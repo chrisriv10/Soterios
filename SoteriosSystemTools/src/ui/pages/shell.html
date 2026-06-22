@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';" />
+  <title>Soterios System Tools</title>
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="status-rail" id="statusRail" data-level="ok"></div>
+
+      <div class="brand">
+        <div class="brand-mark"><span class="dot"></span>SOTERIOS</div>
+        <div class="brand-sub">System Tools</div>
+      </div>
+
+      <nav class="nav">
+        <div class="nav-group-label">Overview</div>
+        <div class="nav-item active" data-page="dashboard">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+          Dashboard
+        </div>
+
+        <div class="nav-group-label">Security</div>
+        <div class="nav-item" data-page="scanner">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          File Scanner
+        </div>
+        <div class="nav-item" data-page="passwords">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.5 7.5a4 4 0 1 1-5.6 5.6 4 4 0 0 1 5.6-5.6Zm0 0L16 7m0 0 3 3m-3-3-2.5 2.5"/></svg>
+          Passwords
+        </div>
+
+        <div class="nav-group-label">System</div>
+        <div class="nav-item" data-page="monitor">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l2-8 4 16 2-8h6"/></svg>
+          System Monitor
+        </div>
+        <div class="nav-item" data-page="processes">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+          Processes
+        </div>
+
+        <div class="nav-group-label">Maintenance</div>
+        <div class="nav-item" data-page="scripts">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+          Scripts
+        </div>
+        <div class="nav-item" data-page="tools">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 1 5.4-5.4l-3-3Z"/></svg>
+          All Tools
+        </div>
+
+        <div class="nav-group-label">App</div>
+        <div class="nav-item" data-page="settings">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+          Settings
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">v0.1.0 — local-only</div>
+    </aside>
+
+    <main class="main" id="mainContent">
+      <!-- Pages are injected here by router.js -->
+    </main>
+  </div>
+
+  <script src="../js/state.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/components.js"></script>
+  <script src="../js/pages/dashboard.js"></script>
+  <script src="../js/pages/scanner.js"></script>
+  <script src="../js/pages/passwords.js"></script>
+  <script src="../js/pages/monitor.js"></script>
+  <script src="../js/pages/processes.js"></script>
+  <script src="../js/pages/scripts.js"></script>
+  <script src="../js/pages/tools.js"></script>
+  <script src="../js/pages/settings.js"></script>
+  <script src="../js/router.js"></script>
+</body>
+</html>

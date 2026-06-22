@@ -1,0 +1,9 @@
+{
+  "_comment": "Local signature database. Add { name, hash } entries (SHA-256, lowercase hex). The entry below is the standard EICAR antivirus TEST file hash (industry-standard, harmless string used to test AV detection) so you can verify the scanner works end-to-end.",
+  "signatures": [
+    {
+      "name": "EICAR-Test-File (industry standard AV test string, not real malware)",
+      "hash": "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f"
+    }
+  ]
+}

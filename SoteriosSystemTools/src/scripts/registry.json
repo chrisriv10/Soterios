@@ -1,0 +1,22 @@
+{
+  "scripts": [
+    {
+      "id": "clear-temp-files",
+      "name": "Clear Temp Files",
+      "description": "Deletes files in the OS temp directory older than 7 days.",
+      "file": "safeScripts/clearTemp.js"
+    },
+    {
+      "id": "list-startup-items",
+      "name": "List Startup Items",
+      "description": "Reports what's configured to launch at system startup (read-only).",
+      "file": "safeScripts/listStartupItems.js"
+    },
+    {
+      "id": "disk-space-report",
+      "name": "Disk Space Report",
+      "description": "Reports free/used space per mounted volume (read-only).",
+      "file": "safeScripts/diskSpaceReport.js"
+    }
+  ]
+}
