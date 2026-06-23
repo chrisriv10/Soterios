@@ -2,3 +2,13 @@ node_modules/
 .npm-cache/
 dist/
 build/
+
+# Electron runtime
+.tmp-user-data/
+dist/
+release/
+*.log
+
+# Environment
+.env
+.env.*

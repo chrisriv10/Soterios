@@ -2,9 +2,9 @@ const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron')
 const path = require('path');
 const os = require('os');
 
-const pluginLoader = require('./src/core/pluginLoader');
-const toolRegistry = require('./src/core/toolRegistry');
-const appStore = require('./src/core/appStore');
+const { loadPlugins } = require('../core/pluginLoader');
+const toolRegistry = require('../core/toolRegistry');
+const appStore = require('../core/appStore');
 
 let mainWindow;
 
@@ -17,7 +17,7 @@ function createWindow() {
     backgroundColor: '#0e1117',
     title: 'Soterios System Tools',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true
@@ -25,7 +25,7 @@ function createWindow() {
     show: false
   });
 
-  mainWindow.loadFile(path.join(__dirname, 'src/ui/pages/shell.html'));
+  mainWindow.loadFile(path.join(__dirname, '../ui/pages/shell.html'));
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
@@ -108,7 +108,7 @@ function buildAppMenu() {
 
 app.whenReady().then(async () => {
   appStore.init(app.getPath('userData'));
-  await pluginLoader.loadAll();
+  loadPlugins();
   buildAppMenu();
   createWindow();
 

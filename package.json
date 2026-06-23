@@ -2,7 +2,7 @@
   "name": "soterios-system-tools",
   "version": "1.0.1",
   "description": "A local-first desktop toolkit for system maintenance, monitoring, and basic security checks.",
-  "main": "main.js",
+  "main": "src/main/main.js",
   "author": "Soterios",
   "license": "MIT",
   "private": true,
@@ -16,37 +16,39 @@
     "dist:linux": "electron-builder --linux"
   },
   "dependencies": {
-    "systeminformation": "^5.23.5",
-    "ps-list": "^8.1.1"
+    "ps-list": "^8.1.1",
+    "systeminformation": "^5.23.5"
   },
   "devDependencies": {
-    "electron": "^31.0.0",
-    "electron-builder": "^24.13.3"
+    "electron": "^42.5.0",
+    "electron-builder": "^26.15.3"
   },
   "build": {
     "appId": "com.soterios.systemtools",
     "productName": "Soterios System Tools",
-    "copyright": "Copyright © 2026 Soterios",
+    "copyright": "Copyright (c) 2026 Soterios",
     "directories": {
       "output": "dist",
       "buildResources": "build"
     },
     "files": [
-      "main.js",
-      "preload.js",
       "src/**/*",
       "assets/**/*",
+      "LICENSE",
       "package.json"
     ],
     "extraResources": [],
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "icon": "assets/icon.ico",
-      "artifactName": "${productName}-Setup-${version}.${ext}",
-      "publisherName": "Soterios",
-      "signAndEditExecutable": false
+      "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -57,7 +59,7 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Soterios System Tools",
       "menuCategory": true,
-      "license": "build/LICENSE.txt",
+      "license": "LICENSE",
       "installerIcon": "assets/icon.ico",
       "uninstallerIcon": "assets/icon.ico",
       "installerHeaderIcon": "assets/icon.ico",
