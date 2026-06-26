@@ -5,3 +5,5 @@ build/win-unpacked/
 *.log
 .env
 .env.*
+assets/clamav/*.pdb
+assets/clamav/*.lib
