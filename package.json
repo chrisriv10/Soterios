@@ -14,6 +14,7 @@
     "dist:win": "electron-builder --win",
     "dist:mac": "electron-builder --mac",
     "dist:linux": "electron-builder --linux",
+    "postinstall": "node scripts/download-clamav.js",
     "prepack": "node scripts/download-clamav.js"
   },
   "dependencies": {

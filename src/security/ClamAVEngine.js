@@ -137,7 +137,9 @@ class ClamAVEngine {
       'DatabaseMirror database.clamav.net',
       'ScriptedUpdates yes',
       'LogTime yes',
-      'UpdateLogFile "' + this.toClamPath(path.join(this.dbDir, 'freshclam.log')) + '"'
+      'UpdateLogFile "' + this.toClamPath(path.join(this.dbDir, 'freshclam.log')) + '"',
+      'ConnectTimeout 30',
+      'ReceiveTimeout 60'
     ];
 
     if (fs.existsSync(this.certsDir)) {
@@ -180,7 +182,7 @@ class ClamAVEngine {
     return new Promise((resolve) => {
       const args = [
         '--stdout',
-        '--database=' + this.dbDir,
+        '--database=' + this.toClamPath(this.dbDir),
         '--max-dir-recursion=32'
       ];
 

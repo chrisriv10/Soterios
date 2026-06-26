@@ -8,7 +8,7 @@ const TARGET_DIR = path.join(__dirname, '..', 'assets', 'clamav');
 const ZIP_PATH = path.join(__dirname, '..', 'assets', 'clamav.zip');
 
 async function downloadClamAV() {
-  if (fs.existsSync(TARGET_DIR) && fs.readdirSync(TARGET_DIR).length > 0) {
+  if (fs.existsSync(TARGET_DIR) && fs.existsSync(path.join(TARGET_DIR, 'clamscan.exe'))) {
     console.log('ClamAV already downloaded.');
     return;
   }
@@ -37,17 +37,21 @@ async function downloadClamAV() {
   const zip = new AdmZip(ZIP_PATH);
   zip.extractAllTo(TARGET_DIR, true);
 
-  // The zip extracts into a subfolder like clamav-1.3.1-win-x64-portable
-  // Let's move the contents up one level for easier access
-  const extractedFolders = fs.readdirSync(TARGET_DIR);
-  if (extractedFolders.length === 1) {
-    const subDirPath = path.join(TARGET_DIR, extractedFolders[0]);
-    if (fs.statSync(subDirPath).isDirectory()) {
-      const files = fs.readdirSync(subDirPath);
+  // The zip extracts into a subfolder like clamav-1.5.2.win.x64
+  // Move the contents up one level for easier access
+  const entries = fs.readdirSync(TARGET_DIR);
+  for (const entry of entries) {
+    const entryPath = path.join(TARGET_DIR, entry);
+    if (fs.statSync(entryPath).isDirectory()) {
+      const files = fs.readdirSync(entryPath);
       for (const file of files) {
-        fs.renameSync(path.join(subDirPath, file), path.join(TARGET_DIR, file));
+        const src = path.join(entryPath, file);
+        const dst = path.join(TARGET_DIR, file);
+        if (!fs.existsSync(dst)) {
+          fs.renameSync(src, dst);
+        }
       }
-      fs.rmdirSync(subDirPath);
+      fs.rmdirSync(entryPath);
     }
   }
 
