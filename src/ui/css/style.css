@@ -378,3 +378,26 @@ body {
 /* Progress bar */
 .stat-bar-track { background: var(--bg-surface-hover); border-radius: 4px; overflow: hidden; }
 .stat-bar-fill { height: 100%; background: var(--accent-primary); transition: width 0.3s ease; border-radius: 4px; }
+
+/* Passwords page */
+.password-display { font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 1rem; font-weight: 600; background: var(--bg-surface); border: 1px solid var(--glass-border); border-radius: 8px; padding: 12px 16px; word-break: break-all; color: var(--accent-primary); letter-spacing: 0.05em; }
+.strength-meter-track { height: 6px; background: var(--bg-surface-hover); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+.strength-meter-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease, background 0.4s ease; }
+.issue-list { margin: 8px 0 0; padding-left: 18px; font-size: 0.82rem; color: var(--text-muted); }
+.issue-list li { margin-bottom: 2px; }
+.mono { font-family: 'Cascadia Code', 'Fira Code', monospace; }
+
+/* Global scan indicator (sidebar) */
+.scan-indicator { margin: 0 12px 8px; padding: 10px 12px; background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.25); border-radius: 10px; cursor: pointer; transition: background 0.2s; }
+.scan-indicator:hover { background: rgba(99,102,241,0.14); }
+.scan-indicator-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.scan-indicator-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-primary); flex-shrink: 0; animation: scanPulse 1.2s ease-in-out infinite; }
+@keyframes scanPulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.7); } }
+.scan-indicator-label { font-size: 0.78rem; font-weight: 600; color: var(--text-primary); flex: 1; }
+.scan-indicator-pct { font-size: 0.75rem; font-weight: 600; color: var(--accent-primary); }
+.scan-indicator-track { height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; margin-bottom: 5px; }
+.scan-indicator-fill { height: 100%; background: var(--accent-primary); border-radius: 2px; transition: width 0.4s ease; }
+.scan-indicator-msg { font-size: 0.7rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+.scan-indicator--done .scan-indicator-dot { background: #22c55e; animation: none; }
+.scan-indicator--done { background: rgba(34,197,94,0.08); border-color: rgba(34,197,94,0.25); }
+.scan-indicator--done .scan-indicator-pct { color: #22c55e; }

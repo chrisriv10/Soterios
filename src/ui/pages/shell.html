@@ -75,6 +75,17 @@
           Settings
         </div>
       </nav>
+      <div id="scanIndicator" class="scan-indicator" style="display:none;">
+        <div class="scan-indicator-header">
+          <span class="scan-indicator-dot"></span>
+          <span class="scan-indicator-label">Scanning…</span>
+          <span class="scan-indicator-pct" id="scanIndicatorPct">0%</span>
+        </div>
+        <div class="scan-indicator-track">
+          <div class="scan-indicator-fill" id="scanIndicatorFill" style="width:0%"></div>
+        </div>
+        <div class="scan-indicator-msg" id="scanIndicatorMsg"></div>
+      </div>
       <div class="sidebar-footer">Engine: ClamAV</div>
     </aside>
     <main class="main compact" id="mainContent">
@@ -95,6 +106,7 @@
   <script src="../js/pages/tools.js"></script>
   <script src="../js/pages/reports.js"></script>
   <script src="../js/pages/settings.js"></script>
+  <script src="../js/scanIndicator.js"></script>
   <script src="../js/router.js"></script>
 </body>
 </html>

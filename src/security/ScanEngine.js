@@ -131,7 +131,10 @@ class ScanEngine {
           totalThreatsFound += result.threatsFound || 0;
           totalFilesScanned += result.filesScanned || 0;
           if (Array.isArray(result.threats)) threats.push(...result.threats);
-          if (result.note && !this._note) this._note = result.note;
+          if (result.note) {
+            this._notes = this._notes || [];
+            this._notes.push(result.note);
+          }
         } else {
           if (wasCanceled) errors.push('Scan canceled by user.');
           else errors.push(result.error || 'Scan failed for ' + targetPath);
@@ -165,8 +168,9 @@ class ScanEngine {
       this.eventBus.emit('scan:complete', { filesScanned: totalFilesScanned, threatsFound: totalThreatsFound, durationMs, threats, errors, status, report });
     }
 
-    const note = this._note;
-    this._note = undefined;
+    const notes = this._notes || [];
+    this._notes = undefined;
+    const note = notes.length ? notes.join(' ') : undefined;
     return {
       success: errors.length === 0 && !wasCanceled,
       canceled: wasCanceled,

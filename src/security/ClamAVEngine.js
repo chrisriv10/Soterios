@@ -226,20 +226,28 @@ class ClamAVEngine {
         if (this.activeScanProcess === clam) this.activeScanProcess = null;
         const fileLines = lines.filter(line => /: (OK|.+ FOUND|ERROR)$/i.test(line.trim()));
         const foundLines = lines.filter(line => /: .+ FOUND$/i.test(line.trim()));
-        const errorLines = lines.filter(line => /: (.*can't open file|.*permission denied|.*access is denied|ERROR)$/i.test(line.trim()));
+        // Access-denied lines end with a ClamAV per-file error suffix
+        const accessDeniedLines = lines.filter(line =>
+          /: (can't open file|lstat\(\) failed|permission denied|access is denied)/i.test(line)
+        );
+        // Real (non-file-access) error lines end with ': ERROR' but are not access-denied
+        const realErrorLines = lines.filter(line =>
+          /: ERROR$/i.test(line.trim()) && !/can't open file|lstat\(\) failed|permission denied|access is denied/i.test(line)
+        );
         const threats = foundLines.map(line => {
           const match = line.match(/^(.*):\s+(.+)\s+FOUND$/i);
           return match ? { path: match[1], name: match[2] } : { path: line, name: 'Unknown' };
         });
 
-        const onlyOpenErrors = code === 2 && errorLines.length > 0 && foundLines.length === 0;
+        // Treat as soft errors (notes) when the only issues are protected/locked files
+        const onlyOpenErrors = code === 2 && accessDeniedLines.length > 0 && foundLines.length === 0 && realErrorLines.length === 0;
         const error = code === 2 && !onlyOpenErrors ? (stderr || output).trim() || 'clamscan exited with code 2' : null;
 
         resolve({
           success: code !== 2 || onlyOpenErrors,
           error,
-          warnings: errorLines,
-          note: onlyOpenErrors ? `${errorLines.length} protected file(s) could not be opened and were skipped.` : null,
+          warnings: accessDeniedLines,
+          note: onlyOpenErrors ? `${accessDeniedLines.length} protected file(s) could not be opened and were skipped.` : null,
           threats,
           threatsFound: threats.length,
           output,
