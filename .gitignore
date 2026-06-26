@@ -7,3 +7,4 @@ build/win-unpacked/
 .env.*
 assets/clamav/*.pdb
 assets/clamav/*.lib
+assets/clamav/
