@@ -110,13 +110,12 @@ window.Pages['dashboard'] = {
     let isRtpActive = true;
 
     async function loadLastScan() {
+      const el = container.querySelector('#lastScanTime');
+      if (!el) return;
       const latest = await window.api.invoke('scanReports:latest');
-      const el = document.getElementById('lastScanTime');
-      if (!latest) {
-        el.textContent = 'Never';
-        return;
-      }
-      el.textContent = `${new Date(latest.timestamp).toLocaleString()} (${latest.status})`;
+      el.textContent = latest
+        ? `${new Date(latest.timestamp).toLocaleString()} (${latest.status})`
+        : 'Never';
     }
 
     async function loadWarnings() {
@@ -200,7 +199,8 @@ window.Pages['dashboard'] = {
       healthDetail.textContent = e.message || 'Unable to calculate health score.';
       healthIcon.className = 'status-icon warning';
     }
-    document.getElementById('btnRefreshWarnings').addEventListener('click', loadWarnings);
+    const btnRefreshWarnings = container.querySelector('#btnRefreshWarnings');
+    if (btnRefreshWarnings) btnRefreshWarnings.addEventListener('click', loadWarnings);
     await loadWarnings();
 
     btnToggleRtp.addEventListener('click', async () => {
@@ -222,12 +222,13 @@ window.Pages['dashboard'] = {
 
     // Scan buttons
     document.getElementById('btnQuickScan').addEventListener('click', async () => {
-      document.getElementById('lastScanTime').textContent = 'Scanning...';
+      const lastScanEl = container.querySelector('#lastScanTime');
+      if (lastScanEl) lastScanEl.textContent = 'Scanning...';
       try {
         const res = await window.api.invoke('scan:quick');
         if (res.error) alert(res.error);
         else {
-          await loadLastScan();
+          if (container.querySelector('#lastScanTime')) await loadLastScan();
           alert(res.canceled ? 'Scan canceled.' : 'Scan completed.');
         }
       } catch(e) {
@@ -236,12 +237,13 @@ window.Pages['dashboard'] = {
     });
 
     document.getElementById('btnFullScan').addEventListener('click', async () => {
-      document.getElementById('lastScanTime').textContent = 'Scanning...';
+      const lastScanEl = container.querySelector('#lastScanTime');
+      if (lastScanEl) lastScanEl.textContent = 'Scanning...';
       try {
         const res = await window.api.invoke('scan:full');
         if (res.error) alert(res.error);
         else {
-          await loadLastScan();
+          if (container.querySelector('#lastScanTime')) await loadLastScan();
           alert(res.canceled ? 'Scan canceled.' : 'Scan completed.');
         }
       } catch(e) {
