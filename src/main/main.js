@@ -32,8 +32,8 @@ function logLine(level, message, meta) {
 }
 
 function createShieldIcon() {
-  const iconPath = path.join(__dirname, '..', '..', 'assets', 'icon.png');
-  return nativeImage.createFromPath(iconPath).resize({ width: 64, height: 64 });
+  const iconPath = path.join(__dirname, '..', '..', 'assets', 'icon.ico');
+  return nativeImage.createFromPath(iconPath);
 }
 
 function showNotification(title, body) {
@@ -113,6 +113,8 @@ function buildAppMenu() {
 
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
+
+app.setAppUserModelId('com.soterios.app');
 
 app.whenReady().then(async () => {
   logLine('info', 'App starting');
