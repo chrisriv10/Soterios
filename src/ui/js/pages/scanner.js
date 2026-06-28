@@ -65,6 +65,9 @@ window.Pages['scanner'] = {
     const updateDefinitionsButton = document.getElementById('btnUpdateDefinitions');
     const cancelButton = document.getElementById('btnCancelScan');
     const reportButton = document.getElementById('btnOpenScanReports');
+    const scanButtons = Array.from(document.querySelectorAll('#btnScannerQuick, #btnScannerFull, #btnScannerCustom'));
+    const scanButtonOriginalLabels = {};
+    scanButtons.forEach((btn) => { scanButtonOriginalLabels[btn.id] = btn.textContent; });
     let isScanRunning = false;
     let alive = true;
     this.cleanups.push(() => { alive = false; });
@@ -90,10 +93,16 @@ window.Pages['scanner'] = {
           scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
         }
         setProgress(30);
-        document.querySelectorAll('#btnScannerQuick, #btnScannerFull, #btnScannerCustom').forEach(b => b.disabled = true);
+        scanButtons.forEach((b) => {
+          b.disabled = true;
+          b.textContent = 'Scanning...';
+        });
         if (cancelButton) cancelButton.disabled = false;
       } else {
-        document.querySelectorAll('#btnScannerQuick, #btnScannerFull, #btnScannerCustom').forEach(b => b.disabled = false);
+        scanButtons.forEach((b) => {
+          b.disabled = false;
+          b.textContent = scanButtonOriginalLabels[b.id] || b.textContent;
+        });
         if (cancelButton) cancelButton.disabled = true;
       }
     }
@@ -149,7 +158,10 @@ window.Pages['scanner'] = {
       if (scanDetail) scanDetail.textContent = msg;
       if (scanIcon) { scanIcon.className = 'status-icon danger';
       scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'; }
-      document.querySelectorAll('#btnScannerQuick, #btnScannerFull, #btnScannerCustom').forEach(b => b.disabled = false);
+      scanButtons.forEach((b) => {
+        b.disabled = false;
+        b.textContent = scanButtonOriginalLabels[b.id] || b.textContent;
+      });
       if (cancelButton) cancelButton.disabled = true;
       isScanRunning = false;
     }
@@ -167,7 +179,8 @@ window.Pages['scanner'] = {
     this.cleanups.push(window.api.on('scan:complete', (data) => {
       if (!data) return;
       if (window.AppRouter && window.AppRouter.current && window.AppRouter.current() !== 'scanner') return;
-      alert(data.status === 'canceled' ? 'Scan canceled.' : `Scan completed. ${data.filesScanned || 0} file(s) scanned, ${data.threatsFound || 0} threat(s) found.`);
+      const canceled = data.status === 'canceled';
+      setComplete(!canceled && data.status !== 'failed', data.filesScanned || 0, data.threatsFound || 0, data.note || data.error || '', canceled);
     }));
 
     updateDefinitionsButton.addEventListener('click', async () => {

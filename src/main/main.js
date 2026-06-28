@@ -1,6 +1,24 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu, nativeImage, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
+
+// Workaround: ensure Electron's disk cache uses a writable folder and
+// disable GPU disk cache where it may fail due to permission issues
+try {
+  const userDataPath = app.getPath && typeof app.getPath === 'function' ? app.getPath('userData') : path.join(os.homedir(), '.soterios');
+  const cacheDir = path.join(userDataPath, 'cache');
+  try { fs.mkdirSync(cacheDir, { recursive: true }); } catch (_) { /* fallback handled below */ }
+  // Prefer a writable location; fall back to OS temp dir if creation failed
+  const finalCache = fs.existsSync(cacheDir) ? cacheDir : path.join(os.tmpdir(), 'soterios-cache');
+  try { fs.mkdirSync(finalCache, { recursive: true }); } catch (_) { }
+  app.commandLine.appendSwitch('disk-cache-dir', finalCache);
+  // Disable GPU disk cache to avoid related failures on some Windows setups
+  app.commandLine.appendSwitch('disable-gpu');
+  app.commandLine.appendSwitch('disable-gpu-compositing');
+} catch (err) {
+  // If anything goes wrong here, we intentionally continue — these are best-effort mitigations
+}
 
 const DatabaseService = require('../core/database');
 const eventBus = require('../core/eventBus');

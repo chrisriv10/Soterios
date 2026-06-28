@@ -200,6 +200,10 @@ window.Pages['dashboard'] = {
       healthIcon.className = 'status-icon warning';
     }
     const btnRefreshWarnings = container.querySelector('#btnRefreshWarnings');
+    const btnQuickScan = document.getElementById('btnQuickScan');
+    const btnFullScan = document.getElementById('btnFullScan');
+    const originalQuickLabel = btnQuickScan ? btnQuickScan.textContent : 'Quick Scan';
+    const originalFullLabel = btnFullScan ? btnFullScan.textContent : 'Full Scan';
     if (btnRefreshWarnings) btnRefreshWarnings.addEventListener('click', loadWarnings);
     await loadWarnings();
 
@@ -221,35 +225,49 @@ window.Pages['dashboard'] = {
     });
 
     // Scan buttons
-    document.getElementById('btnQuickScan').addEventListener('click', async () => {
-      const lastScanEl = container.querySelector('#lastScanTime');
-      if (lastScanEl) lastScanEl.textContent = 'Scanning...';
-      try {
-        const res = await window.api.invoke('scan:quick');
-        if (res.error) alert(res.error);
-        else {
-          if (container.querySelector('#lastScanTime')) await loadLastScan();
-          alert(res.canceled ? 'Scan canceled.' : 'Scan completed.');
+    if (btnQuickScan) {
+      btnQuickScan.addEventListener('click', async () => {
+        const lastScanEl = container.querySelector('#lastScanTime');
+        if (lastScanEl) lastScanEl.textContent = 'Scanning...';
+        btnQuickScan.disabled = true;
+        btnQuickScan.textContent = 'Scanning...';
+        try {
+          const res = await window.api.invoke('scan:quick');
+          if (res.error) {
+            alert(res.error);
+          } else if (container.querySelector('#lastScanTime')) {
+            await loadLastScan();
+          }
+        } catch(e) {
+          alert('Scan failed: ' + e);
+        } finally {
+          btnQuickScan.disabled = false;
+          btnQuickScan.textContent = originalQuickLabel;
         }
-      } catch(e) {
-        alert('Scan failed: ' + e);
-      }
-    });
+      });
+    }
 
-    document.getElementById('btnFullScan').addEventListener('click', async () => {
-      const lastScanEl = container.querySelector('#lastScanTime');
-      if (lastScanEl) lastScanEl.textContent = 'Scanning...';
-      try {
-        const res = await window.api.invoke('scan:full');
-        if (res.error) alert(res.error);
-        else {
-          if (container.querySelector('#lastScanTime')) await loadLastScan();
-          alert(res.canceled ? 'Scan canceled.' : 'Scan completed.');
+    if (btnFullScan) {
+      btnFullScan.addEventListener('click', async () => {
+        const lastScanEl = container.querySelector('#lastScanTime');
+        if (lastScanEl) lastScanEl.textContent = 'Scanning...';
+        btnFullScan.disabled = true;
+        btnFullScan.textContent = 'Scanning...';
+        try {
+          const res = await window.api.invoke('scan:full');
+          if (res.error) {
+            alert(res.error);
+          } else if (container.querySelector('#lastScanTime')) {
+            await loadLastScan();
+          }
+        } catch(e) {
+          alert('Scan failed: ' + e);
+        } finally {
+          btnFullScan.disabled = false;
+          btnFullScan.textContent = originalFullLabel;
         }
-      } catch(e) {
-        alert('Scan failed: ' + e);
-      }
-    });
+      });
+    }
 
     // We could fetch scan history and quarantine count here from API
     try {

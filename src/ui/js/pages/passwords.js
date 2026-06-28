@@ -63,6 +63,7 @@ window.Pages.passwords = {
         out.style.display = 'block';
         container.querySelector('#generatedPassword').textContent = result.password;
         window.AppState.lastPasswordScore = result.strength.score;
+        await window.api.invoke('db:setSetting', 'feature.lastPasswordScore', result.strength.score);
         renderStrengthMeter(container.querySelector('#generatedStrength'), result.strength);
       } catch (err) { showToolError(container.querySelector('#generatedOut'), err); }
     });
@@ -86,6 +87,7 @@ window.Pages.passwords = {
         try {
           const result = await Api.runTool('password-strength-checker', { password: input.value });
           window.AppState.lastPasswordScore = result.score;
+          await window.api.invoke('db:setSetting', 'feature.lastPasswordScore', result.score);
           renderStrengthMeter(out, result, true);
         } catch (err) { showToolError(out, err); }
       }, 200);

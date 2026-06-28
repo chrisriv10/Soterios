@@ -62,7 +62,7 @@ function registerIpcHandlers(mainWindow, services) {
   });
 
   ipcMain.handle('scan:updateDefinitions', async () => {
-    return clamEngine.updateDefinitions((progress) => {
+    const result = await clamEngine.updateDefinitions((progress) => {
       eventBus.emit('scan:progress', { pct: 10, message: 'Updating ClamAV definitions...' });
       if (progress && progress.text) {
         const match = progress.text.match(/(\d+)%/);
@@ -71,6 +71,14 @@ function registerIpcHandlers(mainWindow, services) {
         }
       }
     });
+    eventBus.emit('scan:complete', {
+      status: result.success ? 'completed' : 'failed',
+      filesScanned: 0,
+      threatsFound: 0,
+      errors: result.success ? [] : [result.error || 'Definition update failed'],
+      error: result.error
+    });
+    return result;
   });
 
   ipcMain.handle('scan:quick', async () => {
@@ -226,8 +234,10 @@ function registerIpcHandlers(mainWindow, services) {
 
   ipcMain.handle('health:score', async () => {
     const latest = db.getLatestScanReport();
+    const passwordScore = db.getSetting('feature.lastPasswordScore', null);
     const result = await services.toolRegistry.run('health-score', {
-      lastScanMatches: latest ? latest.threats_found : null
+      lastScanMatches: latest ? latest.threats_found : null,
+      passwordScore: passwordScore === null ? null : Number(passwordScore)
     }, { db });
     if (!result.ok) throw new Error(result.error || 'Unable to calculate health score');
     return result.data;
