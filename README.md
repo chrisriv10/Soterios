@@ -136,6 +136,29 @@ Please make sure your changes work locally (`npm start`) before submitting.
 
 ---
 
+## ⚠️ Project Status & Contributions
+
+Soterios is currently in early development.
+
+Some features are fully functional, while others are still being implemented or refined. The project is actively evolving and may contain incomplete or experimental systems.
+
+Because of this, feedback and contributions are especially valuable.
+
+### 🛠️ Areas that need help
+
+- Stabilizing and improving the malware scanning system
+- Expanding and refining system audit coverage
+- Improving UI consistency and user experience
+- Performance optimization across system monitoring tools
+- Strengthening overall architecture and modularity
+- Identifying and fixing bugs
+
+### 🤝 How you can contribute
+
+If you're interested in system tools, security software, or Electron-based applications, contributions, testing, and feedback are welcome as the project grows.
+
+Even small improvements, bug reports, or suggestions are appreciated.
+
 ## License
 
 Soterios is released under the [MIT License](build/LICENSE.txt).
