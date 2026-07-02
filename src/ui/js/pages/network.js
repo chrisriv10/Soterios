@@ -85,7 +85,7 @@ window.Pages['network'] = {
       } else {
         html += '<div style="display:flex; flex-direction:column; gap:8px; max-height:400px; overflow-y:auto;">';
         for (const c of connections) {
-          const proc = c.OwningProcess ? ` (PID: ${c.OwningProcess})` : '';
+          const proc = c.OwningProcess ? ` (PID: ${escapeHtml(c.OwningProcess)})` : '';
           html += `<div class="card" style="display:flex; flex-direction:column; gap:4px; padding:12px 16px; border-left:4px solid var(--accent-primary);">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <div>

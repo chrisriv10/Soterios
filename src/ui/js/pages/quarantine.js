@@ -40,8 +40,8 @@ window.Pages['quarantine'] = {
         itemEl.style.cssText = "display: flex; justify-content: space-between; align-items: center; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid var(--glass-border);";
         itemEl.innerHTML = `
           <div>
-            <div style="font-weight: 500;">${item.threat_name}</div>
-            <div class="page-subtitle" style="font-size: 0.8rem; margin-top: 4px;">${item.original_path}</div>
+            <div style="font-weight: 500;">${escapeHtml(item.threat_name)}</div>
+            <div class="page-subtitle" style="font-size: 0.8rem; margin-top: 4px;">${escapeHtml(item.original_path)}</div>
             <div class="page-subtitle" style="font-size: 0.75rem;">${item.date_quarantined} | ${item.engine}</div>
           </div>
           <div style="display: flex; gap: 8px;">
