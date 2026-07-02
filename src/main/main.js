@@ -24,10 +24,20 @@ try {
   app.commandLine.appendSwitch('media-cache-dir', cacheDir);
   app.commandLine.appendSwitch('disable-http-cache');
   app.commandLine.appendSwitch('disable-logging');
-  app.commandLine.appendSwitch('disable-gpu');
-  app.commandLine.appendSwitch('disable-gpu-compositing');
+  // GPU acceleration is enabled by default -- disabling it forces Chromium
+  // into full software rendering, which is the most common cause of choppy
+  // scrolling/animations in Electron apps. If a specific machine hits a
+  // graphics driver crash or rendering corruption, set
+  // SOTERIOS_DISABLE_GPU=1 in the environment to fall back to software
+  // rendering without needing a code change.
+  if (process.env.SOTERIOS_DISABLE_GPU === '1') {
+    app.commandLine.appendSwitch('disable-gpu');
+    app.commandLine.appendSwitch('disable-gpu-compositing');
+    app.commandLine.appendSwitch('disable-software-rasterizer');
+  }
+  // Harmless regardless of GPU state -- avoids extra disk writes, not a
+  // rendering-smoothness switch.
   app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
-  app.commandLine.appendSwitch('disable-software-rasterizer');
   app.commandLine.appendSwitch('disable-background-networking');
   app.commandLine.appendSwitch('disable-features', 'NetworkService,AutofillServerCommunication,AutofillAcrossForms,Autofill');
 } catch (err) {
@@ -180,11 +190,8 @@ app.whenReady().then(async () => {
   const firewallManager = new FirewallManager();
   const networkMonitor = new NetworkMonitor();
 
-  // Initialize Engines
-  await clamEngine.init();
-  if (db.getSetting('feature.realtimeProtection', true)) {
-    await realtimeWatcher.start();
-  }
+  // loadPlugins() is a synchronous filesystem scan, not a network call, so
+  // it's cheap enough to keep here rather than deferring it.
   loadPlugins();
 
   const services = {
@@ -203,7 +210,18 @@ app.whenReady().then(async () => {
     toolRegistry
   };
 
-  // 3. Register IPC
+  // Show the window as soon as possible instead of waiting on ClamAV/RTP
+  // initialization below -- those can take a while (definitions download,
+  // spawning PowerShell) and previously blocked the window from appearing
+  // at all until they finished.
+  buildAppMenu();
+  createWindow();
+
+  // Register IPC handlers only once mainWindow actually exists. Previously
+  // this ran before createWindow(), so the mainWindow parameter passed in
+  // was always undefined (a plain variable copied by value at call time) --
+  // handlers like dialog:pickFolder/pickFiles silently fell back to
+  // BrowserWindow.getFocusedWindow() instead of targeting the real window.
   registerIpcHandlers(mainWindow, services);
 
   // Forward scan progress events from EventBus to renderer
@@ -267,12 +285,30 @@ app.whenReady().then(async () => {
     });
   });
 
-  buildAppMenu();
-  createWindow();
-
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+
+  // Slow engine initialization (ClamAV definitions, real-time protection)
+  // runs in the background after the window is already visible, instead of
+  // blocking startup. scanEngine's scan handlers already check
+  // clamEngine.isReady and return a graceful error if a scan is attempted
+  // before this finishes, and rtp:status/rtp:toggle independently query
+  // live Defender state, so nothing depends on this completing first.
+  (async () => {
+    try {
+      await clamEngine.init();
+    } catch (err) {
+      logLine('error', 'ClamAV init failed', { message: err.message });
+    }
+    try {
+      if (db.getSetting('feature.realtimeProtection', true)) {
+        await realtimeWatcher.start();
+      }
+    } catch (err) {
+      logLine('error', 'Real-time protection init failed', { message: err.message });
+    }
+  })();
 });
 
 process.on('uncaughtException', (err) => {

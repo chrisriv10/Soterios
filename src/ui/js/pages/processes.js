@@ -40,7 +40,7 @@ window.Pages.processes = {
         const rawPath = p.path || p.cmd || '';
         const shortPath = truncatePath(rawPath || 'Path unavailable', 56);
         return `
-        <div class="card" style="display:flex; flex-direction:column; gap:8px; padding:16px; border-left: 4px solid ${p.risk.score >= 35 ? 'var(--accent-danger)' : 'var(--accent-success)'};">
+        <div class="list-row" style="display:flex; flex-direction:column; gap:8px; padding:16px; border-left: 4px solid ${p.risk.score >= 35 ? 'var(--accent-danger)' : 'var(--accent-success)'};">
           <div style="display:flex; justify-content:space-between; align-items:flex-start;">
             <div style="min-width:0;">
               <div style="font-weight:600; font-size:1.1rem;">${escapeHtml(p.name)} <span class="page-subtitle" style="font-size:0.85rem;">(PID ${escapeHtml(p.pid)})</span></div>

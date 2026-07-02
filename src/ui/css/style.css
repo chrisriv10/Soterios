@@ -305,6 +305,17 @@ body {
   box-shadow: 0 8px 32px rgba(0,0,0,0.3);
 }
 
+/* Lightweight row style for large repeated lists (e.g. Processes). Deliberately
+   omits backdrop-filter/box-shadow/hover-transform -- those are expensive per
+   element and become a scroll-performance problem once stacked dozens of times,
+   unlike .card which is only ever used a handful of times per page. */
+.list-row {
+  background: var(--bg-surface);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 16px;
+}
+
 .empty-state {
   display: flex;
   align-items: center;
