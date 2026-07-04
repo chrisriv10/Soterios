@@ -58,12 +58,17 @@ const ProcessInspector = require('../security/ProcessInspector');
 const SystemAudit = require('../security/SystemAudit');
 const FirewallManager = require('../security/FirewallManager');
 const NetworkMonitor = require('../security/NetworkMonitor');
+const { ProcessResolver } = require('../security/ProcessResolver');
+const { BlocklistService } = require('../security/BlocklistService');
+const { NetworkEnricher } = require('../security/NetworkEnricher');
 
 // Legacy utilities
 const { loadPlugins } = require('../core/pluginLoader');
 const toolRegistry = require('../core/toolRegistry');
 
 let mainWindow;
+let splashWindow;
+let splashTimeoutId;
 
 function logLine(level, message, meta) {
   try {
@@ -83,6 +88,51 @@ function showNotification(title, body) {
   try {
     new Notification({ title, body, icon: createIcon() }).show();
   } catch (_) {}
+}
+
+function createSplashWindow() {
+  splashWindow = new BrowserWindow({
+    width: 420,
+    height: 280,
+    frame: false,
+    resizable: false,
+    movable: true,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    show: false,
+    center: true,
+    skipTaskbar: true,
+    backgroundColor: '#0e1117',
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  });
+
+  splashWindow.loadFile(path.join(__dirname, '../ui/pages/splash.html'));
+  splashWindow.once('ready-to-show', () => {
+    if (splashWindow) splashWindow.show();
+  });
+}
+
+// Called once the renderer's Dashboard has actually finished loading its data
+// (not just once the HTML has parsed), or after a maximum wait as a fallback
+// so a slow/failed load never leaves the user stuck looking at the splash
+// screen forever.
+function dismissSplash() {
+  if (splashTimeoutId) {
+    clearTimeout(splashTimeoutId);
+    splashTimeoutId = undefined;
+  }
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.show();
+  }
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.close();
+  }
+  splashWindow = undefined;
 }
 
 function createWindow() {
@@ -105,9 +155,13 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '../ui/pages/shell.html'));
 
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-  });
+  // Intentionally no auto-show on 'ready-to-show' here -- the window stays
+  // hidden until the renderer signals it has actually finished loading data
+  // (see the 'app:ready' handler below), so the splash screen covers the
+  // whole load instead of just the initial blank-page flash. A fallback
+  // timeout guarantees the window still appears even if that signal is
+  // delayed or never arrives (e.g. an unexpected renderer error).
+  splashTimeoutId = setTimeout(dismissSplash, 8000);
 
   if (process.argv.includes('--dev') || process.env.NODE_ENV === 'development') {
     mainWindow.webContents.once('did-finish-load', () => {
@@ -161,6 +215,11 @@ function buildAppMenu() {
 app.setAppUserModelId('com.soterios.app');
 
 app.whenReady().then(async () => {
+  // Show the splash screen immediately, before any backend setup, so the
+  // user sees something the instant the app launches rather than a blank
+  // taskbar entry with no window at all.
+  createSplashWindow();
+
   logLine('info', 'App starting');
 
   // 1. Database
@@ -190,6 +249,10 @@ app.whenReady().then(async () => {
   const firewallManager = new FirewallManager();
   const networkMonitor = new NetworkMonitor();
 
+  const processResolver = new ProcessResolver(processInspector);
+  const blocklistService = new BlocklistService(db);
+  const networkEnricher = new NetworkEnricher(processResolver, blocklistService);
+
   // loadPlugins() is a synchronous filesystem scan, not a network call, so
   // it's cheap enough to keep here rather than deferring it.
   loadPlugins();
@@ -207,6 +270,9 @@ app.whenReady().then(async () => {
     systemAudit,
     firewallManager,
     networkMonitor,
+    processResolver,
+    blocklistService,
+    networkEnricher,
     toolRegistry
   };
 
@@ -285,6 +351,10 @@ app.whenReady().then(async () => {
     });
   });
 
+  ipcMain.handle('app:ready', () => {
+    dismissSplash();
+  });
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -307,6 +377,11 @@ app.whenReady().then(async () => {
       }
     } catch (err) {
       logLine('error', 'Real-time protection init failed', { message: err.message });
+    }
+    try {
+      await blocklistService.refreshAll();
+    } catch (err) {
+      logLine('error', 'Blocklist refresh failed', { message: err.message });
     }
   })();
 });

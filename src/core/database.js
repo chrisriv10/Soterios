@@ -105,6 +105,15 @@ class DatabaseService {
         last_checked DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Network Blocklist Cache
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS network_blocklist_cache (
+        source TEXT PRIMARY KEY,
+        raw_data TEXT,
+        fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
   }
 
   // --- Scan History API ---
@@ -225,6 +234,22 @@ class DatabaseService {
   setSetting(key, value) {
     const stmt = this.db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
     return stmt.run(key, JSON.stringify(value));
+  }
+
+  // --- Network Blocklist Cache API ---
+  getBlocklistCache(source) {
+    return this.db.prepare('SELECT * FROM network_blocklist_cache WHERE source = ?').get(source) || null;
+  }
+
+  setBlocklistCache(source, rawData) {
+    const stmt = this.db.prepare(`
+      INSERT INTO network_blocklist_cache (source, raw_data, fetched_at)
+      VALUES (@source, @rawData, CURRENT_TIMESTAMP)
+      ON CONFLICT(source) DO UPDATE SET
+        raw_data = excluded.raw_data,
+        fetched_at = CURRENT_TIMESTAMP
+    `);
+    return stmt.run({ source, rawData });
   }
 }
 

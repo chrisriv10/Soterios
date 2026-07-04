@@ -337,5 +337,19 @@ window.Pages['dashboard'] = {
     } catch (e) {
       console.warn('Failed to load dashboard data:', e);
     }
+
+    // Signal the main process that the Dashboard has actually finished
+    // loading its data, so it can dismiss the startup splash screen and show
+    // the main window now rather than as soon as the HTML merely parsed.
+    // Placed after all the try/catch blocks above (each already handles its
+    // own failures independently) so this always fires exactly once the
+    // initial load sequence settles, success or partial failure alike.
+    try {
+      await window.api.invoke('app:ready');
+    } catch (_) {
+      // If this fails for some reason, main.js's own fallback timeout will
+      // still show the window after a few seconds rather than leaving the
+      // user stuck on the splash screen indefinitely.
+    }
   }
 };

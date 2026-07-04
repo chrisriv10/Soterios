@@ -144,7 +144,8 @@ function registerIpcHandlers(mainWindow, services) {
   });
 
   ipcMain.handle('network:connections', async () => {
-    return services.networkMonitor.getConnections();
+    const raw = await services.networkMonitor.getConnections();
+    return services.networkEnricher.enrich(raw);
   });
 
   ipcMain.handle('network:stats', async () => {

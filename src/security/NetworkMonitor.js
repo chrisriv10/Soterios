@@ -6,7 +6,7 @@ const execPromise = util.promisify(exec);
 class NetworkMonitor {
   async getConnections() {
     try {
-      const { stdout } = await execPromise(`powershell.exe -NoProfile -NonInteractive -Command "Get-NetTCPConnection | Where-Object State -eq 'Established' | Select-Object LocalAddress, LocalPort, RemoteAddress, RemotePort, OwningProcess | ConvertTo-Json -Compress"`);
+      const { stdout } = await execPromise(`powershell.exe -NoProfile -NonInteractive -Command "Get-NetTCPConnection | Select-Object LocalAddress, LocalPort, RemoteAddress, RemotePort, State, OwningProcess | ConvertTo-Json -Compress"`);
       let connections = JSON.parse(stdout || '[]');
       if (!Array.isArray(connections)) connections = [connections];
       return connections;

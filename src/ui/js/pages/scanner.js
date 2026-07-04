@@ -131,23 +131,29 @@ window.Pages['scanner'] = {
       if (canceled) {
         if (scanStatus) scanStatus.textContent = 'Scan Canceled';
         if (scanDetail) scanDetail.textContent = `${filesScanned} file(s) scanned before cancellation.` + (historyEnabled ? ' A scan report was saved.' : '');
-        if (scanIcon) { scanIcon.className = 'status-icon warning';
-        scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'; }
+        if (scanIcon) {
+          scanIcon.className = 'status-icon warning';
+          scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+        }
         updateFooterButtons();
         return;
       }
       if (success) {
         if (scanStatus) scanStatus.textContent = 'Scan Complete';
         if (scanDetail) scanDetail.textContent = `${filesScanned} file(s) scanned, ${threatsFound} threat(s) found.` + (note ? ' ' + note : '');
-        if (scanIcon) { scanIcon.className = 'status-icon ' + (threatsFound > 0 ? 'danger' : 'safe');
-        scanIcon.innerHTML = threatsFound > 0
-          ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
-          : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'; }
+        if (scanIcon) {
+          scanIcon.className = 'status-icon ' + (threatsFound > 0 ? 'danger' : 'safe');
+          scanIcon.innerHTML = threatsFound > 0
+            ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
+            : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+        }
       } else {
         if (scanStatus) scanStatus.textContent = 'Scan Failed';
         if (scanDetail) scanDetail.textContent = note || 'An error occurred during the scan.';
-        if (scanIcon) { scanIcon.className = 'status-icon danger';
-        scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'; }
+        if (scanIcon) {
+          scanIcon.className = 'status-icon danger';
+          scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+        }
       }
       updateFooterButtons();
     }
@@ -178,8 +184,10 @@ window.Pages['scanner'] = {
       if (scanCard) scanCard.style.display = 'block';
       if (scanStatus) scanStatus.textContent = 'Error';
       if (scanDetail) scanDetail.textContent = msg;
-      if (scanIcon) { scanIcon.className = 'status-icon danger';
-      scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'; }
+      if (scanIcon) {
+        scanIcon.className = 'status-icon danger';
+        scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+      }
       scanButtons.forEach((b) => {
         b.disabled = false;
         b.textContent = scanButtonOriginalLabels[b.id] || b.textContent;
@@ -205,15 +213,45 @@ window.Pages['scanner'] = {
     this.cleanups.push(window.api.on('scan:complete', async (data) => {
       if (!data) return;
       if (window.AppRouter && window.AppRouter.current && window.AppRouter.current() !== 'scanner') return;
+
       const canceled = data.status === 'canceled';
-      if (data.scanType) activeAction = data.scanType === 'definitions' ? 'definitions' : 'virus';
+
+      // ✅ Handle definition updates separately (prevents "0 threats found")
+      if (data.scanType === 'definitions') {
+        scanStatus.textContent = data.status === 'failed'
+          ? 'Definition Update Failed'
+          : 'Definitions Updated';
+
+        scanDetail.textContent = data.status === 'failed'
+          ? (data.note || data.error || 'Update failed.')
+          : (data.note || 'ClamAV signatures are ready.');
+
+        setProgress(100);
+        isScanRunning = false;
+        activeAction = null;
+        showReportButton = false;
+        updateFooterButtons();
+        return;
+      }
+
+      // normal virus scan flow
+      if (data.scanType) activeAction = 'virus';
+
       try {
         const settings = await Api.getSettings();
         scanHistoryEnabled = !!settings.features.scanHistory;
       } catch (_) {
         scanHistoryEnabled = true;
       }
-      setComplete(!canceled && data.status !== 'failed', data.filesScanned || 0, data.threatsFound || 0, data.note || data.error || '', canceled, scanHistoryEnabled);
+
+      setComplete(
+        !canceled && data.status !== 'failed',
+        data.filesScanned || 0,
+        data.threatsFound || 0,
+        data.note || data.error || '',
+        canceled,
+        scanHistoryEnabled
+      );
     }));
 
     updateDefinitionsButton.addEventListener('click', async () => {
