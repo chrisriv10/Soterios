@@ -1,10 +1,12 @@
 {
   "scripts": [
-    { "id": "clear-temp-files", "name": "Clear Temp Files", "description": "Deletes files in the OS temp directory older than 7 days.", "file": "safeScripts/clearTemp.js" },
+    { "id": "clear-temp-files", "name": "Clear Temp Files", "description": "Deletes files in the OS temp directory older than a certain amount of days.", "file": "safeScripts/clearTemp.js" },
     { "id": "list-startup-items", "name": "List Startup Items", "description": "Reports what's configured to launch at system startup (read-only).", "file": "safeScripts/listStartupItems.js" },
     { "id": "disk-space-report", "name": "Disk Space Report", "description": "Reports free/used space per mounted volume (read-only).", "file": "safeScripts/diskSpaceReport.js" },
-    { "id": "large-files-report", "name": "Large Files Report", "description": "Finds large files under your home folder without deleting anything.", "file": "safeScripts/largeFilesReport.js" },
+    { "id": "large-files-report", "name": "Large Files Report", "description": "Finds large files under your home folder with the option to select files for deletion.", "file": "safeScripts/largeFilesReport.js" },
     { "id": "browser-cache-report", "name": "Browser Cache Report", "description": "Estimates local browser cache sizes for common Chromium-based browsers.", "file": "safeScripts/browserCacheReport.js" },
-    { "id": "windows-services-report", "name": "Windows Services Report", "description": "Lists auto-start Windows services and highlights unsigned-looking paths (read-only).", "file": "safeScripts/windowsServicesReport.js" }
+    { "id": "windows-services-report", "name": "Windows Services Report", "description": "Lists auto-start Windows services and highlights unsigned-looking paths (read-only).", "file": "safeScripts/windowsServicesReport.js" },
+    { "id": "delete-files", "name": "Delete Selected Files", "description": "Deletes specific files selected from the Large Files Report. Not shown as a standalone tool card -- invoked only from within that report's UI.", "file": "safeScripts/deleteFiles.js" },
+    { "id": "clear-browser-cache", "name": "Clear Browser Cache", "description": "Clears cache for one or more browsers found by the Browser Cache Report. Not shown as a standalone tool card -- invoked only from within that report's UI.", "file": "safeScripts/clearBrowserCache.js" }
   ]
 }

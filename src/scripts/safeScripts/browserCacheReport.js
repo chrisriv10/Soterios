@@ -16,14 +16,16 @@ function dirSize(dirPath) {
   return total;
 }
 
+const CANDIDATES = [
+  { name: 'Chrome', path: path.join(os.homedir(), 'AppData/Local/Google/Chrome/User Data/Default/Cache') },
+  { name: 'Edge', path: path.join(os.homedir(), 'AppData/Local/Microsoft/Edge/User Data/Default/Cache') },
+  { name: 'Brave', path: path.join(os.homedir(), 'AppData/Local/BraveSoftware/Brave-Browser/User Data/Default/Cache') },
+  { name: 'Firefox', path: path.join(os.homedir(), 'AppData/Local/Mozilla/Firefox/Profiles') }
+];
+
 module.exports = async function browserCacheReport() {
-  const home = os.homedir();
-  const candidates = [
-    { name: 'Chrome', path: path.join(home, 'AppData/Local/Google/Chrome/User Data/Default/Cache') },
-    { name: 'Edge', path: path.join(home, 'AppData/Local/Microsoft/Edge/User Data/Default/Cache') },
-    { name: 'Brave', path: path.join(home, 'AppData/Local/BraveSoftware/Brave-Browser/User Data/Default/Cache') },
-    { name: 'Firefox', path: path.join(home, 'AppData/Local/Mozilla/Firefox/Profiles') }
-  ];
-  const browsers = candidates.map((c) => { const bytes = dirSize(c.path); return { name: c.name, path: c.path, exists: fs.existsSync(c.path), sizeMB: +(bytes / 1024 / 1024).toFixed(1) }; });
+  const browsers = CANDIDATES.map((c) => { const bytes = dirSize(c.path); return { name: c.name, path: c.path, exists: fs.existsSync(c.path), sizeMB: +(bytes / 1024 / 1024).toFixed(1) }; });
   return { totalMB: +((browsers.reduce((sum, b) => sum + b.sizeMB, 0))).toFixed(1), browsers };
 };
+
+module.exports.CANDIDATES = CANDIDATES;

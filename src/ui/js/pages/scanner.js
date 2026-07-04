@@ -37,6 +37,41 @@ window.Pages['scanner'] = {
           <button class="btn" style="margin-top:12px;" id="btnScannerCustom">Select Folder\u2026</button>
         </div>
       </div>
+      <div class="card" id="scheduleCard" style="margin-top:24px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+          <div>
+            <h3 style="margin:0;">Scheduled Scans</h3>
+            <p class="page-subtitle" id="scheduleStatusText" style="margin:4px 0 0;">Loading schedule\u2026</p>
+          </div>
+          <button class="btn" id="btnScheduleToggle">Enable</button>
+        </div>
+        <div id="scheduleOptions" style="margin-top:16px; display:none; flex-direction:column; gap:12px;">
+          <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:center;">
+            <label style="font-size:0.85rem; color:var(--text-dim); display:flex; align-items:center; gap:8px;">
+              Scan type
+              <select id="scheduleScanType" class="btn btn-sm">
+                <option value="quick">Quick Scan</option>
+                <option value="full">Full Scan</option>
+                <option value="custom">Custom Folder</option>
+              </select>
+            </label>
+            <label style="font-size:0.85rem; color:var(--text-dim); display:flex; align-items:center; gap:8px;">
+              Frequency
+              <select id="scheduleInterval" class="btn btn-sm">
+                <option value="6">Every 6 hours</option>
+                <option value="12">Every 12 hours</option>
+                <option value="24">Daily</option>
+                <option value="72">Every 3 days</option>
+                <option value="168">Weekly</option>
+              </select>
+            </label>
+          </div>
+          <div id="scheduleCustomRow" style="display:none; align-items:center; gap:10px;">
+            <button class="btn btn-sm" id="btnScheduleFolder">Choose Folder\u2026</button>
+            <span class="page-subtitle" id="scheduleFolderLabel" style="font-size:0.8rem;">No folder selected</span>
+          </div>
+        </div>
+      </div>
       <div class="card" id="scanStatusCard" style="margin-top:24px; display:none;">
         <div style="display:flex; align-items:center; gap:16px;">
           <div class="status-icon info" id="scanIcon">
@@ -63,6 +98,14 @@ window.Pages['scanner'] = {
     const scanIcon = document.getElementById('scanIcon');
     const clamStatusText = document.getElementById('clamStatusText');
     const updateDefinitionsButton = document.getElementById('btnUpdateDefinitions');
+    const scheduleStatusText = document.getElementById('scheduleStatusText');
+    const scheduleToggleBtn = document.getElementById('btnScheduleToggle');
+    const scheduleOptions = document.getElementById('scheduleOptions');
+    const scheduleScanType = document.getElementById('scheduleScanType');
+    const scheduleInterval = document.getElementById('scheduleInterval');
+    const scheduleCustomRow = document.getElementById('scheduleCustomRow');
+    const btnScheduleFolder = document.getElementById('btnScheduleFolder');
+    const scheduleFolderLabel = document.getElementById('scheduleFolderLabel');
     const cancelButton = document.getElementById('btnCancelScan');
     const reportButton = document.getElementById('btnOpenScanReports');
     const scanButtons = Array.from(document.querySelectorAll('#btnScannerQuick, #btnScannerFull, #btnScannerCustom'));
@@ -179,6 +222,95 @@ window.Pages['scanner'] = {
       }
     }
 
+    // -- Scheduled Scans --
+    let scheduleConfig = { enabled: false, scanType: 'quick', customPath: null, intervalHours: 24, lastRun: null };
+
+    function scheduleIntervalLabel(hours) {
+      const map = { 6: 'every 6 hours', 12: 'every 12 hours', 24: 'daily', 72: 'every 3 days', 168: 'weekly' };
+      return map[hours] || `every ${hours} hours`;
+    }
+
+    function formatScheduleTimestamp(ts) {
+      if (!ts) return 'never';
+      try { return new Date(ts).toLocaleString(); } catch (_) { return 'never'; }
+    }
+
+    function renderScheduleUI() {
+      if (!hasView()) return;
+      scheduleToggleBtn.textContent = scheduleConfig.enabled ? 'Disable' : 'Enable';
+      scheduleToggleBtn.className = scheduleConfig.enabled ? 'btn btn-primary' : 'btn';
+      scheduleOptions.style.display = scheduleConfig.enabled ? 'flex' : 'none';
+      scheduleScanType.value = scheduleConfig.scanType || 'quick';
+      scheduleInterval.value = String(scheduleConfig.intervalHours || 24);
+      scheduleCustomRow.style.display = scheduleConfig.scanType === 'custom' ? 'flex' : 'none';
+      scheduleFolderLabel.textContent = scheduleConfig.customPath || 'No folder selected';
+
+      if (scheduleConfig.enabled) {
+        const typeLabel = scheduleConfig.scanType === 'full' ? 'Full scan'
+          : scheduleConfig.scanType === 'custom' ? 'Custom folder scan'
+          : 'Quick scan';
+        scheduleStatusText.textContent =
+          `${typeLabel} runs ${scheduleIntervalLabel(scheduleConfig.intervalHours)}. Last run: ${formatScheduleTimestamp(scheduleConfig.lastRun)}.`;
+      } else {
+        scheduleStatusText.textContent = 'Automatic scans are turned off.';
+      }
+    }
+
+    async function loadSchedule() {
+      try {
+        const config = await window.api.invoke('schedule:get');
+        if (!hasView()) return;
+        scheduleConfig = Object.assign(
+          { enabled: false, scanType: 'quick', customPath: null, intervalHours: 24, lastRun: null },
+          config || {}
+        );
+        renderScheduleUI();
+      } catch (e) {
+        if (hasView()) scheduleStatusText.textContent = e.message || 'Unable to load schedule settings.';
+      }
+    }
+
+    async function saveSchedule() {
+      try {
+        const saved = await window.api.invoke('schedule:set', scheduleConfig);
+        if (!hasView()) return;
+        scheduleConfig = Object.assign({}, scheduleConfig, saved || {});
+        renderScheduleUI();
+      } catch (e) {
+        if (hasView()) scheduleStatusText.textContent = e.message || 'Unable to save schedule settings.';
+      }
+    }
+
+    scheduleToggleBtn.addEventListener('click', () => {
+      const enabling = !scheduleConfig.enabled;
+      if (enabling && scheduleConfig.scanType === 'custom' && !scheduleConfig.customPath) {
+        scheduleStatusText.textContent = 'Choose a folder before enabling a custom scheduled scan.';
+        return;
+      }
+      scheduleConfig.enabled = enabling;
+      renderScheduleUI();
+      saveSchedule();
+    });
+
+    scheduleScanType.addEventListener('change', () => {
+      scheduleConfig.scanType = scheduleScanType.value;
+      renderScheduleUI();
+      saveSchedule();
+    });
+
+    scheduleInterval.addEventListener('change', () => {
+      scheduleConfig.intervalHours = Number(scheduleInterval.value);
+      saveSchedule();
+    });
+
+    btnScheduleFolder.addEventListener('click', async () => {
+      const folder = await window.api.invoke('dialog:pickFolder');
+      if (!folder) return;
+      scheduleConfig.customPath = folder;
+      renderScheduleUI();
+      saveSchedule();
+    });
+
     function setError(msg) {
       if (!hasView()) return;
       if (scanCard) scanCard.style.display = 'block';
@@ -252,6 +384,7 @@ window.Pages['scanner'] = {
         canceled,
         scanHistoryEnabled
       );
+      loadSchedule();
     }));
 
     updateDefinitionsButton.addEventListener('click', async () => {
@@ -340,5 +473,6 @@ window.Pages['scanner'] = {
 
     updateFooterButtons();
     refreshStatus();
+    loadSchedule();
   }
 };

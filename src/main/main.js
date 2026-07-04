@@ -383,6 +383,19 @@ app.whenReady().then(async () => {
     } catch (err) {
       logLine('error', 'Blocklist refresh failed', { message: err.message });
     }
+    try {
+      // systeminformation's networkStats() calculates rx_sec/tx_sec as a
+      // rate between two internal samples. The very first call anywhere in
+      // the process's lifetime has no prior sample to diff against and can
+      // return an empty/zeroed result. This throwaway call exists only to
+      // establish that baseline in the background, so the first time the
+      // user actually opens the Network Monitor page, the real call already
+      // has something to diff against and returns populated data immediately
+      // instead of requiring a second visit to "warm up".
+      await networkMonitor.getStats();
+    } catch (err) {
+      logLine('error', 'Network stats warm-up failed', { message: err.message });
+    }
   })();
 });
 

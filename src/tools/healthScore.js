@@ -2,7 +2,7 @@ const si = require('systeminformation');
 
 module.exports = {
   id: 'health-score', name: 'System Health Score',
-  description: 'Composite score summarizing scan results, disk space, password strength, and load.',
+  description: 'Composite score summarizing scan results, disk space, and load.',
   category: 'Dashboard', icon: 'gauge',
   run: async (args = {}) => {
     const breakdown = {};
@@ -11,11 +11,6 @@ module.exports = {
     if (lastScanMatches === null) breakdown.malware = { points: 0, max: 40, reason: 'No scan has been run yet' };
     else if (lastScanMatches === 0) { score += 40; breakdown.malware = { points: 40, max: 40, reason: 'No threats found in last scan' }; }
     else breakdown.malware = { points: 0, max: 40, reason: `${lastScanMatches} threat match(es) found` };
-
-    const passwordScore = args.passwordScore ?? null;
-    if (passwordScore === null) breakdown.password = { points: 0, max: 20, reason: 'No password checked yet' };
-    else if (passwordScore >= 70) { score += 20; breakdown.password = { points: 20, max: 20, reason: 'Strong password detected' }; }
-    else breakdown.password = { points: 0, max: 20, reason: 'Weak/moderate password detected' };
 
     const fsSize = await si.fsSize();
     if (fsSize.every((d) => d.use < 90)) { score += 20; breakdown.disk = { points: 20, max: 20, reason: 'All volumes under 90% used' }; }

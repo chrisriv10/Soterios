@@ -98,6 +98,65 @@ function registerIpcHandlers(mainWindow, services) {
     return scanEngine.abortScan();
   });
 
+  // -- Scheduled Scans --
+  const SCHEDULE_SETTING_KEY = 'schedule.config';
+  const DEFAULT_SCHEDULE = { enabled: false, scanType: 'quick', customPath: null, intervalHours: 24, lastRun: null };
+
+  function loadScheduleConfig() {
+    const stored = db.getSetting(SCHEDULE_SETTING_KEY, null);
+    return { ...DEFAULT_SCHEDULE, ...(stored || {}) };
+  }
+
+  function saveScheduleConfig(partial) {
+    const merged = { ...loadScheduleConfig(), ...partial };
+    db.setSetting(SCHEDULE_SETTING_KEY, merged);
+    return merged;
+  }
+
+  ipcMain.handle('schedule:get', () => loadScheduleConfig());
+
+  ipcMain.handle('schedule:set', (_event, config) => {
+    return saveScheduleConfig(config || {});
+  });
+
+  // Runs in the main process, independent of any open renderer page, so the
+  // schedule keeps working even if the user isn't looking at the Scanner tab.
+  let scheduledScanRunning = false;
+  async function runScheduledScanIfDue() {
+    if (scheduledScanRunning) return;
+    const config = loadScheduleConfig();
+    if (!config.enabled) return;
+    if (config.scanType === 'custom' && !config.customPath) return;
+
+    const engineStatus = scanEngine.getStatus();
+    if (engineStatus && engineStatus.isScanning) return; // don't collide with a manual/other scan
+
+    const intervalMs = Math.max(1, Number(config.intervalHours) || 24) * 60 * 60 * 1000;
+    const lastRunMs = config.lastRun ? new Date(config.lastRun).getTime() : 0;
+    if (Date.now() - lastRunMs < intervalMs) return;
+
+    scheduledScanRunning = true;
+    saveScheduleConfig({ lastRun: new Date().toISOString() });
+    try {
+      if (config.scanType === 'full') {
+        await scanEngine.runFullScan();
+      } else if (config.scanType === 'custom') {
+        await scanEngine.runCustomScan([config.customPath]);
+      } else {
+        await scanEngine.runQuickScan();
+      }
+    } catch (e) {
+      console.error('Scheduled scan failed', e);
+    } finally {
+      scheduledScanRunning = false;
+    }
+  }
+
+  // Check once a minute whether a scan is due, plus a check shortly after
+  // startup in case one was missed while the app was closed.
+  setInterval(() => { runScheduledScanIfDue(); }, 60 * 1000);
+  setTimeout(() => { runScheduledScanIfDue(); }, 15 * 1000);
+
   // -- Quarantine --
   ipcMain.handle('quarantine:restore', async (_event, id) => {
     return quarantineManager.restore(id);

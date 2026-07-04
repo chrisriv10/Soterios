@@ -50,5 +50,5 @@ module.exports = async function clearTemp(args = {}) {
     return { error: `Could not process temp directory: ${err.message}`, log };
   }
 
-  return { dryRun, tempDir, deletedCount, skippedCount, freedBytes, freedMB: +(freedBytes / 1e6).toFixed(2), log };
+  return { dryRun, tempDir, maxAgeDays, deletedCount, skippedCount, freedBytes, freedMB: +(freedBytes / 1e6).toFixed(2), log };
 };
