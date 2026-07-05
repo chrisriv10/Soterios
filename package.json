@@ -27,7 +27,7 @@
     "adm-zip": "^0.5.17",
     "axios": "^1.18.1",
     "electron": "^39.8.5",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^26.15.3"
   },
   "build": {
     "appId": "com.soterios.app",
