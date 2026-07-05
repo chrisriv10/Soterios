@@ -276,8 +276,8 @@ window.Pages['network'] = {
           html += `<div class="card" style="display:flex; flex-direction:column; gap:4px; padding:12px 16px; border-left:4px solid ${borderColor};">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <div>
-                <div style="font-weight:600; font-family:monospace;">${stateBadge}${escapeHtml(remoteAddress)}:${escapeHtml(remotePort)}${service}${hostname}</div>
-                <div class="page-subtitle" style="font-size:0.85rem;">Local: ${escapeHtml(localAddress)}:${escapeHtml(localPort)}${proc}</div>
+                <div style="font-weight:600; font-family:monospace; word-break:break-all;">${stateBadge}${escapeHtml(remoteAddress)}:${escapeHtml(remotePort)}${service}${hostname}</div>
+                <div class="page-subtitle" style="font-size:0.85rem; word-break:break-all;">Local: ${escapeHtml(localAddress)}:${escapeHtml(localPort)}${proc}</div>
               </div>
               <div style="font-size:0.75rem; font-weight:600; color:${badgeColor}; background:${badgeColor}15; padding:4px 8px; border-radius:4px;">${escapeHtml(c.classification || 'UNKNOWN')}</div>
             </div>

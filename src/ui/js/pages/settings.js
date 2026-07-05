@@ -41,10 +41,10 @@ window.Pages.settings = {
 
           <div class="toggle-row">
             <div>
-              <div class="toggle-label">System Monitoring</div>
-              <div class="toggle-desc">Continuously collect CPU, memory, and disk metrics</div>
+              <div class="toggle-label">External Lookups</div>
+              <div class="toggle-desc">Allow breach checks against HIBP and XposedOrNot (disable for privacy-focused use)</div>
             </div>
-            <label class="toggle"><input type="checkbox" id="sysmonToggle" ${settings.features.systemMonitoring ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+            <label class="toggle"><input type="checkbox" id="externalLookupsToggle" ${settings.features.externalLookups ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
         </div>
 
@@ -152,7 +152,7 @@ window.Pages.settings = {
     container.querySelector('#rtpToggle').addEventListener('change', (event) => saveFeature('realtimeProtection', event.target.checked, event.target));
     container.querySelector('#autoReportToggle').addEventListener('change', (event) => saveFeature('autoReports', event.target.checked, event.target));
     container.querySelector('#scanHistoryToggle').addEventListener('change', (event) => saveFeature('scanHistory', event.target.checked, event.target));
-    container.querySelector('#sysmonToggle').addEventListener('change', (event) => saveFeature('systemMonitoring', event.target.checked, event.target));
+    container.querySelector('#externalLookupsToggle').addEventListener('change', (event) => saveFeature('externalLookups', event.target.checked, event.target));
   },
 
   destroy() {

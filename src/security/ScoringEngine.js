@@ -5,6 +5,13 @@
 
 const { ServiceNames } = require('./ServiceNames');
 
+// Ports where a light-touch heuristic nudges an otherwise-unverified public
+// connection toward SAFE. Kept small and deliberately conservative — HTTPS
+// and HTTP are ubiquitous enough that flagging every single one as
+// "unverified" is more noise than signal for most users. This does NOT
+// override a blocklist hit; malicious traffic on 443 is still MALICIOUS.
+const LIGHT_TOUCH_SAFE_PORTS = new Set([443, 80]);
+
 class ScoringEngine {
   /**
    * Classify a network connection
@@ -30,10 +37,22 @@ class ScoringEngine {
       return 'SAFE';
     }
 
+    // Light-touch heuristic: near-universal, low-risk ports (HTTPS/HTTP)
+    // count as a positive signal, but only alongside a second corroborating
+    // signal — a successfully resolved reverse-DNS hostname. Port number
+    // alone turned out to be too broad in practice: the vast majority of
+    // *all* traffic (legitimate and malicious alike) uses 443 today, so
+    // gating on port only basically emptied out the "unverified" bucket.
+    // Most legitimate servers have a PTR record; many opportunistic/C2
+    // hosts don't bother setting one up.
+    if (remotePort && LIGHT_TOUCH_SAFE_PORTS.has(Number(remotePort)) && connection.hostname) {
+      return 'SAFE';
+    }
+
     // Check if it's a well-known service on a common port
     if (remotePort && ServiceNames.isCommonPort(remotePort)) {
-      // Common ports are generally safe, but we still mark as UNKNOWN
-      // since we can't be certain without more context
+      // Common but not in the light-touch list above (e.g. RDP, SMB) — still
+      // worth a closer look, so this stays UNKNOWN rather than SAFE.
       return 'UNKNOWN';
     }
 

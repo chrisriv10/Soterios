@@ -31,14 +31,14 @@ window.Pages.passwords = {
             <input type="password" id="leakPasswordInput" placeholder="Type a password to check" /></div>
           <button class="btn btn-primary" id="checkPasswordLeak">Check Password</button>
           <div id="passwordLeakResult" style="margin-top:12px;"></div>
-          <div style="font-size:11px;color:var(--text-dim);margin-top:10px;">Uses HIBP k-anonymity: only the first 5 SHA-1 hash characters are sent.</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:10px;">Uses HIBP k-anonymity: only the first 5 SHA-1 hash characters are sent. Disable in Settings for offline-only use.</div>
         </div>
         <div class="panel"><div class="panel-title">Email Breach Check</div>
           <div class="field"><label class="field-label">Email address</label>
             <input type="text" id="leakEmailInput" placeholder="name@example.com" /></div>
           <button class="btn btn-primary" id="checkEmailLeak">Check Email</button>
           <div id="emailLeakResult" style="margin-top:12px;"></div>
-          <div style="font-size:11px;color:var(--text-dim);margin-top:10px;">Uses the XposedOrNot email breach API.</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:10px;">Uses the XposedOrNot email breach API. Disable in Settings for offline-only use.</div>
         </div>
       </div>`;
     this.wireGenerator(container);
@@ -95,11 +95,17 @@ window.Pages.passwords = {
   },
 
   async wireLeakChecks(container) {
+    const settings = await Api.getSettings();
+    const externalLookups = settings.features.externalLookups;
+
+    const disabledHtml = '<div class="empty-state">External lookups are disabled. Enable them in&nbsp;<a href="#" class="goto-settings" style="color:var(--accent-primary);">Settings</a>.</div>';
+
     container.querySelector('#checkPasswordLeak').addEventListener('click', async () => {
       const btn = container.querySelector('#checkPasswordLeak');
       const out = container.querySelector('#passwordLeakResult');
       const password = container.querySelector('#leakPasswordInput').value;
       if (!password) { out.innerHTML = '<div class="empty-state">Enter a password first.</div>'; return; }
+      if (!externalLookups) { out.innerHTML = disabledHtml; return; }
       setButtonLoading(btn, true, 'Checking...');
       try {
         const result = await window.api.invoke('hibp:password', password);
@@ -114,6 +120,7 @@ window.Pages.passwords = {
       const out = container.querySelector('#emailLeakResult');
       const email = container.querySelector('#leakEmailInput').value.trim();
       if (!email) { out.innerHTML = '<div class="empty-state">Enter an email first.</div>'; return; }
+      if (!externalLookups) { out.innerHTML = disabledHtml; return; }
       setButtonLoading(btn, true, 'Checking...');
       try {
         const result = await window.api.invoke('xon:email', email);

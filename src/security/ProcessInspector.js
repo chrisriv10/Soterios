@@ -29,6 +29,23 @@ const PROTECTED_NAMES = new Set([
 class ProcessInspector {
   constructor() {}
 
+  // ps-list's Windows output doesn't include a separate executable path
+  // field — only the full command line. This pulls the executable portion
+  // out of it on a best-effort basis (handles the common quoted-path case;
+  // unquoted paths containing spaces can't be split reliably, so this is an
+  // approximation, not a guarantee).
+  _extractPathFromCmd(cmd) {
+    if (!cmd) return null;
+    const trimmed = cmd.trim();
+    if (!trimmed) return null;
+    if (trimmed.startsWith('"')) {
+      const end = trimmed.indexOf('"', 1);
+      if (end > 0) return trimmed.slice(1, end);
+    }
+    const spaceIdx = trimmed.indexOf(' ');
+    return spaceIdx === -1 ? trimmed : trimmed.slice(0, spaceIdx);
+  }
+
   async getProcesses() {
     try {
       const { default: psList } = await import('ps-list');
@@ -37,6 +54,7 @@ class ProcessInspector {
         pid: p.pid,
         name: p.name,
         cmd: p.cmd || '',
+        path: this._extractPathFromCmd(p.cmd),
         ppid: p.ppid,
         cpu: p.cpu,
         memory: p.memory,

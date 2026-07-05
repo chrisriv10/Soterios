@@ -51,7 +51,11 @@ class BlocklistService {
    * @param {string} rawData - Raw blocklist data
    */
   parseAndStore(source, rawData) {
-    const ips = new Set();
+    // Spamhaus DROP/EDROP entries are CIDR blocks (e.g. "1.2.3.0/24"), not
+    // single addresses. Store each as [networkInt, prefixLength] so isListed()
+    // can do real range containment instead of an exact-string match against
+    // just the network address (which would only ever match one IP per block).
+    const ranges = [];
     const lines = rawData.split('\n');
 
     for (const line of lines) {
@@ -60,14 +64,28 @@ class BlocklistService {
       if (!trimmed || trimmed.startsWith(';') || trimmed.startsWith('#') || trimmed.startsWith('//')) {
         continue;
       }
-      // Extract IP address (handle CIDR notation)
-      const ipMatch = trimmed.match(/^(\d+\.\d+\.\d+\.\d+)/);
-      if (ipMatch) {
-        ips.add(ipMatch[1]);
+      const match = trimmed.match(/^(\d+\.\d+\.\d+\.\d+)(?:\/(\d{1,2}))?/);
+      if (match) {
+        const networkInt = BlocklistService.ipToInt(match[1]);
+        const prefixLength = match[2] !== undefined ? parseInt(match[2], 10) : 32;
+        if (networkInt !== null && prefixLength >= 0 && prefixLength <= 32) {
+          ranges.push({ networkInt, prefixLength });
+        }
       }
     }
 
-    this.blocklists.set(source, ips);
+    this.blocklists.set(source, ranges);
+  }
+
+  /**
+   * Convert a dotted-quad IPv4 address to a 32-bit integer.
+   * @param {string} ip
+   * @returns {number|null}
+   */
+  static ipToInt(ip) {
+    const parts = ip.split('.').map(Number);
+    if (parts.length !== 4 || parts.some((p) => !Number.isInteger(p) || p < 0 || p > 255)) return null;
+    return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
   }
 
   /**
@@ -125,15 +143,16 @@ class BlocklistService {
   isListed(ip) {
     if (!ip || typeof ip !== 'string') return false;
 
-    // Extract base IP (handle CIDR notation)
+    // Extract base IP (handle CIDR notation on the input itself, if present)
     const ipMatch = ip.match(/^(\d+\.\d+\.\d+\.\d+)/);
     if (!ipMatch) return false;
-    const baseIp = ipMatch[1];
+    const targetInt = BlocklistService.ipToInt(ipMatch[1]);
+    if (targetInt === null) return false;
 
-    // Check all blocklists
-    for (const blocklist of this.blocklists.values()) {
-      if (blocklist.has(baseIp)) {
-        return true;
+    for (const ranges of this.blocklists.values()) {
+      for (const { networkInt, prefixLength } of ranges) {
+        const mask = prefixLength === 0 ? 0 : (0xFFFFFFFF << (32 - prefixLength)) >>> 0;
+        if ((targetInt & mask) === (networkInt & mask)) return true;
       }
     }
 
@@ -146,8 +165,8 @@ class BlocklistService {
    */
   getStats() {
     const stats = {};
-    for (const [source, ips] of this.blocklists) {
-      stats[source] = ips.size;
+    for (const [source, ranges] of this.blocklists) {
+      stats[source] = ranges.length;
     }
     return stats;
   }

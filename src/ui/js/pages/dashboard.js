@@ -9,7 +9,7 @@ window.Pages['dashboard'] = {
       </header>
 
       <div class="dashboard-grid">
-        <div class="card">
+        <div class="card" id="healthCard" style="cursor:pointer;" title="Click for a detailed breakdown">
           <div class="status-card">
             <div class="status-icon info" id="healthIcon">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
@@ -20,6 +20,7 @@ window.Pages['dashboard'] = {
             </div>
           </div>
           <div id="healthDetail" class="page-subtitle" style="margin-top:12px; font-size:0.85rem;">Calculating system health.</div>
+          <div class="page-subtitle" style="margin-top:8px; font-size:0.75rem; color:var(--accent-primary);">Click for full breakdown →</div>
         </div>
 
         <!-- Protection Status -->
@@ -35,6 +36,22 @@ window.Pages['dashboard'] = {
           </div>
           <div style="margin-top: 16px;">
             <button class="btn" id="btnToggleRtp">Disable</button>
+          </div>
+        </div>
+
+        <!-- Firewall Status -->
+        <div class="card">
+          <div class="status-card">
+            <div class="status-icon info" id="fwIcon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <div class="status-info">
+              <h3>Windows Firewall</h3>
+              <div class="value" id="fwStatusText">Checking...</div>
+            </div>
+          </div>
+          <div style="margin-top: 16px;">
+            <button class="btn" id="btnManageFirewall">Manage Firewall</button>
           </div>
         </div>
 
@@ -107,7 +124,60 @@ window.Pages['dashboard'] = {
     const healthScore = document.getElementById('healthScore');
     const healthDetail = document.getElementById('healthDetail');
     const healthIcon = document.getElementById('healthIcon');
+    const healthCard = document.getElementById('healthCard');
     let isRtpActive = true;
+    let lastHealthResult = null;
+
+    function summarizeHealth(health) {
+      const entries = Object.values(health.breakdown || {});
+      const weak = entries.filter((e) => e.max > 0 && e.points < e.max);
+      if (!weak.length) return 'All checks passing.';
+      if (weak.length === 1) return weak[0].reason;
+      return `${weak.length} area(s) need attention — click for details.`;
+    }
+
+    function showHealthDetailModal(health) {
+      if (!health) return;
+      const entries = Object.values(health.breakdown || {});
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:1000; padding:24px;';
+      overlay.innerHTML = `
+        <div class="panel" style="max-width:520px; width:100%; max-height:80vh; overflow:auto;">
+          <div class="flex-between">
+            <div>
+              <div class="panel-title">System Health Score</div>
+              <div class="page-subtitle" style="font-size:0.85rem;">Score: ${escapeHtml(String(health.score))} / 100</div>
+            </div>
+            <button class="btn btn-sm" id="closeHealthModal">Close</button>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:14px; margin-top:16px;">
+            ${entries.map((item) => `
+              <div>
+                <div style="display:flex; justify-content:space-between; font-size:0.9rem; margin-bottom:4px;">
+                  <span style="font-weight:600;">${escapeHtml(item.label || '')}</span>
+                  <span class="page-subtitle" style="font-size:0.85rem;">${escapeHtml(String(item.points))}/${escapeHtml(String(item.max))}</span>
+                </div>
+                <div class="stat-bar-track" style="height:6px;">
+                  <div class="stat-bar-fill" style="width:${item.max ? (item.points / item.max) * 100 : 0}%; background:${item.points >= item.max ? 'var(--ok)' : item.points === 0 ? 'var(--danger)' : 'var(--warn)'};"></div>
+                </div>
+                <div class="page-subtitle" style="font-size:0.8rem; margin-top:4px;">${escapeHtml(item.reason || '')}</div>
+              </div>`).join('')}
+          </div>
+        </div>`;
+      document.body.appendChild(overlay);
+      const close = () => {
+        overlay.remove();
+        document.removeEventListener('keydown', onKey);
+      };
+      const onKey = (e) => { if (e.key === 'Escape') close(); };
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+      overlay.querySelector('#closeHealthModal').addEventListener('click', close);
+      document.addEventListener('keydown', onKey);
+    }
+
+    if (healthCard) {
+      healthCard.addEventListener('click', () => showHealthDetailModal(lastHealthResult));
+    }
 
     function parseSqliteTimestamp(value) {
       if (!value) return new Date(NaN);
@@ -212,22 +282,62 @@ window.Pages['dashboard'] = {
     }
 
     try {
-      setRtpState(await window.api.invoke('rtp:status'));
+      isRtpActive = await window.api.invoke('rtp:status');
+      setRtpState(isRtpActive);
     } catch (_) {
       setRtpState(false);
     }
 
+    let fwEnabled = null; // null = unknown/unavailable
     try {
-      const health = await window.api.invoke('health:score');
+      fwEnabled = await window.api.invoke('firewall:status');
+      const fwIcon = document.getElementById('fwIcon');
+      const fwStatusText = document.getElementById('fwStatusText');
+      if (fwStatusText) fwStatusText.textContent = fwEnabled ? 'Active' : 'Disabled';
+      if (fwIcon) fwIcon.className = 'status-icon ' + (fwEnabled ? 'safe' : 'danger');
+    } catch (_) {
+      fwEnabled = null;
+      const fwIcon = document.getElementById('fwIcon');
+      const fwStatusText = document.getElementById('fwStatusText');
+      if (fwStatusText) fwStatusText.textContent = 'Unknown';
+      if (fwIcon) fwIcon.className = 'status-icon warning';
+    }
+
+    let latestScanForHealth = null;
+    try {
+      latestScanForHealth = await window.api.invoke('scanReports:latest');
+    } catch (_) {
+      latestScanForHealth = null;
+    }
+
+    try {
+      // Feed in whatever real signals are already available on this page --
+      // RTP/firewall status and the latest scan's result and date -- so the
+      // score reflects live protection state, not just resource usage.
+      const health = await window.api.invoke('health:score', {
+        lastScanMatches: latestScanForHealth ? (latestScanForHealth.threats_found ?? null) : null,
+        lastScanDate: latestScanForHealth ? latestScanForHealth.timestamp : null,
+        rtpActive: isRtpActive,
+        firewallActive: fwEnabled === null ? undefined : fwEnabled
+      });
+      lastHealthResult = health;
       healthScore.textContent = String(health.score);
       const level = health.score >= 80 ? 'safe' : health.score >= 60 ? 'warning' : 'danger';
       healthIcon.className = 'status-icon ' + level;
-      healthDetail.textContent = Object.values(health.breakdown || {}).map((item) => item.reason).join(' | ');
+      healthDetail.textContent = summarizeHealth(health);
     } catch (e) {
       healthScore.textContent = 'N/A';
       healthDetail.textContent = e.message || 'Unable to calculate health score.';
       healthIcon.className = 'status-icon warning';
     }
+
+    const btnManageFirewall = document.getElementById('btnManageFirewall');
+    if (btnManageFirewall) {
+      btnManageFirewall.addEventListener('click', () => {
+        if (window.AppRouter) window.AppRouter.navigate('firewall');
+      });
+    }
+
     const btnRefreshWarnings = container.querySelector('#btnRefreshWarnings');
     const btnQuickScan = document.getElementById('btnQuickScan');
     const btnFullScan = document.getElementById('btnFullScan');

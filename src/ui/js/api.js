@@ -55,7 +55,7 @@ const Api = {
     const realtimeProtection = await window.api.invoke('db:getSetting', 'feature.realtimeProtection', true);
     const autoReports = await window.api.invoke('db:getSetting', 'feature.autoReports', true);
     const scanHistory = await window.api.invoke('db:getSetting', 'feature.scanHistory', true);
-    const systemMonitoring = await window.api.invoke('db:getSetting', 'feature.systemMonitoring', true);
+    const externalLookups = await window.api.invoke('db:getSetting', 'feature.externalLookups', true);
     const dbTheme = await window.api.invoke('db:getSetting', 'ui.theme', 'dark');
     let storedTheme = null;
     try {
@@ -70,7 +70,7 @@ const Api = {
     if (window.AppState) window.AppState.currentTheme = theme;
     return {
       scanner: { defaultPath, maxDepth, maxFileSizeMB, includeCleanResults, excludedDirNames },
-      features: { realtimeProtection, autoReports, scanHistory, systemMonitoring },
+      features: { realtimeProtection, autoReports, scanHistory, externalLookups },
       ui: { theme }
     };
   },
@@ -92,7 +92,7 @@ const Api = {
       }
       if (Object.prototype.hasOwnProperty.call(f, 'autoReports')) await window.api.invoke('db:setSetting', 'feature.autoReports', !!f.autoReports);
       if (Object.prototype.hasOwnProperty.call(f, 'scanHistory')) await window.api.invoke('db:setSetting', 'feature.scanHistory', !!f.scanHistory);
-      if (Object.prototype.hasOwnProperty.call(f, 'systemMonitoring')) await window.api.invoke('db:setSetting', 'feature.systemMonitoring', !!f.systemMonitoring);
+      if (Object.prototype.hasOwnProperty.call(f, 'externalLookups')) await window.api.invoke('db:setSetting', 'feature.externalLookups', !!f.externalLookups);
     }
     if (patch.ui) {
       const u = patch.ui;

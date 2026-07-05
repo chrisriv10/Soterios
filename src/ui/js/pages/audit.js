@@ -129,8 +129,8 @@ window.Pages['audit'] = {
               <div class="page-subtitle" style="font-size:0.9rem; margin-top:4px;">${escapeHtml(res.message)}</div>
             </div>
           </div>
-          ${res.detail ? `<div style="font-size:0.85rem; color:var(--text-dim); padding:8px; background:var(--bg-surface); border-radius:6px; font-family:monospace;">${escapeHtml(res.detail)}</div>` : ''}
-          ${res.recommendation ? `<div style="font-size:0.85rem;"><strong>Recommendation:</strong> ${escapeHtml(res.recommendation)}</div>` : ''}
+          ${res.detail ? `<div style="font-size:0.85rem; color:var(--text-dim); padding:8px; background:var(--bg-surface); border-radius:6px; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; white-space:pre-wrap; word-break:break-word;">${escapeHtml(res.detail)}</div>` : ''}
+          ${res.recommendation ? this.renderRecommendation(res.recommendation) : ''}
           ${res.status === 'warn' || res.status === 'fail' ? `<button class="btn btn-sm audit-ignore" data-id="${escapeHtml(this.warningId(res))}" data-title="${escapeHtml(res.name)}" data-detail="${escapeHtml(res.message || res.detail || '')}">Ignore Warning</button>` : ''}
         </div>`;
       }
@@ -142,6 +142,18 @@ window.Pages['audit'] = {
             <button class="btn btn-sm audit-restore" data-id="${escapeHtml(w.id)}">Restore</button></div>`).join('')}</div></div>`;
       }
       content.innerHTML = html + '<div class="loading-progress" style="margin-top:16px;"><div class="loading-progress-bar" style="width:100%;opacity:1"></div></div>';
+      content.querySelectorAll('.copy-command-btn').forEach((btn) => btn.addEventListener('click', async () => {
+        const codeEl = content.querySelector(`#${btn.dataset.target}`);
+        if (!codeEl) return;
+        try {
+          await navigator.clipboard.writeText(codeEl.textContent);
+          const original = btn.textContent;
+          btn.textContent = 'Copied!';
+          setTimeout(() => { btn.textContent = original; }, 1500);
+        } catch (err) {
+          alert('Unable to copy to clipboard.');
+        }
+      }));
       content.querySelectorAll('.audit-ignore').forEach((btn) => btn.addEventListener('click', async () => {
         const card = btn.closest('.card');
         btn.disabled = true;
@@ -176,5 +188,29 @@ window.Pages['audit'] = {
   ,
   warningId(result) {
     return 'audit:' + String(result.name || result.message || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  },
+
+  // Some recommendations are "<plain-English explanation>: <PowerShell command>"
+  // (e.g. "Consider setting to RemoteSigned: Set-ExecutionPolicy RemoteSigned
+  // -Scope LocalMachine"). Running the command into the sentence makes it read
+  // like one long instruction instead of an explanation plus an action. This
+  // splits any recommendation ending in a recognizable cmdlet into readable
+  // prose plus its own copyable code block.
+  renderRecommendation(rec) {
+    const match = String(rec).match(/^(.*?):\s*((?:Set|Get|Enable|Disable|Add|Remove|New|Start|Stop|Restart|Install|Uninstall)-[A-Za-z]+\b[\s\S]*)$/);
+    if (!match) {
+      return `<div style="font-size:0.85rem;"><strong>Recommendation:</strong> ${escapeHtml(rec)}</div>`;
+    }
+    const prose = match[1].trim();
+    const command = match[2].trim();
+    const commandId = `cmd-${Math.random().toString(36).slice(2, 9)}`;
+    return `
+      <div style="font-size:0.85rem;">
+        <div><strong>Recommendation:</strong> ${escapeHtml(prose)}</div>
+        <div style="display:flex; align-items:center; gap:8px; margin-top:6px; background:var(--bg-surface); border:1px solid var(--glass-border); border-radius:6px; padding:8px 10px;">
+          <code id="${commandId}" style="flex:1; font-family:'Cascadia Code','Fira Code',monospace; font-size:0.82rem; white-space:pre-wrap; word-break:break-word; color:var(--text-main);">${escapeHtml(command)}</code>
+          <button type="button" class="btn btn-sm copy-command-btn" data-target="${commandId}" style="flex-shrink:0;">Copy</button>
+        </div>
+      </div>`;
   }
 };

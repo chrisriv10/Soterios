@@ -10,6 +10,14 @@ function isValidIp(ip) {
   return v4.test(ip) || (v6.test(ip) && ip.includes(':'));
 }
 
+// Windows Firewall only has these three profiles — reject anything else so a
+// renderer bug (or a compromised renderer) can't smuggle arbitrary strings
+// into a shell/PowerShell command built from this value.
+const VALID_FIREWALL_PROFILES = ['Domain', 'Private', 'Public'];
+function isValidFirewallProfile(name) {
+  return typeof name === 'string' && VALID_FIREWALL_PROFILES.includes(name);
+}
+
 function requestText(url, options = {}) {
   return new Promise((resolve, reject) => {
     const req = https.request(url, {
@@ -225,6 +233,12 @@ function registerIpcHandlers(mainWindow, services) {
     return services.firewallManager.setRuleEnabled(name, enabled);
   });
 
+  // -- Firewall Profile Toggle (Domain/Private/Public on/off) --
+  ipcMain.handle('firewall:setProfileEnabled', async (_event, { profile, enabled }) => {
+    if (!isValidFirewallProfile(profile)) throw new Error(`Invalid firewall profile: ${profile}`);
+    return services.firewallManager.setProfileEnabled(profile, !!enabled);
+  });
+
   // -- Trusted connections (local marker only — does not create a firewall
   // rule, just tells the perimeter UI to treat this remote address as safe) --
   const TRUSTED_IPS_KEY = 'firewall.trustedIps';
@@ -341,6 +355,7 @@ function registerIpcHandlers(mainWindow, services) {
 
   ipcMain.handle('hibp:password', async (_event, password) => {
     if (!password) return { found: false, count: 0 };
+    if (!db.getSetting('feature.externalLookups', true)) throw new Error('External lookups are disabled in Settings.');
     const sha = crypto.createHash('sha1').update(password).digest('hex').toUpperCase();
     const prefix = sha.slice(0, 5);
     const suffix = sha.slice(5);
@@ -355,6 +370,7 @@ function registerIpcHandlers(mainWindow, services) {
 
   ipcMain.handle('xon:email', async (_event, email) => {
     if (!email) return { found: false, breaches: [] };
+    if (!db.getSetting('feature.externalLookups', true)) throw new Error('External lookups are disabled in Settings.');
     const encoded = encodeURIComponent(email);
     const res = await requestText(`https://api.xposedornot.com/v1/check-email/${encoded}?details=true`);
     if (res.statusCode === 404) return { found: false, breaches: [] };

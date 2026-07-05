@@ -19,7 +19,7 @@ function renderHtml(report) {
 <html><head><meta charset="utf-8"><title>Soterios Report</title>
 <style>body{font-family:Segoe UI,Arial,sans-serif;margin:32px;color:#16202a;background:#fff}h1{margin:0 0 4px}.muted{color:#667085}.score{font-size:48px;font-weight:700}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:20px 0}.card{border:1px solid #d7dde5;border-radius:6px;padding:14px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{text-align:left;border-bottom:1px solid #e6eaf0;padding:8px;font-size:13px}.danger{color:#b42318}.warn{color:#b54708}.ok{color:#027a48}</style>
 </head><body>
-<h1>Soterios Report</h1>
+<h1>${esc(report.title || 'Soterios Report')}</h1>
 <div class="muted">Generated ${esc(new Date(report.generatedAt).toLocaleString())}</div>
 <div class="grid">
   <div class="card"><div class="muted">Security Score</div><div class="score ${esc(report.overview.level)}">${esc(report.overview.score)}</div></div>
@@ -45,8 +45,12 @@ module.exports = {
     const scanReports = ctx.db && typeof ctx.db.getScanReports === 'function' ? ctx.db.getScanReports(5) : [];
     const quarantine = ctx.db && typeof ctx.db.getQuarantineList === 'function' ? ctx.db.getQuarantineList() : [];
 
+    const generatedAt = new Date();
+    const friendlyTitle = `Security Report · ${generatedAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} at ${generatedAt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
+
     const report = {
-      generatedAt: new Date().toISOString(),
+      title: friendlyTitle,
+      generatedAt: generatedAt.toISOString(),
       app: { name: 'Soterios', version: args.version || '1.0.2' },
       overview: overviewResult.data,
       system: systemResult.data,
@@ -55,14 +59,14 @@ module.exports = {
       recommendations: overviewResult.data ? overviewResult.data.recommendations || [] : []
     };
 
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const stamp = generatedAt.toISOString().replace(/[:.]/g, '-');
     const dir = reportsDir(ctx);
     const jsonPath = path.join(dir, `soterios-report-${stamp}.json`);
     const htmlPath = path.join(dir, `soterios-report-${stamp}.html`);
     fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2), 'utf-8');
     fs.writeFileSync(htmlPath, renderHtml(report), 'utf-8');
 
-    if (ctx.appStore) ctx.appStore.addHistory('reports', { title: 'Security report generated', htmlPath, jsonPath, score: report.overview ? report.overview.score : null }, 20);
+    if (ctx.appStore) ctx.appStore.addHistory('reports', { title: friendlyTitle, htmlPath, jsonPath, score: report.overview ? report.overview.score : null }, 20);
     return { report, files: { html: htmlPath, json: jsonPath } };
   }
 };

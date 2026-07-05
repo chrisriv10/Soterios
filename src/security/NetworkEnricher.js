@@ -58,7 +58,7 @@ class NetworkEnricher {
 
     // Add security classification
     const isBlocklisted = this.blocklistService.isListed(remoteAddress);
-    enriched.classification = ScoringEngine.classify({ remoteAddress, remotePort }, isBlocklisted);
+    enriched.classification = ScoringEngine.classify({ remoteAddress, remotePort, hostname: enriched.hostname }, isBlocklisted);
     enriched.isBlocklisted = isBlocklisted;
 
     return enriched;

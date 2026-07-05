@@ -18,6 +18,23 @@ function isValidIp(ip) {
   return v4.test(ip) || (v6.test(ip) && ip.includes(':'));
 }
 
+// PowerShell/Windows errors are long, technical, and often include a stack
+// trace with line/column info that means nothing to an end user. This maps
+// the common cases to a short, actionable sentence and falls back to a
+// generic message for anything unrecognized (the raw error is still logged
+// to the console for debugging).
+function friendlyFirewallError(e, fallback) {
+  const raw = (e && e.message) || String(e);
+  console.error('Firewall operation failed:', raw);
+  if (/access is denied/i.test(raw)) return new Error('Access denied. Try running the app as Administrator.');
+  if (/requires elevation/i.test(raw)) return new Error('This action requires administrator privileges.');
+  if (/cannot find.*rule|no rules? (were)? ?found|no matching rules/i.test(raw)) return new Error('That rule could not be found — it may have already been removed.');
+  if (/already exists/i.test(raw)) return new Error('A rule with that name already exists.');
+  if (/timed out/i.test(raw)) return new Error('The operation timed out. Please try again.');
+  if (/cannot find path|does not exist/i.test(raw)) return new Error('That file or path could not be found.');
+  return new Error(fallback || 'Something went wrong updating the firewall. Please try again.');
+}
+
 class FirewallManager {
   async runPowerShell(command) {
     const { stdout } = await execFilePromise('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], {
@@ -150,7 +167,11 @@ class FirewallManager {
     if (localPort) parts.push(`-LocalPort ${Number(localPort)}`);
     if (program) parts.push(`-Program '${psEscape(program)}'`);
 
-    await this.runPowerShell(`New-NetFirewallRule ${parts.join(' ')} | Out-Null`);
+    try {
+      await this.runPowerShell(`New-NetFirewallRule ${parts.join(' ')} | Out-Null`);
+    } catch (e) {
+      throw friendlyFirewallError(e, 'Could not create the firewall rule.');
+    }
     return { success: true, name: fullName };
   }
 
@@ -158,7 +179,11 @@ class FirewallManager {
     if (!name || !name.startsWith(APP_RULE_PREFIX)) {
       throw new Error('Only rules created in this app can be deleted here.');
     }
-    await this.runPowerShell(`Remove-NetFirewallRule -DisplayName '${psEscape(name)}'`);
+    try {
+      await this.runPowerShell(`Remove-NetFirewallRule -DisplayName '${psEscape(name)}'`);
+    } catch (e) {
+      throw friendlyFirewallError(e, 'Could not delete that rule.');
+    }
     return { success: true };
   }
 
@@ -166,7 +191,28 @@ class FirewallManager {
     if (!name || !name.startsWith(APP_RULE_PREFIX)) {
       throw new Error('Only rules created in this app can be toggled here.');
     }
-    await this.runPowerShell(`Set-NetFirewallRule -DisplayName '${psEscape(name)}' -Enabled ${enabled ? 'True' : 'False'}`);
+    try {
+      await this.runPowerShell(`Set-NetFirewallRule -DisplayName '${psEscape(name)}' -Enabled ${enabled ? 'True' : 'False'}`);
+    } catch (e) {
+      throw friendlyFirewallError(e, 'Could not update that rule.');
+    }
+    return { success: true };
+  }
+
+  // Turns Windows Firewall on/off for a given profile (Domain/Private/Public).
+  // The IPC layer already validates `profile` against the same whitelist
+  // before this is ever called, but we check again here since this class
+  // shells out to PowerShell and should never trust its inputs blindly.
+  async setProfileEnabled(profile, enabled) {
+    const VALID_PROFILES = ['Domain', 'Private', 'Public'];
+    if (!VALID_PROFILES.includes(profile)) {
+      throw new Error('Invalid firewall profile.');
+    }
+    try {
+      await this.runPowerShell(`Set-NetFirewallProfile -Name ${profile} -Enabled ${enabled ? 'True' : 'False'}`);
+    } catch (e) {
+      throw friendlyFirewallError(e, `Could not ${enabled ? 'turn on' : 'turn off'} the ${profile} firewall profile.`);
+    }
     return { success: true };
   }
 }

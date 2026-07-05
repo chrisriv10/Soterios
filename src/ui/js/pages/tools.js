@@ -16,7 +16,7 @@ window.Pages.tools = {
         <div class="page-subtitle">Run focused maintenance checks.</div>
       </div>
       <div id="scriptList" class="dashboard-grid compact"></div>
-      <div class="card" style="padding:0; display:flex; flex-direction:column; margin-top:24px; max-height:calc(100vh - 220px);">
+      <div class="panel" style="padding:0; display:flex; flex-direction:column; margin-top:24px; max-height:calc(100vh - 220px);">
         <div style="padding:16px; background:var(--bg-surface-hover); border-bottom:1px solid var(--glass-border); font-weight:600; display:flex; justify-content:space-between; align-items:center;">
           <span>Output</span>
           <button class="btn btn-sm" id="clearOutputBtn" style="display:none;">Clear</button>
@@ -141,6 +141,13 @@ window.Pages.tools = {
     }
   },
 
+  // Applied to rows in long lists (services, large files) so the browser can
+  // skip layout/paint for rows that are scrolled out of view. This is what
+  // actually fixes scroll jank on 100+ row outputs -- it's not the row count
+  // itself that's expensive, it's repainting every row's card styling
+  // (borders/backgrounds) on every scroll frame.
+  lazyRowStyle: 'content-visibility:auto;contain-intrinsic-size:0 36px;',
+
   renderOutput(scriptId, result, when) {
     let html = `<div class="log-row" style="background:var(--panel-raised);"><span class="log-tag clean">done</span><span class="log-path">Completed ${escapeHtml(when)}</span></div>`;
     const truncate = (s, n = 80) => (typeof s === 'string' && s.length > n) ? s.slice(0, n - 1) + '…' : (s || '');
@@ -170,7 +177,7 @@ window.Pages.tools = {
       if (result.files.length) {
         html += `<div style="display:flex; justify-content:flex-end; margin:8px 0;"><button class="btn btn-sm" style="color:var(--accent-danger);" id="deleteSelectedFilesBtn" disabled>Delete Selected (0)</button></div>`;
         html += result.files.slice(0, 100).map((f) => `
-          <div class="log-row" style="display:flex; align-items:center; gap:8px;">
+          <div class="log-row" style="display:flex; align-items:center; gap:8px; ${this.lazyRowStyle}">
             <input type="checkbox" class="large-file-checkbox" data-file-path="${escapeHtml(f.path)}" data-file-size="${f.sizeMB}" />
             <span class="log-tag warn">${f.sizeMB} MB</span>
             <span class="log-path" style="flex:1;">${escapeHtml(f.path)}</span>
@@ -189,8 +196,8 @@ window.Pages.tools = {
       if (result.items.length > 12) html += `<div class="log-row"><span class="log-path">... ${escapeHtml(String(result.items.length - 12))} more items omitted</span></div>`;
     } else if (scriptId === 'windows-services-report') {
       html += `<div class="log-row"><span class="log-tag info">${result.autoStartCount || 0}</span><span class="log-path">Auto-start services, ${result.flaggedCount || 0} flagged</span></div>`;
-      html += (result.flagged || []).map(s => `<div class="log-row"><span class="log-tag match">flag</span><span class="log-path">${escapeHtml(s.displayName || s.name)} ${s.pathName ? '(' + escapeHtml(s.pathName) + ')' : ''}</span></div>`).join('');
-      html += (result.services || []).slice(0, 120).map(s => `<div class="log-row"><span class="log-tag clean">${escapeHtml(s.state || '')}</span><span class="log-path">${escapeHtml(s.displayName || s.name)}</span></div>`).join('');
+      html += (result.flagged || []).map(s => `<div class="log-row" style="${this.lazyRowStyle}"><span class="log-tag match">flag</span><span class="log-path">${escapeHtml(s.displayName || s.name)} ${s.pathName ? '(' + escapeHtml(s.pathName) + ')' : ''}</span></div>`).join('');
+      html += (result.services || []).slice(0, 120).map(s => `<div class="log-row" style="${this.lazyRowStyle}"><span class="log-tag clean">${escapeHtml(s.state || '')}</span><span class="log-path">${escapeHtml(s.displayName || s.name)}</span></div>`).join('');
     } else {
       html += `<pre class="log-path" style="white-space:pre-wrap;">${escapeHtml(JSON.stringify(result, null, 2))}</pre>`;
     }

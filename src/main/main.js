@@ -226,6 +226,14 @@ app.whenReady().then(async () => {
   const dbPath = path.join(app.getPath('userData'), 'soterios.db');
   const db = new DatabaseService(dbPath);
 
+  // Migrate old feature.systemMonitoring key to feature.externalLookups
+  const oldVal = db.getSetting('feature.systemMonitoring', null);
+  if (oldVal !== null) {
+    const newVal = db.getSetting('feature.externalLookups', null);
+    if (newVal === null) db.setSetting('feature.externalLookups', oldVal);
+    db.setSetting('feature.systemMonitoring', null);
+  }
+
   // 2. Security Engines (Dependency Injection)
   const clamEngine = new ClamAVEngine({
     dbDir: path.join(app.getPath('userData'), 'clamav-db')
