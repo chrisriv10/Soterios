@@ -7,8 +7,8 @@
   "license": "MIT",
   "private": true,
   "scripts": {
-    "start": "electron .",
-    "dev": "electron . --dev",
+    "start": "electron . --disable-logging --disable-gpu --disable-gpu-compositing --disable-gpu-shader-disk-cache --disable-software-rasterizer --disable-background-networking --disable-features=NetworkService,AutofillServerCommunication,AutofillAcrossForms,Autofill --disk-cache-dir=.cache/soterios",
+    "dev": "electron . --dev --disable-logging --disable-gpu --disable-gpu-compositing --disable-gpu-shader-disk-cache --disable-software-rasterizer --disable-background-networking --disable-features=NetworkService,AutofillServerCommunication,AutofillAcrossForms,Autofill --disk-cache-dir=.cache/soterios",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "dist:win": "electron-builder --win",
@@ -26,8 +26,8 @@
     "@electron/rebuild": "^4.0.4",
     "adm-zip": "^0.5.17",
     "axios": "^1.18.1",
-    "electron": "^39.8.5",
-    "electron-builder": "^26.15.3"
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
   },
   "build": {
     "appId": "com.soterios.app",
@@ -59,10 +59,7 @@
         }
       ],
       "icon": "assets/icon.ico",
-      "artifactName": "${productName}-Setup-${version}.${ext}",
-      "publisherName": "Chris Rivera",
-      "signAndEditExecutable": true,
-      "requestedExecutionLevel": "requireAdministrator"
+      "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -78,7 +75,8 @@
       "uninstallerIcon": "assets/icon.ico",
       "installerHeaderIcon": "assets/icon.ico",
       "deleteAppDataOnUninstall": true,
-      "artifactName": "${productName}-Setup-${version}.${ext}"
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "requestedExecutionLevel": "requireAdministrator"
     },
     "mac": {
       "target": "dmg",
