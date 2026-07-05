@@ -59,7 +59,10 @@
         }
       ],
       "icon": "assets/icon.ico",
-      "artifactName": "${productName}-Setup-${version}.${ext}"
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "publisherName": "Chris Rivera",
+      "signAndEditExecutable": true,
+      "requestedExecutionLevel": "requireAdministrator"
     },
     "nsis": {
       "oneClick": false,
@@ -75,8 +78,7 @@
       "uninstallerIcon": "assets/icon.ico",
       "installerHeaderIcon": "assets/icon.ico",
       "deleteAppDataOnUninstall": true,
-      "artifactName": "${productName}-Setup-${version}.${ext}",
-      "requestedExecutionLevel": "requireAdministrator"
+      "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "mac": {
       "target": "dmg",
