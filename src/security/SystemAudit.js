@@ -24,8 +24,7 @@ class SystemAudit {
     }
   }
 
-  async checkDefender(onProgress) {
-    onProgress?.('Checking Windows Defender...');
+  async checkDefender() {
     const def = await this.runPowerShell(`Get-MpComputerStatus | Select-Object AMServiceEnabled, AntivirusEnabled, RealTimeProtectionEnabled, AMEngineVersion, AntivirusSignatureVersion, AntivirusSignatureAge | ConvertTo-Json`);
     const out = [];
     if (def.ok) {
@@ -46,8 +45,7 @@ class SystemAudit {
     return out;
   }
 
-  async checkUac(onProgress) {
-    onProgress?.('Checking User Account Control (UAC)...');
+  async checkUac() {
     const uac = await this.runPowerShell(`(Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System').EnableLUA`);
     if (uac.ok) {
       const enabled = uac.stdout.trim() === '1';
@@ -61,8 +59,7 @@ class SystemAudit {
     return [{ name: 'User Account Control', status: 'error', message: 'Could not check UAC status.' }];
   }
 
-  async checkWindowsUpdate(onProgress) {
-    onProgress?.('Checking Windows Update (this can take up to a minute)...');
+  async checkWindowsUpdate() {
     const up = await this.runPowerShell(`$session = New-Object -ComObject Microsoft.Update.Session -ErrorAction Stop; $searcher = $session.CreateUpdateSearcher(); $pending = $searcher.Search('IsInstalled=0 and IsHidden=0'); $pending.Updates.Count`, 90000);
     if (up.ok) {
       const raw = up.stdout.trim();
@@ -77,8 +74,7 @@ class SystemAudit {
     return [{ name: 'Windows Updates', status: 'warn', message: 'Could not query update status.', detail: up.error || 'Windows Update may be disabled or the COM query timed out.', recommendation: 'Check Windows Update in Settings manually.' }];
   }
 
-  async checkBitLocker(onProgress) {
-    onProgress?.('Checking BitLocker status...');
+  async checkBitLocker() {
     const bl = await this.runPowerShell(`Get-BitLockerVolume -MountPoint $env:SystemDrive -ErrorAction Stop | Select-Object ProtectionStatus | ConvertTo-Json`);
     if (bl.ok) {
       try {
@@ -113,8 +109,7 @@ class SystemAudit {
     return [{ name: 'BitLocker', status: 'info', message: 'BitLocker is not available on this system.', detail: 'Requires Windows Pro/Enterprise and a TPM chip.' }];
   }
 
-  async checkExecutionPolicy(onProgress) {
-    onProgress?.('Checking PowerShell execution policy...');
+  async checkExecutionPolicy() {
     const ep = await this.runPowerShell(`try { (Get-ExecutionPolicy -Scope LocalMachine -ErrorAction Stop).ToString() } catch { '' }`);
     if (ep.ok) {
       const policy = ep.stdout.trim();
@@ -130,8 +125,7 @@ class SystemAudit {
     return [{ name: 'PowerShell Execution Policy', status: 'warn', message: 'PowerShell execution policy query failed.', detail: ep.error || 'Unable to query execution policy.', recommendation: 'Check execution policy with Get-ExecutionPolicy -List in PowerShell.' }];
   }
 
-  async checkSecureBoot(onProgress) {
-    onProgress?.('Checking Secure Boot status...');
+  async checkSecureBoot() {
     const sb = await this.runPowerShell(`Confirm-SecureBootUEFI`);
     if (sb.ok) {
       const enabled = sb.stdout.trim() === 'True';
@@ -152,6 +146,31 @@ class SystemAudit {
     // running sequentially meant paying that overhead six times in a row.
     // Total time now converges toward whichever single check takes longest
     // (Windows Update, up to 90s worst case) instead of the sum of all six.
+    //
+    // Progress is centralized here rather than each check method calling
+    // onProgress internally, so a real completed/total fraction can be
+    // reported (not just "this check started") -- since checks run in
+    // parallel, there's no single "step 3 of 6" sequence otherwise.
+    const checks = [
+      { label: 'Windows Defender', run: () => this.checkDefender() },
+      { label: 'User Account Control (UAC)', run: () => this.checkUac() },
+      { label: 'Windows Update (this can take up to a minute)', run: () => this.checkWindowsUpdate() },
+      { label: 'BitLocker', run: () => this.checkBitLocker() },
+      { label: 'PowerShell execution policy', run: () => this.checkExecutionPolicy() },
+      { label: 'Secure Boot', run: () => this.checkSecureBoot() }
+    ];
+
+    const total = checks.length;
+    let completed = 0;
+
+    const runOne = async (check) => {
+      onProgress?.({ type: 'start', label: check.label, completed, total });
+      const result = await check.run();
+      completed++;
+      onProgress?.({ type: 'complete', label: check.label, completed, total });
+      return result;
+    };
+
     const [
       defenderResults,
       uacResult,
@@ -159,14 +178,7 @@ class SystemAudit {
       bitlockerResult,
       epResult,
       secureBootResult
-    ] = await Promise.all([
-      this.checkDefender(onProgress),
-      this.checkUac(onProgress),
-      this.checkWindowsUpdate(onProgress),
-      this.checkBitLocker(onProgress),
-      this.checkExecutionPolicy(onProgress),
-      this.checkSecureBoot(onProgress)
-    ]);
+    ] = await Promise.all(checks.map(runOne));
 
     // Flatten in the same order the UI has always displayed results in, even
     // though execution order is now concurrent rather than sequential.

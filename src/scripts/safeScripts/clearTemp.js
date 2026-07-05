@@ -6,7 +6,7 @@ function safeStat(p) {
   try { return fs.statSync(p); } catch (_) { return null; }
 }
 
-module.exports = async function clearTemp(args = {}) {
+module.exports = async function clearTemp(args = {}, onProgress) {
   const maxAgeDays = args.maxAgeDays ?? 7;
   const dryRun = args.dryRun !== false;
   const tempDir = os.tmpdir();
@@ -14,9 +14,22 @@ module.exports = async function clearTemp(args = {}) {
   const log = [];
   let freedBytes = 0, deletedCount = 0, skippedCount = 0;
 
+  // Total item count isn't known until the whole tree is walked, so this
+  // reports a live count rather than a fabricated percentage. Throttled to
+  // avoid flooding the IPC channel back to the parent process.
+  let scannedCount = 0;
+  const REPORT_EVERY = 25;
+  function maybeReportProgress() {
+    scannedCount++;
+    if (onProgress && scannedCount % REPORT_EVERY === 0) {
+      onProgress({ label: 'Scanning temp files', count: scannedCount });
+    }
+  }
+
   function processPath(p) {
     const stat = safeStat(p);
     if (!stat) return;
+    maybeReportProgress();
     if (stat.isFile()) {
       if (stat.mtimeMs > cutoff) { skippedCount++; return; }
       if (dryRun) log.push(`[DRY RUN] Would delete file: ${p} (${stat.size} bytes)`);
@@ -49,6 +62,8 @@ module.exports = async function clearTemp(args = {}) {
   } catch (err) {
     return { error: `Could not process temp directory: ${err.message}`, log };
   }
+
+  onProgress?.({ label: 'Scan complete', count: scannedCount });
 
   return { dryRun, tempDir, maxAgeDays, deletedCount, skippedCount, freedBytes, freedMB: +(freedBytes / 1e6).toFixed(2), log };
 };

@@ -8,6 +8,33 @@ class ProcessResolver {
     this.processInspector = processInspector;
     this.cache = new Map();
     this.cacheTtl = 30 * 1000; // 30 seconds
+    this._inFlightFetch = null;
+  }
+
+  /**
+   * Fetches the full process list once and populates the cache for every
+   * PID it contains. If a fetch is already in progress, concurrent callers
+   * share that same promise instead of each triggering their own full
+   * process enumeration -- without this, N connections with N different
+   * uncached PIDs would fire N redundant getProcesses() calls at once.
+   * @returns {Promise<void>}
+   */
+  async _refreshProcessList() {
+    if (this._inFlightFetch) return this._inFlightFetch;
+
+    this._inFlightFetch = (async () => {
+      try {
+        const processes = await this.processInspector.getProcesses();
+        const now = Date.now();
+        for (const p of processes) {
+          this.cache.set(p.pid, { processName: p.name || null, timestamp: now });
+        }
+      } finally {
+        this._inFlightFetch = null;
+      }
+    })();
+
+    return this._inFlightFetch;
   }
 
   /**
@@ -25,25 +52,23 @@ class ProcessResolver {
     }
 
     try {
-      const processes = await this.processInspector.getProcesses();
-      const process = processes.find(p => p.pid === pid);
-      const processName = process ? process.name : null;
-
-      // Cache the result
-      this.cache.set(pid, {
-        processName,
-        timestamp: Date.now()
-      });
-
-      return processName;
+      await this._refreshProcessList();
     } catch (err) {
-      // Process lookup failed - cache the failure
-      this.cache.set(pid, {
-        processName: null,
-        timestamp: Date.now()
-      });
+      // Fetch failed -- cache a negative result for this pid so repeated
+      // calls in the same batch don't keep retrying a failing enumeration.
+      this.cache.set(pid, { processName: null, timestamp: Date.now() });
       return null;
     }
+
+    // The refresh populates entries for every PID that's actually running.
+    // If this PID still isn't present, it's genuinely gone (process
+    // exited) -- cache that negative result too, rather than re-fetching
+    // the whole list again on every subsequent call for it within the TTL.
+    if (!this.cache.has(pid)) {
+      this.cache.set(pid, { processName: null, timestamp: Date.now() });
+    }
+
+    return this.cache.get(pid).processName;
   }
 
   /**

@@ -19,32 +19,77 @@ window.Pages['audit'] = {
   async load(container) {
     const content = container.querySelector('#auditContent');
     const progressBar = content?.querySelector('.loading-progress-bar');
-    let progressTimer = null;
-    const setLoadingState = (active) => {
-      if (progressTimer) {
-        clearInterval(progressTimer);
-        progressTimer = null;
+
+    // Real progress is reported in discrete steps (N of 6 checks complete),
+    // but checks run concurrently and one of them (Windows Update) can take
+    // up to 90s on its own -- snapping the bar directly to each new
+    // milestone would leave it sitting frozen for most of that wait. This
+    // creeper fills the gap with continuous motion that always stays
+    // truthful: it only ever approaches the NEXT real milestone (never
+    // claims more progress than is actually known), decelerating as it
+    // nears that ceiling, and snaps immediately to the exact real value the
+    // moment a check genuinely completes.
+    let currentPct = 4;
+    let ceilingPct = 4;
+    let creepTimer = null;
+
+    const startCreeping = () => {
+      if (creepTimer) return;
+      creepTimer = setInterval(() => {
+        const gap = ceilingPct - currentPct;
+        if (gap <= 0.1) return; // effectively at the ceiling, nothing more to do until it moves
+        currentPct += gap * 0.06; // approach asymptotically -- never reaches or crosses ceilingPct
+        if (progressBar) progressBar.style.width = `${currentPct}%`;
+      }, 150);
+    };
+
+    const stopCreeping = () => {
+      if (creepTimer) {
+        clearInterval(creepTimer);
+        creepTimer = null;
       }
-      if (!progressBar) return;
+    };
+
+    const setLoadingState = (active) => {
       if (!active) {
-        progressBar.style.opacity = '0';
-        progressBar.style.width = '100%';
+        stopCreeping();
+        if (progressBar) {
+          progressBar.style.opacity = '0';
+          progressBar.style.width = '100%';
+        }
         return;
       }
+      if (!progressBar) return;
       progressBar.style.opacity = '1';
-      progressBar.style.width = '8%';
-      let currentWidth = 8;
-      progressTimer = setInterval(() => {
-        currentWidth = Math.min(currentWidth + Math.random() * 12 + 4, 88);
-        progressBar.style.width = `${currentWidth}%`;
-      }, 180);
+      progressBar.style.width = `${currentPct}%`;
+      startCreeping();
     };
     setLoadingState(true);
     let unsubscribeProgress = null;
     try {
-      unsubscribeProgress = window.api.on('audit:progress', (label) => {
+      unsubscribeProgress = window.api.on('audit:progress', (event) => {
         const labelEl = container.querySelector('#auditProgressLabel');
-        if (labelEl) labelEl.textContent = label;
+        if (!event) return;
+        const { type, label, completed, total } = event;
+        if (labelEl) {
+          labelEl.textContent = type === 'complete'
+            ? `${label} check completed (${completed}/${total})`
+            : `Checking ${label}...`;
+        }
+        if (typeof completed === 'number' && typeof total === 'number' && total > 0) {
+          if (type === 'complete') {
+            // A check genuinely finished -- snap to the real value now,
+            // overriding wherever the creep had gotten to.
+            currentPct = Math.max(4, Math.round((completed / total) * 100));
+            if (progressBar) progressBar.style.width = `${currentPct}%`;
+          }
+          // Whether this was a start or complete event, the next ceiling is
+          // always "one more check done than we've confirmed so far" --
+          // buffered a few points short so the creep never visually touches
+          // a milestone before it's actually true.
+          const nextMilestone = Math.min(total, completed + 1);
+          ceilingPct = nextMilestone >= total ? 100 : Math.max(currentPct + 1, Math.round((nextMilestone / total) * 100) - 3);
+        }
       });
       const results = await window.api.invoke('audit:run');
       const ignored = await window.api.invoke('warnings:listIgnored');

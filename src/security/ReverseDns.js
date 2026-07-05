@@ -6,6 +6,8 @@
 
 const dns = require('dns').promises;
 
+const LOOKUP_TIMEOUT_MS = 2000;
+
 class ReverseDns {
   constructor() {
     this.cache = new Map();
@@ -27,9 +29,19 @@ class ReverseDns {
     }
 
     try {
-      const hostnames = await dns.reverse(ip);
+      // dns.reverse() has no built-in timeout -- an unreachable or
+      // non-responding DNS server can otherwise hang indefinitely, which
+      // would stall the entire Promise.all() enrichment batch (and make the
+      // progress bar look permanently stuck) waiting on just one IP. Note
+      // this only enforces an application-level timeout; the underlying
+      // lookup itself isn't cancelled, it just gets ignored once it's too
+      // late -- Node's dns module doesn't expose a cancellable request here.
+      const hostnames = await Promise.race([
+        dns.reverse(ip),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Reverse DNS lookup timed out')), LOOKUP_TIMEOUT_MS))
+      ]);
       const hostname = hostnames && hostnames.length > 0 ? hostnames[0] : null;
-      
+
       // Cache the result
       this.cache.set(ip, {
         hostname,
@@ -38,7 +50,8 @@ class ReverseDns {
 
       return hostname;
     } catch (err) {
-      // DNS lookup failed - cache the failure to avoid repeated attempts
+      // DNS lookup failed or timed out - cache the failure to avoid
+      // repeated slow attempts against the same unreachable/non-resolving IP.
       this.cache.set(ip, {
         hostname: null,
         timestamp: Date.now()

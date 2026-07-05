@@ -24,7 +24,7 @@ module.exports = [
     run: async (args, ctx) => {
       const scriptId = args && args.scriptId;
       if (!scriptId) throw new Error('scriptId is required');
-      const result = await runScript(scriptId, args.scriptArgs || {});
+      const result = await runScript(scriptId, args.scriptArgs || {}, ctx && ctx.sendProgress);
       if (ctx.appStore) {
         ctx.appStore.addHistory('scripts', { scriptId, resultSummary: summarizeScriptResult(result) });
         ctx.appStore.addHistory('actions', { type: 'script', title: 'Maintenance script ran', detail: scriptId, level: 'ok' });

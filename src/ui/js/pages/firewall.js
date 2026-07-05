@@ -107,25 +107,63 @@ window.Pages['firewall'] = {
       }
       html += '</div>';
 
-      // ── PERIMETER MAP VISUALIZER ──────────────────────────────────────────
+      // ── NETWORK PERIMETER (live visualization) ────────────────────────────
       html += `
-        <div class="card" id="perimeterMapCard" style="margin-top:24px; padding:24px 28px;">
-          <div style="display:flex; align-items:center; gap:10px; margin-bottom:18px;">
+        <div class="card" id="perimeterCard" style="margin-top:24px; padding:24px 28px;">
+          <style>
+            #perimeterCard .perim-node { cursor:pointer; transition: opacity 0.5s ease; }
+            #perimeterCard .perim-node.entering circle.perim-dot { animation: perimPop 0.4s ease; }
+            #perimeterCard .perim-node.selected circle.perim-dot { stroke:#fff; stroke-width:2; }
+            #perimeterCard .perim-blocked-ring { animation: perimPulse 1.6s ease-out infinite; }
+            @keyframes perimPop { from { transform: scale(0); } to { transform: scale(1); } }
+            @keyframes perimPulse {
+              0% { opacity:0.55; transform: scale(0.6); }
+              100% { opacity:0; transform: scale(1.8); }
+            }
+          </style>
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
             <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2" style="width:18px;height:18px;flex-shrink:0;">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             </svg>
-            <span style="font-weight:600; font-size:0.95rem; letter-spacing:0.3px;">Network Perimeter Map</span>
-            <span style="margin-left:auto; font-size:0.78rem; color:var(--text-muted); letter-spacing:0.5px; text-transform:uppercase;">Live Rule Distribution</span>
+            <span style="font-weight:600; font-size:0.95rem; letter-spacing:0.3px;">Network Perimeter</span>
+            <span id="perimeterSummary" style="margin-left:auto; font-size:0.78rem; color:var(--text-muted);"></span>
           </div>
-          <canvas id="perimeterCanvas" style="display:block; width:100%; max-width:680px; margin:0 auto; cursor:default; height:auto;" height="420"></canvas>
-          <div id="perimeterLegend" style="display:flex; justify-content:center; gap:28px; margin-top:16px; flex-wrap:wrap;"></div>
+          <div style="display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start;">
+            <div style="flex:2; min-width:320px;">
+              <svg id="perimeterSvg" viewBox="0 0 600 420" style="width:100%; height:auto; display:block;"></svg>
+              <div style="display:flex; justify-content:center; gap:20px; margin-top:10px; flex-wrap:wrap; font-size:0.78rem; color:var(--text-dim);">
+                <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--ok);margin-right:5px;"></span>Allowed / Trusted</span>
+                <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--warn);margin-right:5px;"></span>Unknown / Unusual</span>
+                <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--danger);margin-right:5px;"></span>Blocked / High Risk</span>
+              </div>
+            </div>
+            <div style="flex:1; min-width:270px; max-width:340px;" id="connectionDetailPanel">
+              <div class="empty-state" style="font-size:0.85rem;">Click a connection to see details and actions.</div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // ── FIREWALL RULES (searchable, synced to the live data above) ───────
+      html += `
+        <div class="card" style="margin-top:24px; padding:20px 24px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
+            <h3 style="margin:0;">Firewall Rules</h3>
+            <input type="text" id="ruleSearchInput" placeholder="Search by name, app, or address\u2026"
+              style="min-width:240px; padding:8px 12px; border-radius:8px; border:1px solid var(--glass-border); background:var(--bg-surface); color:var(--text-main);" />
+          </div>
+          <div id="ruleListContainer" style="max-height:380px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;">
+            <div class="empty-state">Loading rules\u2026</div>
+          </div>
         </div>
       `;
 
       content.innerHTML = html + '<div class="loading-progress" style="margin-top:16px;"><div class="loading-progress-bar" style="width:100%;opacity:1"></div></div>';
 
-      // Boot the canvas visualizer after DOM is ready
-      requestAnimationFrame(() => this._initPerimeterMap(safeRules, list));
+      requestAnimationFrame(() => {
+        this._initPerimeter(container);
+        this._initRuleList(container);
+      });
 
     } catch (e) {
       content.innerHTML = `<div class="empty-state">Error loading firewall: ${escapeHtml(e.message)}</div>`;
@@ -134,367 +172,439 @@ window.Pages['firewall'] = {
     }
   },
 
-  // ── Perimeter Map Canvas Engine ───────────────────────────────────────────
-  _initPerimeterMap(rules, profiles) {
-    const canvas = document.getElementById('perimeterCanvas');
-    if (!canvas) return;
+  // ══════════════════════════════════════════════════════════════════════
+  // NETWORK PERIMETER — live visualization
+  // ══════════════════════════════════════════════════════════════════════
 
-    const safeRules = rules || {
-      total: 0,
-      inbound: 0,
-      outbound: 0,
-      allow: 0,
-      block: 0,
-      enabled: 0,
-      disabled: 0,
-      profiles: {
-        domain: 0,
-        private: 0,
-        public: 0
+  _perimeterTimer: null,
+  _particleRaf: null,
+  _perimeterNodes: new Map(),   // key -> { data, angle, radius, blocked, x, y }
+  _selectedKey: null,
+  _trustedIps: [],
+
+  STATE_CODE_MAP: {
+    1: 'CLOSED', 2: 'LISTEN', 3: 'SYN_SENT', 4: 'SYN_RECEIVED',
+    5: 'ESTABLISHED', 6: 'FIN_WAIT_1', 7: 'FIN_WAIT_2', 8: 'CLOSE_WAIT',
+    9: 'CLOSING', 10: 'LAST_ACK', 11: 'TIME_WAIT', 12: 'DELETE_TCB', 100: 'BOUND'
+  },
+
+  _getConnState(c) {
+    const raw = c.state ?? c.State ?? c.connectionState ?? c.ConnectionState ?? c.status ?? c.Status ?? '';
+    return (this.STATE_CODE_MAP[raw] || raw || 'UNKNOWN').toString().toUpperCase();
+  },
+
+  _field(c, ...names) {
+    for (const n of names) { if (c[n] !== undefined && c[n] !== null && c[n] !== '') return c[n]; }
+    return '';
+  },
+
+  // Windows doesn't expose true directionality for an already-established TCP
+  // connection, so this is a best-effort heuristic: a low/well-known local
+  // port paired with a high remote port usually means someone connected IN to
+  // a service you're hosting; the common case (you connecting out to a server
+  // on a well-known port) is the opposite.
+  _getDirection(c, localPort, remotePort) {
+    const lp = Number(localPort) || 0;
+    const rp = Number(remotePort) || 0;
+    if (lp > 0 && lp < 1024 && rp >= 1024) return 'inbound';
+    return 'outbound';
+  },
+
+  _connKey(c) {
+    return [
+      this._field(c, 'localAddress', 'LocalAddress'), this._field(c, 'localPort', 'LocalPort'),
+      this._field(c, 'remoteAddress', 'RemoteAddress'), this._field(c, 'remotePort', 'RemotePort')
+    ].join('|');
+  },
+
+  async _initPerimeter(container) {
+    try { this._trustedIps = (await window.api.invoke('firewall:getTrusted')) || []; } catch (_) { this._trustedIps = []; }
+
+    await this._pollPerimeter(container);
+    this._startParticleLoop(container);
+
+    if (this._perimeterTimer) clearInterval(this._perimeterTimer);
+    this._perimeterTimer = setInterval(() => {
+      if (!document.body.contains(container)) {
+        clearInterval(this._perimeterTimer);
+        this._perimeterTimer = null;
+        if (this._particleRaf) cancelAnimationFrame(this._particleRaf);
+        return;
       }
-    };
+      this._pollPerimeter(container);
+    }, 4000);
+  },
 
-    const card = document.getElementById('perimeterMapCard');
-    const baseWidth = 680;
-    const baseHeight = 420;
-    const dpr = window.devicePixelRatio || 1;
+  async _pollPerimeter(container) {
+    const svg = container.querySelector('#perimeterSvg');
+    if (!svg) return;
+    let connections = [];
+    try {
+      const res = await window.api.invoke('network:connections');
+      connections = Array.isArray(res) ? res : [];
+    } catch (_) { /* keep last known nodes on a transient failure */ return; }
+    this._renderPerimeter(container, connections);
+  },
 
-    const ctx = canvas.getContext('2d');
-    let W = 0;
-    let H = 0;
-    let cx = 0;
-    let cy = 0;
+  _classifyRisk(c, key) {
+    const remoteAddress = this._field(c, 'remoteAddress', 'RemoteAddress');
+    if (this._trustedIps.includes(remoteAddress)) return 'SAFE';
+    if (c.classification === 'MALICIOUS') return 'MALICIOUS';
+    if (c.classification === 'SAFE') return 'SAFE';
+    return 'UNKNOWN';
+  },
 
-    const resizeCanvas = () => {
-      const cardWidth = card ? Math.max(280, card.clientWidth - 56) : baseWidth;
-      const width = Math.min(cardWidth, baseWidth);
-      const height = Math.max(280, Math.round((width / baseWidth) * baseHeight));
+  _riskColor(risk) {
+    return risk === 'SAFE' ? 'var(--ok)' : risk === 'MALICIOUS' ? 'var(--danger)' : 'var(--warn)';
+  },
 
-      const pixelWidth = Math.round(width * dpr);
-      const pixelHeight = Math.round(height * dpr);
-      if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
-        canvas.width = pixelWidth;
-        canvas.height = pixelHeight;
-      }
+  _renderPerimeter(container, connections) {
+    const svg = container.querySelector('#perimeterSvg');
+    const summary = container.querySelector('#perimeterSummary');
+    if (!svg) return;
 
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      W = width;
-      H = height;
-      cx = W / 2;
-      cy = H / 2 + 6;
-      return { width, height };
-    };
+    const cx = 300, cy = 210;
+    const boundaryR = 175;
+    const allowedR = 138;
 
-    // Profile ring data
-    const profileNames = ['domain', 'private', 'public'];
-    const profileColors = ['#58A6FF', '#3FB950', '#D29922'];
-    const profileLabels = ['Domain', 'Private', 'Public'];
-    const radii = [68, 108, 148];
-
-    const profileRuleCounts = profileNames.map(n => (safeRules.profiles && safeRules.profiles[n]) || 0);
-    const maxCount = Math.max(...profileRuleCounts, 1);
-
-    // Determine enabled status per profile
-    const enabledByName = {};
-    (Array.isArray(profiles) ? profiles : [profiles]).forEach(p => {
-      if (p && p.Name) {
-        enabledByName[p.Name.toLowerCase()] = p.Enabled === 1 || p.Enabled === true;
-      }
+    // Only show a bounded number of connections so this stays a map, not a
+    // spreadsheet. Prioritize what matters: malicious, then unknown, then a
+    // sample of safe ones.
+    const priority = { MALICIOUS: 0, UNKNOWN: 1, SAFE: 2 };
+    const withMeta = connections.map((c) => {
+      const key = this._connKey(c);
+      const risk = this._classifyRisk(c, key);
+      return { c, key, risk };
     });
+    withMeta.sort((a, b) => priority[a.risk] - priority[b.risk]);
+    const MAX_NODES = 26;
+    const shown = withMeta.slice(0, MAX_NODES);
+    const hiddenCount = Math.max(0, withMeta.length - shown.length);
 
-    // Particles
-    const PARTICLE_COUNT = 38;
-    let particles = [];
-
-    function spawnParticle() {
-      // Pick a profile ring weighted by rule count
-      const weights = profileRuleCounts.map(c => Math.max(c, 1));
-      const total = weights.reduce((a, b) => a + b, 0);
-      let r = Math.random() * total;
-      let ring = 0;
-      for (let i = 0; i < weights.length; i++) {
-        r -= weights[i];
-        if (r <= 0) { ring = i; break; }
-      }
-
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 0.003 + Math.random() * 0.005;
-      const isInbound = Math.random() > 0.5;
-      const color = profileColors[ring];
-
-      return {
-        ring,
-        angle,
-        speed: isInbound ? -speed : speed, // inbound = clockwise inward feel
-        radius: radii[ring] + (Math.random() - 0.5) * 10,
-        alpha: 0,
-        maxAlpha: 0.55 + Math.random() * 0.35,
-        size: 1.8 + Math.random() * 2,
-        color,
-        life: 0,
-        maxLife: 120 + Math.random() * 160,
-        isInbound
-      };
+    const inbound = [];
+    const outbound = [];
+    for (const item of shown) {
+      const localPort = this._field(item.c, 'localPort', 'LocalPort');
+      const remotePort = this._field(item.c, 'remotePort', 'RemotePort');
+      const dir = this._getDirection(item.c, localPort, remotePort);
+      item.direction = dir;
+      (dir === 'inbound' ? inbound : outbound).push(item);
     }
 
-    function initParticles() {
-      particles = [];
-      for (let i = 0; i < PARTICLE_COUNT; i++) {
-        const p = spawnParticle();
-        p.life = Math.floor(Math.random() * p.maxLife); // stagger starts
-        particles.push(p);
-      }
-    }
-
-    initParticles();
-
-    // Build legend
-    const legend = document.getElementById('perimeterLegend');
-    if (legend) {
-      legend.innerHTML = profileLabels.map((label, i) => {
-        const count = profileRuleCounts[i];
-        const pct = Math.round((count / Math.max(safeRules.total, 1)) * 100);
-        const isEnabled = enabledByName[profileNames[i]];
-        const status = isEnabled === undefined ? '' :
-          `<span style="color:${isEnabled ? '#3FB950' : '#F85149'};font-size:0.72rem;margin-left:5px;">${isEnabled ? '● ON' : '○ OFF'}</span>`;
-        return `<div style="display:flex;align-items:center;gap:7px;font-size:0.8rem;color:var(--text-muted);">
-          <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${profileColors[i]};box-shadow:0 0 6px ${profileColors[i]}88;"></span>
-          <span style="color:#c9d1d9;">${label}</span>
-          <span style="color:#6e7681;">${count} rules · ${pct}%</span>
-          ${status}
-        </div>`;
-      }).join('');
-    }
-
-    // Inbound / outbound arc fractions
-    const inboundFrac = safeRules.total > 0 ? safeRules.inbound / safeRules.total : 0.5;
-    const allowFrac = safeRules.total > 0 ? safeRules.allow / safeRules.total : 0.5;
-
-    let frame = 0;
-    let animId;
-
-    const handleResize = () => {
-      cancelAnimationFrame(animId);
-      resizeCanvas();
-      frame = 0;
-      initParticles();
-      draw();
+    const place = (list, side) => {
+      // side: -1 = left (inbound), 1 = right (outbound)
+      const count = list.length;
+      list.forEach((item, i) => {
+        const spread = Math.min(Math.PI * 0.72, Math.PI * 0.16 + count * 0.05);
+        const t = count <= 1 ? 0.5 : i / (count - 1);
+        // Left side is centered on angle PI (pointing left), right side on 0 (pointing right)
+        const finalAngle = side < 0
+          ? Math.PI + (t - 0.5) * spread
+          : (t - 0.5) * spread;
+        const blocked = item.risk === 'MALICIOUS';
+        const radius = blocked ? boundaryR : allowedR - (item.risk === 'UNKNOWN' ? 10 : 0);
+        item.angle = finalAngle;
+        item.radius = radius;
+        item.blocked = blocked;
+        item.x = cx + Math.cos(finalAngle) * radius;
+        item.y = cy + Math.sin(finalAngle) * radius;
+      });
     };
+    place(inbound, -1);
+    place(outbound, 1);
 
-    function draw() {
-      resizeCanvas();
-      ctx.clearRect(0, 0, W, H);
+    const allItems = [...inbound, ...outbound];
+    const newKeys = new Set(allItems.map((i) => i.key));
+    const prevKeys = new Set(this._perimeterNodes.keys());
+    const enteringKeys = new Set([...newKeys].filter((k) => !prevKeys.has(k)));
 
-      // Background subtle radial glow
-      const glow = ctx.createRadialGradient(cx, cy, 20, cx, cy, 200);
-      glow.addColorStop(0, 'rgba(88,166,255,0.04)');
-      glow.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = glow;
-      ctx.fillRect(0, 0, W, H);
+    // If the selected node disappeared (connection closed), close the panel.
+    if (this._selectedKey && !newKeys.has(this._selectedKey)) {
+      this._selectedKey = null;
+      this._renderDetailPanel(container, null);
+    }
 
-      // Draw rings
-      for (let i = 0; i < radii.length; i++) {
-        const r = radii[i];
-        const col = profileColors[i];
-        const count = profileRuleCounts[i];
-        const frac = count / maxCount;
-        const isEnabled = enabledByName[profileNames[i]];
-        const opacity = isEnabled === false ? 0.2 : 0.18 + frac * 0.22;
+    const nodeMap = new Map(allItems.map((i) => [i.key, i]));
+    this._perimeterNodes = nodeMap;
 
-        // Ring track
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.strokeStyle = col + '33';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
+    // Static chrome (boundary ring, allowed ring, center PC) + dynamic nodes
+    let svgHtml = `
+      <circle cx="${cx}" cy="${cy}" r="${boundaryR}" fill="none" stroke="var(--glass-border)" stroke-width="1.5" stroke-dasharray="4 5"/>
+      <circle cx="${cx}" cy="${cy}" r="${allowedR}" fill="none" stroke="var(--glass-border)" stroke-width="1" opacity="0.4"/>
+      <g>
+        <circle cx="${cx}" cy="${cy}" r="30" fill="var(--bg-surface-hover)" stroke="var(--accent-primary)" stroke-width="1.5"/>
+        <text x="${cx}" y="${cy - 2}" text-anchor="middle" font-size="10" font-weight="600" fill="var(--text-main)">This PC</text>
+        <text x="${cx}" y="${cy + 12}" text-anchor="middle" font-size="9" fill="var(--text-dim)">${allItems.length} active</text>
+      </g>
+    `;
 
-        // Filled arc proportional to rule count
-        if (count > 0) {
-          const startAngle = -Math.PI / 2 + (frame * 0.002 * (i % 2 === 0 ? 1 : -1));
-          const sweep = (count / rules.total) * Math.PI * 2;
+    for (const item of allItems) {
+      const color = this._riskColor(item.risk);
+      const entering = enteringKeys.has(item.key) ? 'entering' : '';
+      const selected = this._selectedKey === item.key ? 'selected' : '';
+      const label = escapeHtml((this._field(item.c, 'processName') || this._field(item.c, 'remoteAddress', 'RemoteAddress') || '').slice(0, 14));
 
-          ctx.beginPath();
-          ctx.arc(cx, cy, r, startAngle, startAngle + sweep);
-          ctx.strokeStyle = col;
-          ctx.lineWidth = isEnabled === false ? 1 : 2.5;
-          ctx.globalAlpha = opacity + 0.15;
-          ctx.stroke();
-          ctx.globalAlpha = 1;
-
-          // Glow on the arc tip
-          if (isEnabled !== false) {
-            const tipAngle = startAngle + sweep;
-            const tx = cx + Math.cos(tipAngle) * r;
-            const ty = cy + Math.sin(tipAngle) * r;
-            const tipGlow = ctx.createRadialGradient(tx, ty, 0, tx, ty, 8);
-            tipGlow.addColorStop(0, col + 'cc');
-            tipGlow.addColorStop(1, col + '00');
-            ctx.fillStyle = tipGlow;
-            ctx.beginPath();
-            ctx.arc(tx, ty, 8, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-      }
-
-      // Center shield icon (drawn as polygon)
-      const shieldR = 26;
-      ctx.save();
-      ctx.translate(cx, cy);
-      // Shield shape
-      ctx.beginPath();
-      ctx.moveTo(0, -shieldR);
-      ctx.bezierCurveTo(shieldR * 0.8, -shieldR * 0.8, shieldR, -shieldR * 0.2, shieldR, shieldR * 0.1);
-      ctx.bezierCurveTo(shieldR, shieldR * 0.6, shieldR * 0.5, shieldR * 0.9, 0, shieldR);
-      ctx.bezierCurveTo(-shieldR * 0.5, shieldR * 0.9, -shieldR, shieldR * 0.6, -shieldR, shieldR * 0.1);
-      ctx.bezierCurveTo(-shieldR, -shieldR * 0.2, -shieldR * 0.8, -shieldR * 0.8, 0, -shieldR);
-      ctx.closePath();
-
-      const shieldGrad = ctx.createLinearGradient(0, -shieldR, 0, shieldR);
-      shieldGrad.addColorStop(0, 'rgba(88,166,255,0.25)');
-      shieldGrad.addColorStop(1, 'rgba(88,166,255,0.08)');
-      ctx.fillStyle = shieldGrad;
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(88,166,255,0.7)';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      // Checkmark or cross inside shield based on any profile disabled
-      const anyDisabled = Object.values(enabledByName).some(v => v === false);
-      ctx.strokeStyle = anyDisabled ? '#F85149' : '#3FB950';
-      ctx.lineWidth = 2;
-      ctx.lineCap = 'round';
-      if (anyDisabled) {
-        ctx.beginPath(); ctx.moveTo(-7, -7); ctx.lineTo(7, 7); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(7, -7); ctx.lineTo(-7, 7); ctx.stroke();
+      svgHtml += `<g class="perim-node ${entering} ${selected}" data-key="${escapeHtml(item.key)}" transform-origin="${item.x}px ${item.y}px">`;
+      if (item.blocked) {
+        svgHtml += `<circle class="perim-blocked-ring" cx="${item.x}" cy="${item.y}" r="7" fill="none" stroke="${color}" stroke-width="2"/>`;
       } else {
-        ctx.beginPath(); ctx.moveTo(-8, 0); ctx.lineTo(-2, 7); ctx.lineTo(9, -6); ctx.stroke();
+        // Connecting line + a particle element updated each animation frame
+        svgHtml += `<line x1="${cx}" y1="${cy}" x2="${item.x}" y2="${item.y}" stroke="${color}" stroke-width="1" opacity="0.25"/>`;
+        svgHtml += `<circle class="perim-particle" data-key="${escapeHtml(item.key)}" cx="${item.x}" cy="${item.y}" r="2.2" fill="${color}" opacity="0.9"/>`;
       }
-      ctx.restore();
-
-      // Center labels
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#8B949E';
-      ctx.font = '11px Inter, sans-serif';
-      ctx.fillText(`${safeRules.total} rules`, cx, cy + shieldR + 18);
-
-      // Profile labels on rings
-      for (let i = 0; i < radii.length; i++) {
-        const labelAngle = -Math.PI / 2 - 0.18;
-        const lx = cx + Math.cos(labelAngle) * (radii[i] + 14);
-        const ly = cy + Math.sin(labelAngle) * (radii[i] + 14);
-        ctx.fillStyle = profileColors[i];
-        ctx.font = '600 10px Inter, sans-serif';
-        ctx.textAlign = 'left';
-        ctx.globalAlpha = 0.85;
-        ctx.fillText(profileLabels[i].toUpperCase(), lx, ly + 4);
-        ctx.globalAlpha = 1;
-      }
-
-      // Inbound / outbound split arc (outermost decorative ring)
-      const outerR = 178;
-      const splitStart = -Math.PI / 2;
-      // Inbound arc
-      ctx.beginPath();
-      ctx.arc(cx, cy, outerR, splitStart, splitStart + inboundFrac * Math.PI * 2);
-      ctx.strokeStyle = 'rgba(88,166,255,0.35)';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      // Outbound arc
-      ctx.beginPath();
-      ctx.arc(cx, cy, outerR, splitStart + inboundFrac * Math.PI * 2, splitStart + Math.PI * 2);
-      ctx.strokeStyle = 'rgba(248,81,73,0.25)';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-
-      // Outer ring labels at midpoints
-      function arcLabel(label, startFrac, endFrac, col, isRight) {
-        const midAngle = splitStart + (startFrac + (endFrac - startFrac) / 2) * Math.PI * 2;
-        const lx = cx + Math.cos(midAngle) * (outerR + 18);
-        const ly = cy + Math.sin(midAngle) * (outerR + 18);
-        ctx.fillStyle = col;
-        ctx.font = '10px Inter, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.globalAlpha = 0.75;
-        ctx.fillText(label, lx, ly + 4);
-        ctx.globalAlpha = 1;
-      }
-      arcLabel(`↓ IN ${safeRules.inbound}`, 0, inboundFrac, 'rgba(88,166,255,0.9)');
-      arcLabel(`↑ OUT ${safeRules.outbound}`, inboundFrac, 1, 'rgba(248,81,73,0.8)');
-
-      // Allow/block arc (second outermost)
-      const allowR = 192;
-      ctx.beginPath();
-      ctx.arc(cx, cy, allowR, splitStart, splitStart + allowFrac * Math.PI * 2);
-      ctx.strokeStyle = 'rgba(63,185,80,0.22)';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(cx, cy, allowR, splitStart + allowFrac * Math.PI * 2, splitStart + Math.PI * 2);
-      ctx.strokeStyle = 'rgba(248,81,73,0.18)';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      // Particles
-      for (const p of particles) {
-        p.life++;
-        p.angle += p.speed;
-
-        // Fade in/out
-        const halfLife = p.maxLife / 2;
-        if (p.life < halfLife) {
-          p.alpha = (p.life / halfLife) * p.maxAlpha;
-        } else {
-          p.alpha = ((p.maxLife - p.life) / halfLife) * p.maxAlpha;
-        }
-
-        if (p.life >= p.maxLife) {
-          Object.assign(p, spawnParticle());
-          p.life = 0;
-          continue;
-        }
-
-        const px = cx + Math.cos(p.angle) * p.radius;
-        const py = cy + Math.sin(p.angle) * p.radius;
-
-        ctx.globalAlpha = p.alpha;
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(px, py, p.size, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Trail
-        ctx.globalAlpha = p.alpha * 0.3;
-        const trailAngle = p.angle - p.speed * 8;
-        const tx = cx + Math.cos(trailAngle) * p.radius;
-        const ty = cy + Math.sin(trailAngle) * p.radius;
-        ctx.beginPath();
-        ctx.moveTo(px, py);
-        ctx.lineTo(tx, ty);
-        ctx.strokeStyle = p.color;
-        ctx.lineWidth = p.size * 0.7;
-        ctx.stroke();
-
-        ctx.globalAlpha = 1;
-      }
-
-      frame++;
-      animId = requestAnimationFrame(draw);
+      svgHtml += `<circle class="perim-dot" cx="${item.x}" cy="${item.y}" r="6" fill="${color}"/>`;
+      svgHtml += `<text x="${item.x}" y="${item.y - 12}" text-anchor="middle" font-size="8" fill="var(--text-dim)">${label}</text>`;
+      svgHtml += `</g>`;
     }
 
-    draw();
-    window.addEventListener('resize', handleResize);
-
-    // Cleanup on navigation away
-    const observer = new MutationObserver(() => {
-      if (!document.getElementById('perimeterCanvas')) {
-        cancelAnimationFrame(animId);
-        window.removeEventListener('resize', handleResize);
-        observer.disconnect();
-      }
+    svg.innerHTML = svgHtml;
+    svg.querySelectorAll('.perim-node').forEach((el) => {
+      el.addEventListener('click', () => {
+        const key = el.getAttribute('data-key');
+        this._selectedKey = key;
+        svg.querySelectorAll('.perim-node').forEach((n) => n.classList.remove('selected'));
+        el.classList.add('selected');
+        this._renderDetailPanel(container, this._perimeterNodes.get(key));
+      });
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+
+    if (summary) {
+      const blockedCount = allItems.filter((i) => i.blocked).length;
+      const unknownCount = allItems.filter((i) => i.risk === 'UNKNOWN').length;
+      summary.textContent = `${allItems.length} shown${hiddenCount ? ` (+${hiddenCount} more)` : ''} \u00b7 ${blockedCount} blocked \u00b7 ${unknownCount} unusual`;
+    }
+  },
+
+  _startParticleLoop(container) {
+    if (this._particleRaf) cancelAnimationFrame(this._particleRaf);
+    const cx = 300, cy = 210;
+    const speed = 0.00045; // fraction of the line traveled per ms
+    const loop = (t) => {
+      const svg = container.querySelector('#perimeterSvg');
+      if (!svg || !document.body.contains(container)) return; // page navigated away
+      for (const [key, item] of this._perimeterNodes) {
+        if (item.blocked) continue;
+        const particle = svg.querySelector(`.perim-particle[data-key="${CSS.escape(key)}"]`);
+        if (!particle) continue;
+        const phase = (key.length * 37) % 1000; // stable per-connection offset so they don't all pulse in sync
+        let frac = ((t * speed) + phase / 1000) % 1;
+        // Inbound particles travel from the node toward the PC; outbound the reverse.
+        const travel = item.direction === 'inbound' ? (1 - frac) : frac;
+        particle.setAttribute('cx', cx + (item.x - cx) * travel);
+        particle.setAttribute('cy', cy + (item.y - cy) * travel);
+      }
+      this._particleRaf = requestAnimationFrame(loop);
+    };
+    this._particleRaf = requestAnimationFrame(loop);
+  },
+
+  _renderDetailPanel(container, item) {
+    const panel = container.querySelector('#connectionDetailPanel');
+    if (!panel) return;
+    if (!item) {
+      panel.innerHTML = '<div class="empty-state" style="font-size:0.85rem;">Click a connection to see details and actions.</div>';
+      return;
+    }
+    const c = item.c;
+    const remoteAddress = this._field(c, 'remoteAddress', 'RemoteAddress');
+    const remotePort = this._field(c, 'remotePort', 'RemotePort');
+    const localAddress = this._field(c, 'localAddress', 'LocalAddress');
+    const localPort = this._field(c, 'localPort', 'LocalPort');
+    const pid = this._field(c, 'pid', 'OwningProcess');
+    const processName = this._field(c, 'processName') || '(unknown process)';
+    const hostname = this._field(c, 'hostname');
+    const service = this._field(c, 'serviceName');
+    const state = this._getConnState(c);
+    const risk = item.risk;
+    const color = this._riskColor(risk);
+    const isTrusted = this._trustedIps.includes(remoteAddress);
+
+    panel.innerHTML = `
+      <div class="card compact" style="display:flex; flex-direction:column; gap:10px;">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <span style="font-weight:600;">${escapeHtml(processName)}</span>
+          <span style="font-size:0.7rem; font-weight:600; color:${color}; background:${color}15; padding:3px 8px; border-radius:4px;">${risk}${item.blocked ? ' \u00b7 BLOCKED' : ''}</span>
+        </div>
+        <div style="font-size:0.8rem; color:var(--text-dim); display:flex; flex-direction:column; gap:4px;">
+          <div>Remote: <span style="color:var(--text-main); font-family:monospace;">${escapeHtml(remoteAddress)}:${escapeHtml(remotePort)}</span>${hostname ? ` (${escapeHtml(hostname)})` : ''}</div>
+          ${service ? `<div>Service: ${escapeHtml(service)}</div>` : ''}
+          <div>Local: <span style="font-family:monospace;">${escapeHtml(localAddress)}:${escapeHtml(localPort)}</span></div>
+          <div>Direction: ${item.direction === 'inbound' ? 'Inbound \u2193' : 'Outbound \u2191'} <span style="opacity:0.7;">(best-effort estimate)</span></div>
+          <div>State: ${escapeHtml(state)}</div>
+          <div>PID: ${pid ? escapeHtml(pid) : 'unknown'}</div>
+          <div style="opacity:0.7;">Per-connection bandwidth isn't exposed by Windows without extra instrumentation \u2014 see the Network Monitor page for interface-level throughput.</div>
+        </div>
+        <div id="detailWhoisResult" style="font-size:0.78rem; color:var(--text-dim);"></div>
+        <div id="detailProcessResult" style="font-size:0.78rem; color:var(--text-dim);"></div>
+        <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
+          <button class="btn btn-sm" data-action="block-conn">Block This Connection</button>
+          <button class="btn btn-sm" data-action="block-ip">Block Remote IP</button>
+          <button class="btn btn-sm" data-action="block-app" ${pid ? '' : 'disabled'}>Block Application</button>
+          <button class="btn btn-sm" data-action="trust">${isTrusted ? 'Untrust' : 'Mark as Trusted'}</button>
+          <button class="btn btn-sm" data-action="whois">WHOIS Lookup</button>
+          <button class="btn btn-sm" data-action="process" ${pid ? '' : 'disabled'}>View Process Details</button>
+        </div>
+      </div>
+    `;
+
+    panel.querySelector('[data-action="block-conn"]').addEventListener('click', () => this._blockConnection(container, c));
+    panel.querySelector('[data-action="block-ip"]').addEventListener('click', () => this._blockIp(container, remoteAddress));
+    panel.querySelector('[data-action="block-app"]').addEventListener('click', () => this._blockApp(container, pid, processName));
+    panel.querySelector('[data-action="trust"]').addEventListener('click', () => this._toggleTrust(container, remoteAddress, isTrusted));
+    panel.querySelector('[data-action="whois"]').addEventListener('click', () => this._runWhois(container, remoteAddress));
+    panel.querySelector('[data-action="process"]').addEventListener('click', () => this._showProcessDetails(container, pid));
+  },
+
+  async _blockConnection(container, c) {
+    const remoteAddress = this._field(c, 'remoteAddress', 'RemoteAddress');
+    const remotePort = this._field(c, 'remotePort', 'RemotePort');
+    if (!window.confirm(`Block traffic to ${remoteAddress}:${remotePort}?`)) return;
+    try {
+      await window.api.invoke('firewall:createRule', {
+        name: `Block ${remoteAddress}:${remotePort} (Out)`, direction: 'Outbound', action: 'Block',
+        protocol: 'TCP', remoteAddress, remotePort
+      });
+      await window.api.invoke('firewall:createRule', {
+        name: `Block ${remoteAddress}:${remotePort} (In)`, direction: 'Inbound', action: 'Block',
+        protocol: 'TCP', remoteAddress, remotePort
+      });
+      alert('Rule created. It will apply to new connections.');
+      this._initRuleList(container);
+    } catch (e) { alert(e.message || 'Failed to create rule.'); }
+  },
+
+  async _blockIp(container, ip) {
+    if (!window.confirm(`Block all traffic to/from ${ip}?`)) return;
+    try {
+      await window.api.invoke('firewall:createRule', { name: `Block IP ${ip} (Out)`, direction: 'Outbound', action: 'Block', remoteAddress: ip });
+      await window.api.invoke('firewall:createRule', { name: `Block IP ${ip} (In)`, direction: 'Inbound', action: 'Block', remoteAddress: ip });
+      alert('IP blocked.');
+      this._initRuleList(container);
+    } catch (e) { alert(e.message || 'Failed to block IP.'); }
+  },
+
+  async _blockApp(container, pid, processName) {
+    try {
+      const processes = await window.api.invoke('process:list');
+      const proc = (processes || []).find((p) => String(p.pid ?? p.Pid ?? p.PID) === String(pid));
+      const programPath = proc && (proc.path || proc.execPath || proc.exe || proc.ExecutablePath);
+      if (!programPath) { alert('Could not determine the executable path for this process.'); return; }
+      if (!window.confirm(`Block all network access for ${processName}?\n${programPath}`)) return;
+      await window.api.invoke('firewall:createRule', { name: `Block App ${processName} (Out)`, direction: 'Outbound', action: 'Block', program: programPath });
+      await window.api.invoke('firewall:createRule', { name: `Block App ${processName} (In)`, direction: 'Inbound', action: 'Block', program: programPath });
+      alert('Application blocked.');
+      this._initRuleList(container);
+    } catch (e) { alert(e.message || 'Failed to block application.'); }
+  },
+
+  async _toggleTrust(container, ip, currentlyTrusted) {
+    try {
+      this._trustedIps = currentlyTrusted
+        ? await window.api.invoke('firewall:untrustConnection', ip)
+        : await window.api.invoke('firewall:trustConnection', ip);
+      if (this._selectedKey) this._renderDetailPanel(container, this._perimeterNodes.get(this._selectedKey));
+    } catch (e) { alert(e.message || 'Failed to update trust list.'); }
+  },
+
+  async _runWhois(container, ip) {
+    const target = container.querySelector('#detailWhoisResult');
+    if (target) target.textContent = 'Looking up\u2026';
+    try {
+      const info = await window.api.invoke('network:whois', ip);
+      if (!target) return;
+      if (!info || !info.found) { target.textContent = 'No WHOIS data found.'; return; }
+      target.innerHTML = `WHOIS: ${escapeHtml(info.org || info.isp || 'Unknown org')} \u00b7 ${escapeHtml(info.city || '')}${info.city && info.country ? ', ' : ''}${escapeHtml(info.country || '')}`;
+    } catch (e) {
+      if (target) target.textContent = e.message || 'WHOIS lookup failed.';
+    }
+  },
+
+  async _showProcessDetails(container, pid) {
+    const target = container.querySelector('#detailProcessResult');
+    if (target) target.textContent = 'Loading process info\u2026';
+    try {
+      const processes = await window.api.invoke('process:list');
+      const proc = (processes || []).find((p) => String(p.pid ?? p.Pid ?? p.PID) === String(pid));
+      if (!target) return;
+      if (!proc) { target.textContent = 'Process not found (it may have exited).'; return; }
+      const path = proc.path || proc.execPath || proc.exe || proc.ExecutablePath || 'unknown path';
+      const mem = proc.memoryMB || proc.memory || proc.WorkingSetMB;
+      target.innerHTML = `Path: <span style="font-family:monospace;">${escapeHtml(path)}</span>${mem ? ` \u00b7 ${escapeHtml(String(mem))} MB` : ''}`;
+    } catch (e) {
+      if (target) target.textContent = e.message || 'Unable to load process info.';
+    }
+  },
+
+  // ══════════════════════════════════════════════════════════════════════
+  // FIREWALL RULES — searchable list synced to the same backend
+  // ══════════════════════════════════════════════════════════════════════
+
+  _ruleCache: [],
+
+  async _initRuleList(container) {
+    const listEl = container.querySelector('#ruleListContainer');
+    const searchInput = container.querySelector('#ruleSearchInput');
+    if (!listEl) return;
+    try {
+      this._ruleCache = (await window.api.invoke('firewall:listRules')) || [];
+      this._renderRuleList(container, this._ruleCache);
+    } catch (e) {
+      listEl.innerHTML = `<div class="empty-state">Error loading rules: ${escapeHtml(e.message)}</div>`;
+      return;
+    }
+    if (searchInput) {
+      searchInput.addEventListener('input', () => {
+        const q = searchInput.value.trim().toLowerCase();
+        const filtered = !q ? this._ruleCache : this._ruleCache.filter((r) =>
+          (r.name || '').toLowerCase().includes(q) ||
+          (r.program || '').toLowerCase().includes(q) ||
+          (r.remoteAddress || '').toLowerCase().includes(q)
+        );
+        this._renderRuleList(container, filtered);
+      });
+    }
+  },
+
+  _renderRuleList(container, rules) {
+    const listEl = container.querySelector('#ruleListContainer');
+    if (!listEl) return;
+    if (!rules.length) {
+      listEl.innerHTML = '<div class="empty-state">No matching rules.</div>';
+      return;
+    }
+    listEl.innerHTML = rules.slice(0, 300).map((r) => {
+      const actionColor = r.action === 'Allow' ? 'var(--ok)' : 'var(--danger)';
+      const dirLabel = r.direction === 'Inbound' ? 'IN' : 'OUT';
+      return `<div class="log-row" style="display:flex; align-items:center; gap:10px; content-visibility:auto; contain-intrinsic-size: 0 30px; ${r.enabled ? '' : 'opacity:0.5;'}">
+        <span class="log-tag" style="background:${actionColor}22; color:${actionColor};">${escapeHtml(r.action || '')}</span>
+        <span class="log-tag info">${dirLabel}</span>
+        <span class="log-path" style="flex:1;">${escapeHtml(r.name || '')}${r.program ? ` \u2014 ${escapeHtml(r.program)}` : ''}${r.remoteAddress ? ` \u2014 ${escapeHtml(r.remoteAddress)}` : ''}</span>
+        ${r.managedByApp ? `
+          <button class="btn btn-sm" data-rule-toggle="${escapeHtml(r.name)}" data-enabled="${r.enabled}">${r.enabled ? 'Disable' : 'Enable'}</button>
+          <button class="btn btn-sm" style="color:var(--accent-danger);" data-rule-delete="${escapeHtml(r.name)}">Delete</button>
+        ` : ''}
+      </div>`;
+    }).join('');
+
+    listEl.querySelectorAll('[data-rule-toggle]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const name = btn.getAttribute('data-rule-toggle');
+        const enabled = btn.getAttribute('data-enabled') === 'true';
+        try {
+          await window.api.invoke('firewall:setRuleEnabled', { name, enabled: !enabled });
+          this._initRuleList(container);
+        } catch (e) { alert(e.message || 'Failed to update rule.'); }
+      });
+    });
+    listEl.querySelectorAll('[data-rule-delete]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const name = btn.getAttribute('data-rule-delete');
+        if (!window.confirm(`Delete rule "${name}"?`)) return;
+        try {
+          await window.api.invoke('firewall:deleteRule', name);
+          this._initRuleList(container);
+        } catch (e) { alert(e.message || 'Failed to delete rule.'); }
+      });
+    });
   }
 };

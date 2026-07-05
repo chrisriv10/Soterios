@@ -5,35 +5,13 @@ window.Pages.processes = {
       <div class="page-header"><div class="flex-between">
         <div><h1 class="page-title">Processes</h1><div class="page-subtitle">Running processes with risk scoring</div></div>
         <button class="btn" id="refreshBtn">Refresh</button></div></div>
-      <div class="card" style="padding:0; flex:1; overflow-y:auto; border:none; background:transparent;"><div id="processList" style="padding-right:8px;"><div class="empty-state">Loading processes...</div><div class="loading-progress" style="margin-top:8px;"><div class="loading-progress-bar"></div></div></div></div>`;
+      <div class="card" style="padding:0; flex:1; overflow-y:auto; border:none; background:transparent;"><div id="processList" style="padding-right:8px;"><div class="empty-state"><span class="spinner"></span>&nbsp;Loading processes...</div></div></div>`;
     container.querySelector('#refreshBtn').addEventListener('click', () => this.load(container));
     this.load(container);
   },
   async load(container) {
     const listEl = container.querySelector('#processList');
-    listEl.innerHTML = '<div class="empty-state">Loading processes...</div><div class="loading-progress" style="margin-top:8px;"><div class="loading-progress-bar"></div></div>';
-    const progressBar = listEl?.querySelector('.loading-progress-bar');
-    let progressTimer = null;
-    const setLoadingState = (active) => {
-      if (progressTimer) {
-        clearInterval(progressTimer);
-        progressTimer = null;
-      }
-      if (!progressBar) return;
-      if (!active) {
-        progressBar.style.opacity = '0';
-        progressBar.style.width = '100%';
-        return;
-      }
-      progressBar.style.opacity = '1';
-      progressBar.style.width = '8%';
-      let currentWidth = 8;
-      progressTimer = setInterval(() => {
-        currentWidth = Math.min(currentWidth + Math.random() * 12 + 4, 88);
-        progressBar.style.width = `${currentWidth}%`;
-      }, 180);
-    };
-    setLoadingState(true);
+    listEl.innerHTML = '<div class="empty-state"><span class="spinner"></span>&nbsp;Loading processes...</div>';
     try {
       const processes = await Api.runTool('process-viewer', {});
       const rows = processes.slice(0, 150).map((p) => {
@@ -63,7 +41,7 @@ window.Pages.processes = {
           </div>
         </div>`;
       }).join('');
-      listEl.innerHTML = `<div style="display:flex; flex-direction:column; gap:12px;">${rows || '<div class="empty-state">No processes returned.</div>'}</div><div class="loading-progress" style="margin-top:16px;"><div class="loading-progress-bar" style="width:100%;opacity:1"></div></div>`;
+      listEl.innerHTML = `<div style="display:flex; flex-direction:column; gap:12px;">${rows || '<div class="empty-state">No processes returned.</div>'}</div>`;
 
       listEl.querySelectorAll('[data-end-process]').forEach((btn) => {
         btn.addEventListener('click', async () => {
@@ -90,8 +68,5 @@ window.Pages.processes = {
         });
       });
     } catch (err) { showToolError(listEl, err); }
-    finally {
-      setLoadingState(false);
-    }
   }
 };

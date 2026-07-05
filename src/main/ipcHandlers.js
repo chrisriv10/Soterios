@@ -4,6 +4,12 @@ const fs = require('fs');
 const crypto = require('crypto');
 const https = require('https');
 
+function isValidIp(ip) {
+  const v4 = /^(\d{1,3}\.){3}\d{1,3}$/;
+  const v6 = /^[0-9a-fA-F:]+$/;
+  return v4.test(ip) || (v6.test(ip) && ip.includes(':'));
+}
+
 function requestText(url, options = {}) {
   return new Promise((resolve, reject) => {
     const req = https.request(url, {
@@ -200,6 +206,64 @@ function registerIpcHandlers(mainWindow, services) {
 
   ipcMain.handle('firewall:rules', async () => {
     return services.firewallManager.getRules();
+  });
+
+  // -- Firewall Rule Management (used by the Network Perimeter UI) --
+  ipcMain.handle('firewall:listRules', async () => {
+    return services.firewallManager.listRules();
+  });
+
+  ipcMain.handle('firewall:createRule', async (_event, spec) => {
+    return services.firewallManager.createRule(spec);
+  });
+
+  ipcMain.handle('firewall:deleteRule', async (_event, name) => {
+    return services.firewallManager.deleteRule(name);
+  });
+
+  ipcMain.handle('firewall:setRuleEnabled', async (_event, { name, enabled }) => {
+    return services.firewallManager.setRuleEnabled(name, enabled);
+  });
+
+  // -- Trusted connections (local marker only — does not create a firewall
+  // rule, just tells the perimeter UI to treat this remote address as safe) --
+  const TRUSTED_IPS_KEY = 'firewall.trustedIps';
+
+  ipcMain.handle('firewall:getTrusted', () => {
+    return db.getSetting(TRUSTED_IPS_KEY, []);
+  });
+
+  ipcMain.handle('firewall:trustConnection', (_event, ip) => {
+    if (!ip || !isValidIp(ip)) throw new Error('Invalid address.');
+    const current = db.getSetting(TRUSTED_IPS_KEY, []);
+    if (!current.includes(ip)) current.push(ip);
+    db.setSetting(TRUSTED_IPS_KEY, current);
+    return current;
+  });
+
+  ipcMain.handle('firewall:untrustConnection', (_event, ip) => {
+    const current = (db.getSetting(TRUSTED_IPS_KEY, []) || []).filter((x) => x !== ip);
+    db.setSetting(TRUSTED_IPS_KEY, current);
+    return current;
+  });
+
+  // -- WHOIS lookup (no API key required) --
+  ipcMain.handle('network:whois', async (_event, ip) => {
+    if (!ip || !isValidIp(ip)) throw new Error('Invalid address.');
+    const res = await requestText(`https://ipwho.is/${encodeURIComponent(ip)}`);
+    if (res.statusCode !== 200) throw new Error(`WHOIS lookup failed (${res.statusCode}).`);
+    const data = JSON.parse(res.body || '{}');
+    if (data.success === false) return { found: false };
+    return {
+      found: true,
+      ip: data.ip,
+      country: data.country,
+      region: data.region,
+      city: data.city,
+      org: (data.connection && data.connection.org) || data.org || null,
+      isp: (data.connection && data.connection.isp) || null,
+      asn: (data.connection && data.connection.asn) || null
+    };
   });
 
   ipcMain.handle('network:connections', async () => {
