@@ -1,7 +1,7 @@
 {
   "name": "soterios",
   "version": "1.0.2",
-  "description": "A local-first desktop toolkit for system maintenance, monitoring, and basic security checks.",
+  "description": "A local-first desktop toolkit for system maintenance, monitoring, and security checks.",
   "main": "src/main/main.js",
   "author": "Soterios",
   "license": "MIT",
