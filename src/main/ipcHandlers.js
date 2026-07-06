@@ -3,11 +3,171 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const https = require('https');
+const { execFile } = require('child_process');
+const util = require('util');
+const execFilePromise = util.promisify(execFile);
 
 function isValidIp(ip) {
   const v4 = /^(\d{1,3}\.){3}\d{1,3}$/;
   const v6 = /^[0-9a-fA-F:]+$/;
   return v4.test(ip) || (v6.test(ip) && ip.includes(':'));
+}
+
+// Stricter than isValidIp above — the bandwidth-measurement feature only
+// supports IPv4 (see measureConnectionBandwidth for why), so this rejects
+// IPv6 and validates each octet is actually 0-255, not just digit-shaped.
+function isValidIPv4(ip) {
+  if (typeof ip !== 'string') return false;
+  const m = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!m) return false;
+  return m.slice(1).every((o) => Number(o) >= 0 && Number(o) <= 255);
+}
+
+async function runPowerShellRaw(command) {
+  const { stdout } = await execFilePromise(
+    'powershell.exe',
+    ['-NoProfile', '-NonInteractive', '-Command', command],
+    { timeout: 20000, windowsHide: true }
+  );
+  return stdout;
+}
+
+// Real, live per-TCP-connection bandwidth via Windows' "Extended TCP
+// Statistics" IP Helper API (GetPerTcpConnectionEStats / SetPerTcpConnectionEStats
+// in iphlpapi.dll). There's no cmdlet for this — it's a raw Win32 API that
+// tracks a smoothed bandwidth estimate per connection, computed by Windows
+// itself. We enable tracking for this specific connection, give Windows ~2s
+// to produce a reading, then read it back.
+//
+// IPv4 TCP only: IPv6 connections use a different row struct
+// (MIB_TCP6ROW_LH) that isn't implemented here. UDP has no per-connection
+// concept in this API at all.
+async function measureConnectionBandwidth({ localAddress, localPort, remoteAddress, remotePort }) {
+  if (!isValidIPv4(localAddress) || !isValidIPv4(remoteAddress)) {
+    throw new Error('Per-connection bandwidth currently only supports IPv4 TCP connections.');
+  }
+  const lp = Number(localPort);
+  const rp = Number(remotePort);
+  if (!Number.isInteger(lp) || lp < 0 || lp > 65535 || !Number.isInteger(rp) || rp < 0 || rp > 65535) {
+    throw new Error('Invalid port.');
+  }
+
+  // All values embedded below are pre-validated above (dotted-quad IPv4 /
+  // integer ports only), so there's nothing here an attacker could use to
+  // break out of the PowerShell command string.
+  const script = `
+$ErrorActionPreference = 'Stop'
+Add-Type -TypeDefinition @"
+using System;
+using System.Net;
+using System.Runtime.InteropServices;
+
+public static class SoteriosTcpEstats {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MIB_TCPROW_LH {
+        public uint state;
+        public uint localAddr;
+        public uint localPort;
+        public uint remoteAddr;
+        public uint remotePort;
+    }
+
+    [DllImport("iphlpapi.dll", SetLastError = true)]
+    public static extern uint SetPerTcpConnectionEStats(
+        ref MIB_TCPROW_LH Row, int EstatsType,
+        byte[] Rw, uint RwVersion, uint RwSize, uint Offset);
+
+    [DllImport("iphlpapi.dll", SetLastError = true)]
+    public static extern uint GetPerTcpConnectionEStats(
+        ref MIB_TCPROW_LH Row, int EstatsType,
+        byte[] Rw, uint RwVersion, uint RwSize,
+        byte[] Ros, uint RosVersion, uint RosSize,
+        byte[] Rod, uint RodVersion, uint RodSize);
+
+    public static uint ToRowPort(int port) {
+        return (uint)(ushort)IPAddress.HostToNetworkOrder((short)port);
+    }
+
+    public static uint ToRowAddr(string ip) {
+        return BitConverter.ToUInt32(IPAddress.Parse(ip).GetAddressBytes(), 0);
+    }
+}
+"@
+
+$row = New-Object SoteriosTcpEstats+MIB_TCPROW_LH
+$row.state = 0
+$row.localAddr = [SoteriosTcpEstats]::ToRowAddr('${localAddress}')
+$row.localPort = [SoteriosTcpEstats]::ToRowPort(${lp})
+$row.remoteAddr = [SoteriosTcpEstats]::ToRowAddr('${remoteAddress}')
+$row.remotePort = [SoteriosTcpEstats]::ToRowPort(${rp})
+
+# Sanity check using PowerShell's own (unquestionably correct) cmdlet before
+# touching the low-level P/Invoke call, since Windows error 50
+# (ERROR_NOT_SUPPORTED) from SetPerTcpConnectionEStats is ambiguous on its
+# own — it fires both for a connection that's already gone, and for one
+# that still exists but is no longer ESTABLISHED (TIME_WAIT, CLOSE_WAIT,
+# etc. have no live data flow left to track).
+$existing = Get-NetTCPConnection -LocalAddress '${localAddress}' -LocalPort ${lp} -RemoteAddress '${remoteAddress}' -RemotePort ${rp} -ErrorAction SilentlyContinue
+if (-not $existing) {
+  Write-Output "ERROR|This connection closed before it could be measured. Try again on one that's actively transferring data."
+  exit 0
+}
+if ($existing.State -ne 'Established') {
+  Write-Output "ERROR|This connection is $($existing.State), not Established, so there's no live data flow left to measure."
+  exit 0
+}
+
+# TcpConnectionEstatsBandwidth = 7 in the TCP_ESTATS_TYPE enum.
+# Rw/Rod buffers are deliberately over-allocated well beyond the documented
+# struct sizes (8 / 40 bytes) as a safety margin — Windows only ever writes
+# the real struct's bytes into them, so extra space is harmless, but an
+# under-sized buffer risks a native memory-safety issue.
+$rw = New-Object byte[] 32
+$rw[0] = 1  # EnableCollectionOutbound = TcpBoolOptEnabled
+$rw[4] = 1  # EnableCollectionInbound  = TcpBoolOptEnabled
+
+$setResult = [SoteriosTcpEstats]::SetPerTcpConnectionEStats([ref]$row, 7, $rw, 0, 8, 0)
+if ($setResult -ne 0) {
+  Write-Output "ERROR|Could not enable bandwidth tracking for this connection (Windows error $setResult), even though it's still Established. This may be a Windows/driver quirk \u2014 please report it."
+  exit 0
+}
+
+Start-Sleep -Milliseconds 2000
+
+$rod = New-Object byte[] 64
+$getResult = [SoteriosTcpEstats]::GetPerTcpConnectionEStats([ref]$row, 7, $null, 0, 0, $null, 0, 0, $rod, 0, 40)
+if ($getResult -ne 0) {
+  Write-Output "ERROR|Could not read bandwidth data for this connection (Windows error $getResult). It may have closed during measurement."
+  exit 0
+}
+
+$outBitsPerSec = [BitConverter]::ToUInt64($rod, 0)
+$inBitsPerSec  = [BitConverter]::ToUInt64($rod, 8)
+Write-Output "OK|$outBitsPerSec|$inBitsPerSec"
+`;
+
+  let stdout;
+  try {
+    stdout = await runPowerShellRaw(script);
+  } catch (e) {
+    console.error('Bandwidth measurement failed:', (e && e.message) || e);
+    throw new Error('Bandwidth measurement failed. This requires administrator privileges and Windows 10/11.');
+  }
+
+  const line = stdout.trim().split(/\r?\n/).pop() || '';
+  const parts = line.split('|');
+  if (parts[0] === 'ERROR') {
+    throw new Error(parts.slice(1).join('|') || 'Bandwidth measurement failed.');
+  }
+  if (parts[0] !== 'OK') {
+    throw new Error('Unexpected response from bandwidth measurement.');
+  }
+  const outboundBitsPerSec = Number(parts[1]) || 0;
+  const inboundBitsPerSec = Number(parts[2]) || 0;
+  return {
+    outboundKBps: outboundBitsPerSec / 8 / 1024,
+    inboundKBps: inboundBitsPerSec / 8 / 1024
+  };
 }
 
 // Windows Firewall only has these three profiles — reject anything else so a
@@ -42,7 +202,7 @@ function deleteFileIfSafe(filePath) {
   if (!filePath) return;
   try {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-  } catch (_) {}
+  } catch (_) { }
 }
 
 function registerIpcHandlers(mainWindow, services) {
@@ -55,6 +215,20 @@ function registerIpcHandlers(mainWindow, services) {
     userData: app.getPath('userData'),
     isAdmin: true // We requested admin rights
   }));
+
+  // -- Launch at Startup --
+  // Reads/writes the real OS-level login item via Electron's app API, rather
+  // than just a saved preference flag -- a saved-only flag wouldn't actually
+  // make Windows launch the app. This also stays accurate if the user
+  // changes it outside the app (e.g. Windows Settings > Startup Apps).
+  ipcMain.handle('app:getLaunchAtStartup', () => {
+    return app.getLoginItemSettings().openAtLogin;
+  });
+
+  ipcMain.handle('app:setLaunchAtStartup', (_event, enabled) => {
+    app.setLoginItemSettings({ openAtLogin: !!enabled });
+    return app.getLoginItemSettings().openAtLogin;
+  });
 
   // -- Database / Settings --
   ipcMain.handle('db:getScanHistory', (_event, limit) => db.getScanHistory(limit));
@@ -99,15 +273,15 @@ function registerIpcHandlers(mainWindow, services) {
   ipcMain.handle('scan:quick', async () => {
     return scanEngine.runQuickScan();
   });
-  
+
   ipcMain.handle('scan:full', async () => {
     return scanEngine.runFullScan();
   });
-  
+
   ipcMain.handle('scan:custom', async (_event, targetPaths) => {
     return scanEngine.runCustomScan(targetPaths);
   });
-  
+
   ipcMain.handle('scan:abort', () => {
     return scanEngine.abortScan();
   });
@@ -175,7 +349,7 @@ function registerIpcHandlers(mainWindow, services) {
   ipcMain.handle('quarantine:restore', async (_event, id) => {
     return quarantineManager.restore(id);
   });
-  
+
   ipcMain.handle('quarantine:delete', async (_event, id) => {
     return quarantineManager.delete(id);
   });
@@ -207,7 +381,7 @@ function registerIpcHandlers(mainWindow, services) {
       event.sender.send('audit:progress', label);
     });
   });
-  
+
   ipcMain.handle('firewall:status', async () => {
     return services.firewallManager.getStatus();
   });
@@ -287,6 +461,12 @@ function registerIpcHandlers(mainWindow, services) {
 
   ipcMain.handle('network:stats', async () => {
     return services.networkMonitor.getStats();
+  });
+
+  // -- Per-connection bandwidth (on-demand, IPv4 TCP only — see
+  // measureConnectionBandwidth's comment for why) --
+  ipcMain.handle('network:measureBandwidth', async (_event, spec) => {
+    return measureConnectionBandwidth(spec || {});
   });
 
   // -- Reports --

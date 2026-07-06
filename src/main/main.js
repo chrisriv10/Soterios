@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, nativeImage, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, nativeImage, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -69,6 +69,8 @@ const toolRegistry = require('../core/toolRegistry');
 let mainWindow;
 let splashWindow;
 let splashTimeoutId;
+let dbRef; // set once the database is created in app.whenReady() below, so
+           // showNotification (defined before that point) can check settings
 
 function logLine(level, message, meta) {
   try {
@@ -83,10 +85,165 @@ function createIcon() {
   return nativeImage.createFromPath(iconPath);
 }
 
-function showNotification(title, body) {
-  if (!Notification.isSupported()) return;
+// -- Custom-designed toast notifications ---------------------------------
+// Electron's built-in Notification API renders through the OS's native
+// toast template (title/body/icon only) -- there's no way to apply
+// Soterios's own dark/cyan design to it. These are small frameless windows
+// we fully control instead, stacked bottom-right and styled to match the
+// rest of the app.
+const activeToasts = [];
+const TOAST_WIDTH = 360;
+const TOAST_HEIGHT = 96;
+const TOAST_MARGIN = 16;
+const TOAST_GAP = 10;
+const TOAST_LIFETIME_MS = 6000;
+
+// Toast HTML is loaded via a data: URL, which has no filesystem base to
+// resolve a relative image path against -- so the logo is embedded directly
+// as a base64 PNG instead of referenced by path. Computed once and cached
+// since it never changes.
+let cachedToastLogoDataUri = null;
+function getToastLogoDataUri() {
+  if (cachedToastLogoDataUri !== null) return cachedToastLogoDataUri;
   try {
-    new Notification({ title, body, icon: createIcon() }).show();
+    const png = createIcon().resize({ width: 20, height: 20 }).toPNG();
+    cachedToastLogoDataUri = `data:image/png;base64,${png.toString('base64')}`;
+  } catch (_) {
+    cachedToastLogoDataUri = '';
+  }
+  return cachedToastLogoDataUri;
+}
+
+const TOAST_ACCENTS = {
+  info: '#4fc3d9',
+  success: '#3ddc97',
+  warn: '#e8b339',
+  danger: '#e85f5c'
+};
+
+function escToastHtml(v) {
+  return String(v ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+}
+
+function toastHtml(title, body, level) {
+  const accent = TOAST_ACCENTS[level] || TOAST_ACCENTS.info;
+  const logoDataUri = getToastLogoDataUri();
+  return `<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  html, body { margin:0; padding:0; background:transparent; overflow:hidden; user-select:none; }
+  .toast {
+    box-sizing: border-box;
+    position: relative;
+    width: ${TOAST_WIDTH}px;
+    min-height: ${TOAST_HEIGHT}px;
+    display:flex; align-items:flex-start; gap:12px;
+    padding:14px 40px 14px 16px;
+    background: rgba(20, 26, 33, 0.97);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-left: 3px solid ${accent};
+    border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+    font-family: 'Segoe UI', -apple-system, sans-serif;
+    color: #e6edf3;
+    cursor: pointer;
+    animation: toastIn 220ms ease-out;
+  }
+  .toast.closing { animation: toastOut 200ms ease-in forwards; }
+  @keyframes toastIn { from { transform: translateX(24px); opacity:0; } to { transform: translateX(0); opacity:1; } }
+  @keyframes toastOut { from { transform: translateX(0); opacity:1; } to { transform: translateX(24px); opacity:0; } }
+  .icon { flex-shrink:0; width:20px; height:20px; margin-top:2px; color: ${accent}; }
+  .content { flex:1; min-width:0; }
+  .brand { font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:#7d8a99; margin-bottom:3px; font-weight:600; }
+  .title { font-size:13.5px; font-weight:600; color:#f2f5f8; margin-bottom:3px; }
+  .body { font-size:12.5px; color:#aab4bf; line-height:1.4; word-wrap:break-word; }
+  .top-right { position:absolute; top:10px; right:10px; display:flex; align-items:center; gap:8px; }
+  .logo { width:16px; height:16px; border-radius:4px; display:block; }
+  .close { flex-shrink:0; color:#5b6672; font-size:16px; line-height:1; padding:2px; }
+  .close:hover { color:#aab4bf; }
+</style></head>
+<body>
+  <div class="toast" id="toast">
+    <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+    <div class="content">
+      <div class="brand">Soterios</div>
+      <div class="title">${escToastHtml(title)}</div>
+      <div class="body">${escToastHtml(body)}</div>
+    </div>
+    <div class="top-right">
+      ${logoDataUri ? `<img class="logo" src="${logoDataUri}" alt="" />` : ''}
+      <div class="close" id="closeBtn">&times;</div>
+    </div>
+  </div>
+  <script>
+    const toast = document.getElementById('toast');
+    function dismiss() {
+      toast.classList.add('closing');
+      setTimeout(() => { window.close(); }, 200);
+    }
+    document.getElementById('closeBtn').addEventListener('click', (e) => { e.stopPropagation(); dismiss(); });
+    toast.addEventListener('click', dismiss);
+    setTimeout(dismiss, ${TOAST_LIFETIME_MS});
+  </script>
+</body></html>`;
+}
+
+// Newest toast lands closest to the bottom margin; older ones already on
+// screen get pushed upward above it, same stacking behavior as Windows'
+// own Action Center toasts.
+function repositionToasts() {
+  const display = screen.getPrimaryDisplay();
+  const { x, y, width, height } = display.workArea;
+  let bottom = y + height - TOAST_MARGIN;
+  for (let i = activeToasts.length - 1; i >= 0; i--) {
+    const win = activeToasts[i];
+    if (!win || win.isDestroyed()) continue;
+    const top = bottom - TOAST_HEIGHT;
+    win.setBounds({ x: x + width - TOAST_WIDTH - TOAST_MARGIN, y: top, width: TOAST_WIDTH, height: TOAST_HEIGHT });
+    bottom = top - TOAST_GAP;
+  }
+}
+
+function showNotification(title, body, level = 'info') {
+  // Previously fired unconditionally regardless of the Settings toggle --
+  // this was the same "flag saved but never read" bug found earlier with
+  // System Monitoring.
+  if (dbRef && !dbRef.getSetting('feature.notificationsEnabled', true)) return;
+  try {
+    const display = screen.getPrimaryDisplay();
+    const { x, y, width, height } = display.workArea;
+    const toastWindow = new BrowserWindow({
+      width: TOAST_WIDTH,
+      height: TOAST_HEIGHT,
+      x: x + width - TOAST_WIDTH - TOAST_MARGIN,
+      y: y + height - TOAST_HEIGHT - TOAST_MARGIN,
+      frame: false,
+      transparent: true,
+      resizable: false,
+      movable: false,
+      minimizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      skipTaskbar: true,
+      alwaysOnTop: true,
+      focusable: false,
+      hasShadow: false,
+      show: false,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true
+      }
+    });
+    toastWindow.setAlwaysOnTop(true, 'screen-saver');
+    toastWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(toastHtml(title, body, level)));
+    toastWindow.once('ready-to-show', () => toastWindow.show());
+    toastWindow.on('closed', () => {
+      const idx = activeToasts.indexOf(toastWindow);
+      if (idx !== -1) activeToasts.splice(idx, 1);
+      repositionToasts();
+    });
+    activeToasts.push(toastWindow);
+    repositionToasts();
   } catch (_) {}
 }
 
@@ -225,6 +382,7 @@ app.whenReady().then(async () => {
   // 1. Database
   const dbPath = path.join(app.getPath('userData'), 'soterios.db');
   const db = new DatabaseService(dbPath);
+  dbRef = db;
 
   // Migrate old feature.systemMonitoring key to feature.externalLookups
   const oldVal = db.getSetting('feature.systemMonitoring', null);
@@ -308,7 +466,7 @@ app.whenReady().then(async () => {
     const milestone = [0, 25, 50, 75].find((value) => data.pct >= value && !announcedProgress.has(value));
     if (milestone !== undefined) {
       announcedProgress.add(milestone);
-      showNotification('Soterios scan progress', data.message || `Scan is ${milestone}% complete.`);
+      showNotification('Soterios scan progress', data.message || `Scan is ${milestone}% complete.`, 'info');
     }
   });
 
@@ -320,16 +478,19 @@ app.whenReady().then(async () => {
     announcedProgress.clear();
     let label;
     let body;
+    let level;
     if (data && data.scanType === 'definitions') {
       label = data.status === 'completed' ? 'Signatures updated' : data.status === 'canceled' ? 'Definitions update canceled' : 'Definitions update failed';
       body = data.status === 'completed'
         ? 'ClamAV signatures are up to date.'
         : data.error || 'ClamAV signature update failed.';
+      level = data.status === 'completed' ? 'success' : data.status === 'canceled' ? 'warn' : 'danger';
     } else {
       label = data.status === 'completed' ? 'Scan completed' : data.status === 'canceled' ? 'Scan canceled' : 'Scan finished with issues';
       body = `${data.filesScanned || 0} file(s) scanned, ${data.threatsFound || 0} threat(s) found.`;
+      level = data.status !== 'completed' ? 'warn' : (data.threatsFound ? 'warn' : 'success');
     }
-    showNotification(label, body);
+    showNotification(label, body, level);
     // Auto-generate a scan report
     (async () => {
       try {

@@ -56,6 +56,11 @@ const Api = {
     const autoReports = await window.api.invoke('db:getSetting', 'feature.autoReports', true);
     const scanHistory = await window.api.invoke('db:getSetting', 'feature.scanHistory', true);
     const externalLookups = await window.api.invoke('db:getSetting', 'feature.externalLookups', true);
+    const notificationsEnabled = await window.api.invoke('db:getSetting', 'feature.notificationsEnabled', true);
+    // Cached fallback only -- settings.js queries 'app:getLaunchAtStartup'
+    // directly for the real OS-level state and uses this purely as a
+    // fallback if that IPC call fails.
+    const launchAtStartup = await window.api.invoke('db:getSetting', 'feature.launchAtStartup', false);
     const dbTheme = await window.api.invoke('db:getSetting', 'ui.theme', 'dark');
     let storedTheme = null;
     try {
@@ -70,7 +75,7 @@ const Api = {
     if (window.AppState) window.AppState.currentTheme = theme;
     return {
       scanner: { defaultPath, maxDepth, maxFileSizeMB, includeCleanResults, excludedDirNames },
-      features: { realtimeProtection, autoReports, scanHistory, externalLookups },
+      features: { realtimeProtection, autoReports, scanHistory, externalLookups, notificationsEnabled, launchAtStartup },
       ui: { theme }
     };
   },
@@ -93,6 +98,8 @@ const Api = {
       if (Object.prototype.hasOwnProperty.call(f, 'autoReports')) await window.api.invoke('db:setSetting', 'feature.autoReports', !!f.autoReports);
       if (Object.prototype.hasOwnProperty.call(f, 'scanHistory')) await window.api.invoke('db:setSetting', 'feature.scanHistory', !!f.scanHistory);
       if (Object.prototype.hasOwnProperty.call(f, 'externalLookups')) await window.api.invoke('db:setSetting', 'feature.externalLookups', !!f.externalLookups);
+      if (Object.prototype.hasOwnProperty.call(f, 'notificationsEnabled')) await window.api.invoke('db:setSetting', 'feature.notificationsEnabled', !!f.notificationsEnabled);
+      if (Object.prototype.hasOwnProperty.call(f, 'launchAtStartup')) await window.api.invoke('db:setSetting', 'feature.launchAtStartup', !!f.launchAtStartup);
     }
     if (patch.ui) {
       const u = patch.ui;

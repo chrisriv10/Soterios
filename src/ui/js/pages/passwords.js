@@ -22,13 +22,25 @@ window.Pages.passwords = {
         </div>
         <div class="panel"><div class="panel-title">Strength Checker</div>
           <div class="field"><label class="field-label">Enter a password to analyze</label>
-            <input type="password" id="checkInput" placeholder="Type a password..." /></div>
+            <div style="position:relative;">
+              <input type="password" id="checkInput" placeholder="Type a password..." style="width:100%; padding-right:36px; box-sizing:border-box;" />
+              <button type="button" class="password-toggle-visibility" data-target="checkInput" title="Show password" style="position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:var(--text-dim); padding:4px; display:flex;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
           <div id="checkStrength"></div>
           <div style="font-size:11px;color:var(--text-dim);margin-top:10px;">Strength is analyzed locally.</div>
         </div>
         <div class="panel"><div class="panel-title">Password Leak Check</div>
           <div class="field"><label class="field-label">Check against HIBP Pwned Passwords</label>
-            <input type="password" id="leakPasswordInput" placeholder="Type a password to check" /></div>
+            <div style="position:relative;">
+              <input type="password" id="leakPasswordInput" placeholder="Type a password to check" style="width:100%; padding-right:36px; box-sizing:border-box;" />
+              <button type="button" class="password-toggle-visibility" data-target="leakPasswordInput" title="Show password" style="position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:var(--text-dim); padding:4px; display:flex;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
           <button class="btn btn-primary" id="checkPasswordLeak">Check Password</button>
           <div id="passwordLeakResult" style="margin-top:12px;"></div>
           <div style="font-size:11px;color:var(--text-dim);margin-top:10px;">Uses HIBP k-anonymity: only the first 5 SHA-1 hash characters are sent. Disable in Settings for offline-only use.</div>
@@ -44,6 +56,22 @@ window.Pages.passwords = {
     this.wireGenerator(container);
     this.wireChecker(container);
     this.wireLeakChecks(container);
+    this.wirePasswordVisibilityToggles(container);
+  },
+
+  wirePasswordVisibilityToggles(container) {
+    container.querySelectorAll('.password-toggle-visibility').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const input = container.querySelector(`#${btn.dataset.target}`);
+        if (!input) return;
+        const showing = input.type === 'text';
+        input.type = showing ? 'password' : 'text';
+        btn.title = showing ? 'Show password' : 'Hide password';
+        btn.innerHTML = showing
+          ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
+          : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.6 21.6 0 0 1 5.06-6.06M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+      });
+    });
   },
 
   wireGenerator(container) {
@@ -139,5 +167,6 @@ window.Pages.passwords = {
 function renderStrengthMeter(el, strength, showIssues) {
   const color = strength.label === 'Very Strong' || strength.label === 'Strong' ? 'var(--ok)' : strength.label === 'Moderate' ? 'var(--warn)' : 'var(--danger)';
   const issuesHtml = (showIssues && strength.issues && strength.issues.length) ? `<ul class="issue-list">${strength.issues.map((i) => `<li>${escapeHtml(i)}</li>`).join('')}</ul>` : '';
-  el.innerHTML = `<div class="flex-between" style="font-size:12px;"><span style="color:${color};font-weight:600;">${strength.label}</span><span class="mono" style="color:var(--text-dim);">~${strength.entropyBits} bits entropy</span></div><div class="strength-meter-track"><div class="strength-meter-fill" style="width:${strength.score}%;background:${color};"></div></div>${issuesHtml}`;
+  const crackHtml = strength.crackTimeEstimate ? `<div style="font-size:11px; color:var(--text-dim); margin-top:6px;">Estimated time to crack (offline attack): <strong>${escapeHtml(strength.crackTimeEstimate)}</strong></div>` : '';
+  el.innerHTML = `<div class="flex-between" style="font-size:12px;"><span style="color:${color};font-weight:600;">${strength.label}</span><span class="mono" style="color:var(--text-dim);">~${strength.entropyBits} bits entropy</span></div><div class="strength-meter-track"><div class="strength-meter-fill" style="width:${strength.score}%;background:${color};"></div></div>${crackHtml}${issuesHtml}`;
 }

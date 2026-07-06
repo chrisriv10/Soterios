@@ -364,6 +364,13 @@ window.Pages['firewall'] = {
     return '';
   },
 
+  // Used to gate the "Measure Bandwidth" button — that feature only
+  // supports IPv4 TCP connections (see ipcHandlers.js's
+  // measureConnectionBandwidth for why).
+  _isIPv4(ip) {
+    return typeof ip === 'string' && /^(\d{1,3}\.){3}\d{1,3}$/.test(ip);
+  },
+
   // Windows doesn't expose true directionality for an already-established TCP
   // connection, so this is a best-effort heuristic: a low/well-known local
   // port paired with a high remote port usually means someone connected IN to
@@ -778,6 +785,11 @@ window.Pages['firewall'] = {
     const color = this._riskColor(risk);
     const isTrusted = this._trustedIps.includes(remoteAddress);
     const g = this.GLOSSARY;
+    // Bandwidth tracking needs an actively-open TCP connection: Windows
+    // returns ERROR_NOT_SUPPORTED for anything already winding down
+    // (TIME_WAIT, CLOSE_WAIT, etc.) since there's no live data flow left to
+    // sample, and the underlying API only handles IPv4 (see ipcHandlers.js).
+    const bandwidthEligible = this._isIPv4(localAddress) && this._isIPv4(remoteAddress) && state === 'ESTABLISHED';
 
     panel.innerHTML = `
       <div class="card compact" style="display:flex; flex-direction:column; gap:10px;">
@@ -792,10 +804,20 @@ window.Pages['firewall'] = {
           <div>Direction: <span class="glossary-term" title="${escapeHtml(item.direction === 'inbound' ? g.inbound : g.outbound)}">${item.direction === 'inbound' ? 'Inbound \u2193' : 'Outbound \u2191'}</span> <span style="opacity:0.7;">(best-effort estimate)</span></div>
           <div>State: <span class="glossary-term" title="${escapeHtml(stateExplain)}">${escapeHtml(state)}</span></div>
           <div>PID: <span class="glossary-term" title="${escapeHtml(g.pid)}">${pid ? escapeHtml(pid) : 'unknown'}</span></div>
+          ${bandwidthEligible
+            ? `<div id="detailBandwidthResult" style="opacity:0.85;">Bandwidth not measured yet.</div>`
+            : !this._isIPv4(localAddress) || !this._isIPv4(remoteAddress)
+              ? `<div style="opacity:0.7;">Per-connection bandwidth measurement only supports IPv4 TCP connections right now \u2014 this one's IPv6 or another protocol. See the Network Monitor page for interface-level throughput instead.</div>`
+              : `<div style="opacity:0.7;">Bandwidth can only be measured on an actively-open connection \u2014 this one is ${escapeHtml(state)}, not ESTABLISHED, so there's no live data flow left to sample.</div>`
+          }
         </div>
         <div id="detailWhoisResult" style="font-size:0.78rem; color:var(--text-dim);"></div>
         <div id="detailProcessResult" style="font-size:0.78rem; color:var(--text-dim);"></div>
         <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
+          ${bandwidthEligible
+            ? `<button class="btn btn-sm" data-action="bandwidth" title="Takes ~2 seconds — Windows samples this connection's live throughput.">Measure Bandwidth</button>`
+            : ''
+          }
           <button class="btn btn-sm" data-action="block-conn">Block This Connection</button>
           <button class="btn btn-sm" data-action="block-ip">Block Remote IP</button>
           <button class="btn btn-sm" data-action="block-app" ${pid ? '' : 'disabled'}>Block Application</button>
@@ -812,6 +834,12 @@ window.Pages['firewall'] = {
     panel.querySelector('[data-action="trust"]').addEventListener('click', () => this._toggleTrust(container, remoteAddress, isTrusted));
     panel.querySelector('[data-action="whois"]').addEventListener('click', () => this._runWhois(container, remoteAddress));
     panel.querySelector('[data-action="process"]').addEventListener('click', () => this._showProcessDetails(container, pid));
+    const bandwidthBtn = panel.querySelector('[data-action="bandwidth"]');
+    if (bandwidthBtn) {
+      bandwidthBtn.addEventListener('click', () => this._measureBandwidth(container, bandwidthBtn, {
+        localAddress, localPort, remoteAddress, remotePort
+      }));
+    }
   },
 
   // Full, searchable/filterable list of every active connection — the map
@@ -945,6 +973,29 @@ window.Pages['firewall'] = {
         : await window.api.invoke('firewall:trustConnection', ip);
       if (this._selectedKey) this._renderDetailPanel(container, this._perimeterNodes.get(this._selectedKey));
     } catch (e) { alert(this._friendlyError(e, 'Failed to update trust list.')); }
+  },
+
+  // Kicks off a real, on-demand bandwidth measurement for this one
+  // connection via the main process (see ipcHandlers.js's
+  // measureConnectionBandwidth). Takes ~2 seconds since Windows needs a
+  // moment to produce a reading — the button reflects that while it runs.
+  async _measureBandwidth(container, btn, spec) {
+    const target = container.querySelector('#detailBandwidthResult');
+    const originalLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Measuring\u2026 (~2s)';
+    if (target) target.textContent = 'Measuring\u2026';
+    try {
+      const result = await window.api.invoke('network:measureBandwidth', spec);
+      if (target) {
+        target.innerHTML = `\u2191 ${result.outboundKBps.toFixed(1)} KB/s out \u00b7 \u2193 ${result.inboundKBps.toFixed(1)} KB/s in <span style="opacity:0.6;">(live sample)</span>`;
+      }
+    } catch (e) {
+      if (target) target.textContent = this._friendlyError(e, 'Bandwidth measurement failed.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
   },
 
   async _runWhois(container, ip) {

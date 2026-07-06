@@ -5,6 +5,17 @@ window.Pages.settings = {
   async render(container) {
     const settings = await Api.getSettings();
     const appInfo = await Api.getAppInfo();
+    let launchAtStartup = false;
+    try {
+      // Assumes 'app:getLaunchAtStartup' reflects the real OS-level login
+      // item state (e.g. via Electron's app.getLoginItemSettings()), not
+      // just a saved preference -- so this stays accurate even if the user
+      // changed it outside the app. Falls back to the saved flag if that
+      // channel isn't wired up yet.
+      launchAtStartup = await window.api.invoke('app:getLaunchAtStartup');
+    } catch (_) {
+      launchAtStartup = !!(settings.features && settings.features.launchAtStartup);
+    }
     savedTheme = settings.ui?.theme || 'dark';
     const activeTheme = (window.AppState && window.AppState.currentTheme) || savedTheme;
     Api.applyTheme(activeTheme);
@@ -83,6 +94,29 @@ window.Pages.settings = {
         </div>
 
         <div class="card">
+          <div class="panel-title" style="margin-bottom:16px;">Notifications</div>
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">Enable Notifications</div>
+              <div class="toggle-desc">Show desktop notifications for scan results, threats, and completed reports</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="notificationsToggle" ${settings.features.notificationsEnabled !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="panel-title" style="margin-bottom:16px;">Startup</div>
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">Launch at System Startup</div>
+              <div class="toggle-desc">Automatically start Soterios in the background when you log in to Windows</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="launchAtStartupToggle" ${launchAtStartup ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+          </div>
+          <div id="startupStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
+        </div>
+
+        <div class="card">
           <div class="panel-title" style="margin-bottom:16px;">About</div>
           <div style="font-size:0.9rem; line-height:1.8;">
             <div><strong>Soterios</strong> v${escapeHtml(appInfo.version || '1.0.2')}</div>
@@ -153,6 +187,30 @@ window.Pages.settings = {
     container.querySelector('#autoReportToggle').addEventListener('change', (event) => saveFeature('autoReports', event.target.checked, event.target));
     container.querySelector('#scanHistoryToggle').addEventListener('change', (event) => saveFeature('scanHistory', event.target.checked, event.target));
     container.querySelector('#externalLookupsToggle').addEventListener('change', (event) => saveFeature('externalLookups', event.target.checked, event.target));
+    container.querySelector('#notificationsToggle').addEventListener('change', (event) => saveFeature('notificationsEnabled', event.target.checked, event.target));
+
+    container.querySelector('#launchAtStartupToggle').addEventListener('change', async (event) => {
+      const checked = event.target.checked;
+      const input = event.target;
+      const status = container.querySelector('#startupStatus');
+      input.disabled = true;
+      status.textContent = '';
+      try {
+        // Assumes 'app:setLaunchAtStartup' actually flips the OS-level login
+        // item (e.g. via Electron's app.setLoginItemSettings) and returns
+        // the resulting boolean -- not just a saved preference, since a
+        // saved-only flag wouldn't make Windows launch the app at all.
+        const result = await window.api.invoke('app:setLaunchAtStartup', checked);
+        await Api.updateSettings({ features: { launchAtStartup: !!result } });
+        input.checked = !!result;
+        status.textContent = result ? 'Soterios will launch at startup.' : 'Startup launch disabled.';
+      } catch (err) {
+        input.checked = !checked;
+        status.textContent = err.message || 'Unable to update startup setting.';
+      } finally {
+        input.disabled = false;
+      }
+    });
   },
 
   destroy() {
