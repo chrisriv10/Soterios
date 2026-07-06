@@ -64,19 +64,22 @@ class NetworkEnricher {
     return enriched;
   }
 
-  /**
-   * Enrich an array of network connections
-   * @param {Array} connections - Array of raw connection objects
-   * @returns {Promise<Array>} Array of enriched connection objects
-   */
-  async enrich(connections) {
+  async enrich(connections, onProgress) {
     if (!Array.isArray(connections)) {
       return [];
     }
 
+    let completed = 0;
+    const total = connections.length;
+
     // Enrich connections in parallel for better performance
     const enrichedConnections = await Promise.all(
-      connections.map(conn => this.enrichConnection(conn))
+      connections.map(async (conn) => {
+        const result = await this.enrichConnection(conn);
+        completed++;
+        if (onProgress) onProgress(completed, total);
+        return result;
+      })
     );
 
     return enrichedConnections;

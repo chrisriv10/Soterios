@@ -114,6 +114,15 @@ class DatabaseService {
         fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Network Geo Cache
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS network_geo_cache (
+        ip TEXT PRIMARY KEY,
+        raw_data TEXT,
+        fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
   }
 
   // --- Scan History API ---
@@ -250,6 +259,22 @@ class DatabaseService {
         fetched_at = CURRENT_TIMESTAMP
     `);
     return stmt.run({ source, rawData });
+  }
+
+  // --- Network Geo Cache API ---
+  getGeoCache(ip) {
+    return this.db.prepare('SELECT * FROM network_geo_cache WHERE ip = ?').get(ip) || null;
+  }
+
+  setGeoCache(ip, rawData) {
+    const stmt = this.db.prepare(`
+      INSERT INTO network_geo_cache (ip, raw_data, fetched_at)
+      VALUES (@ip, @rawData, CURRENT_TIMESTAMP)
+      ON CONFLICT(ip) DO UPDATE SET
+        raw_data = excluded.raw_data,
+        fetched_at = CURRENT_TIMESTAMP
+    `);
+    return stmt.run({ ip, rawData });
   }
 }
 

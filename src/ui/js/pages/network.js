@@ -8,6 +8,27 @@ window.Pages['network'] = {
       this._refreshTimer = null;
     }
     container.innerHTML = `
+      <style>
+        @keyframes heatmapPulseMalicious {
+          0% { box-shadow: 0 0 0 0 rgba(232, 95, 92, 0.7); }
+          70% { box-shadow: 0 0 0 10px rgba(232, 95, 92, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(232, 95, 92, 0); }
+        }
+        .heatmap-pulse-malicious {
+          animation: heatmapPulseMalicious 2s infinite;
+        }
+        @keyframes flashHighlight {
+          0% { background-color: rgba(255, 255, 255, 0.2); }
+          100% { background-color: transparent; }
+        }
+        .flash-highlight {
+          animation: flashHighlight 1.5s ease-out;
+        }
+        .heatmap-marker:hover {
+          z-index: 10;
+          transform: translate(-50%, -50%) scale(1.2) !important;
+        }
+      </style>
       <header class="page-header">
         <h1 class="page-title">Network Monitor</h1>
         <p class="page-subtitle">Active connections and interface bandwidth</p>
@@ -20,6 +41,22 @@ window.Pages['network'] = {
       </div>
     `;
     this.load(container, true);
+
+    const content = container.querySelector('#networkContent');
+    if (content) {
+      content.addEventListener('click', (e) => {
+        const marker = e.target.closest('.heatmap-marker');
+        if (marker) {
+          const ips = marker.dataset.ips.split(',');
+          window.Pages['network']._selectedClusterIps = ips;
+          window.Pages['network']._selectedClusterLoc = marker.dataset.loc;
+          window.Pages['network'].load(container, false);
+        } else if (e.target.closest('.heatmap-infobox-close')) {
+          window.Pages['network']._selectedClusterIps = null;
+          window.Pages['network'].load(container, false);
+        }
+      });
+    }
 
     // Auto-refresh bandwidth + connections in real time. Stops itself if the
     // page has been navigated away from (container removed from the DOM).
@@ -35,12 +72,7 @@ window.Pages['network'] = {
   async load(container, isInitial) {
     const content = container.querySelector('#networkContent');
     const progressBar = content?.querySelector('.loading-progress-bar');
-    let progressTimer = null;
     const setLoadingState = (active) => {
-      if (progressTimer) {
-        clearInterval(progressTimer);
-        progressTimer = null;
-      }
       if (!progressBar) return;
       if (!active) {
         progressBar.style.opacity = '0';
@@ -49,11 +81,6 @@ window.Pages['network'] = {
       }
       progressBar.style.opacity = '1';
       progressBar.style.width = '8%';
-      let currentWidth = 8;
-      progressTimer = setInterval(() => {
-        currentWidth = Math.min(currentWidth + Math.random() * 12 + 4, 88);
-        progressBar.style.width = `${currentWidth}%`;
-      }, 180);
     };
     // Only show the loading spinner/progress bar on the very first load.
     // Background refreshes update silently so the UI doesn't flicker every
@@ -63,10 +90,20 @@ window.Pages['network'] = {
     const prevScrollEl = content?.querySelector('#activeConnectionsList');
     const prevScrollTop = prevScrollEl ? prevScrollEl.scrollTop : 0;
     try {
+      const removeProgressListener = window.api.on('network:connections:progress', (data) => {
+        if (!progressBar) return;
+        const pct = Math.max(8, Math.min((data.completed / data.total) * 100, 100));
+        progressBar.style.width = `${pct}%`;
+        progressBar.style.opacity = '1';
+      });
+
       const [statsResult, connectionsResult] = await Promise.allSettled([
         window.api.invoke('network:stats'),
         window.api.invoke('network:connections')
       ]);
+
+      if (removeProgressListener) removeProgressListener();
+      
       const stats = statsResult.status === 'fulfilled' ? statsResult.value : null;
       const connections = connectionsResult.status === 'fulfilled' ? connectionsResult.value : null;
 
@@ -214,6 +251,134 @@ window.Pages['network'] = {
 
       html += '</div>'; // end bandwidth/pie/flags row
 
+      // Heat Map
+      const uniqueIps = [...new Set(connections ? connections.map(c => firstDefined(c.remoteAddress, c.RemoteAddress)).filter(Boolean) : [])];
+      let geoData = {};
+      try {
+        geoData = await window.api.invoke('network:geo', uniqueIps);
+      } catch (e) {
+        console.error('Geo lookup failed', e);
+      }
+
+      if (Object.keys(geoData).length > 0) {
+        html += '<div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px;">';
+        html += '<h3 style="margin:0; font-size:1rem;">Active Connections Heat Map</h3>';
+        html += `<div style="display:flex; gap:12px; font-size:0.75rem; font-weight:600;">
+          <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--ok);"></span> Safe</span>
+          <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--warn);"></span> Unknown</span>
+          <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--danger);"></span> Malicious</span>
+        </div>`;
+        html += '</div>';
+
+        html += `<div class="card" style="padding:0; margin-bottom:18px; position:relative; background-color:var(--bg-panel); overflow:hidden; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
+          <div style="position:absolute; top:0; left:0; right:0; bottom:0; background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 20px 20px; pointer-events:none; z-index:1;"></div>
+          <img src="../img/world-map.svg" alt="World Map" style="width:100%; height:auto; opacity:0.15; display:block; pointer-events:none; user-select:none;" />
+          <div style="position:absolute; top:0; left:0; bottom:0; right:0; pointer-events:none; z-index:2;">`;
+
+        const clusters = {};
+        for (const c of (connections || [])) {
+          const ip = firstDefined(c.remoteAddress, c.RemoteAddress);
+          const geo = geoData[ip];
+          if (!geo || geo.lat === undefined || geo.lon === undefined) continue;
+          
+          const clusterX = Math.round(geo.lon / 2.5) * 2.5;
+          const clusterY = Math.round(geo.lat / 2.5) * 2.5;
+          const key = `${clusterX},${clusterY}`;
+          
+          if (!clusters[key]) {
+            clusters[key] = {
+              lat: clusterY, lon: clusterX, 
+              count: 0, 
+              ips: new Set(),
+              classification: 'SAFE',
+              locations: new Set()
+            };
+          }
+          
+          clusters[key].count++;
+          clusters[key].ips.add(ip);
+          if (geo.city && geo.country) clusters[key].locations.add(`${geo.city}, ${geo.country}`);
+          
+          if (c.classification === 'MALICIOUS') {
+            clusters[key].classification = 'MALICIOUS';
+          } else if (c.classification === 'UNKNOWN' && clusters[key].classification === 'SAFE') {
+            clusters[key].classification = 'UNKNOWN';
+          }
+        }
+
+        for (const key in clusters) {
+          const c = clusters[key];
+          const x = ((c.lon + 180) / 360) * 100;
+          const y = ((90 - c.lat) / 180) * 100;
+          
+          let color = 'var(--ok)';
+          let glow = 'var(--ok)';
+          let pulseClass = '';
+          
+          if (c.classification === 'MALICIOUS') {
+            color = 'var(--danger)';
+            glow = 'var(--danger)';
+            pulseClass = 'heatmap-pulse-malicious';
+          } else if (c.classification === 'UNKNOWN') {
+            color = 'var(--warn)';
+            glow = 'var(--warn)';
+          }
+          
+          const size = Math.max(8, 6 + Math.log(c.count) * 4);
+          const ipList = Array.from(c.ips).join(',');
+          const locList = Array.from(c.locations).join(' | ') || 'Unknown Location';
+          
+          html += `<div class="heatmap-marker ${pulseClass}" data-ips="${ipList}" data-loc="${escapeHtml(locList)}"
+            title="${escapeHtml(locList)}\nIPs: ${ipList}\nConnections: ${c.count}"
+            style="position:absolute; left:${x}%; top:${y}%; width:${size}px; height:${size}px; 
+            background-color:${color}; border-radius:50%; transform:translate(-50%, -50%); 
+            box-shadow:0 0 10px ${glow}; cursor:pointer; pointer-events:auto; display:flex; 
+            align-items:center; justify-content:center; color:#fff; font-size:9px; font-weight:bold; transition: transform 0.15s ease-out;">
+            ${c.count > 1 ? c.count : ''}
+          </div>`;
+        }
+
+        if (window.Pages['network']._selectedClusterIps) {
+          const selectedIps = window.Pages['network']._selectedClusterIps;
+          const loc = window.Pages['network']._selectedClusterLoc;
+          const matchingConns = (connections || []).filter(c => {
+             const ip = firstDefined(c.remoteAddress, c.RemoteAddress);
+             return selectedIps.includes(ip);
+          });
+          
+          html += `<div style="position:absolute; top:10px; right:10px; width:320px; max-height:calc(100% - 20px); background:rgba(20, 26, 33, 0.95); border:1px solid rgba(255,255,255,0.1); border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,0.5); z-index:20; display:flex; flex-direction:column; backdrop-filter:blur(4px); pointer-events:auto;">
+            <div style="padding:10px 14px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-weight:600; font-size:0.9rem;">${escapeHtml(loc || 'Cluster Details')}</div>
+              <div class="heatmap-infobox-close" style="cursor:pointer; opacity:0.7; font-size:1.4rem; line-height:1;">&times;</div>
+            </div>
+            <div style="padding:10px 14px; overflow-y:auto; font-size:0.8rem; display:flex; flex-direction:column; gap:12px;">`;
+            
+          for (const c of matchingConns) {
+            const proc = c.processName ? `(${escapeHtml(c.processName)})` : (c.pid ? `(PID: ${escapeHtml(c.pid)})` : '');
+            const ip = firstDefined(c.remoteAddress, c.RemoteAddress);
+            const port = firstDefined(c.remotePort, c.RemotePort);
+            const state = getState(c);
+            let stateColor = 'var(--text-dim)';
+            if (state === 'ESTABLISHED') stateColor = 'var(--ok)';
+            else if (state === 'LISTEN' || state === 'LISTENING') stateColor = 'var(--accent-primary)';
+            else if (state === 'TIME_WAIT') stateColor = 'var(--warn)';
+            else if (state === 'CLOSE_WAIT') stateColor = 'var(--danger)';
+            
+            html += `<div>
+              <div style="font-family:monospace; color:var(--text-primary); font-size:0.85rem;">${escapeHtml(ip)}:${escapeHtml(port)}</div>
+              <div style="color:var(--text-dim); display:flex; justify-content:space-between; margin-top:4px;">
+                <span>${proc}</span>
+                <span style="color:${stateColor}; font-weight:600; font-size:0.7rem; background:${stateColor}15; padding:2px 4px; border-radius:4px;">${escapeHtml(state)}</span>
+              </div>
+            </div>`;
+          }
+            
+          html += `</div></div>`;
+        }
+
+        html += `</div></div>`;
+      }
+
       // Active connections list
       html += '<h3 style="margin-bottom:10px; font-size:1rem;">Active Connections</h3>';
       if (!connections || connections.length === 0) {
@@ -273,7 +438,7 @@ window.Pages['network'] = {
             ? `<span style="font-size:0.7rem; font-weight:600; color:${stateColor}; background:${stateColor}15; padding:2px 6px; border-radius:4px; margin-right:6px;">${escapeHtml(state)}</span>`
             : '';
 
-          html += `<div class="card" style="display:flex; flex-direction:column; gap:4px; padding:12px 16px; border-left:4px solid ${borderColor};">
+          html += `<div class="card connection-row" data-ip="${escapeHtml(remoteAddress)}" style="display:flex; flex-direction:column; gap:4px; padding:12px 16px; border-left:4px solid ${borderColor};">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <div>
                 <div style="font-weight:600; font-family:monospace; word-break:break-all;">${stateBadge}${escapeHtml(remoteAddress)}:${escapeHtml(remotePort)}${service}${hostname}</div>

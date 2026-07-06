@@ -57,6 +57,14 @@ window.Pages.settings = {
             </div>
             <label class="toggle"><input type="checkbox" id="externalLookupsToggle" ${settings.features.externalLookups ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
+
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">Geolocation Heat Map</div>
+              <div class="toggle-desc">Resolve IP addresses to display a world map of active connections (uses ipwho.is)</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="geoLookupToggle" ${settings.features.geoLookup ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+          </div>
         </div>
 
         <div class="card">
@@ -187,6 +195,7 @@ window.Pages.settings = {
     container.querySelector('#autoReportToggle').addEventListener('change', (event) => saveFeature('autoReports', event.target.checked, event.target));
     container.querySelector('#scanHistoryToggle').addEventListener('change', (event) => saveFeature('scanHistory', event.target.checked, event.target));
     container.querySelector('#externalLookupsToggle').addEventListener('change', (event) => saveFeature('externalLookups', event.target.checked, event.target));
+    container.querySelector('#geoLookupToggle').addEventListener('change', (event) => saveFeature('geoLookup', event.target.checked, event.target));
     container.querySelector('#notificationsToggle').addEventListener('change', (event) => saveFeature('notificationsEnabled', event.target.checked, event.target));
 
     container.querySelector('#launchAtStartupToggle').addEventListener('change', async (event) => {

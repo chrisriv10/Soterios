@@ -61,6 +61,7 @@ const NetworkMonitor = require('../security/NetworkMonitor');
 const { ProcessResolver } = require('../security/ProcessResolver');
 const { BlocklistService } = require('../security/BlocklistService');
 const { NetworkEnricher } = require('../security/NetworkEnricher');
+const { GeoLocationService } = require('../security/GeoLocationService');
 
 // Legacy utilities
 const { loadPlugins } = require('../core/pluginLoader');
@@ -418,6 +419,7 @@ app.whenReady().then(async () => {
   const processResolver = new ProcessResolver(processInspector);
   const blocklistService = new BlocklistService(db);
   const networkEnricher = new NetworkEnricher(processResolver, blocklistService);
+  const geoLocationService = new GeoLocationService(db);
 
   // loadPlugins() is a synchronous filesystem scan, not a network call, so
   // it's cheap enough to keep here rather than deferring it.
@@ -439,6 +441,7 @@ app.whenReady().then(async () => {
     processResolver,
     blocklistService,
     networkEnricher,
+    geoLocationService,
     toolRegistry
   };
 

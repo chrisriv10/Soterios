@@ -454,9 +454,23 @@ function registerIpcHandlers(mainWindow, services) {
     };
   });
 
-  ipcMain.handle('network:connections', async () => {
+  ipcMain.handle('network:connections', async (event) => {
     const raw = await services.networkMonitor.getConnections();
-    return services.networkEnricher.enrich(raw);
+    return services.networkEnricher.enrich(raw, (completed, total) => {
+      event.sender.send('network:connections:progress', { completed, total });
+    });
+  });
+
+  ipcMain.handle('network:geo', async (_event, ips) => {
+    if (!db.getSetting('feature.geoLookup', true)) return {};
+    const results = {};
+    for (const ip of ips) {
+      const geo = await services.geoLocationService.lookup(ip);
+      if (geo) {
+        results[ip] = geo;
+      }
+    }
+    return results;
   });
 
   ipcMain.handle('network:stats', async () => {
