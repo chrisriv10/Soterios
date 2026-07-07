@@ -107,9 +107,9 @@ window.Pages.processes = {
       listEl.innerHTML = '<div class="empty-state"><span class="spinner"></span>&nbsp;Loading processes...</div>';
     }
     try {
-      const processes = await Api.runTool('process-viewer', {});
-      this._all = processes || [];
-      this.updateLiveStats(container, this._all);
+      const data = await Api.runTool('process-viewer', {});
+      this._all = data.processes || [];
+      this.updateLiveStats(container, data.totalCpu, this._all);
       this.buildRows(container);
       this.sortRows(container);
       this.applyFilter(container);
@@ -126,33 +126,25 @@ window.Pages.processes = {
     }
   },
 
-  _cpuHistory: [], // rolling window of recent normalized CPU readings, for smoothing
+  _cpuHistory: [], // rolling window of recent CPU readings, for smoothing
 
-  // Sums per-process CPU/RAM usage to give a real-time system-wide total,
-  // refreshed on the same cadence as the process list itself.
+  // Live CPU comes straight from systeminformation's si.currentLoad()
+  // (the real system-wide figure, matching Task Manager), passed in from
+  // processViewer.js as totalCpu -- NOT summed from the per-process list.
+  // Per-process `cpu` values from si.processes() aren't guaranteed to add
+  // up to true total utilization, which is why the live indicator used to
+  // read 90-100% almost constantly regardless of actual load.
   //
-  // The `cpu` field from process-viewer is a percentage of a single core
-  // (a process fully using one core reports ~100%), not of total system
-  // capacity — this is standard behavior for tools like systeminformation's
-  // processes() call. Summed raw across many processes on a multi-core
-  // machine, that total is almost always >> 100%, which is why it was
-  // pegging at the clamp ceiling. Dividing by the logical core count
-  // converts it into "% of total system capacity", which is what Task
-  // Manager reports. A short rolling average smooths out single-sample
-  // noise without meaningfully lagging real changes.
-  //
-  // Memory doesn't need this: RSS-as-%-of-total-RAM is already a
-  // system-wide fraction, which is why it reads accurately as-is.
-  updateLiveStats(container, processes) {
+  // Memory doesn't have this problem: RSS-as-%-of-total-RAM per process is
+  // already a system-wide fraction, so summing it across processes still
+  // reads accurately.
+  updateLiveStats(container, totalCpuReading, processes) {
     const cpuEl = container.querySelector('#liveCpu');
     const memEl = container.querySelector('#liveMemory');
     if (!cpuEl || !memEl) return;
 
-    const cpuCores = (navigator.hardwareConcurrency && navigator.hardwareConcurrency > 0)
-      ? navigator.hardwareConcurrency
-      : 1;
-    const rawCpuSum = processes.reduce((sum, p) => sum + (typeof p.cpu === 'number' ? p.cpu : 0), 0);
-    const normalizedCpu = Math.min(100, rawCpuSum / cpuCores);
+    const rawCpu = typeof totalCpuReading === 'number' && !Number.isNaN(totalCpuReading) ? totalCpuReading : 0;
+    const normalizedCpu = Math.min(100, Math.max(0, rawCpu));
 
     this._cpuHistory.push(normalizedCpu);
     if (this._cpuHistory.length > 3) this._cpuHistory.shift();

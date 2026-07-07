@@ -1,6 +1,9 @@
 window.Pages = window.Pages || {};
 window.Pages['network'] = {
   REFRESH_INTERVAL_MS: 3000,
+  _connectionQuery: '', // persists the active-connections search across refreshes
+  _connectionRiskFilter: 'all',
+  _connectionStateFilter: 'all',
   render(container) {
     // Clear any previous auto-refresh timer (e.g. if this page is re-rendered)
     if (this._refreshTimer) {
@@ -56,6 +59,22 @@ window.Pages['network'] = {
           window.Pages['network'].load(container, false);
         }
       });
+
+      content.addEventListener('input', (e) => {
+        if (e.target && e.target.id === 'connectionSearch') {
+          window.Pages['network']._connectionQuery = e.target.value;
+          window.Pages['network'].applyConnectionFilter(container);
+        }
+      });
+      content.addEventListener('change', (e) => {
+        if (e.target && e.target.id === 'connectionRiskFilter') {
+          window.Pages['network']._connectionRiskFilter = e.target.value;
+          window.Pages['network'].applyConnectionFilter(container);
+        } else if (e.target && e.target.id === 'connectionStateFilter') {
+          window.Pages['network']._connectionStateFilter = e.target.value;
+          window.Pages['network'].applyConnectionFilter(container);
+        }
+      });
     }
 
     // Auto-refresh bandwidth + connections in real time. Stops itself if the
@@ -89,6 +108,13 @@ window.Pages['network'] = {
     // Preserve the connection list's scroll position across silent refreshes.
     const prevScrollEl = content?.querySelector('#activeConnectionsList');
     const prevScrollTop = prevScrollEl ? prevScrollEl.scrollTop : 0;
+    // Preserve focus/cursor position in the connection search box too, since
+    // content.innerHTML is fully rebuilt on every refresh (including silent
+    // background ones) and would otherwise steal focus mid-keystroke.
+    const prevSearchEl = content?.querySelector('#connectionSearch');
+    const searchWasFocused = !!(prevSearchEl && document.activeElement === prevSearchEl);
+    const searchSelectionStart = prevSearchEl ? prevSearchEl.selectionStart : null;
+    const searchSelectionEnd = prevSearchEl ? prevSearchEl.selectionEnd : null;
     try {
       const removeProgressListener = window.api.on('network:connections:progress', (data) => {
         if (!progressBar) return;
@@ -272,7 +298,7 @@ window.Pages['network'] = {
 
         html += `<div class="card" style="padding:0; margin-bottom:18px; position:relative; background-color:var(--bg-panel); overflow:hidden; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
           <div style="position:absolute; top:0; left:0; right:0; bottom:0; background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 20px 20px; pointer-events:none; z-index:1;"></div>
-          <img src="../img/world-map.svg" alt="World Map" style="width:100%; height:auto; opacity:0.15; display:block; pointer-events:none; user-select:none;" />
+          <img src="../img/world-map.svg" alt="World Map" style="width:100%; height:auto; opacity:0.35; display:block; pointer-events:none; user-select:none;" />
           <div style="position:absolute; top:0; left:0; bottom:0; right:0; pointer-events:none; z-index:2;">`;
 
         const clusters = {};
@@ -380,7 +406,29 @@ window.Pages['network'] = {
       }
 
       // Active connections list
-      html += '<h3 style="margin-bottom:10px; font-size:1rem;">Active Connections</h3>';
+      html += `<div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px; flex-wrap:wrap;">
+        <h3 style="margin:0; font-size:1rem;">Active Connections</h3>
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <span id="connectionCount" class="page-subtitle" style="font-size:0.8rem; white-space:nowrap;"></span>
+          <select id="connectionStateFilter" style="padding:6px 10px; border-radius:8px; border:1px solid var(--glass-border); background:var(--bg-surface); color:inherit; font-size:0.85rem;">
+            <option value="all" ${this._connectionStateFilter === 'all' ? 'selected' : ''}>All States</option>
+            <option value="ESTABLISHED" ${this._connectionStateFilter === 'ESTABLISHED' ? 'selected' : ''}>Established</option>
+            <option value="LISTEN" ${this._connectionStateFilter === 'LISTEN' ? 'selected' : ''}>Listen</option>
+            <option value="TIME_WAIT" ${this._connectionStateFilter === 'TIME_WAIT' ? 'selected' : ''}>Time Wait</option>
+            <option value="CLOSE_WAIT" ${this._connectionStateFilter === 'CLOSE_WAIT' ? 'selected' : ''}>Close Wait</option>
+            <option value="BOUND" ${this._connectionStateFilter === 'BOUND' ? 'selected' : ''}>Bound</option>
+          </select>
+          <select id="connectionRiskFilter" style="padding:6px 10px; border-radius:8px; border:1px solid var(--glass-border); background:var(--bg-surface); color:inherit; font-size:0.85rem;">
+            <option value="all" ${this._connectionRiskFilter === 'all' ? 'selected' : ''}>All Risks</option>
+            <option value="SAFE" ${this._connectionRiskFilter === 'SAFE' ? 'selected' : ''}>Allowed</option>
+            <option value="UNKNOWN" ${this._connectionRiskFilter === 'UNKNOWN' ? 'selected' : ''}>Unverified</option>
+            <option value="MALICIOUS" ${this._connectionRiskFilter === 'MALICIOUS' ? 'selected' : ''}>Blocked</option>
+          </select>
+          <input type="text" id="connectionSearch" placeholder="Search IP, host, process, state\u2026"
+            value="${escapeHtml(this._connectionQuery || '')}"
+            style="padding:6px 10px; border-radius:8px; border:1px solid var(--glass-border); background:var(--glass-bg,rgba(255,255,255,0.05)); color:inherit; font-size:0.85rem; width:220px;">
+        </div>
+      </div>`;
       if (!connections || connections.length === 0) {
         html += '<div class="empty-state">No active connections found.</div>';
       } else {
@@ -438,7 +486,12 @@ window.Pages['network'] = {
             ? `<span style="font-size:0.7rem; font-weight:600; color:${stateColor}; background:${stateColor}15; padding:2px 6px; border-radius:4px; margin-right:6px;">${escapeHtml(state)}</span>`
             : '';
 
-          html += `<div class="card connection-row" data-ip="${escapeHtml(remoteAddress)}" style="display:flex; flex-direction:column; gap:4px; padding:12px 16px; border-left:4px solid ${borderColor};">
+          const searchBlob = [
+            c.processName, c.hostname, c.serviceName, state, c.classification,
+            remoteAddress, remotePort, localAddress, localPort, c.pid
+          ].filter((v) => v !== undefined && v !== null && v !== '').join(' ').toLowerCase();
+
+          html += `<div class="card connection-row" data-ip="${escapeHtml(remoteAddress)}" data-search="${escapeHtml(searchBlob)}" data-risk="${escapeHtml(c.classification || 'UNKNOWN')}" data-state="${escapeHtml(state)}" style="display:flex; flex-direction:column; gap:4px; padding:12px 16px; border-left:4px solid ${borderColor};">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <div>
                 <div style="font-weight:600; font-family:monospace; word-break:break-all;">${stateBadge}${escapeHtml(remoteAddress)}:${escapeHtml(remotePort)}${service}${hostname}</div>
@@ -449,6 +502,7 @@ window.Pages['network'] = {
           </div>`;
         }
         html += '</div>';
+        html += '<div id="connectionNoResults" class="empty-state" style="display:none; margin-top:8px;">No connections match your search.</div>';
       }
 
       content.innerHTML = html + '<div class="loading-progress" style="margin-top:16px;"><div class="loading-progress-bar" style="width:100%;opacity:1"></div></div>';
@@ -458,6 +512,22 @@ window.Pages['network'] = {
       if (prevScrollTop) {
         const newScrollEl = content.querySelector('#activeConnectionsList');
         if (newScrollEl) newScrollEl.scrollTop = prevScrollTop;
+      }
+
+      // Re-apply the connection search filter, since content.innerHTML was
+      // just rebuilt from scratch (this happens on every refresh, not just
+      // the first load).
+      this.applyConnectionFilter(container);
+
+      // If the user was actively typing in the search box when this refresh
+      // landed, restore focus and cursor position on the new input so it
+      // doesn't feel like the page yanked focus away mid-keystroke.
+      if (searchWasFocused) {
+        const newSearchEl = content.querySelector('#connectionSearch');
+        if (newSearchEl) {
+          newSearchEl.focus();
+          if (searchSelectionStart !== null) newSearchEl.setSelectionRange(searchSelectionStart, searchSelectionEnd);
+        }
       }
     } catch (e) {
       if (isInitial) {
@@ -469,6 +539,42 @@ window.Pages['network'] = {
       }
     } finally {
       if (isInitial) setLoadingState(false);
+    }
+  },
+
+  // Shows/hides already-rendered .connection-row elements based on the
+  // current search query. No backend calls, no HTML re-parsing — just a
+  // display toggle on nodes that already exist, so it's instant.
+  applyConnectionFilter(container) {
+    const content = container.querySelector('#networkContent');
+    if (!content) return;
+    const listEl = content.querySelector('#activeConnectionsList');
+    const countEl = content.querySelector('#connectionCount');
+    const noResultsEl = content.querySelector('#connectionNoResults');
+    if (!listEl) return;
+
+    const query = (this._connectionQuery || '').trim().toLowerCase();
+    const riskFilter = this._connectionRiskFilter || 'all';
+    const stateFilter = this._connectionStateFilter || 'all';
+    const rows = listEl.querySelectorAll('.connection-row');
+    let visible = 0;
+
+    rows.forEach((row) => {
+      const searchMatches = !query || (row.dataset.search || '').includes(query);
+      const riskMatches = riskFilter === 'all' || row.dataset.risk === riskFilter;
+      const stateMatches = stateFilter === 'all' || row.dataset.state === stateFilter;
+      const matches = searchMatches && riskMatches && stateMatches;
+      row.style.display = matches ? '' : 'none';
+      if (matches) visible += 1;
+    });
+
+    if (countEl) {
+      countEl.textContent = query
+        ? `${visible} of ${rows.length} connections`
+        : `${rows.length} connection${rows.length === 1 ? '' : 's'}`;
+    }
+    if (noResultsEl) {
+      noResultsEl.style.display = (rows.length > 0 && visible === 0) ? '' : 'none';
     }
   }
 };

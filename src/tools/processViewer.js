@@ -84,10 +84,13 @@ module.exports = {
   category: 'System', icon: 'list',
   run: async () => {
     try {
-      const procData = await si.processes();
+      const [procData, loadData] = await Promise.all([
+        si.processes(),
+        si.currentLoad()
+      ]);
       const processList = procData.list || [];
-      
-      return processList.slice(0, 400).map((p) => {
+
+      const processes = processList.slice(0, 400).map((p) => {
         const item = {
           pid: p.pid,
           ppid: p.parentPid || null,
@@ -107,9 +110,14 @@ module.exports = {
         const usageB = (b.cpu || 0) + (b.memory || 0);
         return usageB - usageA;
       });
+
+      return {
+        totalCpu: loadData.currentLoad,
+        processes
+      };
     } catch (err) {
       console.error('Failed to get processes:', err);
-      return [];
+      return { totalCpu: 0, processes: [] };
     }
   }
 };

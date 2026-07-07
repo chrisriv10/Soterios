@@ -98,8 +98,21 @@ class ScanEngine {
     const errors = [];
     let wasCanceled = false;
 
+    // Progress must never move backward within a single scan. Previously,
+    // each target path computed its own fresh, lower "basePct" and emitted
+    // it immediately on starting the next path, causing the reported
+    // percentage to visibly climb toward ~80-95% then drop back down --
+    // once per target path being scanned. This tracks the highest
+    // percentage reported so far and clamps every emission to it.
+    let maxEmittedPct = 0;
+    const emitProgress = (pctCandidate, message) => {
+      const pct = Math.max(maxEmittedPct, Math.min(100, pctCandidate));
+      maxEmittedPct = pct;
+      this.eventBus.emit('scan:progress', { scanType, pct, message });
+    };
+
     try {
-      this.eventBus.emit('scan:progress', { scanType, pct: 5, message: startMessage });
+      emitProgress(5, startMessage);
 
       for (let i = 0; i < paths.length; i++) {
         if (this.abortController.signal.aborted) {
@@ -109,19 +122,19 @@ class ScanEngine {
 
         const targetPath = paths[i];
         const basePct = Math.round((i / paths.length) * 80 + 10);
-        this.eventBus.emit('scan:progress', { scanType, pct: basePct, message: 'Scanning ' + targetPath + '...' });
+        emitProgress(basePct, 'Scanning ' + targetPath + '...');
 
         const result = await this.clamEngine.scanFile(targetPath, (progress) => {
           if (!progress) return;
 
           if (progress.phase === 'update') {
-            this.eventBus.emit('scan:progress', { scanType, pct: Math.max(8, basePct - 2), message: 'Updating ClamAV definitions...' });
+            emitProgress(Math.max(8, basePct - 2), 'Updating ClamAV definitions...');
             return;
           }
 
           const checked = progress.fileCount || 0;
           const pct = Math.min(95, basePct + Math.min(70, Math.round(checked / 10)));
-          this.eventBus.emit('scan:progress', { scanType, pct, message: 'Scanning ' + targetPath + ' (' + checked + ' files checked)...' });
+          emitProgress(pct, 'Scanning ' + targetPath + ' (' + checked + ' files checked)...');
         });
 
         if (this.abortController.signal.aborted) {
@@ -141,7 +154,11 @@ class ScanEngine {
           if (Array.isArray(result.threats)) {
             for (const threat of result.threats) {
               try {
-                this.eventBus.emit('scan:progress', { scanType, pct: basePct, message: 'Quarantining ' + threat.name + '...' });
+                // Hold at the current highest percentage rather than
+                // basePct -- the path's scan has already completed by this
+                // point, so progress shouldn't dip back to where that path
+                // started just because a threat was found.
+                emitProgress(maxEmittedPct, 'Quarantining ' + threat.name + '...');
                 
                 const fileBuffer = fs.readFileSync(threat.path);
                 const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');

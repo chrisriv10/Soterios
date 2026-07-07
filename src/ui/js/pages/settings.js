@@ -65,6 +65,7 @@ window.Pages.settings = {
             </div>
             <label class="toggle"><input type="checkbox" id="geoLookupToggle" ${settings.features.geoLookup ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
+          <div id="featureToggleStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
         </div>
 
         <div class="card">
@@ -177,7 +178,7 @@ window.Pages.settings = {
     });
 
     async function saveFeature(key, value, input) {
-      const status = container.querySelector('#settingsStatus');
+      const status = container.querySelector('#featureToggleStatus') || container.querySelector('#settingsStatus');
       status.textContent = '';
       input.disabled = true;
       try {

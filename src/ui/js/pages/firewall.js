@@ -2,6 +2,9 @@ window.Pages = window.Pages || {};
 window.Pages['firewall'] = {
   REFRESH_INTERVAL_MS: 4000,
   _summaryTimer: null,
+  _ruleQuery: '',
+  _ruleActionFilter: 'all',
+  _ruleDirectionFilter: 'all',
 
   render(container) {
     // Clear any previous auto-refresh timer (e.g. if this page is re-rendered).
@@ -146,8 +149,21 @@ window.Pages['firewall'] = {
         <div class="card" style="margin-top:24px; padding:20px 24px;">
           <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
             <h3 style="margin:0;">Firewall Rules</h3>
-            <input type="text" id="ruleSearchInput" placeholder="Search by name, app, or address\u2026"
-              style="min-width:240px; padding:8px 12px; border-radius:8px; border:1px solid var(--glass-border); background:var(--bg-surface); color:var(--text-main);" />
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+              <select id="ruleActionFilter" style="padding:6px 10px; border-radius:8px; border:1px solid var(--glass-border); background:var(--bg-surface); color:inherit; font-size:0.85rem;">
+                <option value="all" ${this._ruleActionFilter === 'all' ? 'selected' : ''}>All Actions</option>
+                <option value="Allow" ${this._ruleActionFilter === 'Allow' ? 'selected' : ''}>Allow</option>
+                <option value="Block" ${this._ruleActionFilter === 'Block' ? 'selected' : ''}>Block</option>
+              </select>
+              <select id="ruleDirectionFilter" style="padding:6px 10px; border-radius:8px; border:1px solid var(--glass-border); background:var(--bg-surface); color:inherit; font-size:0.85rem;">
+                <option value="all" ${this._ruleDirectionFilter === 'all' ? 'selected' : ''}>All Directions</option>
+                <option value="Inbound" ${this._ruleDirectionFilter === 'Inbound' ? 'selected' : ''}>Inbound</option>
+                <option value="Outbound" ${this._ruleDirectionFilter === 'Outbound' ? 'selected' : ''}>Outbound</option>
+              </select>
+              <input type="text" id="ruleSearchInput" placeholder="Search by name, app, or address\u2026"
+                value="${escapeHtml(this._ruleQuery || '')}"
+                style="min-width:240px; padding:8px 12px; border-radius:8px; border:1px solid var(--glass-border); background:var(--bg-surface); color:var(--text-main);" />
+            </div>
           </div>
           <div id="ruleListContainer" style="max-height:380px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;">
             <div class="empty-state">Loading rules\u2026</div>
@@ -1039,23 +1055,46 @@ window.Pages['firewall'] = {
   async _initRuleList(container) {
     const listEl = container.querySelector('#ruleListContainer');
     const searchInput = container.querySelector('#ruleSearchInput');
+    const actionSelect = container.querySelector('#ruleActionFilter');
+    const directionSelect = container.querySelector('#ruleDirectionFilter');
     if (!listEl) return;
+
+    const applyFilters = () => {
+      const q = (this._ruleQuery || '').trim().toLowerCase();
+      const action = this._ruleActionFilter || 'all';
+      const direction = this._ruleDirectionFilter || 'all';
+      const filtered = this._ruleCache.filter((r) => {
+        const matchesSearch = !q || (r.name || '').toLowerCase().includes(q) || (r.program || '').toLowerCase().includes(q) || (r.remoteAddress || '').toLowerCase().includes(q);
+        const matchesAction = action === 'all' || r.action === action;
+        const matchesDirection = direction === 'all' || r.direction === direction;
+        return matchesSearch && matchesAction && matchesDirection;
+      });
+      this._renderRuleList(container, filtered);
+    };
+
     try {
       this._ruleCache = (await window.api.invoke('firewall:listRules')) || [];
-      this._renderRuleList(container, this._ruleCache);
+      applyFilters();
     } catch (e) {
       listEl.innerHTML = `<div class="empty-state">Error loading rules: ${escapeHtml(this._friendlyError(e, 'Unable to load rules.'))}</div>`;
       return;
     }
     if (searchInput) {
       searchInput.addEventListener('input', () => {
-        const q = searchInput.value.trim().toLowerCase();
-        const filtered = !q ? this._ruleCache : this._ruleCache.filter((r) =>
-          (r.name || '').toLowerCase().includes(q) ||
-          (r.program || '').toLowerCase().includes(q) ||
-          (r.remoteAddress || '').toLowerCase().includes(q)
-        );
-        this._renderRuleList(container, filtered);
+        this._ruleQuery = searchInput.value;
+        applyFilters();
+      });
+    }
+    if (actionSelect) {
+      actionSelect.addEventListener('change', () => {
+        this._ruleActionFilter = actionSelect.value;
+        applyFilters();
+      });
+    }
+    if (directionSelect) {
+      directionSelect.addEventListener('change', () => {
+        this._ruleDirectionFilter = directionSelect.value;
+        applyFilters();
       });
     }
   },

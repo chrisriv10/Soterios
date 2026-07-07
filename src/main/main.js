@@ -93,8 +93,8 @@ function createIcon() {
 // we fully control instead, stacked bottom-right and styled to match the
 // rest of the app.
 const activeToasts = [];
-const TOAST_WIDTH = 360;
-const TOAST_HEIGHT = 96;
+const TOAST_WIDTH = 380;
+const TOAST_HEIGHT = 180;
 const TOAST_MARGIN = 16;
 const TOAST_GAP = 10;
 const TOAST_LIFETIME_MS = 6000;
@@ -103,16 +103,24 @@ const TOAST_LIFETIME_MS = 6000;
 // resolve a relative image path against -- so the logo is embedded directly
 // as a base64 PNG instead of referenced by path. Computed once and cached
 // since it never changes.
-let cachedToastLogoDataUri = null;
-function getToastLogoDataUri() {
-  if (cachedToastLogoDataUri !== null) return cachedToastLogoDataUri;
+function readPngAsDataUri(relativePath) {
   try {
-    const png = createIcon().resize({ width: 20, height: 20 }).toPNG();
-    cachedToastLogoDataUri = `data:image/png;base64,${png.toString('base64')}`;
+    const fullPath = path.join(__dirname, '../../', relativePath);
+    const buf = fs.readFileSync(fullPath);
+    return `data:image/png;base64,${buf.toString('base64')}`;
   } catch (_) {
-    cachedToastLogoDataUri = '';
+    return '';
   }
-  return cachedToastLogoDataUri;
+}
+
+function getToastMarkDataUri() {
+  if (!getToastMarkDataUri._cache) getToastMarkDataUri._cache = readPngAsDataUri('assets/toast-icon.png');
+  return getToastMarkDataUri._cache;
+}
+
+function getToastWordmarkDataUri() {
+  if (!getToastWordmarkDataUri._cache) getToastWordmarkDataUri._cache = readPngAsDataUri('assets/toast-wordmark.png');
+  return getToastWordmarkDataUri._cache;
 }
 
 const TOAST_ACCENTS = {
@@ -122,13 +130,74 @@ const TOAST_ACCENTS = {
   danger: '#e85f5c'
 };
 
+const TOAST_ICONS = {
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 10.5v5"/><path d="M12 7.5h.01"/>',
+  success: '<path d="M5 13l4 4L19 7"/>',
+  warn: '<path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9L2.7 18a1 1 0 0 0 .9 1.5h16.8a1 1 0 0 0 .9-1.5L13.7 3.9a1.6 1.6 0 0 0-2.8 0z"/>',
+  danger: '<path d="M15 9l-6 6"/><path d="M9 9l6 6"/><circle cx="12" cy="12" r="9"/>'
+};
+
+const TOAST_THEMES = {
+  dark: {
+    bg: 'rgba(20, 26, 33, 0.97)', border: 'rgba(255,255,255,0.08)',
+    textMain: '#f2f5f8', textMuted: '#aab4bf', textDim: '#7d8a99',
+    closeBtn: '#5b6672', closeHover: '#aab4bf',
+    accents: { info: '#4fc3d9', success: '#3ddc97', warn: '#e8b339', danger: '#e85f5c' }
+  },
+  light: {
+    bg: 'rgba(248, 250, 252, 0.98)', border: 'rgba(15, 23, 42, 0.1)',
+    textMain: '#0f172a', textMuted: '#475569', textDim: '#94a3b8',
+    closeBtn: '#94a3b8', closeHover: '#64748b',
+    accents: { info: '#2563eb', success: '#16a34a', warn: '#d97706', danger: '#dc2626' }
+  },
+  ocean: {
+    bg: 'rgba(8, 23, 39, 0.95)', border: 'rgba(125, 211, 252, 0.16)',
+    textMain: '#ecfeff', textMuted: '#7dd3fc', textDim: '#5bb8e0',
+    closeBtn: '#5bb8e0', closeHover: '#7dd3fc',
+    accents: { info: '#2dd4bf', success: '#34d399', warn: '#f59e0b', danger: '#fb7185' }
+  },
+  emerald: {
+    bg: 'rgba(12, 48, 36, 0.95)', border: 'rgba(134, 239, 172, 0.28)',
+    textMain: '#eafff0', textMuted: '#9ff5bf', textDim: '#7ddb9f',
+    closeBtn: '#7ddb9f', closeHover: '#9ff5bf',
+    accents: { info: '#32e06f', success: '#5ff08f', warn: '#fcd34d', danger: '#ff8fa0' }
+  },
+  sunset: {
+    bg: 'rgba(46, 24, 27, 0.95)', border: 'rgba(251, 191, 36, 0.16)',
+    textMain: '#fff7ed', textMuted: '#fdba74', textDim: '#f59e6b',
+    closeBtn: '#f59e6b', closeHover: '#fdba74',
+    accents: { info: '#f97316', success: '#fb923c', warn: '#facc15', danger: '#f43f5e' }
+  },
+  violet: {
+    bg: 'rgba(35, 24, 54, 0.95)', border: 'rgba(192, 132, 252, 0.18)',
+    textMain: '#f5f3ff', textMuted: '#d8b4fe', textDim: '#c094e0',
+    closeBtn: '#c094e0', closeHover: '#d8b4fe',
+    accents: { info: '#8b5cf6', success: '#a78bfa', warn: '#f59e0b', danger: '#fb7185' }
+  },
+  crimson: {
+    bg: 'rgba(12, 4, 5, 0.96)', border: 'rgba(220, 38, 38, 0.22)',
+    textMain: '#fef2f2', textMuted: '#fca5a5', textDim: '#e08080',
+    closeBtn: '#e08080', closeHover: '#fca5a5',
+    accents: { info: '#dc2626', success: '#f87171', warn: '#fb923c', danger: '#b91c1c' }
+  },
+  terminal: {
+    bg: 'rgba(5, 12, 7, 0.97)', border: 'rgba(0, 255, 170, 0.18)',
+    textMain: '#e9ffee', textMuted: '#8af5c0', textDim: '#60d9a0',
+    closeBtn: '#60d9a0', closeHover: '#8af5c0',
+    accents: { info: '#16a34a', success: '#4ade80', warn: '#a3e635', danger: '#f87171' }
+  }
+};
+
 function escToastHtml(v) {
   return String(v ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 }
 
-function toastHtml(title, body, level) {
-  const accent = TOAST_ACCENTS[level] || TOAST_ACCENTS.info;
-  const logoDataUri = getToastLogoDataUri();
+function toastHtml(title, body, level, themeName) {
+  const theme = TOAST_THEMES[themeName] || TOAST_THEMES.dark;
+  const accent = theme.accents[level] || theme.accents.info;
+  const iconPaths = TOAST_ICONS[level] || TOAST_ICONS.info;
+  const markDataUri = getToastMarkDataUri();
+  const wordmarkDataUri = getToastWordmarkDataUri();
   return `<!doctype html>
 <html><head><meta charset="utf-8"><style>
   html, body { margin:0; padding:0; background:transparent; overflow:hidden; user-select:none; }
@@ -136,43 +205,56 @@ function toastHtml(title, body, level) {
     box-sizing: border-box;
     position: relative;
     width: ${TOAST_WIDTH}px;
-    min-height: ${TOAST_HEIGHT}px;
-    display:flex; align-items:flex-start; gap:12px;
-    padding:14px 40px 14px 16px;
-    background: rgba(20, 26, 33, 0.97);
-    border: 1px solid rgba(255,255,255,0.08);
+    display:flex; flex-direction:column;
+    background: ${theme.bg};
+    border: 1px solid ${theme.border};
     border-left: 3px solid ${accent};
     border-radius: 10px;
     box-shadow: 0 8px 28px rgba(0,0,0,0.45);
     font-family: 'Segoe UI', -apple-system, sans-serif;
-    color: #e6edf3;
+    color: ${theme.textMain};
     cursor: pointer;
     animation: toastIn 220ms ease-out;
+    overflow: hidden;
   }
   .toast.closing { animation: toastOut 200ms ease-in forwards; }
   @keyframes toastIn { from { transform: translateX(24px); opacity:0; } to { transform: translateX(0); opacity:1; } }
   @keyframes toastOut { from { transform: translateX(0); opacity:1; } to { transform: translateX(24px); opacity:0; } }
-  .icon { flex-shrink:0; width:20px; height:20px; margin-top:2px; color: ${accent}; }
-  .content { flex:1; min-width:0; }
-  .brand { font-size:10px; letter-spacing:0.06em; text-transform:uppercase; color:#7d8a99; margin-bottom:3px; font-weight:600; }
-  .title { font-size:13.5px; font-weight:600; color:#f2f5f8; margin-bottom:3px; }
-  .body { font-size:12.5px; color:#aab4bf; line-height:1.4; word-wrap:break-word; }
-  .top-right { position:absolute; top:10px; right:10px; display:flex; align-items:center; gap:8px; }
-  .logo { width:16px; height:16px; border-radius:4px; display:block; }
-  .close { flex-shrink:0; color:#5b6672; font-size:16px; line-height:1; padding:2px; }
-  .close:hover { color:#aab4bf; }
+  .header { flex-shrink:0; position:relative; display:flex; align-items:center; padding:16px 12px 0 14px; }
+  .mark { position:absolute; top:16px; left:12px; height:56px; width:56px; border-radius:8px; }
+  .wordmark { height:56px; width:auto; display:block; opacity:0.97; margin-left:49px; }
+  .wordmark-fallback { font-size:17px; font-weight:600; color:${theme.textMain}; letter-spacing:-0.02em; margin-left:12px; }
+  .header .spacer { flex:1; }
+  .close { flex-shrink:0; color:${theme.closeBtn}; font-size:16px; line-height:1; padding:2px 4px; align-self:flex-start; margin-top:4px; }
+  .close:hover { color:${theme.closeHover}; }
+  .body-row { flex-shrink:0; display:flex; gap:14px; align-items:flex-start; padding:14px 16px 16px 14px; }
+  .status-circle {
+    flex-shrink:0; width:48px; height:48px; border-radius:50%;
+    border:2px solid ${accent};
+    display:flex; align-items:center; justify-content:center;
+    background: rgba(255,255,255,0.03);
+  }
+  .status-glyph { width:22px; height:22px; stroke:${accent}; }
+  .text { flex:1; min-width:0; padding-top:2px; }
+  .title { font-size:14px; font-weight:700; color:${theme.textMain}; margin-bottom:3px; }
+  .desc { font-size:12px; color:${theme.textMuted}; line-height:1.42; word-wrap:break-word; }
 </style></head>
 <body>
   <div class="toast" id="toast">
-    <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
-    <div class="content">
-      <div class="brand">Soterios</div>
-      <div class="title">${escToastHtml(title)}</div>
-      <div class="body">${escToastHtml(body)}</div>
-    </div>
-    <div class="top-right">
-      ${logoDataUri ? `<img class="logo" src="${logoDataUri}" alt="" />` : ''}
+    <div class="header">
+      ${markDataUri ? `<img class="mark" src="${markDataUri}" alt="" />` : ''}
+      ${wordmarkDataUri ? `<img class="wordmark" src="${wordmarkDataUri}" alt="" />` : '<span class="wordmark-fallback">Soterios</span>'}
+      <div class="spacer"></div>
       <div class="close" id="closeBtn">&times;</div>
+    </div>
+    <div class="body-row">
+      <div class="status-circle">
+        <svg class="status-glyph" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${iconPaths}</svg>
+      </div>
+      <div class="text">
+        <div class="title">${escToastHtml(title)}</div>
+        <div class="desc">${escToastHtml(body)}</div>
+      </div>
     </div>
   </div>
   <script>
@@ -210,6 +292,7 @@ function showNotification(title, body, level = 'info') {
   // System Monitoring.
   if (dbRef && !dbRef.getSetting('feature.notificationsEnabled', true)) return;
   try {
+    const themeName = dbRef ? dbRef.getSetting('ui.theme', 'dark') : 'dark';
     const display = screen.getPrimaryDisplay();
     const { x, y, width, height } = display.workArea;
     const toastWindow = new BrowserWindow({
@@ -236,7 +319,7 @@ function showNotification(title, body, level = 'info') {
       }
     });
     toastWindow.setAlwaysOnTop(true, 'screen-saver');
-    toastWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(toastHtml(title, body, level)));
+    toastWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(toastHtml(title, body, level, themeName)));
     toastWindow.once('ready-to-show', () => toastWindow.show());
     toastWindow.on('closed', () => {
       const idx = activeToasts.indexOf(toastWindow);
@@ -250,8 +333,8 @@ function showNotification(title, body, level = 'info') {
 
 function createSplashWindow() {
   splashWindow = new BrowserWindow({
-    width: 420,
-    height: 280,
+    width: 660,
+    height: 440,
     frame: false,
     resizable: false,
     movable: true,

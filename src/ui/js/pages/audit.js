@@ -107,6 +107,7 @@ window.Pages['audit'] = {
         <div class="stat-tile"><div class="stat-label">Warnings</div><div class="stat-value" style="color:var(--warn);">${warn}</div></div>
         <div class="stat-tile"><div class="stat-label">Errors</div><div class="stat-value" style="color:var(--text-dim);">${err}</div></div>
       </div>`;
+      html += '<div id="auditResultsContainer" style="max-height:500px; overflow-y:auto; padding-right:8px; display:flex; flex-direction:column; gap:12px;">';
       html += '<div class="dashboard-grid">';
       for (const res of visibleResults) {
         let iconClass = 'info';
@@ -134,7 +135,7 @@ window.Pages['audit'] = {
           ${res.status === 'warn' || res.status === 'fail' ? `<button class="btn btn-sm audit-ignore" data-id="${escapeHtml(this.warningId(res))}" data-title="${escapeHtml(res.name)}" data-detail="${escapeHtml(res.message || res.detail || '')}">Ignore Warning</button>` : ''}
         </div>`;
       }
-      html += '</div>';
+      html += '</div></div>';
       if ((ignored || []).some((w) => String(w.id || '').startsWith('audit:'))) {
         html += `<div class="panel" style="margin-top:18px;"><div class="panel-title">Ignored Audit Warnings</div>
           <div class="history-list">${ignored.filter((w) => String(w.id || '').startsWith('audit:')).map((w) => `
