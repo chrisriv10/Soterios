@@ -1,9 +1,10 @@
 window.Pages = window.Pages || {};
 window.Pages['network'] = {
   REFRESH_INTERVAL_MS: 3000,
-  _connectionQuery: '', // persists the active-connections search across refreshes
+  _connectionQuery: '',
   _connectionRiskFilter: 'all',
   _connectionStateFilter: 'all',
+  _geoCache: {},
   render(container) {
     // Clear any previous auto-refresh timer (e.g. if this page is re-rendered)
     if (this._refreshTimer) {
@@ -37,10 +38,7 @@ window.Pages['network'] = {
         <p class="page-subtitle">Active connections and interface bandwidth</p>
       </header>
       <div id="networkContent">
-        <div class="empty-state">Loading network stats\u2026</div>
-        <div class="loading-progress" style="margin-top:8px;">
-          <div class="loading-progress-bar"></div>
-        </div>
+        <div class="empty-state"><span class="spinner"></span>&nbsp;Loading network stats\u2026</div>
       </div>
     `;
     this.load(container, true);
@@ -90,21 +88,6 @@ window.Pages['network'] = {
   },
   async load(container, isInitial) {
     const content = container.querySelector('#networkContent');
-    const progressBar = content?.querySelector('.loading-progress-bar');
-    const setLoadingState = (active) => {
-      if (!progressBar) return;
-      if (!active) {
-        progressBar.style.opacity = '0';
-        progressBar.style.width = '100%';
-        return;
-      }
-      progressBar.style.opacity = '1';
-      progressBar.style.width = '8%';
-    };
-    // Only show the loading spinner/progress bar on the very first load.
-    // Background refreshes update silently so the UI doesn't flicker every
-    // few seconds.
-    if (isInitial) setLoadingState(true);
     // Preserve the connection list's scroll position across silent refreshes.
     const prevScrollEl = content?.querySelector('#activeConnectionsList');
     const prevScrollTop = prevScrollEl ? prevScrollEl.scrollTop : 0;
@@ -116,20 +99,11 @@ window.Pages['network'] = {
     const searchSelectionStart = prevSearchEl ? prevSearchEl.selectionStart : null;
     const searchSelectionEnd = prevSearchEl ? prevSearchEl.selectionEnd : null;
     try {
-      const removeProgressListener = window.api.on('network:connections:progress', (data) => {
-        if (!progressBar) return;
-        const pct = Math.max(8, Math.min((data.completed / data.total) * 100, 100));
-        progressBar.style.width = `${pct}%`;
-        progressBar.style.opacity = '1';
-      });
-
       const [statsResult, connectionsResult] = await Promise.allSettled([
         window.api.invoke('network:stats'),
         window.api.invoke('network:connections')
       ]);
 
-      if (removeProgressListener) removeProgressListener();
-      
       const stats = statsResult.status === 'fulfilled' ? statsResult.value : null;
       const connections = connectionsResult.status === 'fulfilled' ? connectionsResult.value : null;
 
@@ -155,6 +129,37 @@ window.Pages['network'] = {
         }
         return '';
       };
+
+      // Shared filter logic for the connection search box + risk/state
+      // selects -- used both to drive the heat map's cluster data below
+      // (so filtering actually affects what's plotted) and, further down,
+      // to build each row's data-search/data-risk/data-state attributes
+      // that applyConnectionFilter() reads for its instant DOM show/hide.
+      // Keeping one implementation avoids the map and the list silently
+      // drifting out of sync on what "matches the current filters" means.
+      const matchesConnectionFilters = (c) => {
+        const state = getState(c);
+        const risk = c.classification || 'UNKNOWN';
+        const query = (this._connectionQuery || '').trim().toLowerCase();
+        const riskFilter = this._connectionRiskFilter || 'all';
+        const stateFilter = this._connectionStateFilter || 'all';
+
+        if (riskFilter !== 'all' && risk !== riskFilter) return false;
+        if (stateFilter !== 'all' && state !== stateFilter) return false;
+        if (query) {
+          const remoteAddress = firstDefined(c.remoteAddress, c.RemoteAddress);
+          const remotePort = firstDefined(c.remotePort, c.RemotePort);
+          const localAddress = firstDefined(c.localAddress, c.LocalAddress);
+          const localPort = firstDefined(c.localPort, c.LocalPort);
+          const searchBlob = [
+            c.processName, c.hostname, c.serviceName, state, risk,
+            remoteAddress, remotePort, localAddress, localPort, c.pid
+          ].filter((v) => v !== undefined && v !== null && v !== '').join(' ').toLowerCase();
+          if (!searchBlob.includes(query)) return false;
+        }
+        return true;
+      };
+      const filteredConnections = (connections || []).filter(matchesConnectionFilters);
 
       // Classification counts (used by the Security Flags panel)
       const safeCount = connections ? connections.filter(c => c.classification === 'SAFE').length : 0;
@@ -279,16 +284,42 @@ window.Pages['network'] = {
 
       // Heat Map
       const uniqueIps = [...new Set(connections ? connections.map(c => firstDefined(c.remoteAddress, c.RemoteAddress)).filter(Boolean) : [])];
-      let geoData = {};
-      try {
-        geoData = await window.api.invoke('network:geo', uniqueIps);
-      } catch (e) {
-        console.error('Geo lookup failed', e);
+      const uncachedIps = uniqueIps.filter((ip) => !(ip in this._geoCache));
+      if (uncachedIps.length) {
+        try {
+          const fresh = await window.api.invoke('network:geo', uncachedIps);
+          Object.assign(this._geoCache, fresh);
+          for (const ip of uncachedIps) {
+            if (!(ip in fresh)) this._geoCache[ip] = null;
+          }
+        } catch (e) {
+          console.error('Geo lookup failed', e);
+        }
+      }
+      const geoData = {};
+      for (const ip of uniqueIps) {
+        if (this._geoCache[ip]) geoData[ip] = this._geoCache[ip];
       }
 
+      // Three distinct numbers, mirroring the same "total vs filtered vs
+      // actually shown" distinction the connections list below makes:
+      // total connections regardless of filters, how many match the
+      // current search/risk/state filters, and how many of THOSE actually
+      // have resolved geolocation data (private IPs, failed lookups, etc.
+      // never get a dot no matter what).
+      const totalConnectionsCount = (connections || []).length;
+      const filteredConnectionsCount = filteredConnections.length;
+      const mappedCount = filteredConnections.filter((c) => {
+        const ip = firstDefined(c.remoteAddress, c.RemoteAddress);
+        return !!geoData[ip];
+      }).length;
+
       if (Object.keys(geoData).length > 0) {
-        html += '<div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px;">';
-        html += '<h3 style="margin:0; font-size:1rem;">Active Connections Heat Map</h3>';
+        html += '<div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px; flex-wrap:wrap; gap:8px;">';
+        html += `<div>
+          <h3 style="margin:0; font-size:1rem;">Active Connections Heat Map</h3>
+          <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">${totalConnectionsCount} total connection${totalConnectionsCount === 1 ? '' : 's'} \u00b7 ${filteredConnectionsCount} match current filters \u00b7 ${mappedCount} mapped</div>
+        </div>`;
         html += `<div style="display:flex; gap:12px; font-size:0.75rem; font-weight:600;">
           <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--ok);"></span> Safe</span>
           <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--warn);"></span> Unknown</span>
@@ -301,8 +332,12 @@ window.Pages['network'] = {
           <img src="../img/world-map.svg" alt="World Map" style="width:100%; height:auto; opacity:0.35; display:block; pointer-events:none; user-select:none;" />
           <div style="position:absolute; top:0; left:0; bottom:0; right:0; pointer-events:none; z-index:2;">`;
 
+        if (mappedCount === 0) {
+          html += `<div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; font-size:0.85rem; color:var(--text-dim); white-space:nowrap;">No connections match your current filters.</div>`;
+        }
+
         const clusters = {};
-        for (const c of (connections || [])) {
+        for (const c of filteredConnections) {
           const ip = firstDefined(c.remoteAddress, c.RemoteAddress);
           const geo = geoData[ip];
           if (!geo || geo.lat === undefined || geo.lon === undefined) continue;
@@ -367,7 +402,7 @@ window.Pages['network'] = {
         if (window.Pages['network']._selectedClusterIps) {
           const selectedIps = window.Pages['network']._selectedClusterIps;
           const loc = window.Pages['network']._selectedClusterLoc;
-          const matchingConns = (connections || []).filter(c => {
+          const matchingConns = filteredConnections.filter(c => {
              const ip = firstDefined(c.remoteAddress, c.RemoteAddress);
              return selectedIps.includes(ip);
           });
@@ -491,7 +526,7 @@ window.Pages['network'] = {
             remoteAddress, remotePort, localAddress, localPort, c.pid
           ].filter((v) => v !== undefined && v !== null && v !== '').join(' ').toLowerCase();
 
-          html += `<div class="card connection-row" data-ip="${escapeHtml(remoteAddress)}" data-search="${escapeHtml(searchBlob)}" data-risk="${escapeHtml(c.classification || 'UNKNOWN')}" data-state="${escapeHtml(state)}" style="display:flex; flex-direction:column; gap:4px; padding:12px 16px; border-left:4px solid ${borderColor};">
+          html += `<div class="list-row connection-row" data-ip="${escapeHtml(remoteAddress)}" data-search="${escapeHtml(searchBlob)}" data-risk="${escapeHtml(c.classification || 'UNKNOWN')}" data-state="${escapeHtml(state)}" style="display:flex; flex-direction:column; gap:4px; padding:12px 16px; border-left:4px solid ${borderColor}; content-visibility:auto; contain-intrinsic-size:0 70px;">>
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <div>
                 <div style="font-weight:600; font-family:monospace; word-break:break-all;">${stateBadge}${escapeHtml(remoteAddress)}:${escapeHtml(remotePort)}${service}${hostname}</div>
@@ -505,7 +540,7 @@ window.Pages['network'] = {
         html += '<div id="connectionNoResults" class="empty-state" style="display:none; margin-top:8px;">No connections match your search.</div>';
       }
 
-      content.innerHTML = html + '<div class="loading-progress" style="margin-top:16px;"><div class="loading-progress-bar" style="width:100%;opacity:1"></div></div>';
+      content.innerHTML = html;
 
       // Restore scroll position of the connections list so a background
       // refresh doesn't yank the user back to the top of the list.
@@ -533,12 +568,8 @@ window.Pages['network'] = {
       if (isInitial) {
         content.innerHTML = `<div class="empty-state">Error loading network: ${escapeHtml(e.message)}</div>`;
       } else {
-        // Don't blow away a working display just because one background
-        // refresh tick failed (e.g. a transient PowerShell hiccup).
         console.error('Network refresh failed:', e);
       }
-    } finally {
-      if (isInitial) setLoadingState(false);
     }
   },
 

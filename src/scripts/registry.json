@@ -6,6 +6,7 @@
     { "id": "large-files-report", "name": "Large Files Report", "description": "Finds large files under your home folder with the option to select files for deletion.", "file": "safeScripts/largeFilesReport.js" },
     { "id": "browser-cache-report", "name": "Browser Cache Report", "description": "Estimates local browser cache sizes for common Chromium-based browsers.", "file": "safeScripts/browserCacheReport.js" },
     { "id": "windows-services-report", "name": "Windows Services Report", "description": "Lists auto-start Windows services and highlights unsigned-looking paths (read-only).", "file": "safeScripts/windowsServicesReport.js" },
+    { "id": "network-report", "name": "Network Report", "description": "Reports network interfaces, default gateway, and active established connections (read-only).", "file": "safeScripts/networkReport.js" },
     { "id": "delete-files", "name": "Delete Selected Files", "description": "Deletes specific files selected from the Large Files Report. Not shown as a standalone tool card -- invoked only from within that report's UI.", "file": "safeScripts/deleteFiles.js" },
     { "id": "clear-browser-cache", "name": "Clear Browser Cache", "description": "Clears cache for one or more browsers found by the Browser Cache Report. Not shown as a standalone tool card -- invoked only from within that report's UI.", "file": "safeScripts/clearBrowserCache.js" }
   ]

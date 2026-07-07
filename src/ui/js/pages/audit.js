@@ -107,7 +107,7 @@ window.Pages['audit'] = {
         <div class="stat-tile"><div class="stat-label">Warnings</div><div class="stat-value" style="color:var(--warn);">${warn}</div></div>
         <div class="stat-tile"><div class="stat-label">Errors</div><div class="stat-value" style="color:var(--text-dim);">${err}</div></div>
       </div>`;
-      html += '<div id="auditResultsContainer" style="max-height:500px; overflow-y:auto; padding-right:8px; display:flex; flex-direction:column; gap:12px;">';
+      html += '<div id="auditResultsContainer" style="max-height:calc(100vh - 260px); overflow-y:auto; padding-right:8px; display:flex; flex-direction:column; gap:12px;">';
       html += '<div class="dashboard-grid">';
       for (const res of visibleResults) {
         let iconClass = 'info';
@@ -142,7 +142,7 @@ window.Pages['audit'] = {
             <div class="history-item"><div><div class="history-title">${escapeHtml(w.title)}</div><div class="history-meta">${escapeHtml(w.detail || '')}</div></div>
             <button class="btn btn-sm audit-restore" data-id="${escapeHtml(w.id)}">Restore</button></div>`).join('')}</div></div>`;
       }
-      content.innerHTML = html + '<div class="loading-progress" style="margin-top:16px;"><div class="loading-progress-bar" style="width:100%;opacity:1"></div></div>';
+      content.innerHTML = html;
       content.querySelectorAll('.copy-command-btn').forEach((btn) => btn.addEventListener('click', async () => {
         const codeEl = content.querySelector(`#${btn.dataset.target}`);
         if (!codeEl) return;

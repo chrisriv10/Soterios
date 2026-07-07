@@ -1,14 +1,14 @@
 {
   "name": "soterios",
-  "version": "1.0.2",
+  "version": "1.2.1",
   "description": "A local-first desktop toolkit for system maintenance, monitoring, and basic security checks.",
   "main": "src/main/main.js",
   "author": "Soterios",
   "license": "MIT",
   "private": true,
   "scripts": {
-    "start": "electron . --disable-logging --disable-gpu --disable-gpu-compositing --disable-gpu-shader-disk-cache --disable-software-rasterizer --disable-background-networking --disable-features=NetworkService,AutofillServerCommunication,AutofillAcrossForms,Autofill --disk-cache-dir=.cache/soterios",
-    "dev": "electron . --dev --disable-logging --disable-gpu --disable-gpu-compositing --disable-gpu-shader-disk-cache --disable-software-rasterizer --disable-background-networking --disable-features=NetworkService,AutofillServerCommunication,AutofillAcrossForms,Autofill --disk-cache-dir=.cache/soterios",
+    "start": "electronmon . --disable-logging --disable-gpu --disable-gpu-compositing --disable-gpu-shader-disk-cache --disable-software-rasterizer --disable-background-networking --disable-features=NetworkService,AutofillServerCommunication,AutofillAcrossForms,Autofill --disk-cache-dir=.cache/soterios",
+    "dev": "electronmon . --dev --disable-logging --disable-gpu --disable-gpu-compositing --disable-gpu-shader-disk-cache --disable-software-rasterizer --disable-background-networking --disable-features=NetworkService,AutofillServerCommunication,AutofillAcrossForms,Autofill --disk-cache-dir=.cache/soterios",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "dist:win": "electron-builder --win",
@@ -27,7 +27,8 @@
     "adm-zip": "^0.5.17",
     "axios": "^1.18.1",
     "electron": "^31.7.7",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "electronmon": "^2.0.4"
   },
   "build": {
     "appId": "com.soterios.app",

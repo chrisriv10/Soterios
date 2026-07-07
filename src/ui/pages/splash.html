@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self';" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; script-src 'unsafe-inline';" />
   <title>Soterios</title>
   <style>
     html,
@@ -57,14 +57,22 @@
       border-radius: 2px;
       background: rgba(255, 255, 255, 0.08);
       overflow: hidden;
+      margin-top: -48px;
     }
 
     .loading-bar-fill {
       height: 100%;
-      width: 35%;
+      width: 0%;
       border-radius: 2px;
-      background: #58A6FF;
-      animation: slide 1.3s ease-in-out infinite;
+      background: #4169E1;
+      transition: width 0.35s ease;
+    }
+
+    .loading-label {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.55);
+      margin-top: -16px;
+      text-align: center;
     }
 
     @keyframes pulse {
@@ -80,20 +88,6 @@
         transform: scale(2.5);
       }
     }
-
-    @keyframes slide {
-      0% {
-        transform: translateX(-120%);
-      }
-
-      50% {
-        transform: translateX(60%);
-      }
-
-      100% {
-        transform: translateX(220%);
-      }
-    }
   </style>
 </head>
 
@@ -102,9 +96,27 @@
     <img class="mark" src="../../../assets/toast-icon.png" alt="Soterios" />
     <img class="wordmark" src="../../../assets/toast-wordmark.png" alt="Soterios" />
     <div class="loading-bar">
-      <div class="loading-bar-fill"></div>
+      <div class="loading-bar-fill" id="progressFill"></div>
     </div>
+    <div class="loading-label" id="progressLabel">Starting Soterios...</div>
   </div>
+  <script>
+    (function () {
+      var fill = document.getElementById('progressFill');
+      var label = document.getElementById('progressLabel');
+
+      if (window.api && window.api.on) {
+        window.api.on('splash:progress', function (data) {
+          if (data.pct !== undefined && fill) {
+            fill.style.width = Math.min(100, Math.max(0, data.pct)) + '%';
+          }
+          if (data.label && label) {
+            label.textContent = data.label;
+          }
+        });
+      }
+    })();
+  </script>
 </body>
 
 </html>

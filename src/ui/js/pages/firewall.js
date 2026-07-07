@@ -18,49 +18,23 @@ window.Pages['firewall'] = {
         <p class="page-subtitle">Windows Firewall Profiles and Rule Summary</p>
       </header>
       <div id="firewallContent">
-        <div class="empty-state">Loading firewall profiles\u2026</div>
-        <div class="loading-progress" style="margin-top:8px;">
-          <div class="loading-progress-bar"></div>
-        </div>
+        <div class="empty-state"><span class="spinner"></span>&nbsp;Loading firewall profiles\u2026</div>
       </div>
     `;
     this.load(container);
   },
   async load(container) {
     const content = container.querySelector('#firewallContent');
-    const progressBar = content?.querySelector('.loading-progress-bar');
-    let progressTimer = null;
-    const setLoadingState = (active) => {
-      if (progressTimer) {
-        clearInterval(progressTimer);
-        progressTimer = null;
-      }
-      if (!progressBar) return;
-      if (!active) {
-        progressBar.style.opacity = '0';
-        progressBar.style.width = '100%';
-        return;
-      }
-      progressBar.style.opacity = '1';
-      progressBar.style.width = '8%';
-      let currentWidth = 8;
-      progressTimer = setInterval(() => {
-        currentWidth = Math.min(currentWidth + Math.random() * 12 + 4, 88);
-        progressBar.style.width = `${currentWidth}%`;
-      }, 180);
-    };
-    setLoadingState(true);
     try {
-      const [profiles, rules] = await Promise.all([
-        window.api.invoke('firewall:status'),
-        window.api.invoke('firewall:rules')
-      ]);
+      // Track each IPC individually so the bar progresses as each resolves
+      const profilesPromise = window.api.invoke('firewall:status');
+      const rulesPromise = window.api.invoke('firewall:rules');
+
+      const profiles = await profilesPromise;
+      const rules = await rulesPromise;
 
       let html = '';
 
-      // Rules summary + profile cards (kept in their own element so they can
-      // be silently refreshed on an interval without touching the rest of
-      // the page, e.g. the perimeter map or the rule list's scroll/search state).
       html += `<div id="firewallSummary">${this._renderSummaryHtml(profiles, rules)}</div>`;
 
       // ── NETWORK PERIMETER (live visualization) ────────────────────────────
@@ -170,13 +144,13 @@ window.Pages['firewall'] = {
           </div>
         </div>
       `;
+      content.innerHTML = html;
 
-      content.innerHTML = html + '<div class="loading-progress" style="margin-top:16px;"><div class="loading-progress-bar" style="width:100%;opacity:1"></div></div>';
+      // Init perimeter (loads trusted IPs, then enriches connections — the slow part)
+      await this._initPerimeter(container);
 
-      requestAnimationFrame(() => {
-        this._initPerimeter(container);
-        this._initRuleList(container);
-      });
+      // Init rule list (loads firewall rules from PowerShell)
+      await this._initRuleList(container);
 
       // Delegated so it keeps working even after _refreshSummary() swaps out
       // #firewallSummary's innerHTML on a timer — #firewallContent itself
@@ -206,8 +180,6 @@ window.Pages['firewall'] = {
 
     } catch (e) {
       content.innerHTML = `<div class="empty-state">Error loading firewall: ${escapeHtml(e.message)}</div>`;
-    } finally {
-      setLoadingState(false);
     }
   },
 
@@ -336,6 +308,7 @@ window.Pages['firewall'] = {
   _perimeterTimer: null,
   _particleRaf: null,
   _perimeterNodes: new Map(),   // key -> { data, angle, radius, blocked, x, y }
+  _perimeterNodeEls: new Map(), // key -> { g, blocked, dotEl, lineEl, blockedRingEl, particleEl } -- the actual DOM, reused across refreshes
   _selectedKey: null,
   _trustedIps: [],
   _lastConnections: [],
@@ -483,8 +456,18 @@ window.Pages['firewall'] = {
         if (this._particleObserver) { this._particleObserver.disconnect(); this._particleObserver = null; }
         return;
       }
-      this._pollPerimeter(container);
-    }, 4000);
+      // network:connections is genuinely expensive on the backend (spawns
+      // PowerShell, then runs full enrichment -- reverse DNS, blocklist
+      // checks, process resolution -- per connection). Without this guard,
+      // if any single poll ever took longer than the interval, the next
+      // timer tick would fire anyway and start a second overlapping fetch
+      // on top of the first, compounding rather than staying constant.
+      if (this._perimeterPolling) return;
+      this._perimeterPolling = true;
+      this._pollPerimeter(container).finally(() => {
+        this._perimeterPolling = false;
+      });
+    }, 6000);
   },
 
   async _pollPerimeter(container) {
@@ -651,8 +634,24 @@ window.Pages['firewall'] = {
     const nodeMap = new Map(allItems.map((i) => [i.key, i]));
     this._perimeterNodes = nodeMap;
 
-    // Static chrome (boundary ring, center PC, section dividers/labels)
-    let svgHtml = `
+    // Two persistent layers, created once and never destroyed on refresh:
+    // static chrome (boundary ring, hub, section dividers) and the
+    // per-connection nodes. Splitting them out is what makes the diffing
+    // below possible -- see _createPerimeterNodeEl/_updatePerimeterNodeEl.
+    let chromeG = svg.querySelector('#perimStaticChrome');
+    let nodesG = svg.querySelector('#perimNodesLayer');
+    if (!chromeG || !nodesG) {
+      svg.innerHTML = '<g id="perimStaticChrome"></g><g id="perimNodesLayer"></g>';
+      chromeG = svg.querySelector('#perimStaticChrome');
+      nodesG = svg.querySelector('#perimNodesLayer');
+      this._perimeterNodeEls = new Map();
+    }
+
+    // Static chrome (boundary ring, center PC, section dividers/labels) --
+    // cheap (a handful of elements), not clickable, so rebuilding it
+    // wholesale every refresh is fine. The part that actually needs to stay
+    // stable under the user's cursor is the nodes layer below.
+    let chromeHtml = `
       <circle cx="${cx}" cy="${cy}" r="${boundaryR}" fill="none" stroke="var(--glass-border)" stroke-width="1.5" stroke-dasharray="4 5"/>
       <g>
         <circle cx="${cx}" cy="${cy}" r="30" fill="var(--bg-surface-hover)" stroke="var(--accent-primary)" stroke-width="1.5"/>
@@ -660,9 +659,6 @@ window.Pages['firewall'] = {
         <text x="${cx}" y="${cy + 12}" text-anchor="middle" font-size="9" fill="var(--text-dim)">${allItems.length} shown</text>
       </g>
     `;
-
-    // Only draw section dividers/labels when there's more than one section —
-    // a single-risk map (e.g. everything Allowed) stays a plain circle.
     if (sectionMeta.length > 1) {
       for (const g of sectionMeta) {
         const color = this._riskColor(g.risk);
@@ -670,54 +666,162 @@ window.Pages['firewall'] = {
         const labelR = boundaryR + 16;
         const lx = cx + Math.cos(midAngle) * labelR;
         const ly = cy + Math.sin(midAngle) * labelR;
-        // Radial divider line at the start of each section
         const dx1 = cx + Math.cos(g.startAngle) * 95, dy1 = cy + Math.sin(g.startAngle) * 95;
         const dx2 = cx + Math.cos(g.startAngle) * (boundaryR + 8), dy2 = cy + Math.sin(g.startAngle) * (boundaryR + 8);
-        svgHtml += `<line x1="${dx1}" y1="${dy1}" x2="${dx2}" y2="${dy2}" stroke="var(--glass-border)" stroke-width="1" stroke-dasharray="2 3"/>`;
-        svgHtml += `<text x="${lx}" y="${ly}" text-anchor="middle" font-size="9" font-weight="600" fill="${color}">${sectionLabels[g.risk]} (${g.items.length})</text>`;
+        chromeHtml += `<line x1="${dx1}" y1="${dy1}" x2="${dx2}" y2="${dy2}" stroke="var(--glass-border)" stroke-width="1" stroke-dasharray="2 3"/>`;
+        chromeHtml += `<text x="${lx}" y="${ly}" text-anchor="middle" font-size="9" font-weight="600" fill="${color}">${sectionLabels[g.risk]} (${g.items.length})</text>`;
       }
     }
+    chromeG.innerHTML = chromeHtml;
 
+    // Per-connection nodes: diffed against the previous render instead of
+    // being torn down and recreated every refresh. A full rebuild here
+    // used to destroy every node's DOM element -- and its click listener --
+    // every ~6 seconds. A click landing anywhere near that boundary could
+    // have its target vanish mid-click and silently fail to register, which
+    // is what "laggy, hard to click" actually was: not a rendering-speed
+    // problem, a DOM-churn-eats-your-click problem. Reusing elements in
+    // place (just moving/recoloring them) fixes that directly.
     for (const item of allItems) {
-      const color = this._riskColor(item.risk);
-      const entering = enteringKeys.has(item.key) ? 'entering' : '';
-      const selected = this._selectedKey === item.key ? 'selected' : '';
-      const label = escapeHtml(this._field(item.c, 'processName') || this._field(item.c, 'remoteAddress', 'RemoteAddress') || 'Unknown');
+      const existing = this._perimeterNodeEls.get(item.key);
 
-      svgHtml += `<g class="perim-node ${entering} ${selected}" data-key="${escapeHtml(item.key)}" transform-origin="${item.x}px ${item.y}px">`;
-      svgHtml += `<title>${label}</title>`;
-      if (item.blocked) {
-        svgHtml += `<circle class="perim-blocked-ring" cx="${item.x}" cy="${item.y}" r="7" fill="none" stroke="${color}" stroke-width="2"/>`;
-      } else {
-        // Connecting line + a particle element updated each animation frame
-        svgHtml += `<line x1="${cx}" y1="${cy}" x2="${item.x}" y2="${item.y}" stroke="${color}" stroke-width="1" opacity="0.25"/>`;
-        svgHtml += `<circle class="perim-particle" data-key="${escapeHtml(item.key)}" cx="${item.x}" cy="${item.y}" r="2.2" fill="${color}" opacity="0.9"/>`;
+      if (existing && existing.blocked === item.blocked) {
+        // Same node, same blocked/unblocked shape -- move & recolor in place.
+        this._updatePerimeterNodeEl(existing, item, cx, cy);
+        item.particleEl = existing.particleEl;
+        continue;
       }
-      // A larger invisible hit-area makes small dots easy to click without
-      // needing pixel-perfect precision.
-      svgHtml += `<circle r="11" cx="${item.x}" cy="${item.y}" fill="transparent"/>`;
-      svgHtml += `<circle class="perim-dot" cx="${item.x}" cy="${item.y}" r="6" fill="${color}"/>`;
-      svgHtml += `</g>`;
+
+      // New node, or one that flipped between blocked/unblocked (a
+      // structurally different shape) -- (re)create its element.
+      if (existing) existing.g.remove();
+      const entering = enteringKeys.has(item.key) && !existing;
+      const el = this._createPerimeterNodeEl(item, cx, cy, entering, container, svg);
+      nodesG.appendChild(el.g);
+      this._perimeterNodeEls.set(item.key, el);
+      item.particleEl = el.particleEl;
     }
 
-    svg.innerHTML = svgHtml;
-    svg.querySelectorAll('.perim-node').forEach((el) => {
-      const key = el.getAttribute('data-key');
-      const item = nodeMap.get(key);
-      if (item) item.particleEl = el.querySelector('.perim-particle');
-      el.addEventListener('click', () => {
-        this._selectedKey = key;
-        svg.querySelectorAll('.perim-node').forEach((n) => n.classList.remove('selected'));
-        el.classList.add('selected');
-        this._renderDetailPanel(container, this._perimeterNodes.get(key));
-      });
-    });
+    // Remove elements for connections that disappeared since last refresh.
+    for (const [key, el] of this._perimeterNodeEls) {
+      if (!nodeMap.has(key)) {
+        el.g.remove();
+        this._perimeterNodeEls.delete(key);
+      }
+    }
 
     if (summary) {
       const blockedCount = allItems.filter((i) => i.blocked).length;
       const unknownCount = allItems.filter((i) => i.risk === 'UNKNOWN').length;
-      summary.textContent = `${allItems.length} shown${hiddenCount ? ` (+${hiddenCount} more \u2014 refine search or raise "Show on map")` : ''} \u00b7 ${blockedCount} blocked \u00b7 ${unknownCount} unverified`;
+      // Three distinct numbers, since they can each differ: how many
+      // connections exist at all, how many match the current filters, and
+      // how many are actually drawn on the map (which the "Show on map" cap
+      // can further shrink). Previously only the last of these was shown,
+      // which made it look like filtering wasn't doing anything whenever it
+      // didn't happen to interact with the cap.
+      const totalConnections = connections.length;
+      const filteredCount = withMeta.length;
+      let countText = `${totalConnections} total connection${totalConnections === 1 ? '' : 's'} \u00b7 ${filteredCount} match current filters`;
+      if (hiddenCount > 0) {
+        countText += ` \u00b7 ${allItems.length} shown on map (+${hiddenCount} hidden by cap \u2014 raise "Show on map" to see more)`;
+      }
+      summary.textContent = `${countText} \u00b7 ${blockedCount} blocked \u00b7 ${unknownCount} unverified`;
     }
+  },
+
+  // Builds a brand-new node element for a connection we haven't got a DOM
+  // element for yet (either genuinely new, or one that just flipped
+  // blocked/unblocked state and needs a different internal shape).
+  _createPerimeterNodeEl(item, cx, cy, entering, container, svg) {
+    const color = this._riskColor(item.risk);
+    const label = escapeHtml(this._field(item.c, 'processName') || this._field(item.c, 'remoteAddress', 'RemoteAddress') || 'Unknown');
+    const selected = this._selectedKey === item.key ? 'selected' : '';
+
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('class', `perim-node ${entering ? 'entering' : ''} ${selected}`.trim());
+    g.setAttribute('data-key', item.key);
+    g.setAttribute('transform-origin', `${item.x}px ${item.y}px`);
+
+    let inner = `<title>${label}</title>`;
+    if (item.blocked) {
+      inner += `<circle class="perim-blocked-ring" cx="${item.x}" cy="${item.y}" r="7" fill="none" stroke="${color}" stroke-width="2"/>`;
+    } else {
+      // Connecting line + a particle element updated each animation frame.
+      // Starts at the edge of the "This PC" circle (radius 30, see above)
+      // rather than its exact center, so the line doesn't visually run
+      // underneath/through the hub itself.
+      const hubR = 32; // circle radius (30) plus a couple px of breathing room
+      const lineStartX = cx + Math.cos(item.angle) * hubR;
+      const lineStartY = cy + Math.sin(item.angle) * hubR;
+      inner += `<line class="perim-line" x1="${lineStartX}" y1="${lineStartY}" x2="${item.x}" y2="${item.y}" stroke="${color}" stroke-width="1" opacity="0.25"/>`;
+      inner += `<circle class="perim-particle" data-key="${escapeHtml(item.key)}" cx="${item.x}" cy="${item.y}" r="2.2" fill="${color}" opacity="0.9"/>`;
+    }
+    // A larger invisible hit-area makes small dots easy to click without
+    // needing pixel-perfect precision.
+    inner += `<circle class="perim-hit" r="11" cx="${item.x}" cy="${item.y}" fill="transparent"/>`;
+    inner += `<circle class="perim-dot" cx="${item.x}" cy="${item.y}" r="6" fill="${color}"/>`;
+    g.innerHTML = inner;
+
+    g.addEventListener('click', () => {
+      this._selectedKey = item.key;
+      svg.querySelectorAll('.perim-node').forEach((n) => n.classList.remove('selected'));
+      g.classList.add('selected');
+      this._renderDetailPanel(container, this._perimeterNodes.get(item.key));
+    });
+
+    return {
+      g,
+      blocked: item.blocked,
+      dotEl: g.querySelector('.perim-dot'),
+      lineEl: g.querySelector('.perim-line'),
+      blockedRingEl: g.querySelector('.perim-blocked-ring'),
+      particleEl: g.querySelector('.perim-particle')
+    };
+  },
+
+  // Updates an existing node element in place for a refresh where its
+  // blocked/unblocked shape hasn't changed -- just position, color, and
+  // the selected/label state, via direct attribute writes (no innerHTML,
+  // no new element, no lost click listener).
+  _updatePerimeterNodeEl(existing, item, cx, cy) {
+    const color = this._riskColor(item.risk);
+    const { g, dotEl, lineEl, blockedRingEl, particleEl } = existing;
+
+    g.classList.toggle('selected', this._selectedKey === item.key);
+    g.setAttribute('transform-origin', `${item.x}px ${item.y}px`);
+
+    const hitEl = g.querySelector('.perim-hit');
+    if (hitEl) { hitEl.setAttribute('cx', item.x); hitEl.setAttribute('cy', item.y); }
+
+    if (dotEl) {
+      dotEl.setAttribute('cx', item.x);
+      dotEl.setAttribute('cy', item.y);
+      dotEl.setAttribute('fill', color);
+    }
+
+    if (item.blocked) {
+      if (blockedRingEl) {
+        blockedRingEl.setAttribute('cx', item.x);
+        blockedRingEl.setAttribute('cy', item.y);
+        blockedRingEl.setAttribute('stroke', color);
+      }
+    } else {
+      const hubR = 32;
+      const lineStartX = cx + Math.cos(item.angle) * hubR;
+      const lineStartY = cy + Math.sin(item.angle) * hubR;
+      if (lineEl) {
+        lineEl.setAttribute('x1', lineStartX);
+        lineEl.setAttribute('y1', lineStartY);
+        lineEl.setAttribute('x2', item.x);
+        lineEl.setAttribute('y2', item.y);
+        lineEl.setAttribute('stroke', color);
+      }
+      if (particleEl) particleEl.setAttribute('fill', color);
+    }
+
+    const titleEl = g.querySelector('title');
+    const label = this._field(item.c, 'processName') || this._field(item.c, 'remoteAddress', 'RemoteAddress') || 'Unknown';
+    if (titleEl && titleEl.textContent !== label) titleEl.textContent = label;
   },
 
   // Drives the slow "particle" dots that drift along each connection line.
@@ -734,6 +838,7 @@ window.Pages['firewall'] = {
 
     const svg = container.querySelector('#perimeterSvg');
     const cx = 300, cy = 210;
+    const hubR = 32; // must match the line start point computed in _renderPerimeter
     const speed = 0.00045; // fraction of the line traveled per ms
     const FRAME_INTERVAL_MS = 50; // ~20fps — plenty smooth for a slow drift, far less main-thread work than 60fps
     let lastFrameTime = 0;
@@ -752,8 +857,10 @@ window.Pages['firewall'] = {
           let frac = ((t * speed) + phase / 1000) % 1;
           // Inbound particles travel from the node toward the PC; outbound the reverse.
           const travel = item.direction === 'inbound' ? (1 - frac) : frac;
-          item.particleEl.setAttribute('cx', cx + (item.x - cx) * travel);
-          item.particleEl.setAttribute('cy', cy + (item.y - cy) * travel);
+          const startX = cx + Math.cos(item.angle) * hubR;
+          const startY = cy + Math.sin(item.angle) * hubR;
+          item.particleEl.setAttribute('cx', startX + (item.x - startX) * travel);
+          item.particleEl.setAttribute('cy', startY + (item.y - startY) * travel);
         }
       }
       this._particleRaf = requestAnimationFrame(loop);

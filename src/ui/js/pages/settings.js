@@ -111,6 +111,14 @@ window.Pages.settings = {
             </div>
             <label class="toggle"><input type="checkbox" id="notificationsToggle" ${settings.features.notificationsEnabled !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
+          <div class="toggle-row" style="margin-top:8px;">
+            <div>
+              <div class="toggle-label">Scan Progress Notifications</div>
+              <div class="toggle-desc">Show desktop notifications as a scan progresses</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="scanNotificationsToggle" ${settings.features.scanNotifications !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+          </div>
+          <div id="notificationStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
         </div>
 
         <div class="card">
@@ -128,8 +136,8 @@ window.Pages.settings = {
         <div class="card">
           <div class="panel-title" style="margin-bottom:16px;">About</div>
           <div style="font-size:0.9rem; line-height:1.8;">
-            <div><strong>Soterios</strong> v${escapeHtml(appInfo.version || '1.0.2')}</div>
-            <div style="color:var(--text-muted); margin-top:8px;">Local-first Windows security and maintenance platform.</div>
+            <div><strong>Soterios</strong> v${escapeHtml(appInfo.version || '1.2.1')}</div>
+            <div style="color:var(--text-muted); margin-top:8px;">Local-first security and maintenance platform.</div>
             <div style="margin-top:12px; font-size:0.8rem;">
               <div>ClamAV engine at <code style="color:var(--accent-primary);">assets/clamav/</code></div>
               <div>Quarantine path: <code style="color:var(--accent-primary);">~/.soterios-quarantine</code></div>
@@ -177,16 +185,16 @@ window.Pages.settings = {
       finally { setButtonLoading(btn, false); }
     });
 
-    async function saveFeature(key, value, input) {
-      const status = container.querySelector('#featureToggleStatus') || container.querySelector('#settingsStatus');
-      status.textContent = '';
+    async function saveFeature(key, value, input, statusEl) {
+      if (!statusEl) statusEl = container.querySelector('#featureToggleStatus');
+      statusEl.textContent = '';
       input.disabled = true;
       try {
         await Api.updateSettings({ features: { [key]: value } });
-        status.textContent = 'Feature toggle saved.';
+        statusEl.textContent = 'Feature toggle saved.';
       } catch (err) {
         input.checked = !value;
-        status.textContent = err.message || String(err);
+        statusEl.textContent = err.message || String(err);
       } finally {
         input.disabled = false;
       }
@@ -197,7 +205,29 @@ window.Pages.settings = {
     container.querySelector('#scanHistoryToggle').addEventListener('change', (event) => saveFeature('scanHistory', event.target.checked, event.target));
     container.querySelector('#externalLookupsToggle').addEventListener('change', (event) => saveFeature('externalLookups', event.target.checked, event.target));
     container.querySelector('#geoLookupToggle').addEventListener('change', (event) => saveFeature('geoLookup', event.target.checked, event.target));
-    container.querySelector('#notificationsToggle').addEventListener('change', (event) => saveFeature('notificationsEnabled', event.target.checked, event.target));
+    container.querySelector('#notificationsToggle').addEventListener('change', async (event) => {
+      const checked = event.target.checked;
+      const statusEl = container.querySelector('#notificationStatus');
+      statusEl.textContent = '';
+      event.target.disabled = true;
+      try {
+        await Api.updateSettings({ features: { notificationsEnabled: checked } });
+        if (!checked) {
+          const scanToggle = container.querySelector('#scanNotificationsToggle');
+          if (scanToggle.checked) {
+            scanToggle.checked = false;
+            await Api.updateSettings({ features: { scanNotifications: false } });
+          }
+        }
+        statusEl.textContent = 'Feature toggle saved.';
+      } catch (err) {
+        event.target.checked = !checked;
+        statusEl.textContent = err.message || String(err);
+      } finally {
+        event.target.disabled = false;
+      }
+    });
+    container.querySelector('#scanNotificationsToggle').addEventListener('change', (event) => saveFeature('scanNotifications', event.target.checked, event.target, container.querySelector('#notificationStatus')));
 
     container.querySelector('#launchAtStartupToggle').addEventListener('change', async (event) => {
       const checked = event.target.checked;

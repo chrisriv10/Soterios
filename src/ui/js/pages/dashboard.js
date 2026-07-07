@@ -63,7 +63,7 @@ window.Pages['dashboard'] = {
             </div>
             <div class="status-info">
               <h3>Last Scan</h3>
-              <div class="value" id="lastScanTime">Never</div>
+              <div class="value" id="lastScanTime">Loading...</div>
             </div>
           </div>
           <div style="margin-top: 16px; display: flex; gap: 12px;">
@@ -118,6 +118,8 @@ window.Pages['dashboard'] = {
       </div>
     `;
 
+    window.api.invoke('splash:progress', { pct: 20, label: 'Loading dashboard...' });
+
     const btnToggleRtp = document.getElementById('btnToggleRtp');
     const rtpStatusText = document.getElementById('rtpStatusText');
     const rtpIcon = document.getElementById('rtpIcon');
@@ -140,7 +142,7 @@ window.Pages['dashboard'] = {
       if (!health) return;
       const entries = Object.values(health.breakdown || {});
       const overlay = document.createElement('div');
-      overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:1000; padding:24px;';
+      overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.85); display:flex; align-items:center; justify-content:center; z-index:1000; padding:24px;';
       overlay.innerHTML = `
         <div class="panel" style="max-width:520px; width:100%; max-height:80vh; overflow:auto;">
           <div class="flex-between">
@@ -287,6 +289,7 @@ window.Pages['dashboard'] = {
     } catch (_) {
       setRtpState(false);
     }
+    window.api.invoke('splash:progress', { pct: 35, label: 'Checking protection status...' });
 
     let fwEnabled = null; // null = unknown/unavailable
     try {
@@ -302,12 +305,21 @@ window.Pages['dashboard'] = {
       if (fwStatusText) fwStatusText.textContent = 'Unknown';
       if (fwIcon) fwIcon.className = 'status-icon warning';
     }
+    window.api.invoke('splash:progress', { pct: 50, label: 'Verifying firewall...' });
 
     let latestScanForHealth = null;
     try {
       latestScanForHealth = await window.api.invoke('scanReports:latest');
     } catch (_) {
       latestScanForHealth = null;
+    }
+
+    // Set last scan text immediately from the already-fetched data so it never flashes "Never".
+    const lastScanEl = container.querySelector('#lastScanTime');
+    if (lastScanEl) {
+      lastScanEl.textContent = latestScanForHealth
+        ? `${parseSqliteTimestamp(latestScanForHealth.timestamp).toLocaleString()} (${latestScanForHealth.status})`
+        : 'Never';
     }
 
     try {
@@ -330,6 +342,7 @@ window.Pages['dashboard'] = {
       healthDetail.textContent = e.message || 'Unable to calculate health score.';
       healthIcon.className = 'status-icon warning';
     }
+    window.api.invoke('splash:progress', { pct: 65, label: 'Calculating health score...' });
 
     const btnManageFirewall = document.getElementById('btnManageFirewall');
     if (btnManageFirewall) {
@@ -370,6 +383,7 @@ window.Pages['dashboard'] = {
       });
     }
     await loadWarnings();
+    window.api.invoke('splash:progress', { pct: 75, label: 'Loading warnings...' });
 
     btnToggleRtp.addEventListener('click', async () => {
       const previous = isRtpActive;
@@ -436,6 +450,7 @@ window.Pages['dashboard'] = {
     // We could fetch scan history and quarantine count here from API
     try {
       await loadLastScan();
+      window.api.invoke('splash:progress', { pct: 85, label: 'Loading scan history...' });
 
       const quarantineList = await window.api.invoke('db:getQuarantineList');
       if (quarantineList) {
@@ -444,6 +459,7 @@ window.Pages['dashboard'] = {
           threatsCountEl.textContent = quarantineList.length;
         }
       }
+      window.api.invoke('splash:progress', { pct: 90, label: 'Checking quarantine...' });
     } catch (e) {
       console.warn('Failed to load dashboard data:', e);
     }
@@ -455,6 +471,7 @@ window.Pages['dashboard'] = {
     // own failures independently) so this always fires exactly once the
     // initial load sequence settles, success or partial failure alike.
     try {
+      window.api.invoke('splash:progress', { pct: 100, label: 'Ready' });
       await window.api.invoke('app:ready');
     } catch (_) {
       // If this fails for some reason, main.js's own fallback timeout will

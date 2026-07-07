@@ -348,7 +348,8 @@ function createSplashWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: true,
+      preload: path.join(__dirname, '../preload/splashPreload.js')
     }
   });
 
@@ -356,6 +357,12 @@ function createSplashWindow() {
   splashWindow.once('ready-to-show', () => {
     if (splashWindow) splashWindow.show();
   });
+}
+
+function sendSplashProgress(pct, label) {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.webContents.send('splash:progress', { pct, label });
+  }
 }
 
 // Called once the renderer's Dashboard has actually finished loading its data
@@ -462,11 +469,13 @@ app.whenReady().then(async () => {
   createSplashWindow();
 
   logLine('info', 'App starting');
+  sendSplashProgress(0, 'Starting Soterios...');
 
   // 1. Database
   const dbPath = path.join(app.getPath('userData'), 'soterios.db');
   const db = new DatabaseService(dbPath);
   dbRef = db;
+  sendSplashProgress(3, 'Connecting to database...');
 
   // Migrate old feature.systemMonitoring key to feature.externalLookups
   const oldVal = db.getSetting('feature.systemMonitoring', null);
@@ -507,6 +516,7 @@ app.whenReady().then(async () => {
   // loadPlugins() is a synchronous filesystem scan, not a network call, so
   // it's cheap enough to keep here rather than deferring it.
   loadPlugins();
+  sendSplashProgress(6, 'Loading security engines...');
 
   const services = {
     db,
@@ -534,6 +544,7 @@ app.whenReady().then(async () => {
   // at all until they finished.
   buildAppMenu();
   createWindow();
+  sendSplashProgress(9, 'Building interface...');
 
   // Register IPC handlers only once mainWindow actually exists. Previously
   // this ran before createWindow(), so the mainWindow parameter passed in
@@ -541,6 +552,7 @@ app.whenReady().then(async () => {
   // handlers like dialog:pickFolder/pickFiles silently fell back to
   // BrowserWindow.getFocusedWindow() instead of targeting the real window.
   registerIpcHandlers(mainWindow, services);
+  sendSplashProgress(12, 'Registering services...');
 
   // Forward scan progress events from EventBus to renderer
   const announcedProgress = new Set();
@@ -549,10 +561,12 @@ app.whenReady().then(async () => {
       mainWindow.webContents.send('scan:progress', data);
     }
     if (!data || typeof data.pct !== 'number') return;
+    if (dbRef && !dbRef.getSetting('feature.scanNotifications', true)) return;
     const milestone = [0, 25, 50, 75].find((value) => data.pct >= value && !announcedProgress.has(value));
     if (milestone !== undefined) {
       announcedProgress.add(milestone);
-      showNotification('Soterios scan progress', data.message || `Scan is ${milestone}% complete.`, 'info');
+      const files = data.filesScanned || 0;
+      showNotification('Soterios scan progress', `${files} file${files === 1 ? '' : 's'} scanned — ${data.pct}% complete.`, 'info');
     }
   });
 
@@ -613,6 +627,15 @@ app.whenReady().then(async () => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+
+  // Forward progress events from the dashboard (renderer) to the splash
+  ipcMain.handle('splash:progress', (_event, data) => {
+    if (splashWindow && !splashWindow.isDestroyed()) {
+      splashWindow.webContents.send('splash:progress', data);
+    }
+  });
+
+  sendSplashProgress(15, 'Loading dashboard...');
 
   // Slow engine initialization (ClamAV definitions, real-time protection)
   // runs in the background after the window is already visible, instead of

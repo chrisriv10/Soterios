@@ -105,10 +105,11 @@ class ScanEngine {
     // once per target path being scanned. This tracks the highest
     // percentage reported so far and clamps every emission to it.
     let maxEmittedPct = 0;
-    const emitProgress = (pctCandidate, message) => {
+    let cumulativeFiles = 0;
+    const emitProgress = (pctCandidate, message, extra) => {
       const pct = Math.max(maxEmittedPct, Math.min(100, pctCandidate));
       maxEmittedPct = pct;
-      this.eventBus.emit('scan:progress', { scanType, pct, message });
+      this.eventBus.emit('scan:progress', { scanType, pct, message, ...extra });
     };
 
     try {
@@ -124,6 +125,7 @@ class ScanEngine {
         const basePct = Math.round((i / paths.length) * 80 + 10);
         emitProgress(basePct, 'Scanning ' + targetPath + '...');
 
+        let pathLastChecked = 0;
         const result = await this.clamEngine.scanFile(targetPath, (progress) => {
           if (!progress) return;
 
@@ -133,8 +135,10 @@ class ScanEngine {
           }
 
           const checked = progress.fileCount || 0;
+          cumulativeFiles += checked - pathLastChecked;
+          pathLastChecked = checked;
           const pct = Math.min(95, basePct + Math.min(70, Math.round(checked / 10)));
-          emitProgress(pct, 'Scanning ' + targetPath + ' (' + checked + ' files checked)...');
+          emitProgress(pct, 'Scanning ' + targetPath + ' (' + checked + ' files checked)...', { filesScanned: cumulativeFiles });
         });
 
         if (this.abortController.signal.aborted) {

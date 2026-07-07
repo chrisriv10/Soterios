@@ -23,9 +23,9 @@ Pick the installer for your operating system from the [latest release](https://g
 
 | Platform | Installer | Notes |
 |----------|-----------|-------|
-| **Windows** | `Soterios-Setup-x.x.x.exe` | NSIS installer · requires admin for system-level checks |
-| **macOS** | `Soterios-x.x.x.dmg` | Drag to Applications · may require Gatekeeper approval |
-| **Linux** | `Soterios-x.x.x.AppImage` | `chmod +x` and run · no install needed |
+| **Windows** | `Soterios-Setup-1.2.1.exe` | NSIS installer · requires admin for system-level checks |
+| **macOS** | `Soterios-1.2.1.dmg` | Drag to Applications · may require Gatekeeper approval |
+| **Linux** | `Soterios-1.2.1.AppImage` | `chmod +x` and run · no install needed |
 
 ---
 
@@ -39,9 +39,9 @@ Pick the installer for your operating system from the [latest release](https://g
 - **Firewall Management** — Windows Firewall profile status and rule summaries
 - **Network Monitor** — active connections and interface activity
 - **Password Tools** — local generator, strength checker, HIBP k-anonymity password leak checks, and XposedOrNot email breach checks
-- **Real-Time Protection** — local file-system watcher for live threat detection
+- **Real-Time Protection** — toggles Windows Defender real-time monitoring on/off and verifies its state
 - **Quarantine Management** — restore or permanently delete isolated files
-- **Tools & Maintenance** — temp cleanup, disk reports, large file finder, browser cache reports, startup items, network reports, and Windows services reports
+- **Tools & Maintenance** — temp cleanup, disk reports, large file finder, browser cache reports, startup items, network reports, Windows services reports, and network interface/connection reports
 
 ---
 
@@ -132,7 +132,7 @@ Contributions are welcome! To get started:
 3. **Commit** your changes with clear messages.
 4. **Push** to your fork and open a **Pull Request**.
 
-Please make sure your changes work locally (`npm start`) before submitting.
+Please make sure your changes work locally (`npm start`) and pass linting before submitting.
 
 ---
 

@@ -534,8 +534,8 @@ body {
   width: 0;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #4da3ff 0%, #1f6feb 100%);
-  transition: width 0.25s ease, opacity 0.25s ease;
+  background: #4169E1;
+  transition: opacity 0.25s ease;
   opacity: 0;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
