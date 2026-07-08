@@ -28,7 +28,7 @@ window.Pages.processes = {
     container.innerHTML = `
       <div class="page-header"><div class="flex-between">
         <div><h1 class="page-title">Processes</h1><div class="page-subtitle">Running processes with risk scoring</div></div>
-        <button class="btn" id="refreshBtn">Refresh</button></div>
+        <button class="btn" id="refreshBtn">Refresh</button></div></div>
         <div style="margin-top:12px; display:flex; align-items:center; gap:10px;">
           <input type="text" id="processSearch" placeholder="Search by name, path, or PID..."
             style="flex:1; max-width:360px; padding:8px 12px; border-radius:8px; border:1px solid var(--glass-border); background:var(--glass-bg,rgba(255,255,255,0.05)); color:inherit;">
