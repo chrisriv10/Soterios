@@ -23,8 +23,8 @@ class NetworkMonitor {
         iface: s.iface,
         rxSec: Math.round((s.rx_sec || 0) / 1024 * 10) / 10,
         txSec: Math.round((s.tx_sec || 0) / 1024 * 10) / 10,
-        rxTotal: Math.round((s.rxBytes || 0) / (1024 * 1024) * 10) / 10,
-        txTotal: Math.round((s.txBytes || 0) / (1024 * 1024) * 10) / 10
+        rxTotal: Math.round((s.rx_bytes || 0) / (1024 * 1024) * 10) / 10,
+        txTotal: Math.round((s.tx_bytes || 0) / (1024 * 1024) * 10) / 10
       }));
 
       // Use a script file to avoid PowerShell quoting issues

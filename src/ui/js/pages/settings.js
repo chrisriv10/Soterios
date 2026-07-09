@@ -65,6 +65,14 @@ window.Pages.settings = {
             </div>
             <label class="toggle"><input type="checkbox" id="geoLookupToggle" ${settings.features.geoLookup ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
+
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">Network Perimeter Map</div>
+              <div class="toggle-desc">Show the live connection visualization on the Firewall page</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="networkPerimeterMapToggle" ${settings.features.networkPerimeterMap !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+          </div>
           <div id="featureToggleStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
         </div>
 
@@ -205,6 +213,7 @@ window.Pages.settings = {
     container.querySelector('#scanHistoryToggle').addEventListener('change', (event) => saveFeature('scanHistory', event.target.checked, event.target));
     container.querySelector('#externalLookupsToggle').addEventListener('change', (event) => saveFeature('externalLookups', event.target.checked, event.target));
     container.querySelector('#geoLookupToggle').addEventListener('change', (event) => saveFeature('geoLookup', event.target.checked, event.target));
+    container.querySelector('#networkPerimeterMapToggle').addEventListener('change', (event) => saveFeature('networkPerimeterMap', event.target.checked, event.target));
     container.querySelector('#notificationsToggle').addEventListener('change', async (event) => {
       const checked = event.target.checked;
       const statusEl = container.querySelector('#notificationStatus');

@@ -183,7 +183,7 @@ function requestText(url, options = {}) {
     const req = https.request(url, {
       method: 'GET',
       headers: {
-        'User-Agent': 'Soterios-System-Tools',
+        'User-Agent': 'Soterios',
         ...options.headers
       }
     }, (res) => {

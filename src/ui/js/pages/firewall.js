@@ -32,13 +32,15 @@ window.Pages['firewall'] = {
 
       const profiles = await profilesPromise;
       const rules = await rulesPromise;
+      const settings = await Api.getSettings();
+      const showPerimeterMap = settings.features.networkPerimeterMap !== false;
 
       let html = '';
 
       html += `<div id="firewallSummary">${this._renderSummaryHtml(profiles, rules)}</div>`;
 
       // ── NETWORK PERIMETER (live visualization) ────────────────────────────
-      html += `
+      if (showPerimeterMap) html += `
         <div class="list-row" id="perimeterCard" style="margin-top:24px; padding:24px 28px;">
           <style>
             #perimeterCard .perim-node { cursor:pointer; transition: opacity 0.5s ease; }
@@ -117,6 +119,14 @@ window.Pages['firewall'] = {
           </div>
         </div>
       `;
+      else {
+        html += `
+        <div class="card" style="margin-top:24px; padding:20px 24px;">
+          <div class="empty-state" style="margin:0;">
+            Network perimeter map is disabled. Enable it in&nbsp;<a href="#" class="goto-settings" style="color:var(--accent-primary);">Settings</a>.
+          </div>
+        </div>`;
+      }
 
       // ── FIREWALL RULES (searchable, synced to the live data above) ───────
       html += `
@@ -146,8 +156,16 @@ window.Pages['firewall'] = {
       `;
       content.innerHTML = html;
 
+      const settingsLink = content.querySelector('.goto-settings');
+      if (settingsLink) {
+        settingsLink.addEventListener('click', (e) => {
+          e.preventDefault();
+          if (window.AppRouter) window.AppRouter.navigate('settings');
+        });
+      }
+
       // Init perimeter (loads trusted IPs, then enriches connections — the slow part)
-      await this._initPerimeter(container);
+      if (showPerimeterMap) await this._initPerimeter(container);
 
       // Init rule list (loads firewall rules from PowerShell)
       await this._initRuleList(container);

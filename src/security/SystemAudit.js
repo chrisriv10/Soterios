@@ -154,7 +154,7 @@ class SystemAudit {
     const checks = [
       { label: 'Windows Defender', run: () => this.checkDefender() },
       { label: 'User Account Control (UAC)', run: () => this.checkUac() },
-      { label: 'Windows Update (this can take up to a minute)', run: () => this.checkWindowsUpdate() },
+      { label: 'Windows Update', run: () => this.checkWindowsUpdate() },
       { label: 'BitLocker', run: () => this.checkBitLocker() },
       { label: 'PowerShell execution policy', run: () => this.checkExecutionPolicy() },
       { label: 'Secure Boot', run: () => this.checkSecureBoot() }

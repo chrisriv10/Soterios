@@ -97,7 +97,7 @@ class BlocklistService {
     return new Promise((resolve, reject) => {
       const req = https.get(source.url, {
         headers: {
-          'User-Agent': 'Soterios-System-Tools'
+          'User-Agent': 'Soterios',
         }
       }, (res) => {
         let data = '';

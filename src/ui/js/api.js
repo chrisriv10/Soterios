@@ -57,6 +57,7 @@ const Api = {
     const scanHistory = await window.api.invoke('db:getSetting', 'feature.scanHistory', true);
     const externalLookups = await window.api.invoke('db:getSetting', 'feature.externalLookups', true);
     const geoLookup = await window.api.invoke('db:getSetting', 'feature.geoLookup', true);
+    const networkPerimeterMap = await window.api.invoke('db:getSetting', 'feature.networkPerimeterMap', true);
     const notificationsEnabled = await window.api.invoke('db:getSetting', 'feature.notificationsEnabled', true);
     const scanNotifications = await window.api.invoke('db:getSetting', 'feature.scanNotifications', true);
     // Cached fallback only -- settings.js queries 'app:getLaunchAtStartup'
@@ -77,7 +78,7 @@ const Api = {
     if (window.AppState) window.AppState.currentTheme = theme;
     return {
       scanner: { defaultPath, maxDepth, maxFileSizeMB, includeCleanResults, excludedDirNames },
-      features: { realtimeProtection, autoReports, scanHistory, externalLookups, geoLookup, notificationsEnabled, scanNotifications, launchAtStartup },
+      features: { realtimeProtection, autoReports, scanHistory, externalLookups, geoLookup, networkPerimeterMap, notificationsEnabled, scanNotifications, launchAtStartup },
       ui: { theme }
     };
   },
@@ -101,6 +102,7 @@ const Api = {
       if (Object.prototype.hasOwnProperty.call(f, 'scanHistory')) await window.api.invoke('db:setSetting', 'feature.scanHistory', !!f.scanHistory);
       if (Object.prototype.hasOwnProperty.call(f, 'externalLookups')) await window.api.invoke('db:setSetting', 'feature.externalLookups', !!f.externalLookups);
       if (Object.prototype.hasOwnProperty.call(f, 'geoLookup')) await window.api.invoke('db:setSetting', 'feature.geoLookup', !!f.geoLookup);
+      if (Object.prototype.hasOwnProperty.call(f, 'networkPerimeterMap')) await window.api.invoke('db:setSetting', 'feature.networkPerimeterMap', !!f.networkPerimeterMap);
       if (Object.prototype.hasOwnProperty.call(f, 'notificationsEnabled')) await window.api.invoke('db:setSetting', 'feature.notificationsEnabled', !!f.notificationsEnabled);
       if (Object.prototype.hasOwnProperty.call(f, 'scanNotifications')) await window.api.invoke('db:setSetting', 'feature.scanNotifications', !!f.scanNotifications);
       if (Object.prototype.hasOwnProperty.call(f, 'launchAtStartup')) await window.api.invoke('db:setSetting', 'feature.launchAtStartup', !!f.launchAtStartup);

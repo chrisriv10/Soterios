@@ -290,7 +290,7 @@ window.Pages['network'] = {
           <span style="font-weight:600; color:var(--ok);">${safeCount}</span>
         </div>
         <div style="display:flex; align-items:center; justify-content:space-between;">
-          <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:50%; background:var(--warn); display:inline-block;"></span>Unknown</span>
+          <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:50%; background:var(--warn); display:inline-block;"></span>Unverified</span>
           <span style="font-weight:600; color:var(--warn);">${unknownCount}</span>
         </div>
         <div style="display:flex; align-items:center; justify-content:space-between;">
@@ -342,7 +342,7 @@ window.Pages['network'] = {
         </div>`;
         html += `<div style="display:flex; gap:12px; font-size:0.75rem; font-weight:600;">
           <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--ok);"></span> Safe</span>
-          <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--warn);"></span> Unknown</span>
+          <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--warn);"></span> Unverified</span>
           <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--danger);"></span> Malicious</span>
         </div>`;
         html += '</div>';
@@ -406,7 +406,7 @@ window.Pages['network'] = {
           
           const size = Math.max(8, 6 + Math.log(c.count) * 4);
           const ipList = Array.from(c.ips).join(',');
-          const locList = Array.from(c.locations).join(' | ') || 'Unknown Location';
+          const locList = Array.from(c.locations).join(' | ') || 'Unverified Location';
           
           html += `<div class="heatmap-marker ${pulseClass}" data-ips="${ipList}" data-loc="${escapeHtml(locList)}"
             title="${escapeHtml(locList)}\nIPs: ${ipList}\nConnections: ${c.count}"
@@ -545,13 +545,15 @@ window.Pages['network'] = {
             remoteAddress, remotePort, localAddress, localPort, c.pid
           ].filter((v) => v !== undefined && v !== null && v !== '').join(' ').toLowerCase();
 
+          const riskDisplay = c.classification === 'UNKNOWN' ? 'UNVERIFIED' : c.classification;
+
           html += `<div class="list-row connection-row" data-ip="${escapeHtml(remoteAddress)}" data-search="${escapeHtml(searchBlob)}" data-risk="${escapeHtml(c.classification || 'UNKNOWN')}" data-state="${escapeHtml(state)}" style="display:flex; flex-direction:column; gap:4px; padding:12px 16px; border-left:4px solid ${borderColor}; content-visibility:auto; contain-intrinsic-size:0 70px;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <div>
                 <div style="font-weight:600; font-family:monospace; word-break:break-all;">${stateBadge}${escapeHtml(remoteAddress)}:${escapeHtml(remotePort)}${service}${hostname}</div>
                 <div class="page-subtitle" style="font-size:0.85rem; word-break:break-all;">Local: ${escapeHtml(localAddress)}:${escapeHtml(localPort)}${proc}</div>
               </div>
-              <div style="font-size:0.75rem; font-weight:600; color:${badgeColor}; background:${badgeColor}15; padding:4px 8px; border-radius:4px;">${escapeHtml(c.classification || 'UNKNOWN')}</div>
+              <div style="font-size:0.75rem; font-weight:600; color:${badgeColor}; background:${badgeColor}15; padding:4px 8px; border-radius:4px;">${escapeHtml(riskDisplay)}</div>
             </div>
           </div>`;
         }
