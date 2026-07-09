@@ -6,10 +6,10 @@ window.Pages['scanner'] = {
     this.cleanups = [];
   },
   render(container) {
-    container.innerHTML = `
+container.innerHTML = `
       <header class="page-header">
-        <h1 class="page-title">Virus Scan</h1>
-        <p class="page-subtitle">Scan your system for threats using the ClamAV engine</p>
+        <h1 class="page-title">Malware Scan</h1>
+        <p class="page-subtitle">Scan your system for malware and threats using ClamAV</p>
       </header>
       <div class="card" id="clamStatusCard" style="margin-bottom:24px;">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:16px;">

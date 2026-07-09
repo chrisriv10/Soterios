@@ -34,7 +34,7 @@ Pick the installer for your operating system from the [latest release](https://g
 ## Features
 
 - **Security Dashboard** — health score, scan status, warnings, ignored warnings, quarantine count, and real-time protection controls
-- **Virus Scan** — quick, full, and custom scans powered by ClamAV with definition updates, progress, cancellation, quarantine, and saved reports
+- **Malware Scan** — quick, full, and custom scans powered by ClamAV with definition updates, progress, cancellation, quarantine, and saved reports
 - **Reports** — browse, view, generate, and delete scan and security reports in-app
 - **Process Inspector** — risk-first sorting, then highest CPU/RAM impact within the same risk level
 - **Windows Security Audit** — Defender, UAC, Windows Update, BitLocker, PowerShell policy, and Secure Boot
