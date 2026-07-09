@@ -67,12 +67,9 @@ window.Pages.reports = {
   render(container) {
     container.innerHTML = `
       <div class="page-header">
-        <div class="flex-between">
-          <div>
-            <h1 class="page-title">Reports</h1>
-            <div class="page-subtitle">Browse scan and security reports</div>
-          </div>
-          <button class="btn btn-primary" id="generateReport">${iconFor('list-checks')} Generate Security Report</button>
+        <div>
+          <h1 class="page-title">Reports</h1>
+          <div class="page-subtitle">Browse scan and security reports</div>
         </div>
       </div>
 
@@ -81,7 +78,10 @@ window.Pages.reports = {
           <div class="panel-title">Scan Reports</div>
           <div id="scanReportHistory" class="history-list"><div class="empty-state">Loading scan reports...</div></div>
 
-          <div class="panel-title" style="margin-top:18px;">Saved Security Reports</div>
+          <div class="panel-title" style="margin-top:18px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
+            Saved Security Reports
+            <button class="btn btn-primary btn-sm" id="generateReport">Generate Security Report</button>
+          </div>
           <div id="reportHistory" class="history-list"><div class="empty-state">Loading saved reports...</div></div>
         </section>
 

@@ -20,7 +20,7 @@ window.Pages['scanner'] = {
           <button class="btn" id="btnUpdateDefinitions">Update Definitions</button>
         </div>
       </div>
-      <div class="dashboard-grid">
+      <div class="scanner-grid">
         <div class="card">
           <h3>Quick Scan</h3>
           <p class="page-subtitle">Scans common startup locations and temp folders.</p>

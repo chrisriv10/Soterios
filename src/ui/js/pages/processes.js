@@ -9,6 +9,7 @@ window.Pages.processes = {
   _order: [],         // pids in original fetch order
   _delegated: false,  // whether the click-delegation listener has been attached
   _refreshTimer: null,
+  _compactView: false,
 
   render(container) {
     // Clear any previous auto-refresh timer (e.g. if this page is re-rendered)
@@ -25,17 +26,25 @@ window.Pages.processes = {
     // after the first navigation away from and back to this page.
     this._delegated = false;
 
-    container.innerHTML = `
-      <div class="page-header"><div class="flex-between">
-        <div><h1 class="page-title">Processes</h1><div class="page-subtitle">Running processes with risk scoring</div></div>
-        <button class="btn" id="refreshBtn">Refresh</button></div></div>
-        <div style="margin-top:12px; display:flex; align-items:center; gap:10px;">
+container.innerHTML = `
+      <div class="page-header">
+        <div class="flex-between">
+          <div>
+            <h1 class="page-title">Processes</h1>
+            <div class="page-subtitle">Running processes with risk scoring</div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button class="btn btn-sm" id="compactToggle" title="Toggle compact view">${this._compactView ? 'Expand' : 'Compact'}</button>
+            <button class="btn" id="refreshBtn">Refresh</button>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:12px;">
           <input type="text" id="processSearch" placeholder="Search by name, path, or PID..."
             style="flex:1; max-width:360px; padding:8px 12px; border-radius:8px; border:1px solid var(--glass-border); background:var(--glass-bg,rgba(255,255,255,0.05)); color:inherit;">
           <select id="riskFilter" class="btn btn-sm">
             <option value="all">All Risk Levels</option>
             <option value="high">High Risk (&ge;35)</option>
-            <option value="normal">Normal Risk (&lt;35)</option>
+            <option value="normal">Normal Risk (<35)</option>
           </select>
           <select id="sortBy" class="btn btn-sm">
             <option value="default">Sort: Default</option>
@@ -80,6 +89,10 @@ window.Pages.processes = {
       this._sortBy = e.target.value;
       this.sortRows(container);
     });
+
+    const compactBtn = container.querySelector('#compactToggle');
+    console.log('[DEBUG] compactToggle element found:', compactBtn);
+    compactBtn?.addEventListener('click', () => this.toggleCompactView(container));
 
     this.load(container, true);
 
@@ -218,12 +231,37 @@ window.Pages.processes = {
       });
     }
 
+    // Load process icons
+    this.loadProcessIcons(container);
+
     // One delegated listener for all "End Process" buttons, instead of
     // attaching a fresh listener per row on every load/refresh.
     if (!this._delegated) {
       listEl.addEventListener('click', (e) => this.handleEndProcessClick(e, container));
       this._delegated = true;
     }
+  },
+
+  loadProcessIcons(container) {
+    if (!window.soterios || !window.soterios.process) return;
+    const listEl = container.querySelector('#processList');
+    if (!listEl) return;
+    const iconImgs = listEl.querySelectorAll('.process-icon[data-exe]');
+    const exePaths = [...new Set([...iconImgs].map((img) => img.dataset.exe).filter(Boolean))];
+    if (!exePaths.length) return;
+    window.soterios.process.getIcons(exePaths).then((icons) => {
+      iconImgs.forEach((img) => {
+        const dataUrl = icons && icons[img.dataset.exe];
+        if (dataUrl) {
+          img.src = dataUrl;
+          img.style.display = '';
+        } else {
+          img.style.display = 'none';
+        }
+      });
+    }).catch(() => {
+      iconImgs.forEach((img) => img.style.display = 'none');
+    });
   },
 
   // Creates a brand-new row for a process we haven't seen before. Keeps
@@ -235,13 +273,38 @@ window.Pages.processes = {
     const rawPath = p.path || p.cmd || '';
     const shortPath = truncatePath(rawPath || 'Path unavailable', 56);
     const isDanger = p.risk.score >= 35;
+    const compact = this._compactView;
 
     const row = document.createElement('div');
     row.className = 'list-row';
-    row.style.cssText = `display:flex; flex-direction:column; gap:8px; padding:16px; border-left: 4px solid ${isDanger ? 'var(--accent-danger)' : 'var(--accent-success)'}; content-visibility:auto; contain-intrinsic-size: 0 160px;`;
-    row.innerHTML = `
+    const padding = compact ? '8px 12px' : '16px';
+    const gap = compact ? '4px' : '8px';
+    const fontSize = compact ? '0.8rem' : '1.1rem';
+    const showDetails = !compact;
+
+    row.className = 'list-row';
+    row.style.cssText = `display:flex; flex-direction:column; gap:${gap}; padding:${padding}; border-left: 4px solid ${isDanger ? 'var(--accent-danger)' : 'var(--accent-success)'}; content-visibility:auto; contain-intrinsic-size: 0 ${compact ? 80 : 160}px;`;
+
+    if (compact) {
+      row.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="min-width:0; display:flex; align-items:center; gap:8px;">
+            <img class="process-icon" data-exe="${escapeHtml(rawPath || '')}" src="" alt="" style="width:18px;height:18px;flex-shrink:0;border-radius:3px;display:none;" />
+            <div style="font-weight:600; font-size:${fontSize};">${escapeHtml(p.name)} <span class="page-subtitle" style="font-size:0.75rem;">(PID ${escapeHtml(p.pid)})</span></div>
+            <span class="risk-score" style="font-weight:600; font-size:${fontSize}; color:${isDanger ? 'var(--accent-danger)' : 'var(--accent-success)'}">${escapeHtml(p.risk.score)} Risk</span>
+            <span class="risk-level page-subtitle" style="font-size:0.7rem; text-transform:uppercase;">${escapeHtml(p.risk.level)}</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="cpu-value" style="font-size:0.75rem; font-weight:500;">${p.cpu !== null ? p.cpu + '% CPU' : 'CPU n/a'}</span>
+            <span class="memory-value" style="font-size:0.75rem; font-weight:500;">${p.memory !== null ? p.memory + '% RAM' : 'RAM n/a'}</span>
+            <button class="btn btn-sm" style="color: var(--accent-danger);" data-end-process="${escapeHtml(p.pid)}" data-process-name="${escapeHtml(p.name)}">End</button>
+          </div>
+        </div>`;
+    } else {
+      row.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-          <div style="min-width:0;">
+          <div style="min-width:0; display:flex; align-items:center; gap:8px;">
+            <img class="process-icon" data-exe="${escapeHtml(rawPath || '')}" src="" alt="" style="width:20px;height:20px;flex-shrink:0;border-radius:3px;display:none;" />
             <div style="font-weight:600; font-size:1.1rem;">${escapeHtml(p.name)} <span class="page-subtitle" style="font-size:0.85rem;">(PID ${escapeHtml(p.pid)})</span></div>
             <div class="path-chip" title="${escapeHtml(rawPath)}">${escapeHtml(shortPath)}</div>
           </div>
@@ -260,6 +323,7 @@ window.Pages.processes = {
             <span class="memory-value">${p.memory !== null ? p.memory + '% RAM' : 'RAM n/a'}</span>
           </div>
         </div>`;
+    }
 
     // Precompute a lowercase search blob once, instead of on every keystroke.
     const blob = `${p.name || ''} ${rawPath} ${p.pid}`.toLowerCase();
@@ -387,5 +451,19 @@ window.Pages.processes = {
     } else {
       countEl.textContent = `${totalMatches} process${totalMatches === 1 ? '' : 'es'}`;
     }
+  },
+
+  toggleCompactView(container) {
+    console.log('[DEBUG] toggleCompactView called, new state:', !this._compactView);
+    this._compactView = !this._compactView;
+    const btn = container.querySelector('#compactToggle');
+    if (btn) btn.textContent = this._compactView ? 'Expand' : 'Compact';
+    // Force full rebuild since HTML structure changes between views
+    this._rowIndex = new Map();
+    this._order = [];
+    this._listWrapper = null;
+    this.buildRows(container);
+    this.sortRows(container);
+    this.applyFilter(container);
   }
 };

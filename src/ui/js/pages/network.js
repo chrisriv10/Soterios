@@ -13,13 +13,33 @@ window.Pages['network'] = {
     }
     container.innerHTML = `
       <style>
+        /* GPU-accelerated pulse: animating transform + opacity (instead of
+           box-shadow) keeps this off the main-thread paint path, so it
+           doesn't fight page scrolling for repaint budget. The ring is a
+           ::after pseudo-element with its own transform, so it can animate
+           scale independently of the marker's own centering transform. */
         @keyframes heatmapPulseMalicious {
-          0% { box-shadow: 0 0 0 0 rgba(232, 95, 92, 0.7); }
-          70% { box-shadow: 0 0 0 10px rgba(232, 95, 92, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(232, 95, 92, 0); }
+          0% { transform: translate(-50%, -50%) scale(0.7); opacity: 0.7; }
+          70% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
+          100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
         }
-        .heatmap-pulse-malicious {
+        .heatmap-marker {
+          will-change: transform;
+        }
+        .heatmap-marker.heatmap-pulse-malicious::after {
+          content: '';
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: 100%;
+          height: 100%;
+          border-radius: 50%;
+          background: var(--danger);
+          transform: translate(-50%, -50%) scale(0.7);
+          opacity: 0.7;
           animation: heatmapPulseMalicious 2s infinite;
+          will-change: transform, opacity;
+          pointer-events: none;
         }
         @keyframes flashHighlight {
           0% { background-color: rgba(255, 255, 255, 0.2); }
@@ -328,8 +348,7 @@ window.Pages['network'] = {
         html += '</div>';
 
         html += `<div class="card" style="padding:0; margin-bottom:18px; position:relative; background-color:var(--bg-panel); overflow:hidden; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
-          <div style="position:absolute; top:0; left:0; right:0; bottom:0; background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 20px 20px; pointer-events:none; z-index:1;"></div>
-          <img src="../img/world-map.svg" alt="World Map" style="width:100%; height:auto; opacity:0.35; display:block; pointer-events:none; user-select:none;" />
+          <div id="heatmapMapBgMount"></div>
           <div style="position:absolute; top:0; left:0; bottom:0; right:0; pointer-events:none; z-index:2;">`;
 
         if (mappedCount === 0) {
@@ -526,7 +545,7 @@ window.Pages['network'] = {
             remoteAddress, remotePort, localAddress, localPort, c.pid
           ].filter((v) => v !== undefined && v !== null && v !== '').join(' ').toLowerCase();
 
-          html += `<div class="list-row connection-row" data-ip="${escapeHtml(remoteAddress)}" data-search="${escapeHtml(searchBlob)}" data-risk="${escapeHtml(c.classification || 'UNKNOWN')}" data-state="${escapeHtml(state)}" style="display:flex; flex-direction:column; gap:4px; padding:12px 16px; border-left:4px solid ${borderColor}; content-visibility:auto; contain-intrinsic-size:0 70px;">>
+          html += `<div class="list-row connection-row" data-ip="${escapeHtml(remoteAddress)}" data-search="${escapeHtml(searchBlob)}" data-risk="${escapeHtml(c.classification || 'UNKNOWN')}" data-state="${escapeHtml(state)}" style="display:flex; flex-direction:column; gap:4px; padding:12px 16px; border-left:4px solid ${borderColor}; content-visibility:auto; contain-intrinsic-size:0 70px;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <div>
                 <div style="font-weight:600; font-family:monospace; word-break:break-all;">${stateBadge}${escapeHtml(remoteAddress)}:${escapeHtml(remotePort)}${service}${hostname}</div>
@@ -541,6 +560,24 @@ window.Pages['network'] = {
       }
 
       content.innerHTML = html;
+
+      // The world map background (grid overlay + <img>) is static and never
+      // changes between refreshes, so instead of letting content.innerHTML
+      // tear it down and force the browser to re-decode the image every
+      // REFRESH_INTERVAL_MS, build it once and reuse the same DOM node,
+      // moving it into the fresh placeholder each time. Moving an already-
+      // loaded <img> node doesn't trigger a reload/re-decode.
+      const mapBgMount = content.querySelector('#heatmapMapBgMount');
+      if (mapBgMount) {
+        if (!this._worldMapBgEl) {
+          this._worldMapBgEl = document.createElement('div');
+          this._worldMapBgEl.innerHTML = `
+            <div style="position:absolute; top:0; left:0; right:0; bottom:0; background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 20px 20px; pointer-events:none; z-index:1;"></div>
+            <img src="../img/world-map.svg" alt="World Map" style="width:100%; height:auto; opacity:0.6; display:block; pointer-events:none; user-select:none;" />
+          `;
+        }
+        mapBgMount.replaceWith(this._worldMapBgEl);
+      }
 
       // Restore scroll position of the connections list so a background
       // refresh doesn't yank the user back to the top of the list.

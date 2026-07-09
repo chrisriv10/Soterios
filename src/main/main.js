@@ -563,6 +563,7 @@ app.whenReady().then(async () => {
     }
     if (!data || typeof data.pct !== 'number') return;
     if (dbRef && !dbRef.getSetting('feature.scanNotifications', true)) return;
+    if (data.scanType === 'definitions') return;
     const milestone = [0, 25, 50, 75].find((value) => data.pct >= value && !announcedProgress.has(value));
     if (milestone !== undefined) {
       announcedProgress.add(milestone);
@@ -671,6 +672,42 @@ app.whenReady().then(async () => {
         }
       } catch (_) {
         _startupIconCache[exePath] = null;
+        result[exePath] = null;
+      }
+    }
+    return result;
+  });
+
+  // Extract icons from executable paths for the processes page
+  const _processIconCache = {};
+  ipcMain.handle('process:getIcons', async (_event, exePaths) => {
+    const unique = [...new Set((exePaths || []).filter(Boolean))];
+    const result = {};
+    for (const exePath of unique) {
+      if (exePath in _processIconCache) {
+        result[exePath] = _processIconCache[exePath];
+        continue;
+      }
+      try {
+        const expandedPath = process.env.SystemRoot && exePath.includes('%SystemRoot%')
+          ? exePath.replace(/%SystemRoot%/gi, process.env.SystemRoot)
+          : exePath;
+        if (!fs.existsSync(expandedPath)) {
+          _processIconCache[exePath] = null;
+          result[exePath] = null;
+          continue;
+        }
+        const nativeImg = await app.getFileIcon(expandedPath);
+        const dataUrl = nativeImg.toDataURL();
+        if (dataUrl && dataUrl.length > 100) {
+          _processIconCache[exePath] = dataUrl;
+          result[exePath] = dataUrl;
+        } else {
+          _processIconCache[exePath] = null;
+          result[exePath] = null;
+        }
+      } catch (_) {
+        _processIconCache[exePath] = null;
         result[exePath] = null;
       }
     }
