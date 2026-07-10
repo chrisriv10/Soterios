@@ -1,4 +1,5 @@
 window.AppState = {
   lastScanSummary: null,
-  lastPasswordScore: null
+  lastPasswordScore: null,
+  currentTheme: null
 };

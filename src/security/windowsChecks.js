@@ -126,7 +126,7 @@ async function getUpdateStatus() {
   const r1 = await runJsonPowerShell(`
     $session  = New-Object -ComObject Microsoft.Update.Session -ErrorAction Stop
     $searcher = $session.CreateUpdateSearcher()
-    $pending  = $searcher.Search("IsInstalled=0 and IsHidden=0")
+    $pending  = $searcher.Search('IsInstalled=0 and IsHidden=0')
     $historyCount = $searcher.GetTotalHistoryCount()
     $last = $null
     if ($historyCount -gt 0) { $last = $searcher.QueryHistory(0,1)[0] }

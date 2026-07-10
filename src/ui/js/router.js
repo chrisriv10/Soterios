@@ -1,4 +1,4 @@
-(function () {
+(async function () {
   const mainContent = document.getElementById('mainContent');
   const navItems = document.querySelectorAll('.nav-item[data-page]');
   let currentPage = null;
@@ -20,5 +20,15 @@
 
   navItems.forEach((item) => { item.addEventListener('click', () => navigate(item.dataset.page)); });
   window.AppRouter = { navigate, current: () => currentPage };
+  if (window.Api) {
+    await window.Api.initializeTheme();
+  }
   navigate('dashboard');
+
+  // Listen for toast click to navigate to scanner
+  if (window.api) {
+    window.api.on('navigate-to-scanner', () => {
+      navigate('scanner');
+    });
+  }
 })();

@@ -2,7 +2,9 @@
   <img src="assets/icon.png" alt="Soterios" width="128" />
 </p>
 
-<h1 align="center">Soterios</h1>
+<p align="center">
+  <img src="assets/soteriosTextLogo.png" alt="Soterios" width="320" />
+</p>
 
 <p align="center">
   <strong>Open-source, local-first security and system maintenance suite optimized for Windows.</strong><br/>
@@ -23,9 +25,9 @@ Pick the installer for your operating system from the [latest release](https://g
 
 | Platform | Installer | Notes |
 |----------|-----------|-------|
-| **Windows** | `Soterios-Setup-x.x.x.exe` | NSIS installer · requires admin for system-level checks |
-| **macOS** | `Soterios-x.x.x.dmg` | Drag to Applications · may require Gatekeeper approval |
-| **Linux** | `Soterios-x.x.x.AppImage` | `chmod +x` and run · no install needed |
+| **Windows** | `Soterios-Setup-1.2.1.exe` | NSIS installer · requires admin for system-level checks |
+| **macOS** | `Soterios-1.2.1.dmg` | Drag to Applications · may require Gatekeeper approval |
+| **Linux** | `Soterios-1.2.1.AppImage` | `chmod +x` and run · no install needed |
 
 ---
 
@@ -38,9 +40,10 @@ Pick the installer for your operating system from the [latest release](https://g
 - **Windows Security Audit** — Defender, UAC, Windows Update, BitLocker, PowerShell policy, and Secure Boot
 - **Firewall Management** — Windows Firewall profile status and rule summaries
 - **Network Monitor** — active connections and interface activity
-- **Password Tools** — local generator, strength checker, HIBP k-anonymity password leak checks, and XposedOrNot email breach checks
+- **Credential Safety Hub** — local password generator, strength checker, HIBP k-anonymity password leak checks, and XposedOrNot email breach checks
+- **Real-Time Protection** — toggles Windows Defender real-time monitoring on/off and verifies its state
 - **Quarantine Management** — restore or permanently delete isolated files
-- **Tools & Maintenance** — temp cleanup, disk reports, large file finder, browser cache reports, startup items, network reports, and Windows services reports
+- **Tools & Maintenance** — temp file cleanup, disk reports, large file finder, browser cache reports, startup items, network reports, Windows services reports, and network interface/connection reports
 
 ---
 
@@ -83,18 +86,6 @@ Built artifacts are output to the `dist/` directory.
 
 ---
 
-## Usage
-
-1. **Dashboard** — review your health score, active warnings, and real-time protection status.
-2. **Virus Scan** — run a quick, full, or custom scan.
-3. **Reports** — view detailed scan results. 
-4. **Windows Audit** — check Defender, UAC, BitLocker, and other Windows security settings.
-5. **Firewall** — inspect firewall profile status and rules.
-6. **Process Inspector** — review high-risk or resource-heavy processes.
-7. **Passwords** — generate secure passwords, check strength locally, and look up breaches.
-
----
-
 ## API Notes
 
 | Feature | Service | Privacy |
@@ -122,6 +113,32 @@ tests/               test suites
 
 ---
 
+## Roadmap
+
+| Version | Focus |
+|---------|-------|
+| **1.3** | System tray with quick actions, toast notification polish, auto-update basics |
+| **1.4** | Real-time folder watching (auto-scan new/changed files), USB drive scanning on insert |
+| **1.5** | PDF/CSV report export, network traffic graphs over time, startup impact analysis |
+| **1.6** | Improved UI polish, more visual displays (graphs, charts)
+| **1.7** | Hardware monitoring (CPU/GPU temp, disk SMART, etc), localization framework |
+| **1.8** | File shredder (DoD overwrite), duplicate file finder, disk health monitor with SMART alerts |
+| **1.9** | System restore point manager, process history tracking, startup manager with impact ratings |
+| **2.0** | Privacy settings hub, safe mode lockdown feature, secure local password/credential vault |
+| **2.1** | More device maintenance & cleanup optimization scripts |
+
+### Future Considerations
+
+These are longer-term ideas that may require significant architectural work:
+
+- Custom real-time protection 
+- Proprietary scanning engine 
+- Browser guard companion extension
+
+*Order and scope may change based on feedback. Releases have no fixed dates*
+
+---
+
 ## Contributing
 
 Contributions are welcome! To get started:
@@ -131,7 +148,7 @@ Contributions are welcome! To get started:
 3. **Commit** your changes with clear messages.
 4. **Push** to your fork and open a **Pull Request**.
 
-Please make sure your changes work locally (`npm start`) before submitting.
+Please make sure your changes work locally (`npm start`) and pass linting before submitting.
 
 ---
 

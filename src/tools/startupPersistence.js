@@ -24,7 +24,7 @@ async function enrichStartupItem(item) {
   const signature = filePath ? await getSignatureInfo(filePath) : { status: 'Unknown', publisher: null };
   const risk = makeRisk(buildSignals({ ...item, path: filePath }, signature));
   return {
-    ...item, path: filePath, exists: filePath ? fs.existsSync(filePath) : false,
+    ...item, path: filePath, exePath: filePath, exists: filePath ? fs.existsSync(filePath) : false,
     publisher: signature.publisher, signatureStatus: signature.status, risk,
     recommendedAction: recommendationForRisk(risk, 'startup item')
   };

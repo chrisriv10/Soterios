@@ -3,13 +3,187 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const https = require('https');
+const { execFile } = require('child_process');
+const util = require('util');
+const execFilePromise = util.promisify(execFile);
+
+function isValidIp(ip) {
+  const v4 = /^(\d{1,3}\.){3}\d{1,3}$/;
+  const v6 = /^[0-9a-fA-F:]+$/;
+  return v4.test(ip) || (v6.test(ip) && ip.includes(':'));
+}
+
+// Stricter than isValidIp above — the bandwidth-measurement feature only
+// supports IPv4 (see measureConnectionBandwidth for why), so this rejects
+// IPv6 and validates each octet is actually 0-255, not just digit-shaped.
+function isValidIPv4(ip) {
+  if (typeof ip !== 'string') return false;
+  const m = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!m) return false;
+  return m.slice(1).every((o) => Number(o) >= 0 && Number(o) <= 255);
+}
+
+async function runPowerShellRaw(command) {
+  const { stdout } = await execFilePromise(
+    'powershell.exe',
+    ['-NoProfile', '-NonInteractive', '-Command', command],
+    { timeout: 20000, windowsHide: true }
+  );
+  return stdout;
+}
+
+// Real, live per-TCP-connection bandwidth via Windows' "Extended TCP
+// Statistics" IP Helper API (GetPerTcpConnectionEStats / SetPerTcpConnectionEStats
+// in iphlpapi.dll). There's no cmdlet for this — it's a raw Win32 API that
+// tracks a smoothed bandwidth estimate per connection, computed by Windows
+// itself. We enable tracking for this specific connection, give Windows ~2s
+// to produce a reading, then read it back.
+//
+// IPv4 TCP only: IPv6 connections use a different row struct
+// (MIB_TCP6ROW_LH) that isn't implemented here. UDP has no per-connection
+// concept in this API at all.
+async function measureConnectionBandwidth({ localAddress, localPort, remoteAddress, remotePort }) {
+  if (!isValidIPv4(localAddress) || !isValidIPv4(remoteAddress)) {
+    throw new Error('Per-connection bandwidth currently only supports IPv4 TCP connections.');
+  }
+  const lp = Number(localPort);
+  const rp = Number(remotePort);
+  if (!Number.isInteger(lp) || lp < 0 || lp > 65535 || !Number.isInteger(rp) || rp < 0 || rp > 65535) {
+    throw new Error('Invalid port.');
+  }
+
+  // All values embedded below are pre-validated above (dotted-quad IPv4 /
+  // integer ports only), so there's nothing here an attacker could use to
+  // break out of the PowerShell command string.
+  const script = `
+$ErrorActionPreference = 'Stop'
+Add-Type -TypeDefinition @"
+using System;
+using System.Net;
+using System.Runtime.InteropServices;
+
+public static class SoteriosTcpEstats {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MIB_TCPROW_LH {
+        public uint state;
+        public uint localAddr;
+        public uint localPort;
+        public uint remoteAddr;
+        public uint remotePort;
+    }
+
+    [DllImport("iphlpapi.dll", SetLastError = true)]
+    public static extern uint SetPerTcpConnectionEStats(
+        ref MIB_TCPROW_LH Row, int EstatsType,
+        byte[] Rw, uint RwVersion, uint RwSize, uint Offset);
+
+    [DllImport("iphlpapi.dll", SetLastError = true)]
+    public static extern uint GetPerTcpConnectionEStats(
+        ref MIB_TCPROW_LH Row, int EstatsType,
+        byte[] Rw, uint RwVersion, uint RwSize,
+        byte[] Ros, uint RosVersion, uint RosSize,
+        byte[] Rod, uint RodVersion, uint RodSize);
+
+    public static uint ToRowPort(int port) {
+        return (uint)(ushort)IPAddress.HostToNetworkOrder((short)port);
+    }
+
+    public static uint ToRowAddr(string ip) {
+        return BitConverter.ToUInt32(IPAddress.Parse(ip).GetAddressBytes(), 0);
+    }
+}
+"@
+
+$row = New-Object SoteriosTcpEstats+MIB_TCPROW_LH
+$row.state = 0
+$row.localAddr = [SoteriosTcpEstats]::ToRowAddr('${localAddress}')
+$row.localPort = [SoteriosTcpEstats]::ToRowPort(${lp})
+$row.remoteAddr = [SoteriosTcpEstats]::ToRowAddr('${remoteAddress}')
+$row.remotePort = [SoteriosTcpEstats]::ToRowPort(${rp})
+
+# Sanity check using PowerShell's own (unquestionably correct) cmdlet before
+# touching the low-level P/Invoke call, since Windows error 50
+# (ERROR_NOT_SUPPORTED) from SetPerTcpConnectionEStats is ambiguous on its
+# own — it fires both for a connection that's already gone, and for one
+# that still exists but is no longer ESTABLISHED (TIME_WAIT, CLOSE_WAIT,
+# etc. have no live data flow left to track).
+$existing = Get-NetTCPConnection -LocalAddress '${localAddress}' -LocalPort ${lp} -RemoteAddress '${remoteAddress}' -RemotePort ${rp} -ErrorAction SilentlyContinue
+if (-not $existing) {
+  Write-Output "ERROR|This connection closed before it could be measured. Try again on one that's actively transferring data."
+  exit 0
+}
+if ($existing.State -ne 'Established') {
+  Write-Output "ERROR|This connection is $($existing.State), not Established, so there's no live data flow left to measure."
+  exit 0
+}
+
+# TcpConnectionEstatsBandwidth = 7 in the TCP_ESTATS_TYPE enum.
+# Rw/Rod buffers are deliberately over-allocated well beyond the documented
+# struct sizes (8 / 40 bytes) as a safety margin — Windows only ever writes
+# the real struct's bytes into them, so extra space is harmless, but an
+# under-sized buffer risks a native memory-safety issue.
+$rw = New-Object byte[] 32
+$rw[0] = 1  # EnableCollectionOutbound = TcpBoolOptEnabled
+$rw[4] = 1  # EnableCollectionInbound  = TcpBoolOptEnabled
+
+$setResult = [SoteriosTcpEstats]::SetPerTcpConnectionEStats([ref]$row, 7, $rw, 0, 8, 0)
+if ($setResult -ne 0) {
+  Write-Output "ERROR|Could not enable bandwidth tracking for this connection (Windows error $setResult), even though it's still Established. This may be a Windows/driver quirk \u2014 please report it."
+  exit 0
+}
+
+Start-Sleep -Milliseconds 2000
+
+$rod = New-Object byte[] 64
+$getResult = [SoteriosTcpEstats]::GetPerTcpConnectionEStats([ref]$row, 7, $null, 0, 0, $null, 0, 0, $rod, 0, 40)
+if ($getResult -ne 0) {
+  Write-Output "ERROR|Could not read bandwidth data for this connection (Windows error $getResult). It may have closed during measurement."
+  exit 0
+}
+
+$outBitsPerSec = [BitConverter]::ToUInt64($rod, 0)
+$inBitsPerSec  = [BitConverter]::ToUInt64($rod, 8)
+Write-Output "OK|$outBitsPerSec|$inBitsPerSec"
+`;
+
+  let stdout;
+  try {
+    stdout = await runPowerShellRaw(script);
+  } catch (e) {
+    console.error('Bandwidth measurement failed:', (e && e.message) || e);
+    throw new Error('Bandwidth measurement failed. This requires administrator privileges and Windows 10/11.');
+  }
+
+  const line = stdout.trim().split(/\r?\n/).pop() || '';
+  const parts = line.split('|');
+  if (parts[0] === 'ERROR') {
+    throw new Error(parts.slice(1).join('|') || 'Bandwidth measurement failed.');
+  }
+  if (parts[0] !== 'OK') {
+    throw new Error('Unexpected response from bandwidth measurement.');
+  }
+  const outboundBitsPerSec = Number(parts[1]) || 0;
+  const inboundBitsPerSec = Number(parts[2]) || 0;
+  return {
+    outboundKBps: outboundBitsPerSec / 8 / 1024,
+    inboundKBps: inboundBitsPerSec / 8 / 1024
+  };
+}
+
+// Windows Firewall only has these three profiles — reject anything else so a
+// renderer bug (or a compromised renderer) can't smuggle arbitrary strings
+// into a shell/PowerShell command built from this value.
+const VALID_FIREWALL_PROFILES = ['Domain', 'Private', 'Public'];
+function isValidFirewallProfile(name) {
+  return typeof name === 'string' && VALID_FIREWALL_PROFILES.includes(name);
+}
 
 function requestText(url, options = {}) {
   return new Promise((resolve, reject) => {
     const req = https.request(url, {
       method: 'GET',
       headers: {
-        'User-Agent': 'Soterios-System-Tools',
+        'User-Agent': 'Soterios',
         ...options.headers
       }
     }, (res) => {
@@ -28,7 +202,7 @@ function deleteFileIfSafe(filePath) {
   if (!filePath) return;
   try {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-  } catch (_) {}
+  } catch (_) { }
 }
 
 function registerIpcHandlers(mainWindow, services) {
@@ -41,6 +215,20 @@ function registerIpcHandlers(mainWindow, services) {
     userData: app.getPath('userData'),
     isAdmin: true // We requested admin rights
   }));
+
+  // -- Launch at Startup --
+  // Reads/writes the real OS-level login item via Electron's app API, rather
+  // than just a saved preference flag -- a saved-only flag wouldn't actually
+  // make Windows launch the app. This also stays accurate if the user
+  // changes it outside the app (e.g. Windows Settings > Startup Apps).
+  ipcMain.handle('app:getLaunchAtStartup', () => {
+    return app.getLoginItemSettings().openAtLogin;
+  });
+
+  ipcMain.handle('app:setLaunchAtStartup', (_event, enabled) => {
+    app.setLoginItemSettings({ openAtLogin: !!enabled });
+    return app.getLoginItemSettings().openAtLogin;
+  });
 
   // -- Database / Settings --
   ipcMain.handle('db:getScanHistory', (_event, limit) => db.getScanHistory(limit));
@@ -62,48 +250,120 @@ function registerIpcHandlers(mainWindow, services) {
   });
 
   ipcMain.handle('scan:updateDefinitions', async () => {
-    return clamEngine.updateDefinitions((progress) => {
-      eventBus.emit('scan:progress', { pct: 10, message: 'Updating ClamAV definitions...' });
+    const result = await clamEngine.updateDefinitions((progress) => {
+      eventBus.emit('scan:progress', { scanType: 'definitions', pct: 10, message: 'Updating ClamAV definitions...' });
       if (progress && progress.text) {
         const match = progress.text.match(/(\d+)%/);
         if (match) {
-          eventBus.emit('scan:progress', { pct: Math.min(95, Number(match[1])), message: 'Updating ClamAV definitions...' });
+          eventBus.emit('scan:progress', { scanType: 'definitions', pct: Math.min(95, Number(match[1])), message: 'Updating ClamAV definitions...' });
         }
       }
     });
+    eventBus.emit('scan:complete', {
+      scanType: 'definitions',
+      status: result.success ? 'completed' : 'failed',
+      filesScanned: 0,
+      threatsFound: 0,
+      errors: result.success ? [] : [result.error || 'Definition update failed'],
+      error: result.error
+    });
+    return result;
   });
 
   ipcMain.handle('scan:quick', async () => {
     return scanEngine.runQuickScan();
   });
-  
+
   ipcMain.handle('scan:full', async () => {
     return scanEngine.runFullScan();
   });
-  
+
   ipcMain.handle('scan:custom', async (_event, targetPaths) => {
     return scanEngine.runCustomScan(targetPaths);
   });
-  
+
   ipcMain.handle('scan:abort', () => {
     return scanEngine.abortScan();
   });
+
+  // -- Scheduled Scans --
+  const SCHEDULE_SETTING_KEY = 'schedule.config';
+  const DEFAULT_SCHEDULE = { enabled: false, scanType: 'quick', customPath: null, intervalHours: 24, lastRun: null };
+
+  function loadScheduleConfig() {
+    const stored = db.getSetting(SCHEDULE_SETTING_KEY, null);
+    return { ...DEFAULT_SCHEDULE, ...(stored || {}) };
+  }
+
+  function saveScheduleConfig(partial) {
+    const merged = { ...loadScheduleConfig(), ...partial };
+    db.setSetting(SCHEDULE_SETTING_KEY, merged);
+    return merged;
+  }
+
+  ipcMain.handle('schedule:get', () => loadScheduleConfig());
+
+  ipcMain.handle('schedule:set', (_event, config) => {
+    return saveScheduleConfig(config || {});
+  });
+
+  // Runs in the main process, independent of any open renderer page, so the
+  // schedule keeps working even if the user isn't looking at the Scanner tab.
+  let scheduledScanRunning = false;
+  async function runScheduledScanIfDue() {
+    if (scheduledScanRunning) return;
+    const config = loadScheduleConfig();
+    if (!config.enabled) return;
+    if (config.scanType === 'custom' && !config.customPath) return;
+
+    const engineStatus = scanEngine.getStatus();
+    if (engineStatus && engineStatus.isScanning) return; // don't collide with a manual/other scan
+
+    const intervalMs = Math.max(1, Number(config.intervalHours) || 24) * 60 * 60 * 1000;
+    const lastRunMs = config.lastRun ? new Date(config.lastRun).getTime() : 0;
+    if (Date.now() - lastRunMs < intervalMs) return;
+
+    scheduledScanRunning = true;
+    saveScheduleConfig({ lastRun: new Date().toISOString() });
+    try {
+      if (config.scanType === 'full') {
+        await scanEngine.runFullScan();
+      } else if (config.scanType === 'custom') {
+        await scanEngine.runCustomScan([config.customPath]);
+      } else {
+        await scanEngine.runQuickScan();
+      }
+    } catch (e) {
+      console.error('Scheduled scan failed', e);
+    } finally {
+      scheduledScanRunning = false;
+    }
+  }
+
+  // Check once a minute whether a scan is due, plus a check shortly after
+  // startup in case one was missed while the app was closed.
+  setInterval(() => { runScheduledScanIfDue(); }, 60 * 1000);
+  setTimeout(() => { runScheduledScanIfDue(); }, 15 * 1000);
 
   // -- Quarantine --
   ipcMain.handle('quarantine:restore', async (_event, id) => {
     return quarantineManager.restore(id);
   });
-  
+
   ipcMain.handle('quarantine:delete', async (_event, id) => {
     return quarantineManager.delete(id);
   });
 
   // -- Real-Time Protection --
-  ipcMain.handle('rtp:status', () => realtimeWatcher.getStatus());
-  ipcMain.handle('rtp:toggle', (_event, enable) => {
-    if (enable) realtimeWatcher.start();
-    else realtimeWatcher.stop();
-    return realtimeWatcher.getStatus();
+  ipcMain.handle('rtp:status', async () => {
+    const result = await realtimeWatcher.getStatus();
+    return result.ok ? result.enabled : false;
+  });
+
+  ipcMain.handle('rtp:toggle', async (_event, enable) => {
+    const result = enable ? await realtimeWatcher.start() : await realtimeWatcher.stop();
+    if (!result.ok) throw new Error(result.error || 'Unable to update real-time protection.');
+    return result.enabled;
   });
 
   // -- Process Inspector --
@@ -111,11 +371,17 @@ function registerIpcHandlers(mainWindow, services) {
     return processInspector.getProcesses();
   });
 
-  // -- Audit & Firewall & Network --
-  ipcMain.handle('audit:run', async () => {
-    return services.systemAudit.runAudit();
+  ipcMain.handle('process:kill', async (_event, pid) => {
+    return processInspector.killProcess(pid);
   });
-  
+
+  // -- Audit & Firewall & Network --
+  ipcMain.handle('audit:run', async (event) => {
+    return services.systemAudit.runAudit((label) => {
+      event.sender.send('audit:progress', label);
+    });
+  });
+
   ipcMain.handle('firewall:status', async () => {
     return services.firewallManager.getStatus();
   });
@@ -124,12 +390,97 @@ function registerIpcHandlers(mainWindow, services) {
     return services.firewallManager.getRules();
   });
 
-  ipcMain.handle('network:connections', async () => {
-    return services.networkMonitor.getConnections();
+  // -- Firewall Rule Management (used by the Network Perimeter UI) --
+  ipcMain.handle('firewall:listRules', async () => {
+    return services.firewallManager.listRules();
+  });
+
+  ipcMain.handle('firewall:createRule', async (_event, spec) => {
+    return services.firewallManager.createRule(spec);
+  });
+
+  ipcMain.handle('firewall:deleteRule', async (_event, name) => {
+    return services.firewallManager.deleteRule(name);
+  });
+
+  ipcMain.handle('firewall:setRuleEnabled', async (_event, { name, enabled }) => {
+    return services.firewallManager.setRuleEnabled(name, enabled);
+  });
+
+  // -- Firewall Profile Toggle (Domain/Private/Public on/off) --
+  ipcMain.handle('firewall:setProfileEnabled', async (_event, { profile, enabled }) => {
+    if (!isValidFirewallProfile(profile)) throw new Error(`Invalid firewall profile: ${profile}`);
+    return services.firewallManager.setProfileEnabled(profile, !!enabled);
+  });
+
+  // -- Trusted connections (local marker only — does not create a firewall
+  // rule, just tells the perimeter UI to treat this remote address as safe) --
+  const TRUSTED_IPS_KEY = 'firewall.trustedIps';
+
+  ipcMain.handle('firewall:getTrusted', () => {
+    return db.getSetting(TRUSTED_IPS_KEY, []);
+  });
+
+  ipcMain.handle('firewall:trustConnection', (_event, ip) => {
+    if (!ip || !isValidIp(ip)) throw new Error('Invalid address.');
+    const current = db.getSetting(TRUSTED_IPS_KEY, []);
+    if (!current.includes(ip)) current.push(ip);
+    db.setSetting(TRUSTED_IPS_KEY, current);
+    return current;
+  });
+
+  ipcMain.handle('firewall:untrustConnection', (_event, ip) => {
+    const current = (db.getSetting(TRUSTED_IPS_KEY, []) || []).filter((x) => x !== ip);
+    db.setSetting(TRUSTED_IPS_KEY, current);
+    return current;
+  });
+
+  // -- WHOIS lookup (no API key required) --
+  ipcMain.handle('network:whois', async (_event, ip) => {
+    if (!ip || !isValidIp(ip)) throw new Error('Invalid address.');
+    const res = await requestText(`https://ipwho.is/${encodeURIComponent(ip)}`);
+    if (res.statusCode !== 200) throw new Error(`WHOIS lookup failed (${res.statusCode}).`);
+    const data = JSON.parse(res.body || '{}');
+    if (data.success === false) return { found: false };
+    return {
+      found: true,
+      ip: data.ip,
+      country: data.country,
+      region: data.region,
+      city: data.city,
+      org: (data.connection && data.connection.org) || data.org || null,
+      isp: (data.connection && data.connection.isp) || null,
+      asn: (data.connection && data.connection.asn) || null
+    };
+  });
+
+  ipcMain.handle('network:connections', async (event) => {
+    const raw = await services.networkMonitor.getConnections();
+    return services.networkEnricher.enrich(raw, (completed, total) => {
+      event.sender.send('network:connections:progress', { completed, total });
+    });
+  });
+
+  ipcMain.handle('network:geo', async (_event, ips) => {
+    if (!db.getSetting('feature.geoLookup', true)) return {};
+    const results = {};
+    for (const ip of ips) {
+      const geo = await services.geoLocationService.lookup(ip);
+      if (geo) {
+        results[ip] = geo;
+      }
+    }
+    return results;
   });
 
   ipcMain.handle('network:stats', async () => {
     return services.networkMonitor.getStats();
+  });
+
+  // -- Per-connection bandwidth (on-demand, IPv4 TCP only — see
+  // measureConnectionBandwidth's comment for why) --
+  ipcMain.handle('network:measureBandwidth', async (_event, spec) => {
+    return measureConnectionBandwidth(spec || {});
   });
 
   // -- Reports --
@@ -198,6 +549,7 @@ function registerIpcHandlers(mainWindow, services) {
 
   ipcMain.handle('hibp:password', async (_event, password) => {
     if (!password) return { found: false, count: 0 };
+    if (!db.getSetting('feature.externalLookups', true)) throw new Error('External lookups are disabled in Settings.');
     const sha = crypto.createHash('sha1').update(password).digest('hex').toUpperCase();
     const prefix = sha.slice(0, 5);
     const suffix = sha.slice(5);
@@ -212,6 +564,7 @@ function registerIpcHandlers(mainWindow, services) {
 
   ipcMain.handle('xon:email', async (_event, email) => {
     if (!email) return { found: false, breaches: [] };
+    if (!db.getSetting('feature.externalLookups', true)) throw new Error('External lookups are disabled in Settings.');
     const encoded = encodeURIComponent(email);
     const res = await requestText(`https://api.xposedornot.com/v1/check-email/${encoded}?details=true`);
     if (res.statusCode === 404) return { found: false, breaches: [] };
@@ -226,8 +579,10 @@ function registerIpcHandlers(mainWindow, services) {
 
   ipcMain.handle('health:score', async () => {
     const latest = db.getLatestScanReport();
+    const passwordScore = db.getSetting('feature.lastPasswordScore', null);
     const result = await services.toolRegistry.run('health-score', {
-      lastScanMatches: latest ? latest.threats_found : null
+      lastScanMatches: latest ? latest.threats_found : null,
+      passwordScore: passwordScore === null ? null : Number(passwordScore)
     }, { db });
     if (!result.ok) throw new Error(result.error || 'Unable to calculate health score');
     return result.data;

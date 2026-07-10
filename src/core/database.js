@@ -50,6 +50,7 @@ class DatabaseService {
       CREATE TABLE IF NOT EXISTS quarantine (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         original_path TEXT,
+        quarantine_path TEXT,
         hash TEXT,
         engine TEXT,
         threat_name TEXT,
@@ -58,6 +59,13 @@ class DatabaseService {
         status TEXT DEFAULT 'quarantined'
       )
     `);
+
+    // Migration: add quarantine_path column if it doesn't exist (for existing databases)
+    const quarantineColumns = this.db.prepare("PRAGMA table_info(quarantine)").all();
+    const hasQuarantinePath = quarantineColumns.some((col) => col.name === 'quarantine_path');
+    if (!hasQuarantinePath) {
+      this.db.exec('ALTER TABLE quarantine ADD COLUMN quarantine_path TEXT');
+    }
 
     // Alerts Table
     this.db.exec(`
@@ -95,6 +103,24 @@ class DatabaseService {
         suspicious INTEGER,
         undetected INTEGER,
         last_checked DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Network Blocklist Cache
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS network_blocklist_cache (
+        source TEXT PRIMARY KEY,
+        raw_data TEXT,
+        fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Network Geo Cache
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS network_geo_cache (
+        ip TEXT PRIMARY KEY,
+        raw_data TEXT,
+        fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
   }
@@ -160,8 +186,8 @@ class DatabaseService {
   // --- Quarantine API ---
   addQuarantineRecord(record) {
     const stmt = this.db.prepare(`
-      INSERT INTO quarantine (original_path, hash, engine, threat_name, reason) 
-      VALUES (@originalPath, @hash, @engine, @threatName, @reason)
+      INSERT INTO quarantine (original_path, quarantine_path, hash, engine, threat_name, reason) 
+      VALUES (@originalPath, @quarantinePath, @hash, @engine, @threatName, @reason)
     `);
     return stmt.run(record);
   }
@@ -217,6 +243,38 @@ class DatabaseService {
   setSetting(key, value) {
     const stmt = this.db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
     return stmt.run(key, JSON.stringify(value));
+  }
+
+  // --- Network Blocklist Cache API ---
+  getBlocklistCache(source) {
+    return this.db.prepare('SELECT * FROM network_blocklist_cache WHERE source = ?').get(source) || null;
+  }
+
+  setBlocklistCache(source, rawData) {
+    const stmt = this.db.prepare(`
+      INSERT INTO network_blocklist_cache (source, raw_data, fetched_at)
+      VALUES (@source, @rawData, CURRENT_TIMESTAMP)
+      ON CONFLICT(source) DO UPDATE SET
+        raw_data = excluded.raw_data,
+        fetched_at = CURRENT_TIMESTAMP
+    `);
+    return stmt.run({ source, rawData });
+  }
+
+  // --- Network Geo Cache API ---
+  getGeoCache(ip) {
+    return this.db.prepare('SELECT * FROM network_geo_cache WHERE ip = ?').get(ip) || null;
+  }
+
+  setGeoCache(ip, rawData) {
+    const stmt = this.db.prepare(`
+      INSERT INTO network_geo_cache (ip, raw_data, fetched_at)
+      VALUES (@ip, @rawData, CURRENT_TIMESTAMP)
+      ON CONFLICT(ip) DO UPDATE SET
+        raw_data = excluded.raw_data,
+        fetched_at = CURRENT_TIMESTAMP
+    `);
+    return stmt.run({ ip, rawData });
   }
 }
 

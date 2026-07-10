@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 
 function esc(v) {
   return String(v ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
@@ -97,8 +98,22 @@ class ScanEngine {
     const errors = [];
     let wasCanceled = false;
 
+    // Progress must never move backward within a single scan. Previously,
+    // each target path computed its own fresh, lower "basePct" and emitted
+    // it immediately on starting the next path, causing the reported
+    // percentage to visibly climb toward ~80-95% then drop back down --
+    // once per target path being scanned. This tracks the highest
+    // percentage reported so far and clamps every emission to it.
+    let maxEmittedPct = 0;
+    let cumulativeFiles = 0;
+    const emitProgress = (pctCandidate, message, extra) => {
+      const pct = Math.max(maxEmittedPct, Math.min(100, pctCandidate));
+      maxEmittedPct = pct;
+      this.eventBus.emit('scan:progress', { scanType, pct, message, ...extra });
+    };
+
     try {
-      this.eventBus.emit('scan:progress', { pct: 5, message: startMessage });
+      emitProgress(5, startMessage);
 
       for (let i = 0; i < paths.length; i++) {
         if (this.abortController.signal.aborted) {
@@ -108,19 +123,22 @@ class ScanEngine {
 
         const targetPath = paths[i];
         const basePct = Math.round((i / paths.length) * 80 + 10);
-        this.eventBus.emit('scan:progress', { pct: basePct, message: 'Scanning ' + targetPath + '...' });
+        emitProgress(basePct, 'Scanning ' + targetPath + '...');
 
+        let pathLastChecked = 0;
         const result = await this.clamEngine.scanFile(targetPath, (progress) => {
           if (!progress) return;
 
           if (progress.phase === 'update') {
-            this.eventBus.emit('scan:progress', { pct: Math.max(8, basePct - 2), message: 'Updating ClamAV definitions...' });
+            emitProgress(Math.max(8, basePct - 2), 'Updating ClamAV definitions...');
             return;
           }
 
           const checked = progress.fileCount || 0;
+          cumulativeFiles += checked - pathLastChecked;
+          pathLastChecked = checked;
           const pct = Math.min(95, basePct + Math.min(70, Math.round(checked / 10)));
-          this.eventBus.emit('scan:progress', { pct, message: 'Scanning ' + targetPath + ' (' + checked + ' files checked)...' });
+          emitProgress(pct, 'Scanning ' + targetPath + ' (' + checked + ' files checked)...', { filesScanned: cumulativeFiles });
         });
 
         if (this.abortController.signal.aborted) {
@@ -134,6 +152,32 @@ class ScanEngine {
           if (result.note) {
             this._notes = this._notes || [];
             this._notes.push(result.note);
+          }
+
+          // Quarantine each newly-found threat from this iteration
+          if (Array.isArray(result.threats)) {
+            for (const threat of result.threats) {
+              try {
+                // Hold at the current highest percentage rather than
+                // basePct -- the path's scan has already completed by this
+                // point, so progress shouldn't dip back to where that path
+                // started just because a threat was found.
+                emitProgress(maxEmittedPct, 'Quarantining ' + threat.name + '...');
+                
+                const fileBuffer = fs.readFileSync(threat.path);
+                const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+                
+                const qResult = await this.quarantineManager.quarantine(
+                  threat.path, hash, 'ClamAV', threat.name, 'Detected during ' + scanType + ' scan'
+                );
+                
+                if (!qResult.success) {
+                  errors.push(`Failed to quarantine ${threat.path}: ${qResult.error}`);
+                }
+              } catch (qErr) {
+                errors.push(`Failed to quarantine ${threat.path}: ${qErr.message}`);
+              }
+            }
           }
         } else {
           if (wasCanceled) errors.push('Scan canceled by user.');
@@ -157,7 +201,8 @@ class ScanEngine {
         threatsFound: totalThreatsFound,
         durationMs,
         threats,
-        errors
+        errors,
+        details: { threats, errors }
       });
       try {
         if (this.db.getSetting('feature.scanHistory', true)) {
@@ -189,7 +234,8 @@ class ScanEngine {
     if (this.clamEngine && typeof this.clamEngine.abortCurrentScan === 'function') {
       this.clamEngine.abortCurrentScan();
     }
-    this.eventBus.emit('scan:progress', { pct: 100, message: 'Canceling scan...' });
+    // Don't emit 100% progress on cancel - let the current percentage stay
+    this.eventBus.emit('scan:progress', { pct: null, message: 'Canceling scan...' });
     return { success: true };
   }
 
@@ -201,6 +247,11 @@ class ScanEngine {
   }
 
   saveScanReport(report) {
+    const shouldSaveHistory = this.db.getSetting('feature.scanHistory', true);
+    if (!shouldSaveHistory) {
+      return report;
+    }
+
     const dir = scanReportsDir();
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     const base = `scan-${report.scanType}-${stamp}`;
@@ -213,13 +264,13 @@ class ScanEngine {
       this.db.addScanReport({
         scanType: report.scanType,
         status: report.status,
-        targetPaths: report.targetPaths,
-        filesScanned: report.filesScanned,
-        threatsFound: report.threatsFound,
-        durationMs: report.durationMs,
+        targetPaths: report.targetPaths || [],
+        filesScanned: report.filesScanned || 0,
+        threatsFound: report.threatsFound || 0,
+        durationMs: report.durationMs || 0,
         jsonPath,
         htmlPath,
-        details: report
+        details: report.details || {}
       });
     } catch (err) {
       console.warn('Unable to save scan report record:', err.message || err);

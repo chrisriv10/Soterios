@@ -1,15 +1,75 @@
 window.Pages = window.Pages || {};
 
+function parseUtcTimestamp(value) {
+  if (!value) return new Date(NaN);
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) {
+    return new Date(value.replace(' ', 'T') + 'Z');
+  }
+  return new Date(value);
+}
+
+function humanizeKey(key) {
+  return String(key)
+    .replace(/_/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatSnapshotPrimitive(value) {
+  if (value === null || value === undefined || value === '') return '<span class="page-subtitle">Not available</span>';
+  if (typeof value === 'boolean') {
+    return `<span class="log-tag ${value ? 'clean' : 'match'}">${value ? 'Yes' : 'No'}</span>`;
+  }
+  return escapeHtml(String(value));
+}
+
+function renderSnapshotValue(value) {
+  if (Array.isArray(value)) {
+    if (!value.length) return '<span class="page-subtitle">None</span>';
+    if (value.every((v) => v === null || typeof v !== 'object')) {
+      return `<ul style="margin:4px 0 0 18px; padding:0;">${value.map((v) => `<li>${formatSnapshotPrimitive(v)}</li>`).join('')}</ul>`;
+    }
+    return value.map((v) => `<div style="margin-top:6px; padding:8px; background:var(--bg-surface); border-radius:6px;">${renderSnapshotObject(v)}</div>`).join('');
+  }
+  if (value !== null && typeof value === 'object') {
+    return renderSnapshotObject(value);
+  }
+  return formatSnapshotPrimitive(value);
+}
+
+function renderSnapshotObject(obj) {
+  const entries = Object.entries(obj || {});
+  if (!entries.length) return '<span class="page-subtitle">No data.</span>';
+  return `<div style="display:flex; flex-direction:column; gap:6px;">
+    ${entries.map(([key, value]) => `
+      <div style="display:flex; justify-content:space-between; gap:12px; font-size:0.85rem;">
+        <span class="page-subtitle" style="flex-shrink:0;">${escapeHtml(humanizeKey(key))}</span>
+        <span style="text-align:right;">${renderSnapshotValue(value)}</span>
+      </div>`).join('')}
+  </div>`;
+}
+
+function renderSystemSnapshot(system) {
+  const entries = Object.entries(system || {});
+  if (!entries.length) return '<div class="empty-state compact-empty">No system information recorded.</div>';
+  return `<div class="report-stats" style="grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));">
+    ${entries.map(([key, value]) => `
+      <div class="stat-tile" style="text-align:left;">
+        <div class="stat-label">${escapeHtml(humanizeKey(key))}</div>
+        <div style="margin-top:8px;">${renderSnapshotValue(value)}</div>
+      </div>`).join('')}
+  </div>`;
+}
+
 window.Pages.reports = {
   render(container) {
     container.innerHTML = `
       <div class="page-header">
-        <div class="flex-between">
-          <div>
-            <h1 class="page-title">Reports</h1>
-            <div class="page-subtitle">Browse scan and security reports</div>
-          </div>
-          <button class="btn btn-primary" id="generateReport">${iconFor('list-checks')} Generate Security Report</button>
+        <div>
+          <h1 class="page-title">Reports</h1>
+          <div class="page-subtitle">Browse scan and security reports</div>
         </div>
       </div>
 
@@ -18,7 +78,10 @@ window.Pages.reports = {
           <div class="panel-title">Scan Reports</div>
           <div id="scanReportHistory" class="history-list"><div class="empty-state">Loading scan reports...</div></div>
 
-          <div class="panel-title" style="margin-top:18px;">Saved Security Reports</div>
+          <div class="panel-title" style="margin-top:18px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
+            Saved Security Reports
+            <button class="btn btn-primary btn-sm" id="generateReport">Generate Security Report</button>
+          </div>
           <div id="reportHistory" class="history-list"><div class="empty-state">Loading saved reports...</div></div>
         </section>
 
@@ -90,7 +153,7 @@ window.Pages.reports = {
       <div class="report-section"><div class="panel-title">Recommendations</div>
         ${recommendations.length ? recommendations.map((i) => `<div class="log-row"><span class="log-tag ${i.level === 'danger' ? 'match' : i.level === 'warn' ? 'warn' : 'clean'}">${escapeHtml(i.level)}</span><span class="log-path"><strong>${escapeHtml(i.title)}</strong><br>${escapeHtml(i.detail || '')}</span></div>`).join('') : '<div class="empty-state compact-empty">No recommendations recorded.</div>'}
       </div>
-      <div class="report-section"><div class="panel-title">System Snapshot</div><pre>${escapeHtml(JSON.stringify(report.system || {}, null, 2))}</pre></div>`;
+      <div class="report-section"><div class="panel-title">System Snapshot</div>${renderSystemSnapshot(report.system)}</div>`;
   },
 
   async generate(container) {
@@ -99,7 +162,8 @@ window.Pages.reports = {
     try {
       const appInfo = await Api.getAppInfo();
       const data = await Api.runTool('generate-security-report', { version: appInfo.version });
-      this.showViewer(container, 'Generated security report', this.renderSecurityReport(data.report));
+      const title = (data.report && data.report.title) || 'Generated security report';
+      this.showViewer(container, title, this.renderSecurityReport(data.report));
       this.listReports(container);
     } catch (err) {
       this.showViewer(container, 'Report error', `<div class="empty-state">Error: ${escapeHtml(err.message)}</div>`);
@@ -122,7 +186,7 @@ window.Pages.reports = {
           <div class="history-item">
             <div style="min-width:0;">
               <div class="history-title">${escapeHtml(r.scan_type)} scan <span class="log-tag ${statusClass}">${escapeHtml(r.status)}</span></div>
-              <div class="history-meta">${escapeHtml(new Date(r.timestamp).toLocaleString())} | ${r.files_scanned} file(s), ${r.threats_found} threat(s)</div>
+              <div class="history-meta">${escapeHtml(parseUtcTimestamp(r.timestamp).toLocaleString())} | ${r.files_scanned} file(s), ${r.threats_found} threat(s)</div>
             </div>
             <div style="display:flex; gap:6px;">
               <button class="btn btn-sm open-scan-report" data-id="${escapeHtml(r.id)}">View</button>
@@ -133,7 +197,7 @@ window.Pages.reports = {
       el.querySelectorAll('.open-scan-report').forEach((btn) => {
         btn.addEventListener('click', () => {
           const report = reports.find((r) => String(r.id) === String(btn.dataset.id));
-          if (report) this.showViewer(container, `${report.scan_type} scan - ${new Date(report.timestamp).toLocaleString()}`, this.renderScanReport(report));
+          if (report) this.showViewer(container, `${report.scan_type} scan - ${parseUtcTimestamp(report.timestamp).toLocaleString()}`, this.renderScanReport(report));
         });
       });
       el.querySelectorAll('.delete-scan-report').forEach((btn) => {
@@ -148,6 +212,35 @@ window.Pages.reports = {
     }
   },
 
+  groupReportFiles(files) {
+    // Files are written in pairs like soterios-report-<stamp>.json / .html.
+    // Group them by stamp so each "report" shows as one friendly entry.
+    const groups = new Map();
+
+    files.forEach((f) => {
+      const match = f.name.match(/soterios-report-(.+)\.(json|html)$/i);
+      const key = match ? match[1] : f.name;
+      const ext = match ? match[2].toLowerCase() : (f.name.split('.').pop() || '').toLowerCase();
+      if (!groups.has(key)) {
+        groups.set(key, { key, mtime: f.mtime, files: {} });
+      }
+      const group = groups.get(key);
+      group.files[ext] = f;
+      // Use the newest mtime among the pair for sorting/display.
+      if (new Date(f.mtime) > new Date(group.mtime)) group.mtime = f.mtime;
+    });
+
+    return Array.from(groups.values()).sort((a, b) => new Date(b.mtime) - new Date(a.mtime));
+  },
+
+  formatReportTitle(mtime) {
+    const date = new Date(mtime);
+    if (Number.isNaN(date.getTime())) return 'Security Report';
+    const datePart = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    const timePart = date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    return `Security Report · ${datePart} at ${timePart}`;
+  },
+
   async listReports(container) {
     const el = container.querySelector('#reportHistory');
     try {
@@ -156,31 +249,57 @@ window.Pages.reports = {
         el.innerHTML = '<div class="empty-state">No saved reports found.</div>';
         return;
       }
-      el.innerHTML = files.map((f) => `
-        <div class="history-item">
-          <div style="min-width:0;">
-            <div class="history-title">${escapeHtml(f.name)}</div>
-            <div class="history-meta">${escapeHtml(new Date(f.mtime).toLocaleString())}</div>
-          </div>
-          <div style="display:flex; gap:6px;">
-            <button class="btn btn-sm open-report" data-path="${escapeHtml(f.path)}">View</button>
-            <button class="btn btn-sm delete-report" data-path="${escapeHtml(f.path)}">Delete</button>
-          </div>
-        </div>
-      `).join('');
+      const groups = this.groupReportFiles(files);
+
+      el.innerHTML = groups.map((g) => {
+        const jsonFile = g.files.json;
+        const htmlFile = g.files.html;
+        const viewButtons = [
+          jsonFile ? `<button class="btn btn-sm open-report" data-path="${escapeHtml(jsonFile.path)}">View</button>` : '',
+          htmlFile ? `<button class="btn btn-sm open-report-html" data-path="${escapeHtml(htmlFile.path)}">Open HTML</button>` : ''
+        ].filter(Boolean).join('');
+        const deletePaths = [jsonFile, htmlFile].filter(Boolean).map((f) => f.path).join('|');
+        const rawNames = [jsonFile, htmlFile].filter(Boolean).map((f) => f.name).join(', ');
+
+        return `
+          <div class="history-item">
+            <div style="min-width:0;">
+              <div class="history-title">${escapeHtml(this.formatReportTitle(g.mtime))}</div>
+              <div class="history-meta">${escapeHtml(rawNames)}</div>
+            </div>
+            <div style="display:flex; gap:6px;">
+              ${viewButtons}
+              <button class="btn btn-sm delete-report" data-paths="${escapeHtml(deletePaths)}">Delete</button>
+            </div>
+          </div>`;
+      }).join('');
+
       el.querySelectorAll('.open-report').forEach(btn => {
         btn.addEventListener('click', async () => {
           const res = await window.api.invoke('reports:read', btn.dataset.path);
           if (!res.success) { alert(res.error || 'Unable to read report.'); return; }
-          const title = btn.dataset.path.split('\\').pop();
+          const entry = groups.find((g) => g.files.json && g.files.json.path === btn.dataset.path);
+          const title = entry ? this.formatReportTitle(entry.mtime) : btn.dataset.path.split('\\').pop();
           if (res.type === 'json') this.showViewer(container, title, this.renderSecurityReport(res.data));
           else this.showViewer(container, title, `<div class="report-section"><pre>${escapeHtml(res.text || 'No readable content.')}</pre></div>`);
         });
       });
+      el.querySelectorAll('.open-report-html').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const res = await window.api.invoke('reports:read', btn.dataset.path);
+          if (!res.success) { alert(res.error || 'Unable to read report.'); return; }
+          const entry = groups.find((g) => g.files.html && g.files.html.path === btn.dataset.path);
+          const title = entry ? this.formatReportTitle(entry.mtime) : btn.dataset.path.split('\\').pop();
+          this.showViewer(container, title, `<div class="report-section"><pre>${escapeHtml(res.text || 'No readable content.')}</pre></div>`);
+        });
+      });
       el.querySelectorAll('.delete-report').forEach(btn => {
         btn.addEventListener('click', async () => {
-          const res = await window.api.invoke('reports:delete', btn.dataset.path);
-          if (!res.success) alert(res.error || 'Unable to delete report.');
+          const paths = btn.dataset.paths.split('|').filter(Boolean);
+          for (const p of paths) {
+            const res = await window.api.invoke('reports:delete', p);
+            if (!res.success) { alert(res.error || 'Unable to delete report.'); break; }
+          }
           this.listReports(container);
         });
       });
