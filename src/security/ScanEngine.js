@@ -234,7 +234,8 @@ class ScanEngine {
     if (this.clamEngine && typeof this.clamEngine.abortCurrentScan === 'function') {
       this.clamEngine.abortCurrentScan();
     }
-    this.eventBus.emit('scan:progress', { pct: 100, message: 'Canceling scan...' });
+    // Don't emit 100% progress on cancel - let the current percentage stay
+    this.eventBus.emit('scan:progress', { pct: null, message: 'Canceling scan...' });
     return { success: true };
   }
 

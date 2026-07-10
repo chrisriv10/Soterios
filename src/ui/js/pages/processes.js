@@ -110,6 +110,7 @@ container.innerHTML = `
 
   async load(container, isInitial = true) {
     const listEl = container.querySelector('#processList');
+    if (!listEl) return;
     const scrollParent = listEl ? listEl.closest('.card') : null;
     const prevScrollTop = scrollParent ? scrollParent.scrollTop : 0;
 
@@ -121,6 +122,10 @@ container.innerHTML = `
     }
     try {
       const data = await Api.runTool('process-viewer', {});
+      // Verify container is still in DOM after async operation
+      if (!document.body.contains(container)) {
+        return;
+      }
       this._all = data.processes || [];
       this.updateLiveStats(container, data.totalCpu, this._all);
       this.buildRows(container);
@@ -187,6 +192,7 @@ container.innerHTML = `
   // ones get removed.
   buildRows(container) {
     const listEl = container.querySelector('#processList');
+    if (!listEl) return;
 
     // First-time setup (or if something else wiped out #processList, e.g.
     // an error state) — create the wrapper + "no results" placeholder once.
@@ -372,6 +378,7 @@ container.innerHTML = `
   // it doesn't clone/re-render them), so switching sort order is cheap.
   sortRows(container) {
     if (!this._rowIndex || !this._listWrapper) return;
+    if (!container) return;
     const sortSelect = container.querySelector('#sortBy');
     if (sortSelect) sortSelect.value = this._sortBy;
 
@@ -420,6 +427,7 @@ container.innerHTML = `
   // fast while typing.
   applyFilter(container) {
     const listEl = container.querySelector('#processList');
+    if (!listEl) return;
     const countEl = container.querySelector('#processCount');
     if (!this._rowIndex) return;
 
@@ -465,5 +473,22 @@ container.innerHTML = `
     this.buildRows(container);
     this.sortRows(container);
     this.applyFilter(container);
+  },
+
+  destroy() {
+    if (this._refreshTimer) {
+      clearInterval(this._refreshTimer);
+      this._refreshTimer = null;
+    }
+    this._all = [];
+    this._query = '';
+    this._riskFilter = 'all';
+    this._sortBy = 'default';
+    this._rowIndex = null;
+    this._order = [];
+    this._delegated = false;
+    this._listWrapper = null;
+    this._noResultsEl = null;
+    this._cpuHistory = [];
   }
 };

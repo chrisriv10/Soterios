@@ -7,114 +7,179 @@ window.Pages['dashboard'] = {
         <h1 class="page-title">Security Dashboard</h1>
         <p class="page-subtitle">System status and real-time protection overview</p>
       </header>
+      <div id="dashboardContent" style="overflow-y:auto; margin-right:8px; padding-right:8px;">
+        <div class="dashboard-grid">
+          <div class="card" id="healthCard" style="cursor:pointer;" title="Click for a detailed breakdown">
+            <div class="status-card">
+              <div class="status-icon info" id="healthIcon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 
-      <div class="dashboard-grid">
-        <div class="card" id="healthCard" style="cursor:pointer;" title="Click for a detailed breakdown">
-          <div class="status-card">
-            <div class="status-icon info" id="healthIcon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+  <rect x="3" y="4" width="18" height="13" rx="2"/>
+  <path d="M8 21h8"/>
+  <path d="M12 17v4"/>
+  <path d="m8 11 2 2 5-5"/>
+</svg>
+              </div>
+              <div class="status-info">
+                <h3>System Health Score</h3>
+                <div class="value" id="healthScore">Loading...</div>
+              </div>
             </div>
-            <div class="status-info">
-              <h3>System Health Score</h3>
-              <div class="value" id="healthScore">Loading...</div>
-            </div>
+            <div id="healthDetail" class="page-subtitle" style="margin-top:12px; font-size:0.85rem;">Calculating system health.</div>
+            <div class="page-subtitle" style="margin-top:8px; font-size:0.75rem; color:var(--accent-primary);">Click for full breakdown →</div>
           </div>
-          <div id="healthDetail" class="page-subtitle" style="margin-top:12px; font-size:0.85rem;">Calculating system health.</div>
-          <div class="page-subtitle" style="margin-top:8px; font-size:0.75rem; color:var(--accent-primary);">Click for full breakdown →</div>
-        </div>
 
-        <!-- Protection Status -->
-        <div class="card">
-          <div class="status-card">
-            <div class="status-icon safe" id="rtpIcon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+          <!-- Protection Status -->
+          <div class="card">
+            <div class="status-card">
+              <div class="status-icon safe" id="rtpIcon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+              </div>
+              <div class="status-info">
+                <h3>Real-Time Protection</h3>
+                <div class="value" id="rtpStatusText">Active</div>
+              </div>
             </div>
-            <div class="status-info">
-              <h3>Real-Time Protection</h3>
-              <div class="value" id="rtpStatusText">Active</div>
+            <div style="margin-top: 16px;">
+              <button class="btn" id="btnToggleRtp">Disable</button>
             </div>
           </div>
-          <div style="margin-top: 16px;">
-            <button class="btn" id="btnToggleRtp">Disable</button>
-          </div>
-        </div>
 
-        <!-- Firewall Status -->
-        <div class="card">
-          <div class="status-card">
-            <div class="status-icon info" id="fwIcon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            </div>
-            <div class="status-info">
-              <h3>Windows Firewall</h3>
-              <div class="value" id="fwStatusText">Checking...</div>
-            </div>
-          </div>
-          <div style="margin-top: 16px;">
-            <button class="btn" id="btnManageFirewall">Manage Firewall</button>
-          </div>
-        </div>
+          <!-- Firewall Status -->
+          <div class="card">
+            <div class="status-card">
+              <div class="status-icon info" id="fwIcon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 
-        <!-- Last Scan -->
-        <div class="card">
-          <div class="status-card">
-            <div class="status-icon info">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+  <rect x="3" y="6" width="18" height="12" rx="1" />
+  <line x1="3" y1="10" x2="21" y2="10" />
+  <line x1="3" y1="14" x2="21" y2="14" />
+  <line x1="9" y1="6" x2="9" y2="10" />
+  <line x1="15" y1="10" x2="15" y2="14" />
+  <line x1="9" y1="14" x2="9" y2="18" />
+</svg>
+              </div>
+              <div class="status-info">
+                <h3>Windows Firewall</h3>
+                <div class="value" id="fwStatusText">Checking...</div>
+              </div>
             </div>
-            <div class="status-info">
-              <h3>Last Scan</h3>
-              <div class="value" id="lastScanTime">Loading...</div>
+            <div style="margin-top: 16px;">
+              <button class="btn" id="btnManageFirewall">Manage Firewall</button>
             </div>
           </div>
-          <div style="margin-top: 16px; display: flex; gap: 12px;">
-            <button class="btn btn-primary" id="btnQuickScan">Quick Scan</button>
-            <button class="btn" id="btnFullScan">Full Scan</button>
-          </div>
-        </div>
 
-        <!-- Database Age -->
-        <div class="card">
-          <div class="status-card">
-            <div class="status-icon warning">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+          <!-- Last Scan -->
+          <div class="card">
+            <div class="status-card">
+              <div class="status-icon info">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              </div>
+              <div class="status-info">
+                <h3>Last Scan</h3>
+                <div class="value" id="lastScanTime">Loading...</div>
+              </div>
             </div>
-            <div class="status-info">
-              <h3>ClamAV Definitions</h3>
-              <div class="value" id="dbAge">Up to date</div>
+            <div style="margin-top: 16px; display: flex; gap: 12px;">
+              <button class="btn btn-primary" id="btnQuickScan">Quick Scan</button>
+              <button class="btn" id="btnFullScan">Full Scan</button>
             </div>
           </div>
-          <div style="margin-top: 16px;">
-            <button class="btn" id="btnUpdateDb">Check for Updates</button>
-          </div>
-        </div>
 
-        <!-- Threats Blocked -->
-        <div class="card">
-          <div class="status-card">
-            <div class="status-icon danger">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <!-- Database Age -->
+          <div class="card">
+            <div class="status-card">
+              <div class="status-icon warning">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+  <!-- bug body -->
+  <ellipse cx="10" cy="12" rx="4" ry="6"/>
+
+  <!-- bug head -->
+  <circle cx="10" cy="6" r="2"/>
+
+  <!-- antenna -->
+  <path d="M8.5 4.5 7 3"/>
+  <path d="M11.5 4.5 13 3"/>
+
+  <!-- bug legs -->
+  <path d="M6 10H3"/>
+  <path d="M6 13H2.5"/>
+  <path d="M6 16H3"/>
+  <path d="M14 10h2"/>
+  <path d="M14 13h2"/>
+  <path d="M14 16h2"/>
+
+  <!-- magnifying glass -->
+  <circle cx="16.5" cy="16.5" r="4"/>
+  <path d="m19.5 19.5 3 3"/>
+</svg>
+              </div>
+              <div class="status-info">
+                <h3>ClamAV Definitions</h3>
+                <div class="value" id="dbAge">Up to date</div>
+              </div>
             </div>
-            <div class="status-info">
-              <h3>Threats Blocked</h3>
-              <div class="value" id="threatsCount">0</div>
+            <div style="margin-top: 16px;">
+              <button class="btn" id="btnUpdateDb">Check for Updates</button>
             </div>
           </div>
-          <div style="margin-top: 16px;">
-            <button class="btn" id="btnViewQuarantine">View Quarantine</button>
+
+          <!-- Threats Blocked -->
+          <div class="card">
+            <div class="status-card">
+              <div class="status-icon danger">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+     stroke="currentColor" stroke-width="2"
+     stroke-linecap="round" stroke-linejoin="round">
+
+  <!-- virus body -->
+  <circle cx="12" cy="12" r="5"/>
+
+  <!-- spikes -->
+  <path d="M12 2v3"/>
+  <path d="M12 19v3"/>
+  <path d="M2 12h3"/>
+  <path d="M19 12h3"/>
+
+  <path d="M5.6 5.6l2.1 2.1"/>
+  <path d="M18.3 18.3l-2.1-2.1"/>
+  <path d="M18.3 5.6l-2.1 2.1"/>
+  <path d="M5.6 18.3l2.1-2.1"/>
+
+  <!-- inner details -->
+  <circle cx="10" cy="10" r=".5"/>
+  <circle cx="14.5" cy="10.5" r=".5"/>
+  <circle cx="13" cy="14.5" r=".5"/>
+  <circle cx="9.5" cy="14" r=".5"/>
+
+</svg>
+              </div>
+              <div class="status-info">
+                <h3>Threats Blocked</h3>
+                <div class="value" id="threatsCount">0</div>
+              </div>
+            </div>
+            <div style="margin-top: 16px;">
+              <button class="btn" id="btnViewQuarantine">View Quarantine</button>
+            </div>
           </div>
         </div>
-      </div>
-      <div class="card" style="margin-top:24px;">
-        <div class="flex-between">
-          <div>
-            <div class="panel-title">Warnings</div>
-            <div class="page-subtitle" style="font-size:0.85rem;">Review or ignore warnings you have accepted.</div>
+        <div class="card" style="margin-top:24px;">
+          <div class="flex-between">
+            <div>
+              <div class="panel-title">Warnings</div>
+              <div class="page-subtitle" style="font-size:0.85rem;">Review or ignore warnings you have accepted.</div>
+            </div>
+            <button class="btn btn-sm" id="btnRefreshWarnings">Refresh</button>
           </div>
-          <button class="btn btn-sm" id="btnRefreshWarnings">Refresh</button>
+          <div id="warningList" class="history-list" style="margin-top:12px;"><div class="empty-state">Loading warnings...</div></div>
+          <div class="panel-title" style="margin-top:16px;">Ignored Warnings</div>
+          <div id="ignoredWarningList" class="history-list" style="max-height:300px; overflow-y:auto;"><div class="empty-state">Loading ignored warnings...</div></div>
         </div>
-        <div id="warningList" class="history-list" style="margin-top:12px;"><div class="empty-state">Loading warnings...</div></div>
-        <div class="panel-title" style="margin-top:16px;">Ignored Warnings</div>
-        <div id="ignoredWarningList" class="history-list"><div class="empty-state">Loading ignored warnings...</div></div>
       </div>
     `;
 

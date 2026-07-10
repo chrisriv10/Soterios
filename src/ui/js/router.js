@@ -24,4 +24,11 @@
     await window.Api.initializeTheme();
   }
   navigate('dashboard');
+
+  // Listen for toast click to navigate to scanner
+  if (window.api) {
+    window.api.on('navigate-to-scanner', () => {
+      navigate('scanner');
+    });
+  }
 })();

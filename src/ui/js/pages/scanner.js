@@ -164,7 +164,6 @@ container.innerHTML = `
 
     function setComplete(success, filesScanned, threatsFound, note, canceled, historyEnabled = true) {
       if (!hasView()) return;
-      setProgress(100);
       if (activeAction === 'virus') {
         showReportButton = historyEnabled && (canceled || success);
       } else {
@@ -172,22 +171,24 @@ container.innerHTML = `
       }
       setScanning(false);
       if (canceled) {
+        // Don't set progress to 100% on cancel - keep current percentage
         if (scanStatus) scanStatus.textContent = 'Scan Canceled';
         if (scanDetail) scanDetail.textContent = `${filesScanned} file(s) scanned before cancellation.` + (historyEnabled ? ' A scan report was saved.' : '');
         if (scanIcon) {
           scanIcon.className = 'status-icon warning';
-          scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+          scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="13"/><circle cx="12" cy="16.5" r="1" fill="currentColor" stroke="none"/></svg>';
         }
         updateFooterButtons();
         return;
       }
+      setProgress(100);
       if (success) {
         if (scanStatus) scanStatus.textContent = 'Scan Complete';
         if (scanDetail) scanDetail.textContent = `${filesScanned} file(s) scanned, ${threatsFound} threat(s) found.` + (note ? ' ' + note : '');
         if (scanIcon) {
           scanIcon.className = 'status-icon ' + (threatsFound > 0 ? 'danger' : 'safe');
           scanIcon.innerHTML = threatsFound > 0
-            ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
+            ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;"><circle cx="12" cy="12" r="5"/><path d="M12 2v3"/><path d="M12 19v3"/><path d="M2 12h3"/><path d="M19 12h3"/><path d="M5.6 5.6l2.1 2.1"/><path d="M18.3 18.3l-2.1-2.1"/><path d="M18.3 5.6l-2.1 2.1"/><path d="M5.6 18.3l2.1-2.1"/><circle cx="10" cy="10" r=".5"/><circle cx="14.5" cy="10.5" r=".5"/><circle cx="13" cy="14.5" r=".5"/><circle cx="9.5" cy="14" r=".5"/></svg>'
             : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
         }
       } else {

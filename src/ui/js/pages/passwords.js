@@ -2,7 +2,7 @@ window.Pages = window.Pages || {};
 window.Pages.passwords = {
   render(container) {
     container.innerHTML = `
-      <div class="page-header"><h1 class="page-title">Passwords</h1>
+      <div class="page-header"><h1 class="page-title">Credential Safety Hub</h1>
         <div class="page-subtitle">Generate strong passwords and check credentials against breach data</div></div>
       <div class="grid grid-2">
         <div class="panel"><div class="panel-title">Generator</div>

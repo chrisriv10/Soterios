@@ -108,6 +108,7 @@ window.Pages['network'] = {
   },
   async load(container, isInitial) {
     const content = container.querySelector('#networkContent');
+    if (!content) return;
     // Preserve the connection list's scroll position across silent refreshes.
     const prevScrollEl = content?.querySelector('#activeConnectionsList');
     const prevScrollTop = prevScrollEl ? prevScrollEl.scrollTop : 0;
@@ -123,6 +124,11 @@ window.Pages['network'] = {
         window.api.invoke('network:stats'),
         window.api.invoke('network:connections')
       ]);
+
+      // Verify container is still in DOM after async operation
+      if (!document.body.contains(container)) {
+        return;
+      }
 
       const stats = statsResult.status === 'fulfilled' ? statsResult.value : null;
       const connections = connectionsResult.status === 'fulfilled' ? connectionsResult.value : null;
@@ -308,6 +314,10 @@ window.Pages['network'] = {
       if (uncachedIps.length) {
         try {
           const fresh = await window.api.invoke('network:geo', uncachedIps);
+          // Verify container is still in DOM after async operation
+          if (!document.body.contains(container)) {
+            return;
+          }
           Object.assign(this._geoCache, fresh);
           for (const ip of uncachedIps) {
             if (!(ip in fresh)) this._geoCache[ip] = null;
@@ -646,5 +656,19 @@ window.Pages['network'] = {
     if (noResultsEl) {
       noResultsEl.style.display = (rows.length > 0 && visible === 0) ? '' : 'none';
     }
+  },
+
+  destroy() {
+    if (this._refreshTimer) {
+      clearInterval(this._refreshTimer);
+      this._refreshTimer = null;
+    }
+    this._connectionQuery = '';
+    this._connectionRiskFilter = 'all';
+    this._connectionStateFilter = 'all';
+    this._geoCache = {};
+    this._selectedClusterIps = null;
+    this._selectedClusterLoc = null;
+    this._worldMapBgEl = null;
   }
 };

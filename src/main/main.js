@@ -135,7 +135,8 @@ const TOAST_ICONS = {
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 10.5v5"/><path d="M12 7.5h.01"/>',
   success: '<path d="M5 13l4 4L19 7"/>',
   warn: '<path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9L2.7 18a1 1 0 0 0 .9 1.5h16.8a1 1 0 0 0 .9-1.5L13.7 3.9a1.6 1.6 0 0 0-2.8 0z"/>',
-  danger: '<path d="M15 9l-6 6"/><path d="M9 9l6 6"/><circle cx="12" cy="12" r="9"/>'
+  danger: '<path d="M15 9l-6 6"/><path d="M9 9l6 6"/><circle cx="12" cy="12" r="9"/>',
+  threat: '<circle cx="12" cy="12" r="5"/><path d="M12 2v3"/><path d="M12 19v3"/><path d="M2 12h3"/><path d="M19 12h3"/><path d="M5.6 5.6l2.1 2.1"/><path d="M18.3 18.3l-2.1-2.1"/><path d="M18.3 5.6l-2.1 2.1"/><path d="M5.6 18.3l2.1-2.1"/><circle cx="10" cy="10" r=".5"/><circle cx="14.5" cy="10.5" r=".5"/><circle cx="13" cy="14.5" r=".5"/><circle cx="9.5" cy="14" r=".5"/>'
 };
 
 const TOAST_THEMES = {
@@ -193,10 +194,10 @@ function escToastHtml(v) {
   return String(v ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 }
 
-function toastHtml(title, body, level, themeName) {
+function toastHtml(title, body, level, themeName, iconOverride = null) {
   const theme = TOAST_THEMES[themeName] || TOAST_THEMES.dark;
   const accent = theme.accents[level] || theme.accents.info;
-  const iconPaths = TOAST_ICONS[level] || TOAST_ICONS.info;
+  const iconPaths = iconOverride || TOAST_ICONS[level] || TOAST_ICONS.info;
   const markDataUri = getToastMarkDataUri();
   const wordmarkDataUri = getToastWordmarkDataUri();
   return `<!doctype html>
@@ -265,7 +266,10 @@ function toastHtml(title, body, level, themeName) {
       setTimeout(() => { window.close(); }, 200);
     }
     document.getElementById('closeBtn').addEventListener('click', (e) => { e.stopPropagation(); dismiss(); });
-    toast.addEventListener('click', dismiss);
+    toast.addEventListener('click', () => {
+      window.location.href = 'soterios://navigate-scanner';
+      dismiss();
+    });
     setTimeout(dismiss, ${TOAST_LIFETIME_MS});
   </script>
 </body></html>`;
@@ -287,7 +291,7 @@ function repositionToasts() {
   }
 }
 
-function showNotification(title, body, level = 'info') {
+function showNotification(title, body, level = 'info', iconOverride = null) {
   // Previously fired unconditionally regardless of the Settings toggle --
   // this was the same "flag saved but never read" bug found earlier with
   // System Monitoring.
@@ -314,19 +318,31 @@ function showNotification(title, body, level = 'info') {
       hasShadow: false,
       show: false,
       webPreferences: {
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true
+        contextIsolation: false,
+        nodeIntegration: true,
+        sandbox: false
       }
     });
     toastWindow.setAlwaysOnTop(true, 'screen-saver');
-    toastWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(toastHtml(title, body, level, themeName)));
+    toastWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(toastHtml(title, body, level, themeName, iconOverride)));
     toastWindow.once('ready-to-show', () => toastWindow.show());
     toastWindow.on('closed', () => {
       const idx = activeToasts.indexOf(toastWindow);
       if (idx !== -1) activeToasts.splice(idx, 1);
       repositionToasts();
     });
+
+    // Handle toast click to navigate to scanner
+    toastWindow.webContents.on('will-navigate', (event, url) => {
+      if (url === 'soterios://navigate-scanner') {
+        event.preventDefault();
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.focus();
+          mainWindow.webContents.send('navigate-to-scanner');
+        }
+      }
+    });
+
     activeToasts.push(toastWindow);
     repositionToasts();
   } catch (_) {}
@@ -588,11 +604,19 @@ app.whenReady().then(async () => {
         : data.error || 'ClamAV signature update failed.';
       level = data.status === 'completed' ? 'success' : data.status === 'canceled' ? 'warn' : 'danger';
     } else {
-      label = data.status === 'completed' ? 'Scan completed' : data.status === 'canceled' ? 'Scan canceled' : 'Scan finished with issues';
-      body = `${data.filesScanned || 0} file(s) scanned, ${data.threatsFound || 0} threat(s) found.`;
-      level = data.status !== 'completed' ? 'warn' : (data.threatsFound ? 'warn' : 'success');
+      // Only show notification if not canceled
+      if (data.status === 'canceled') {
+        label = 'Scan canceled';
+        body = `${data.filesScanned || 0} file(s) scanned before cancellation.`;
+        level = 'warn';
+      } else {
+        label = data.status === 'completed' ? 'Scan completed' : 'Scan finished with issues';
+        body = `${data.filesScanned || 0} file(s) scanned, ${data.threatsFound || 0} threat(s) found.`;
+        level = data.status !== 'completed' ? 'warn' : (data.threatsFound ? 'danger' : 'success');
+      }
     }
-    showNotification(label, body, level);
+    const iconOverride = (data.threatsFound && data.threatsFound > 0) ? TOAST_ICONS.threat : null;
+    showNotification(label, body, level, iconOverride);
     // Auto-generate a scan report
     (async () => {
       try {
