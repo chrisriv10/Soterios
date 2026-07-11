@@ -23,7 +23,7 @@
     "systeminformation": "^5.23.5"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.0.4",
+    "@electron/rebuild": "^4.2.0",
     "adm-zip": "^0.5.17",
     "ajv-keywords": "^5.1.0",
     "axios": "^1.18.1",
