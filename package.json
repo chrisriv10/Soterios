@@ -10,10 +10,10 @@
     "start": "electronmon . --disable-logging --disable-gpu --disable-gpu-compositing --disable-gpu-shader-disk-cache --disable-software-rasterizer --disable-background-networking --disable-features=NetworkService,AutofillServerCommunication,AutofillAcrossForms,Autofill --disk-cache-dir=.cache/soterios",
     "dev": "electronmon . --dev --disable-logging --disable-gpu --disable-gpu-compositing --disable-gpu-shader-disk-cache --disable-software-rasterizer --disable-background-networking --disable-features=NetworkService,AutofillServerCommunication,AutofillAcrossForms,Autofill --disk-cache-dir=.cache/soterios",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder",
-    "dist:win": "electron-builder --win",
-    "dist:mac": "electron-builder --mac",
-    "dist:linux": "electron-builder --linux",
+    "dist": "electron-builder --publish never",
+    "dist:win": "electron-builder --win --publish never",
+    "dist:mac": "electron-builder --mac --publish never",
+    "dist:linux": "electron-builder --linux --publish never",
     "postinstall": "node scripts/download-clamav.js",
     "prepack": "node scripts/download-clamav.js"
   },
@@ -62,9 +62,11 @@
       ],
       "icon": "assets/icon.ico",
       "artifactName": "${productName}-Setup-${version}.${ext}",
-      "publisherName": "Chris Rivera",
       "signAndEditExecutable": true,
-      "requestedExecutionLevel": "requireAdministrator"
+      "requestedExecutionLevel": "requireAdministrator",
+      "signtoolOptions": {
+        "publisherName": "Chris Rivera"
+      }
     },
     "nsis": {
       "oneClick": false,
