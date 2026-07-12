@@ -85,6 +85,7 @@ Built artifacts are output to the `dist/` directory.
 | `SOTERIOS_DISABLE_GPU=1`   | Setting this will disable GPU acceleration (which is enabled by default), to force full software rendering. Set this if rendering glitches or crashes occur related to GPU drivers.
 | `SOTERIOS_USERDATA=<path>` | Allows for specifying a custom path to override the default user data directory (%APPDATA%\Soterios). This may be useful for running isolating instances to retain results.
 
+In order to utilize these environment variables during runtime, the start command can be modified as followed: `set SOTERIOS_DISABLE_GPU=1 && npm start`.
 
 ---
 
