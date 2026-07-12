@@ -258,3 +258,5 @@ module.exports = [
     run: async (args) => { return checkStrength(args && args.password ? String(args.password) : ''); }
   }
 ];
+
+module.exports={hasKeyboardWalk, hasSequentialRun, hasRepeatedRun, isRepeatedPattern, hasDatePattern, containsCommonSubstring, checkStrength};
