@@ -78,6 +78,14 @@ Additional platform builds may be added in the future as cross-platform support 
 
 Built artifacts are output to the `dist/` directory.
 
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `SOTERIOS_DISABLE_GPU=1`   | Setting this will disable GPU acceleration (which is enabled by default), to force full software rendering. Set this if rendering glitches or crashes occur related to GPU drivers.
+| `SOTERIOS_USERDATA=<path>` | Allows for specifying a custom path to override the default user data directory (%APPDATA%\Soterios). This may be useful for running isolating instances to retain results.
+
+
 ---
 
 ## API Notes
