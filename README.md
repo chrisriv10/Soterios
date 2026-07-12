@@ -118,17 +118,41 @@ tests/               test suites
 
 ## Roadmap
 
-| Version | Focus |
-|---------|-------|
-| **1.3** | System tray with quick actions, toast notification polish, auto-update basics |
-| **1.4** | Real-time folder watching (auto-scan new/changed files), USB drive scanning on insert |
-| **1.5** | PDF/CSV report export, network traffic graphs over time, startup impact analysis |
-| **1.6** | Improved UI polish, more visual displays (graphs, charts)
-| **1.7** | Hardware monitoring (CPU/GPU temp, disk SMART, etc), localization framework |
-| **1.8** | File shredder (DoD overwrite), duplicate file finder, disk health monitor with SMART alerts |
-| **1.9** | System restore point manager, process history tracking, startup manager with impact ratings |
-| **2.0** | Privacy settings hub, safe mode lockdown feature, secure local password/credential vault |
-| **2.1** | More device maintenance & cleanup optimization scripts |
+These features are planned for future updates. There is no fixed release order. Features will be released as they are completed.
+
+## Planned Features
+
+### Security
+- Real-time folder monitoring
+- USB device scanning
+- Privacy settings hub
+- Secure local credential vault
+
+### Monitoring
+- CPU/GPU temperature monitoring
+- Disk SMART monitoring and alerts
+- Network traffic history
+- Process history
+- Startup impact analysis
+
+### Maintenance
+- Duplicate file finder
+- Secure file shredder (DoD overwrite)
+- Startup manager
+- System Restore manager
+- Additional cleanup and optimization tools
+
+### Reports
+- PDF report export
+- CSV report export
+- More charts and visual analytics
+
+### Interface
+- System tray support
+- Toast notification improvements
+- Automatic updates
+- UI polish
+- Localization support
 
 ### Future Considerations
 
@@ -152,7 +176,7 @@ Contributions are welcome! To get started:
 3. **Commit** your changes with clear messages.
 4. **Push** to your fork and open a **Pull Request**.
 
-Please make sure your changes work locally (`npm start`) and pass linting before submitting.
+Please make sure your changes work locally (`npm start`) before submitting.
 
 ---
 
