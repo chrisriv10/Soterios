@@ -256,7 +256,14 @@ module.exports = [
     description: 'Analyze a password against dictionary, keyboard-pattern, sequence, and repetition attacks -- not just raw character-set math.',
     category: 'Security', icon: 'shield-check',
     run: async (args) => { return checkStrength(args && args.password ? String(args.password) : ''); }
-  }
+  }, 
+
 ];
 
-module.exports={hasKeyboardWalk, hasSequentialRun, hasRepeatedRun, isRepeatedPattern, hasDatePattern, containsCommonSubstring, checkStrength};
+module.exports.KeyboardWalk=hasKeyboardWalk;
+module.exports.SequentialRun=hasSequentialRun;
+module.exports.RepeatedRun=hasRepeatedRun;
+module.exports.RepeatedPattern=isRepeatedPattern;
+module.exports.DatePattern=hasDatePattern;
+module.exports.CommonSubstring=containsCommonSubstring;
+module.exports.Strength=checkStrength;
