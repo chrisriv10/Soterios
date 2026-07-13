@@ -1,9 +1,13 @@
 //const test = require('node:test');
 //const assert = require('node:assert/strict');
+
+//above statements were commented as due to them the test cases were not running
+
+//All functions imported
 const {hasKeyboardWalk, hasSequentialRun, hasRepeatedRun, isRepeatedPattern, hasDatePattern, containsCommonSubstring, checkStrength} = require('../src/tools/passwordTools');
 
 //hasKeyboardWalk()
-
+//two cases done with different return value
 test('uses adjacent keyboard substrings',() => {
     expect(hasKeyboardWalk("dfgh")).toBe(true)
 });
@@ -14,7 +18,7 @@ test('does not use adjacent keyboard substrings',() => {
 
 
 //hasSequentialRun()
-
+//Different scenarios tested -> All passed
 test('has sequential alphabets',() => {
     expect(hasSequentialRun("efghe",4)).toBe(true)
 });
@@ -44,7 +48,7 @@ test('last four sequential but first not sequential',() => {
 });
 
 //hasRepeatedRun()
-
+//All show expected behaviour
 test('one sequence repeated rest unique',() => {
     expect(hasRepeatedRun("ghbaaame",3)).toBe(true)
 });
@@ -66,7 +70,7 @@ test('all sequences repeated',() => {
 });
 
 //isRepeatedPattern()
-
+//Expected behaviour recorded
 test('a pattern repeated',() => {
     expect(hasRepeatedRun("aaabbaaabb")).toBe(true)
 });
@@ -84,7 +88,7 @@ test('repeated characters having unique characters in between ',() => {
 });
 
 //hasDatePattern()
-
+//all provide expected behaviour
 test('contains year',() => {
     expect(hasDatePattern("1930")).toBe(true)
 });
@@ -121,8 +125,34 @@ test('common leet but not in dict of common string',() => {
 
 //checkStrength()
 
+//edge case of empty password checked
 test('empty password',() => {
-    expect(containsCommonSubstring("")).toEqual([0,'Empty',0,['No password provided'],'Instantly'])
+    const value = {"crackTimeEstimate": "Instantly", "entropyBits": 0, issues: ['No password provided'],"label": "Empty", "score": 0,}
+    expect(checkStrength("")).toMatchObject(value);
 });
+
+
+test('filled password',() => {
+    const value = { "crackTimeEstimate": "Instantly", "entropyBits": 14, "issues": ["Shorter than 8 characters", "No uppercase letters", "No digits", "No symbols"],"label": "Very Weak",  "score": 2};
+    expect(checkStrength("fdd")).toMatchObject(value);
+});
+
+test('strong password',() => {
+    const value = { "crackTimeEstimate": "Centuries", "entropyBits": 84, "issues": [],"label": "Very Strong",  "score": 100};
+    expect(checkStrength("Hsck_2enz_3q1")).toMatchObject(value);
+});
+
+//test case failed, returns a "strong password" but such a big password should be warned against. Changes need to made to passwordTools.js file for the same
+test('very long password',() => {
+    const value = { "crackTimeEstimate": "Centuries", "entropyBits": 652, "issues": ["Very long password"],"label": "Very Strong",  "score": 100};
+    expect(checkStrength("Hsck_2enz_3q1jka_dsvq234vmb_adkgjqqeug83gq-gwemnb3ioavqi3uwbkuqyrb32kuyvmdanvkeqi7o23lqaksbfcvkldusgh")).toMatchObject(value);
+});
+
+//since all special characters are recorded they ensure higher entropy compared to without it
+test('Special character password',() => {
+    const value = { "crackTimeEstimate": "Centuries", "entropyBits": 90, "issues": [],"label": "Very Strong",  "score": 100};
+    expect(checkStrength("Hsc&k*2enz%3q1")).toMatchObject(value);
+});
+
 
 
