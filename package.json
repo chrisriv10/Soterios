@@ -18,7 +18,8 @@
     "dist:mac": "electron-builder --mac --publish never",
     "dist:linux": "electron-builder --linux --publish never",
     "postinstall": "node scripts/download-clamav.js",
-    "prepack": "node scripts/download-clamav.js"
+    "prepack": "node scripts/download-clamav.js",
+    "test": "jest"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",
@@ -27,12 +28,14 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",
+    "@types/jest": "^30.0.0",
     "adm-zip": "^0.5.17",
     "ajv-keywords": "^5.1.0",
     "axios": "^1.18.1",
     "electron": "^42.6.1",
     "electron-builder": "^26.15.3",
-    "electronmon": "^2.0.4"
+    "electronmon": "^2.0.4",
+    "jest": "^30.4.2"
   },
   "build": {
     "appId": "com.soterios.app",
