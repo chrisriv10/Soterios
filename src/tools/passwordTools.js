@@ -259,11 +259,12 @@ module.exports = [
   }, 
 
 ];
-
-module.exports.KeyboardWalk=hasKeyboardWalk;
-module.exports.SequentialRun=hasSequentialRun;
-module.exports.RepeatedRun=hasRepeatedRun;
-module.exports.RepeatedPattern=isRepeatedPattern;
-module.exports.DatePattern=hasDatePattern;
-module.exports.CommonSubstring=containsCommonSubstring;
-module.exports.Strength=checkStrength;
+module.exports.helpers = {
+  KeyboardWalk: hasKeyboardWalk,
+  SequentialRun: hasSequentialRun,
+  RepeatedRun: hasRepeatedRun,
+  RepeatedPattern: isRepeatedPattern,
+  DatePattern: hasDatePattern,
+  CommonSubstring: containsCommonSubstring,
+  Strength: checkStrength
+};

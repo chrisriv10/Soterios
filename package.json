@@ -3,7 +3,6 @@
   "version": "1.2.1",
   "description": "A local-first desktop suite for system maintenance, monitoring, and basic security checks.",
   "main": "src/main/main.js",
-  "type":"module",
   "author": "Soterios",
   "license": "MIT",
   "private": true,

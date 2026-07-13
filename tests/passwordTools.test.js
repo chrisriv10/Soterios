@@ -1,5 +1,5 @@
 //All functions imported
-const tests = require('../src/tools/passwordTools');
+const tests = require('../src/tools/passwordTools').helpers;
 
 //hasKeyboardWalk()
 //two cases done with different return value
