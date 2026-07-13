@@ -130,6 +130,22 @@
   --accent-danger: #ff8fa0;
 }
 
+:root[data-theme="midnight"] {
+  --bg-base: #0a0e1a;
+  --bg-surface: rgba(14, 22, 42, 0.88);
+  --bg-surface-hover: rgba(22, 34, 62, 0.95);
+  --glass-border: rgba(96, 165, 250, 0.18);
+  --body-gradient: var(--bg-base);
+  --text-main: #e8edf5;
+  --text-muted: #94a3c4;
+  --accent-primary: #38bdf8;
+  --accent-primary-dark: #0ea5e9;
+  --accent-primary-glow: rgba(56, 189, 248, 0.22);
+  --accent-success: #2dd4bf;
+  --accent-warning: #fbbf24;
+  --accent-danger: #f87171;
+}
+
 body {
   background-color: var(--bg-base);
   color: var(--text-main);
