@@ -6,6 +6,9 @@
   "author": "Soterios",
   "license": "MIT",
   "private": true,
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "electronmon . --disable-logging --disable-gpu --disable-gpu-compositing --disable-gpu-shader-disk-cache --disable-software-rasterizer --disable-background-networking --disable-features=NetworkService,AutofillServerCommunication,AutofillAcrossForms,Autofill --disk-cache-dir=.cache/soterios",
     "dev": "electronmon . --dev --disable-logging --disable-gpu --disable-gpu-compositing --disable-gpu-shader-disk-cache --disable-software-rasterizer --disable-background-networking --disable-features=NetworkService,AutofillServerCommunication,AutofillAcrossForms,Autofill --disk-cache-dir=.cache/soterios",
