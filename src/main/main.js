@@ -187,6 +187,18 @@ const TOAST_THEMES = {
     textMain: '#e9ffee', textMuted: '#8af5c0', textDim: '#60d9a0',
     closeBtn: '#60d9a0', closeHover: '#8af5c0',
     accents: { info: '#16a34a', success: '#4ade80', warn: '#a3e635', danger: '#f87171' }
+  },
+  midnight: {
+    bg: 'rgba(10, 14, 26, 0.97)', border: 'rgba(96, 165, 250, 0.18)',
+    textMain: '#e8edf5', textMuted: '#94a3c4', textDim: '#64748b',
+    closeBtn: '#64748b', closeHover: '#94a3c4',
+    accents: { info: '#38bdf8', success: '#2dd4bf', warn: '#fbbf24', danger: '#f87171' }
+  },
+  rose: {
+    bg: 'rgba(26, 18, 22, 0.97)', border: 'rgba(244, 114, 182, 0.18)',
+    textMain: '#fdf2f8', textMuted: '#f9a8d4', textDim: '#db2777',
+    closeBtn: '#db2777', closeHover: '#f9a8d4',
+    accents: { info: '#f472b6', success: '#6ee7b7', warn: '#fbbf24', danger: '#e11d48' }
   }
 };
 
