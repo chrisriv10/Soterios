@@ -26,7 +26,8 @@ contextBridge.exposeInMainWorld('soterios', {
     pickFiles: () => ipcRenderer.invoke('dialog:pickFiles')
   },
   shell: {
-    showItemInFolder: (filePath) => ipcRenderer.invoke('shell:showItemInFolder', filePath)
+    showItemInFolder: (filePath) => ipcRenderer.invoke('shell:showItemInFolder', filePath),
+    openPath: (filePath) => ipcRenderer.invoke('shell:openPath', filePath)
   },
   app: {
     info: () => ipcRenderer.invoke('app:info')

@@ -19,7 +19,7 @@
     "dist:linux": "electron-builder --linux --publish never",
     "postinstall": "node scripts/download-clamav.js",
     "prepack": "node scripts/download-clamav.js",
-    "test": "jest"
+    "test": "node --test tests/blocklistService.test.js tests/scoringEngine.test.js tests/realTimeWatcher.test.js && jest tests/passwordTools.test.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",
