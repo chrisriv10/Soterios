@@ -138,8 +138,8 @@ test('strong password',() => {
 });
 
 //test case failed, returns a "strong password" but such a big password should be warned against. Changes need to made to passwordTools.js file for the same
-test.skip('very long password',() => {
-    const value = { "crackTimeEstimate": "Centuries", "entropyBits": 652, "issues": ["Very long password"],"label": "Very Strong",  "score": 100};
+test('very long password',() => {
+    const value = { "crackTimeEstimate": "Centuries", "entropyBits": 652, "issues": ["Too long password"],"label": "Very Strong",  "score": 96};
     expect(tests.Strength("Hsck_2enz_3q1jka_dsvq234vmb_adkgjqqeug83gq-gwemnb3ioavqi3uwbkuqyrb32kuyvmdanvkeqi7o23lqaksbfcvkldusgh")).toMatchObject(value);
 });
 
