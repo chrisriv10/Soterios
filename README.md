@@ -184,6 +184,8 @@ Contributions are welcome! To get started:
 
 Please make sure your changes work locally (`npm start`) before submitting.
 
+**Documentation:** User and developer guides live in [`docs/wiki/`](docs/wiki/Home.md) and on the [GitHub Wiki](https://github.com/chrisriv10/Soterios/wiki).
+
 ---
 
 ## Project Status & Contributions
