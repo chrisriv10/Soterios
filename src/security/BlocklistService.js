@@ -5,11 +5,14 @@
 
 const https = require('https');
 
+/** How often (ms) blocklists are refreshed from their upstream sources. */
+const BLOCKLIST_REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
+
 class BlocklistService {
   constructor(db) {
     this.db = db;
     this.blocklists = new Map();
-    this.refreshInterval = 12 * 60 * 60 * 1000; // 12 hours
+    this.refreshInterval = BLOCKLIST_REFRESH_INTERVAL_MS;
 
     // Free public blocklist sources
     this.sources = [
