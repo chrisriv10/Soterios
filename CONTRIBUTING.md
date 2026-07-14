@@ -135,6 +135,55 @@ If your change affects system-level operations, test carefully.
 
 ---
 
+## Running Tests
+
+Soterios uses Node.js built-in test runner (`node:test`) for most unit tests. Test files live in `tests/` and follow the `*.test.js` naming convention.
+
+### Run all tests
+
+```bash
+node --test tests/
+```
+
+### Run a specific test file
+
+```bash
+node --test tests/realTimeWatcher.test.js
+node --test tests/blocklistService.test.js
+node --test tests/scoringEngine.test.js
+```
+
+### Run the default test command
+
+```bash
+node --test
+```
+
+The password tools suite (`tests/passwordTools.test.js`) uses Jest and can be run separately:
+
+```bash
+npx jest tests/passwordTools.test.js
+```
+
+### Expected output
+
+A successful run looks like:
+
+```text
+✔ BlocklistService tests (12ms)
+✔ Real-time watcher tests (28ms)
+
+ℹ tests X
+ℹ pass X
+ℹ fail 0
+```
+
+Counts and timings may vary as the test suite evolves.
+
+Run the full suite before opening a pull request.
+
+---
+
 ### Pull Requests
 
 Before opening a PR:
