@@ -1,0 +1,26 @@
+name: Sync Wiki
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/wiki/**'
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sync to Wiki
+        uses: andymckay/wiki-sync@v1
+        with:
+          wiki-repo: chrisriv10/Soterios.wiki
+          source-dir: docs/wiki
+          commit-message: "docs(wiki): auto-sync from docs/wiki"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
