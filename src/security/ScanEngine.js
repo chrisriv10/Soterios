@@ -253,6 +253,9 @@ class ScanEngine {
   }
 
   abortScan() {
+    if (!this.isScanning) {
+      return { success: false, canceled: false, error: 'No scan in progress' };
+    }
     if (this.abortController) this.abortController.abort();
     if (this.clamEngine && typeof this.clamEngine.abortCurrentScan === 'function') {
       this.clamEngine.abortCurrentScan();

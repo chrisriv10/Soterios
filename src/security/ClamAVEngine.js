@@ -20,7 +20,8 @@ class ClamAVEngine {
     this.lastUpdateError = null;
     this.activeScanProcess = null;
     this.activeUpdateProcess = null;
-    this.cancelRequested = false;
+    this.cancelScanRequested = false;
+    this.cancelUpdateRequested = false;
   }
 
   async init() {
@@ -121,8 +122,13 @@ class ClamAVEngine {
       freshclam.stderr.on('data', handleData);
 
       freshclam.on('close', (code) => {
-        if (this.cancelRequested) {
-          this.cancelRequested = false;
+        const wasCanceled = this.cancelUpdateRequested;
+        if (this.activeUpdateProcess === freshclam) {
+          this.activeUpdateProcess = null;
+          this.cancelUpdateRequested = false;
+        }
+
+        if (wasCanceled) {
           finish({ success: false, canceled: true, error: 'Definition update canceled', output });
           return;
         }
@@ -244,8 +250,13 @@ class ClamAVEngine {
       });
 
       clam.on('close', (code) => {
-        if (this.cancelRequested) {
-          this.cancelRequested = false;
+        const wasCanceled = this.cancelScanRequested;
+        if (this.activeScanProcess === clam) {
+          this.activeScanProcess = null;
+          this.cancelScanRequested = false;
+        }
+
+        if (wasCanceled) {
           finish({
             success: false,
             canceled: true,
@@ -258,7 +269,6 @@ class ClamAVEngine {
           return;
         }
 
-        if (this.activeScanProcess === clam) this.activeScanProcess = null;
         const fileLines = lines.filter(line => /: (OK|.+ FOUND|ERROR)$/i.test(line.trim()));
         const foundLines = lines.filter(line => /: .+ FOUND$/i.test(line.trim()));
         const accessDeniedLines = lines.filter(line =>
@@ -294,15 +304,24 @@ class ClamAVEngine {
   }
 
   abortCurrentScan() {
-    this.cancelRequested = true;
     let killed = false;
-    for (const proc of [this.activeScanProcess, this.activeUpdateProcess]) {
-      if (!proc) continue;
+
+    if (this.activeScanProcess) {
+      this.cancelScanRequested = true;
       try {
-        proc.kill();
+        this.activeScanProcess.kill();
         killed = true;
       } catch (_) {}
     }
+
+    if (this.activeUpdateProcess) {
+      this.cancelUpdateRequested = true;
+      try {
+        this.activeUpdateProcess.kill();
+        killed = true;
+      } catch (_) {}
+    }
+
     return killed;
   }
 }

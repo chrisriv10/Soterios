@@ -32,11 +32,11 @@ describe('HeuristicEngine.analyze', () => {
 
   it('flags high-entropy content', async () => {
     const filePath = path.join(tempDir, 'packed.bin');
-    const random = Buffer.alloc(8192);
-    for (let i = 0; i < random.length; i++) {
-      random[i] = Math.floor(Math.random() * 256);
+    const highEntropy = Buffer.alloc(8192);
+    for (let i = 0; i < highEntropy.length; i++) {
+      highEntropy[i] = i % 256;
     }
-    fs.writeFileSync(filePath, random);
+    fs.writeFileSync(filePath, highEntropy);
 
     const result = await engine.analyze(filePath);
     assert.ok(result.score > 0);
