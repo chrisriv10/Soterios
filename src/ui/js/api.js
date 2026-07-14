@@ -45,6 +45,7 @@ const Api = {
   async pickFolder() { return window.soterios.dialog.pickFolder(); },
   async pickFiles() { return window.soterios.dialog.pickFiles(); },
   async showItemInFolder(filePath) { return window.soterios.shell.showItemInFolder(filePath); },
+  async openPath(filePath) { return window.soterios.shell.openPath(filePath); },
   async getStoreSnapshot() { return {}; },
   async getSettings() {
     const defaultPath = await window.api.invoke('db:getSetting', 'scanner.defaultPath', '');

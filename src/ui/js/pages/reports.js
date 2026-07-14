@@ -64,6 +64,9 @@ function renderSystemSnapshot(system) {
 }
 
 window.Pages.reports = {
+  _currentScanReportId: null,
+  _lastExportPath: null,
+
   render(container) {
     container.innerHTML = `
       <div class="page-header">
@@ -91,8 +94,13 @@ window.Pages.reports = {
               <div class="panel-title">Report Viewer</div>
               <div id="reportViewerTitle" class="history-title">Select a report</div>
             </div>
-            <button class="btn btn-sm" id="closeReportViewer" style="display:none;">Close</button>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <button class="btn btn-sm" id="exportReportPdf" style="display:none;">Export as PDF</button>
+              <button class="btn btn-sm" id="exportReportCsv" style="display:none;">Export as CSV</button>
+              <button class="btn btn-sm" id="closeReportViewer" style="display:none;">Close</button>
+            </div>
           </div>
+          <div id="exportReportToast" style="display:none; margin:10px 0; padding:10px 12px; border-radius:8px; background:var(--bg-surface); border:1px solid var(--glass-border); font-size:0.85rem;"></div>
           <div id="reportResult" class="empty-state">Choose a report from the list to view its details.</div>
         </section>
       </div>
@@ -100,20 +108,78 @@ window.Pages.reports = {
 
     container.querySelector('#generateReport').addEventListener('click', () => this.generate(container));
     container.querySelector('#closeReportViewer').addEventListener('click', () => this.clearViewer(container));
+    container.querySelector('#exportReportPdf').addEventListener('click', () => this.exportCurrentReport(container, 'pdf'));
+    container.querySelector('#exportReportCsv').addEventListener('click', () => this.exportCurrentReport(container, 'csv'));
     this.listScanReports(container);
     this.listReports(container);
   },
 
   clearViewer(container) {
+    this._currentScanReportId = null;
+    this._lastExportPath = null;
     container.querySelector('#reportViewerTitle').textContent = 'Select a report';
     container.querySelector('#closeReportViewer').style.display = 'none';
+    container.querySelector('#exportReportPdf').style.display = 'none';
+    container.querySelector('#exportReportCsv').style.display = 'none';
+    container.querySelector('#exportReportToast').style.display = 'none';
     container.querySelector('#reportResult').className = 'empty-state';
     container.querySelector('#reportResult').innerHTML = 'Choose a report from the list to view its details without leaving the app.';
+  },
+
+  setScanReportViewer(container, report) {
+    this._currentScanReportId = report.id;
+    this._lastExportPath = null;
+    container.querySelector('#exportReportPdf').style.display = 'inline-flex';
+    container.querySelector('#exportReportCsv').style.display = 'inline-flex';
+    container.querySelector('#exportReportToast').style.display = 'none';
+    this.showViewer(
+      container,
+      `${report.scan_type} scan - ${parseUtcTimestamp(report.timestamp).toLocaleString()}`,
+      this.renderScanReport(report)
+    );
+  },
+
+  showExportToast(container, message, filePath) {
+    this._lastExportPath = filePath;
+    const toast = container.querySelector('#exportReportToast');
+    toast.style.display = 'block';
+    toast.innerHTML = `
+      <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap;">
+        <span>${escapeHtml(message)}</span>
+        <button class="btn btn-sm btn-primary" id="openExportedReport">Open file</button>
+      </div>`;
+    toast.querySelector('#openExportedReport').addEventListener('click', async () => {
+      const res = await Api.openPath(filePath);
+      if (!res.success) alert(res.error || 'Unable to open file.');
+    });
+  },
+
+  async exportCurrentReport(container, format) {
+    if (!this._currentScanReportId) return;
+    const btn = container.querySelector(format === 'pdf' ? '#exportReportPdf' : '#exportReportCsv');
+    setButtonLoading(btn, true, 'Exporting...');
+    try {
+      const channel = format === 'pdf' ? 'report:exportPDF' : 'report:exportCSV';
+      const res = await window.api.invoke(channel, this._currentScanReportId);
+      if (!res.success) {
+        alert(res.error || 'Export failed.');
+        return;
+      }
+      const label = format === 'pdf' ? 'PDF' : 'CSV';
+      this.showExportToast(container, `${label} export saved successfully.`, res.path);
+    } finally {
+      setButtonLoading(btn, false);
+    }
   },
 
   showViewer(container, title, html) {
     container.querySelector('#reportViewerTitle').textContent = title;
     container.querySelector('#closeReportViewer').style.display = 'inline-flex';
+    if (!this._currentScanReportId) {
+      container.querySelector('#exportReportPdf').style.display = 'none';
+      container.querySelector('#exportReportCsv').style.display = 'none';
+      container.querySelector('#exportReportToast').style.display = 'none';
+    }
     const result = container.querySelector('#reportResult');
     result.className = 'report-content';
     result.innerHTML = html;
@@ -157,6 +223,7 @@ window.Pages.reports = {
   },
 
   async generate(container) {
+    this._currentScanReportId = null;
     const btn = container.querySelector('#generateReport');
     setButtonLoading(btn, true, 'Generating...');
     try {
@@ -197,7 +264,7 @@ window.Pages.reports = {
       el.querySelectorAll('.open-scan-report').forEach((btn) => {
         btn.addEventListener('click', () => {
           const report = reports.find((r) => String(r.id) === String(btn.dataset.id));
-          if (report) this.showViewer(container, `${report.scan_type} scan - ${parseUtcTimestamp(report.timestamp).toLocaleString()}`, this.renderScanReport(report));
+          if (report) this.setScanReportViewer(container, report);
         });
       });
       el.querySelectorAll('.delete-scan-report').forEach((btn) => {
@@ -276,6 +343,7 @@ window.Pages.reports = {
 
       el.querySelectorAll('.open-report').forEach(btn => {
         btn.addEventListener('click', async () => {
+          this._currentScanReportId = null;
           const res = await window.api.invoke('reports:read', btn.dataset.path);
           if (!res.success) { alert(res.error || 'Unable to read report.'); return; }
           const entry = groups.find((g) => g.files.json && g.files.json.path === btn.dataset.path);
@@ -286,6 +354,7 @@ window.Pages.reports = {
       });
       el.querySelectorAll('.open-report-html').forEach(btn => {
         btn.addEventListener('click', async () => {
+          this._currentScanReportId = null;
           const res = await window.api.invoke('reports:read', btn.dataset.path);
           if (!res.success) { alert(res.error || 'Unable to read report.'); return; }
           const entry = groups.find((g) => g.files.html && g.files.html.path === btn.dataset.path);
