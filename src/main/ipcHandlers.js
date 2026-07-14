@@ -215,7 +215,7 @@ function deleteFileIfSafe(filePath) {
 }
 
 function registerIpcHandlers(mainWindow, services) {
-  const { db, eventBus, clamEngine, scanEngine, quarantineManager, realtimeWatcher, processInspector } = services;
+  const { db, eventBus, clamEngine, scanEngine, quarantineManager, realtimeWatcher, processInspector, reputationEngine } = services;
 
   // -- System --
   ipcMain.handle('app:info', () => ({
@@ -293,6 +293,22 @@ function registerIpcHandlers(mainWindow, services) {
 
   ipcMain.handle('scan:abort', () => {
     return scanEngine.abortScan();
+  });
+
+  ipcMain.handle('reputation:addHash', async (_event, hash, verdict, note) => {
+    return reputationEngine.addHash(hash, verdict, note);
+  });
+
+  ipcMain.handle('reputation:removeHash', async (_event, hash) => {
+    return reputationEngine.removeHash(hash);
+  });
+
+  ipcMain.handle('reputation:listHashes', async (_event, limit) => {
+    return reputationEngine.listHashes(limit);
+  });
+
+  ipcMain.handle('reputation:checkHash', async (_event, hash) => {
+    return reputationEngine.checkHash(hash);
   });
 
   // -- Scheduled Scans --

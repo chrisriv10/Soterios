@@ -123,6 +123,16 @@ class DatabaseService {
         fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS reputation_hashes (
+        hash TEXT PRIMARY KEY,
+        verdict TEXT NOT NULL CHECK(verdict IN ('safe', 'malicious')),
+        source TEXT,
+        note TEXT,
+        added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
   }
 
   // --- Scan History API ---
@@ -297,6 +307,48 @@ class DatabaseService {
         fetched_at = CURRENT_TIMESTAMP
     `);
     return stmt.run({ ip, rawData });
+  }
+
+  getReputationHash(hash) {
+    const row = this.db.prepare(`
+      SELECT hash, verdict, source, note, added_at
+      FROM reputation_hashes
+      WHERE hash = ?
+    `).get(hash);
+    if (!row) return null;
+    return {
+      verdict: row.verdict,
+      source: row.source,
+      note: row.note,
+      addedAt: row.added_at
+    };
+  }
+
+  upsertReputationHash(record) {
+    const stmt = this.db.prepare(`
+      INSERT INTO reputation_hashes (hash, verdict, source, note, added_at)
+      VALUES (@hash, @verdict, @source, @note, CURRENT_TIMESTAMP)
+      ON CONFLICT(hash) DO UPDATE SET
+        verdict = excluded.verdict,
+        source = excluded.source,
+        note = excluded.note,
+        added_at = CURRENT_TIMESTAMP
+    `);
+    return stmt.run(record);
+  }
+
+  deleteReputationHash(hash) {
+    const result = this.db.prepare('DELETE FROM reputation_hashes WHERE hash = ?').run(hash);
+    return result.changes > 0;
+  }
+
+  listReputationHashes(limit = 500) {
+    return this.db.prepare(`
+      SELECT hash, verdict, source, note, added_at
+      FROM reputation_hashes
+      ORDER BY added_at DESC
+      LIMIT ?
+    `).all(limit);
   }
 }
 

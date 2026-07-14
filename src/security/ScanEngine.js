@@ -143,6 +143,12 @@ class ScanEngine {
 
         if (this.abortController.signal.aborted) {
           wasCanceled = true;
+          break;
+        }
+
+        if (result.canceled) {
+          wasCanceled = true;
+          break;
         }
 
         if (result.success) {
@@ -180,13 +186,20 @@ class ScanEngine {
             }
           }
         } else {
-          if (wasCanceled) errors.push('Scan canceled by user.');
-          else errors.push(result.error || 'Scan failed for ' + targetPath);
+          if (wasCanceled || result.canceled) {
+            wasCanceled = true;
+          } else {
+            errors.push(result.error || 'Scan failed for ' + targetPath);
+          }
         }
       }
     } catch (err) {
-      console.error('Scan error:', err);
-      errors.push(err.message || String(err));
+      if (this.abortController && this.abortController.signal.aborted) {
+        wasCanceled = true;
+      } else {
+        console.error('Scan error:', err);
+        errors.push(err.message || String(err));
+      }
     } finally {
       this.isScanning = false;
       const durationMs = Date.now() - startTime;
@@ -210,6 +223,16 @@ class ScanEngine {
         }
       } catch (_) {}
       this.currentScan = null;
+      this.abortController = null;
+      if (wasCanceled) {
+        this.eventBus.emit('scan:canceled', {
+          scanType,
+          filesScanned: totalFilesScanned,
+          threatsFound: totalThreatsFound,
+          durationMs,
+          status: 'canceled'
+        });
+      }
       this.eventBus.emit('scan:complete', { filesScanned: totalFilesScanned, threatsFound: totalThreatsFound, durationMs, threats, errors, status, report });
     }
 
@@ -217,7 +240,7 @@ class ScanEngine {
     this._notes = undefined;
     const note = notes.length ? notes.join(' ') : undefined;
     return {
-      success: errors.length === 0 && !wasCanceled,
+      success: !wasCanceled && errors.length === 0,
       canceled: wasCanceled,
       status: wasCanceled ? 'canceled' : (errors.length === 0 ? 'completed' : 'failed'),
       filesScanned: totalFilesScanned,
@@ -230,13 +253,15 @@ class ScanEngine {
   }
 
   abortScan() {
+    if (!this.isScanning) {
+      return { success: false, canceled: false, error: 'No scan in progress' };
+    }
     if (this.abortController) this.abortController.abort();
     if (this.clamEngine && typeof this.clamEngine.abortCurrentScan === 'function') {
       this.clamEngine.abortCurrentScan();
     }
-    // Don't emit 100% progress on cancel - let the current percentage stay
     this.eventBus.emit('scan:progress', { pct: null, message: 'Canceling scan...' });
-    return { success: true };
+    return { success: true, canceled: true };
   }
 
   getStatus() {

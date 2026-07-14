@@ -19,6 +19,9 @@ class ClamAVEngine {
     this.isReady = false;
     this.lastUpdateError = null;
     this.activeScanProcess = null;
+    this.activeUpdateProcess = null;
+    this.cancelScanRequested = false;
+    this.cancelUpdateRequested = false;
   }
 
   async init() {
@@ -98,10 +101,16 @@ class ClamAVEngine {
           cwd: this.baseDir,
           windowsHide: true
         });
+        this.activeUpdateProcess = freshclam;
       } catch (err) {
         resolve({ success: false, error: err.message, output });
         return;
       }
+
+      const finish = (result) => {
+        if (this.activeUpdateProcess === freshclam) this.activeUpdateProcess = null;
+        resolve(result);
+      };
 
       const handleData = (data) => {
         const chunk = data.toString();
@@ -113,19 +122,30 @@ class ClamAVEngine {
       freshclam.stderr.on('data', handleData);
 
       freshclam.on('close', (code) => {
+        const wasCanceled = this.cancelUpdateRequested;
+        if (this.activeUpdateProcess === freshclam) {
+          this.activeUpdateProcess = null;
+          this.cancelUpdateRequested = false;
+        }
+
+        if (wasCanceled) {
+          finish({ success: false, canceled: true, error: 'Definition update canceled', output });
+          return;
+        }
+
         const hasDb = this.hasVirusDatabase();
         if (code === 0 || hasDb) {
           this.lastUpdateError = null;
-          resolve({ success: true, code, output });
+          finish({ success: true, code, output });
           return;
         }
 
         const error = output.trim() || 'freshclam exited with code ' + code;
-        resolve({ success: false, code, output, error });
+        finish({ success: false, code, output, error });
       });
 
       freshclam.on('error', (err) => {
-        resolve({ success: false, error: err.message, output });
+        finish({ success: false, error: err.message, output });
       });
     });
   }
@@ -207,6 +227,11 @@ class ClamAVEngine {
       let stderr = '';
       let lines = [];
 
+      const finish = (result) => {
+        if (this.activeScanProcess === clam) this.activeScanProcess = null;
+        resolve(result);
+      };
+
       const handleOutput = (data) => {
         const chunk = data.toString();
         output += chunk;
@@ -225,14 +250,30 @@ class ClamAVEngine {
       });
 
       clam.on('close', (code) => {
-        if (this.activeScanProcess === clam) this.activeScanProcess = null;
+        const wasCanceled = this.cancelScanRequested;
+        if (this.activeScanProcess === clam) {
+          this.activeScanProcess = null;
+          this.cancelScanRequested = false;
+        }
+
+        if (wasCanceled) {
+          finish({
+            success: false,
+            canceled: true,
+            error: 'Scan canceled',
+            threats: [],
+            threatsFound: 0,
+            output,
+            filesScanned: 0
+          });
+          return;
+        }
+
         const fileLines = lines.filter(line => /: (OK|.+ FOUND|ERROR)$/i.test(line.trim()));
         const foundLines = lines.filter(line => /: .+ FOUND$/i.test(line.trim()));
-        // Access-denied lines end with a ClamAV per-file error suffix
         const accessDeniedLines = lines.filter(line =>
           /: (can't open file|lstat\(\) failed|permission denied|access is denied)/i.test(line)
         );
-        // Real (non-file-access) error lines end with ': ERROR' but are not access-denied
         const realErrorLines = lines.filter(line =>
           /: ERROR$/i.test(line.trim()) && !/can't open file|lstat\(\) failed|permission denied|access is denied/i.test(line)
         );
@@ -241,11 +282,10 @@ class ClamAVEngine {
           return match ? { path: match[1], name: match[2] } : { path: line, name: 'Unknown' };
         });
 
-        // Treat as soft errors (notes) when the only issues are protected/locked files
         const onlyOpenErrors = code === 2 && accessDeniedLines.length > 0 && foundLines.length === 0 && realErrorLines.length === 0;
         const error = code === 2 && !onlyOpenErrors ? (stderr || output).trim() || 'clamscan exited with code 2' : null;
 
-        resolve({
+        finish({
           success: code !== 2 || onlyOpenErrors,
           error,
           warnings: accessDeniedLines,
@@ -258,20 +298,31 @@ class ClamAVEngine {
       });
 
       clam.on('error', (err) => {
-        if (this.activeScanProcess === clam) this.activeScanProcess = null;
-        resolve({ success: false, error: err.message, threatsFound: 0, filesScanned: 0, output: '' });
+        finish({ success: false, error: err.message, threatsFound: 0, filesScanned: 0, output: '' });
       });
     });
   }
 
   abortCurrentScan() {
-    if (!this.activeScanProcess) return false;
-    try {
-      this.activeScanProcess.kill();
-      return true;
-    } catch (_) {
-      return false;
+    let killed = false;
+
+    if (this.activeScanProcess) {
+      this.cancelScanRequested = true;
+      try {
+        this.activeScanProcess.kill();
+        killed = true;
+      } catch (_) {}
     }
+
+    if (this.activeUpdateProcess) {
+      this.cancelUpdateRequested = true;
+      try {
+        this.activeUpdateProcess.kill();
+        killed = true;
+      } catch (_) {}
+    }
+
+    return killed;
   }
 }
 
