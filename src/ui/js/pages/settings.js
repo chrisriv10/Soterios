@@ -90,6 +90,7 @@ window.Pages.settings = {
               <option value="crimson" ${settings.ui?.theme === 'crimson' ? 'selected' : ''}>Crimson</option>
               <option value="terminal" ${settings.ui?.theme === 'terminal' ? 'selected' : ''}>Terminal</option>
               <option value="midnight" ${settings.ui?.theme === 'midnight' ? 'selected' : ''}>Midnight</option>
+              <option value="monochrome" ${settings.ui?.theme === 'monochrome' ? 'selected' : ''}>Monochrome</option>
               <option value="rose" ${settings.ui?.theme === 'rose' ? 'selected' : ''}>Rose</option>
             </select>
           </div>

@@ -194,6 +194,11 @@ const TOAST_THEMES = {
     closeBtn: '#64748b', closeHover: '#94a3c4',
     accents: { info: '#38bdf8', success: '#2dd4bf', warn: '#fbbf24', danger: '#f87171' }
   },
+  monochrome: {
+    bg: 'rgba(10, 10, 10, 0.97)', border: 'rgba(255, 255, 255, 0.1)',
+    textMain: '#f5f5f5', textMuted: '#a3a3a3', textDim: '#737373',
+    closeBtn: '#737373', closeHover: '#a3a3a3',
+    accents: { info: '#e5e5e5', success: '#d4d4d4', warn: '#a3a3a3', danger: '#737373' }
   rose: {
     bg: 'rgba(26, 18, 22, 0.97)', border: 'rgba(244, 114, 182, 0.18)',
     textMain: '#fdf2f8', textMuted: '#f9a8d4', textDim: '#db2777',
