@@ -11,6 +11,11 @@ const SYMBOLS = '!@#$%^&*()_+-=[]{}|;:,.<>?';
 // which is what actually matters for a "did you pick something guessable"
 // check -- exhaustive coverage matters far less than catching the common
 // cases with high confidence.
+// Passwords longer than this are flagged — very long passwords are hard to
+// remember, often indicate copy-paste from a generator without storage, and
+// can hit input limits on some sites.
+const MAX_RECOMMENDED_PASSWORD_LENGTH = 64;
+
 const COMMON_PASSWORDS = new Set([
   'password', 'password1', 'password123', '123456', '123456789', '12345678',
   '1234567', '1234567890', 'qwerty', 'qwerty123', 'qwertyuiop', 'letmein',
@@ -201,6 +206,7 @@ function checkStrength(password) {
   const datePattern = hasDatePattern(password);
 
   if (password.length < 8) issues.push('Shorter than 8 characters');
+  if (password.length > MAX_RECOMMENDED_PASSWORD_LENGTH) issues.push('Too long password');
   if (!/[a-z]/.test(password)) issues.push('No lowercase letters');
   if (!/[A-Z]/.test(password)) issues.push('No uppercase letters');
   if (!/[0-9]/.test(password)) issues.push('No digits');

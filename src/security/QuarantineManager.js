@@ -2,6 +2,11 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
+// XOR key used to obfuscate quarantined files. This is not cryptographic
+// security — it's just enough to prevent accidental double-click execution.
+// Both quarantine() and restore() must use the same value.
+const QUARANTINE_XOR_KEY = 0x55;
+
 class QuarantineManager {
   constructor(db) {
     this.db = db;
@@ -20,7 +25,7 @@ class QuarantineManager {
       // Basic XOR encryption to prevent accidental execution
       const data = fs.readFileSync(originalPath);
       for (let i = 0; i < data.length; i++) {
-        data[i] ^= 0x55;
+        data[i] ^= QUARANTINE_XOR_KEY;
       }
       fs.writeFileSync(quarantinePath, data);
 
@@ -64,7 +69,7 @@ class QuarantineManager {
 
       const data = fs.readFileSync(record.quarantine_path);
       for (let i = 0; i < data.length; i++) {
-        data[i] ^= 0x55; // reverse the same XOR used to quarantine
+        data[i] ^= QUARANTINE_XOR_KEY;
       }
 
       const destDir = path.dirname(record.original_path);

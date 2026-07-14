@@ -5,11 +5,14 @@
 
 const https = require('https');
 
+/** How often (ms) blocklists are refreshed from their upstream sources. */
+const BLOCKLIST_REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
+
 class BlocklistService {
   constructor(db) {
     this.db = db;
     this.blocklists = new Map();
-    this.refreshInterval = 12 * 60 * 60 * 1000; // 12 hours
+    this.refreshInterval = BLOCKLIST_REFRESH_INTERVAL_MS;
 
     // Free public blocklist sources
     this.sources = [
@@ -83,6 +86,7 @@ class BlocklistService {
    * @returns {number|null}
    */
   static ipToInt(ip) {
+    if (!ip || typeof ip !== 'string') return null;
     const parts = ip.split('.').map(Number);
     if (parts.length !== 4 || parts.some((p) => !Number.isInteger(p) || p < 0 || p > 255)) return null;
     return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;

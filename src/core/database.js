@@ -176,6 +176,28 @@ class DatabaseService {
     };
   }
 
+  getScanReport(id) {
+    const row = this.db.prepare('SELECT * FROM scan_reports WHERE id = ?').get(id);
+    if (!row) return null;
+    let target_paths = [];
+    let details = {};
+    try {
+      target_paths = JSON.parse(row.target_paths || '[]');
+    } catch (_) {
+      target_paths = [];
+    }
+    try {
+      details = JSON.parse(row.details || '{}');
+    } catch (_) {
+      details = {};
+    }
+    return {
+      ...row,
+      target_paths,
+      details
+    };
+  }
+
   deleteScanReport(id) {
     const row = this.db.prepare('SELECT * FROM scan_reports WHERE id = ?').get(id);
     if (!row) return null;
