@@ -5,7 +5,7 @@ const Api = {
       'black-red': 'crimson',
       'black-green': 'terminal'
     }[theme] || theme;
-    const allowed = ['dark', 'light', 'ocean', 'emerald', 'sunset', 'violet', 'crimson', 'terminal', 'midnight'];
+    const allowed = ['dark', 'light', 'ocean', 'emerald', 'sunset', 'violet', 'crimson', 'terminal', 'midnight', 'rose'];
     const finalTheme = allowed.includes(normalized) ? normalized : 'dark';
     document.documentElement.setAttribute('data-theme', finalTheme);
     document.documentElement.style.setProperty('--theme-name', finalTheme);
