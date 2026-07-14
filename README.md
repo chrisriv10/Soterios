@@ -1,17 +1,23 @@
 <p align="center">
-  <img src="assets/soteriosLogo.png" alt="Soterios" width="300" />
+<img src="assets/soteriosLogo.png" alt="Soterios" width="300" />
 </p>
 
 <p align="center">
-  <strong>Open-source, local-first security and system maintenance suite built for Windows.</strong><br/>
-  Scan files, inspect processes, audit your system, manage your firewall, test password strength, and check known breaches privately.
+<strong>Open-source, local-first security and system maintenance suite built for Windows.</strong><br/>
+Scan files, inspect processes, audit your system, manage your firewall, test password strength, and check known breaches privately.
 </p>
 
 <p align="center">
-  <a href="https://github.com/chrisriv10/Soterios/releases/latest"><img src="https://img.shields.io/github/v/release/chrisriv10/Soterios?style=flat-square&label=Latest%20Release" alt="Latest Release" /></a>
-  <a href="https://github.com/chrisriv10/Soterios/blob/main/build/LICENSE.txt"><img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="MIT License" /></a>
-  <a href="https://github.com/chrisriv10/Soterios/releases/latest"><img src="https://img.shields.io/github/downloads/chrisriv10/Soterios/total?style=flat-square&label=Downloads" alt="Downloads" /></a>
+<a href="https://github.com/chrisriv10/Soterios/releases/latest"><img src="https://img.shields.io/github/v/release/chrisriv10/Soterios?style=flat-square&label=Latest%20Release" alt="Latest Release" /></a>
+<a href="https://github.com/chrisriv10/Soterios/blob/main/build/LICENSE.txt"><img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="MIT License" /></a>
+<a href="https://github.com/chrisriv10/Soterios/releases/latest"><img src="https://img.shields.io/github/downloads/chrisriv10/Soterios/total?style=flat-square&label=Downloads" alt="Downloads" /></a>
 </p>
+
+---
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for a full history of notable changes and release notes.
 
 ---
 
@@ -82,7 +88,7 @@ Built artifacts are output to the `dist/` directory.
 
 | Variable | Description |
 |----------|-------------|
-| `SOTERIOS_DISABLE_GPU=1`   | Setting this will disable GPU acceleration (which is enabled by default), to force full software rendering. Set this if rendering glitches or crashes occur related to GPU drivers.
+| `SOTERIOS_DISABLE_GPU=1` | Setting this will disable GPU acceleration (which is enabled by default), to force full software rendering. Set this if rendering glitches or crashes occur related to GPU drivers.
 | `SOTERIOS_USERDATA=<path>` | Allows for specifying a custom path to override the default user data directory (%APPDATA%\Soterios). This may be useful for running isolating instances to retain results.
 
 In order to utilize these environment variables during runtime, the start command can be modified as followed: `set SOTERIOS_DISABLE_GPU=1 && npm start`.
@@ -101,17 +107,17 @@ In order to utilize these environment variables during runtime, the start comman
 ## Project Structure
 
 ```text
-main.js              Electron root entry point
-src/preload/         contextBridge API exposed to the renderer
-src/main/            IPC handlers and app/service orchestration
-src/core/            database, event bus, tool registry, plugin loader
-src/security/        scanning, quarantine, audit, firewall, network, process, and realtime services
-src/tools/           built-in tool modules
-src/scripts/         maintenance scripts and registry
-src/ui/              shell, CSS, shared JS, and page modules
-assets/              Soterios icons and bundled ClamAV files
-build/               installer resources
-tests/               test suites
+main.js Electron root entry point
+src/preload/ contextBridge API exposed to the renderer
+src/main/ IPC handlers and app/service orchestration
+src/core/ database, event bus, tool registry, plugin loader
+src/security/ scanning, quarantine, audit, firewall, network, process, and realtime services
+src/tools/ built-in tool modules
+src/scripts/ maintenance scripts and registry
+src/ui/ shell, CSS, shared JS, and page modules
+assets/ Soterios icons and bundled ClamAV files
+build/ installer resources
+tests/ test suites
 ```
 
 ---
@@ -158,8 +164,8 @@ These features are planned for future updates. There is no fixed release order. 
 
 These are longer-term ideas that may require significant architectural work:
 
-- Custom real-time protection 
-- Proprietary scanning engine 
+- Custom real-time protection
+- Proprietary scanning engine
 - Browser guard companion extension
 - Cross-platform support (macOS/Linux) |
 
