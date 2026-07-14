@@ -30,8 +30,9 @@ Maintainers can copy pages to the wiki git repository:
 ```bash
 git clone https://github.com/chrisriv10/Soterios.wiki.git
 cp docs/wiki/*.md Soterios.wiki/
-# Rename Home.md if using as wiki home page
-git commit -am "Sync wiki from docs/wiki"
+cd Soterios.wiki
+git add .
+git commit -m "Sync wiki from docs/wiki"
 git push
 ```
 

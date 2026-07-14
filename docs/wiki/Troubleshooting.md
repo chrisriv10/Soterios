@@ -71,7 +71,7 @@ Ensure the Windows Firewall service is running and Soterios has admin rights.
 No. Soterios supplements Defender with ClamAV scanning, audits, and monitoring. Real-time protection toggles Defender itself.
 
 **Is my data sent to the cloud?**  
-Not by default. See [Privacy and Security](Privacy-and-Security).
+Not by default. See [Privacy and Security](Privacy-and-Security.md).
 
 **Can I use Soterios on macOS or Linux?**  
 Not yet. Windows is the primary supported platform.

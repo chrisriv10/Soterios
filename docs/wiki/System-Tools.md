@@ -11,6 +11,7 @@ The **Tools & Maintenance** page provides built-in utilities for disk cleanup, s
 | **Disk Space Report** | Per-volume used/free space summary. |
 | **Large Files Report** | Finds large files under your user profile. Can select files for deletion. |
 | **Browser Cache Report** | Reports cache sizes for Chromium-based browsers. Includes option to clear cache. |
+| **Network Report** | Read-only report of network interfaces, default gateway, and active established connections. |
 | **Windows Services Report** | Lists auto-start services; flags services running from unsigned paths. |
 
 ## Running a tool
