@@ -196,6 +196,22 @@
   --accent-danger: #e11d48;
 }
 
+:root[data-theme="aurora"] {
+  --bg-base: #0b1220;
+  --bg-surface: rgba(20, 30, 50, 0.75);
+  --bg-surface-hover: rgba(30, 45, 75, 0.88);
+  --glass-border: rgba(125, 211, 252, 0.18);
+  --body-gradient: var(--bg-base);
+  --text-main: #e0faff;
+  --text-muted: #94a3b8;
+  --accent-primary: #7dd3fc;
+  --accent-primary-dark: #38bdf8;
+  --accent-primary-glow: rgba(125, 211, 252, 0.25);
+  --accent-success: #3ddc97;
+  --accent-warning: #fbbf24;
+  --accent-danger: #fb7185;
+}
+
 body {
   background-color: var(--bg-base);
   color: var(--text-main);

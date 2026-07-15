@@ -72,7 +72,7 @@ let mainWindow;
 let splashWindow;
 let splashTimeoutId;
 let dbRef; // set once the database is created in app.whenReady() below, so
-           // showNotification (defined before that point) can check settings
+// showNotification (defined before that point) can check settings
 
 function logLine(level, message, meta) {
   try {
@@ -211,6 +211,12 @@ const TOAST_THEMES = {
     textMain: '#fdf2f8', textMuted: '#f9a8d4', textDim: '#db2777',
     closeBtn: '#db2777', closeHover: '#f9a8d4',
     accents: { info: '#f472b6', success: '#6ee7b7', warn: '#fbbf24', danger: '#e11d48' }
+  },
+  aurora: {
+    bg: 'rgba(20, 30, 50, 0.96)', border: 'rgba(125, 211, 252, 0.18)',
+    textMain: '#e0faff', textMuted: '#94a3b8', textDim: '#7dd3fc',
+    closeBtn: '#7dd3fc', closeHover: '#e0faff',
+    accents: { info: '#7dd3fc', success: '#3ddc97', warn: '#fbbf24', danger: '#fb7185' }
   }
 };
 
@@ -369,7 +375,7 @@ function showNotification(title, body, level = 'info', iconOverride = null) {
 
     activeToasts.push(toastWindow);
     repositionToasts();
-  } catch (_) {}
+  } catch (_) { }
 }
 
 function createSplashWindow() {
