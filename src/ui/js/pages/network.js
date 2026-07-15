@@ -308,6 +308,19 @@ window.Pages['network'] = {
 
       html += '</div>'; // end bandwidth/pie/flags row
 
+      // Traffic history chart (persisted network_stats samples)
+      html += '<div class="card" style="padding:14px 16px; margin-bottom:18px;">';
+      html += '<h3 style="margin-bottom:10px; font-size:1rem;">Traffic history (24h)</h3>';
+      html += '<canvas id="networkHistoryChart" width="900" height="180" style="width:100%; max-height:180px;"></canvas>';
+      html += '<div id="networkHistoryEmpty" class="empty-state" style="font-size:0.85rem; display:none;">No historical samples yet — samples are recorded every 30 seconds while the app runs.</div>';
+      html += '</div>';
+
+      // Recent suspicious network alert actions
+      html += '<div class="card" style="padding:14px 16px; margin-bottom:18px;" id="networkAlertsPanel">';
+      html += '<h3 style="margin-bottom:10px; font-size:1rem;">Suspicious connection alerts</h3>';
+      html += '<div id="networkAlertsList" class="empty-state" style="font-size:0.85rem;">Loading alerts…</div>';
+      html += '</div>';
+
       // Heat Map
       const uniqueIps = [...new Set(connections ? connections.map(c => firstDefined(c.remoteAddress, c.RemoteAddress)).filter(Boolean) : [])];
       const uncachedIps = uniqueIps.filter((ip) => !(ip in this._geoCache));
@@ -572,6 +585,8 @@ window.Pages['network'] = {
       }
 
       content.innerHTML = html;
+      this.paintHistoryChart(content).catch(() => {});
+      this.renderAlertHits(content).catch(() => {});
 
       // The world map background (grid overlay + <img>) is static and never
       // changes between refreshes, so instead of letting content.innerHTML
@@ -656,6 +671,119 @@ window.Pages['network'] = {
     if (noResultsEl) {
       noResultsEl.style.display = (rows.length > 0 && visible === 0) ? '' : 'none';
     }
+  },
+
+  async paintHistoryChart(content) {
+    const canvas = content.querySelector('#networkHistoryChart');
+    const empty = content.querySelector('#networkHistoryEmpty');
+    if (!canvas) return;
+    let rows = [];
+    try {
+      rows = await window.api.invoke('network:history', { hours: 24 }) || [];
+    } catch (_) {
+      rows = [];
+    }
+    if (!rows.length) {
+      if (empty) empty.style.display = '';
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+
+    // Aggregate all interfaces into one rx/tx series by timestamp bucket.
+    const buckets = new Map();
+    for (const row of rows) {
+      const key = row.recorded_at;
+      const cur = buckets.get(key) || { t: key, rx: 0, tx: 0 };
+      cur.rx += Number(row.rx_sec) || 0;
+      cur.tx += Number(row.tx_sec) || 0;
+      buckets.set(key, cur);
+    }
+    const series = [...buckets.values()].sort((a, b) => a.t.localeCompare(b.t));
+    const maxY = Math.max(1, ...series.map((p) => Math.max(p.rx, p.tx)));
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+    const pad = 12;
+    ctx.clearRect(0, 0, w, h);
+    ctx.strokeStyle = 'rgba(127,127,127,0.25)';
+    ctx.beginPath();
+    ctx.moveTo(pad, h - pad);
+    ctx.lineTo(w - pad, h - pad);
+    ctx.stroke();
+
+    const plot = (key, color) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      series.forEach((p, i) => {
+        const x = pad + (i / Math.max(1, series.length - 1)) * (w - pad * 2);
+        const y = (h - pad) - (p[key] / maxY) * (h - pad * 2);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    };
+    plot('rx', '#58A6FF');
+    plot('tx', '#3FB950');
+  },
+
+  async renderAlertHits(content) {
+    const list = content.querySelector('#networkAlertsList');
+    if (!list) return;
+    let status = { recentHits: [] };
+    try {
+      status = await window.api.invoke('network-alerts:status') || status;
+    } catch (_) {}
+    const hits = status.recentHits || [];
+    if (!hits.length) {
+      list.className = 'empty-state';
+      list.style.fontSize = '0.85rem';
+      list.textContent = 'No blocklisted connections detected this session.';
+      return;
+    }
+    list.className = '';
+    list.style.fontSize = '';
+    list.innerHTML = hits.slice(0, 8).map((h) => `
+      <div class="list-row" style="display:flex; justify-content:space-between; gap:12px; align-items:center; padding:10px 0; border-bottom:1px solid var(--glass-border);">
+        <div style="font-size:0.85rem;">
+          <div style="font-weight:600; font-family:monospace;">${escapeHtml(h.remoteAddress || '')}${h.remotePort ? ':' + escapeHtml(h.remotePort) : ''}</div>
+          <div class="page-subtitle">PID ${escapeHtml(h.pid || 'n/a')} · ${escapeHtml(h.state || '')}</div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-sm" data-alert-ignore="${escapeHtml(h.key)}">Ignore</button>
+          <button class="btn btn-sm" style="color:var(--accent-danger);" data-alert-kill="${escapeHtml(h.pid || '')}" ${h.pid ? '' : 'disabled'}>Kill</button>
+        </div>
+      </div>
+    `).join('');
+    this.bindAlertActions(content);
+  },
+
+  bindAlertActions(content) {
+    content.querySelectorAll('[data-alert-ignore]').forEach((btn) => {
+      btn.onclick = async () => {
+        try {
+          await window.api.invoke('network-alerts:ignore', btn.getAttribute('data-alert-ignore'));
+          btn.closest('.list-row')?.remove();
+        } catch (e) {
+          alert(e.message || String(e));
+        }
+      };
+    });
+    content.querySelectorAll('[data-alert-kill]').forEach((btn) => {
+      btn.onclick = async () => {
+        try {
+          const res = await window.api.invoke('network-alerts:kill', Number(btn.getAttribute('data-alert-kill')));
+          if (!res || !res.success) alert((res && res.error) || 'Kill failed');
+          else btn.closest('.list-row')?.remove();
+        } catch (e) {
+          alert(e.message || String(e));
+        }
+      };
+    });
   },
 
   destroy() {

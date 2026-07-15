@@ -133,6 +133,21 @@ class DatabaseService {
         added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Network bandwidth history (Issue #35)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS network_stats (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        recorded_at TEXT NOT NULL,
+        iface TEXT NOT NULL,
+        rx_sec REAL,
+        tx_sec REAL
+      )
+    `);
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_network_stats_recorded_at
+      ON network_stats(recorded_at)
+    `);
   }
 
   // --- Scan History API ---
@@ -349,6 +364,37 @@ class DatabaseService {
       ORDER BY added_at DESC
       LIMIT ?
     `).all(limit);
+  }
+
+  // --- Network stats history ---
+  addNetworkStatsSample(iface, rxSec, txSec, recordedAt = new Date().toISOString()) {
+    return this.db.prepare(`
+      INSERT INTO network_stats (recorded_at, iface, rx_sec, tx_sec)
+      VALUES (?, ?, ?, ?)
+    `).run(recordedAt, iface, rxSec, txSec);
+  }
+
+  getNetworkStatsHistory(hours = 24, iface = null) {
+    const since = new Date(Date.now() - Number(hours) * 3600 * 1000).toISOString();
+    if (iface) {
+      return this.db.prepare(`
+        SELECT recorded_at, iface, rx_sec, tx_sec
+        FROM network_stats
+        WHERE recorded_at >= ? AND iface = ?
+        ORDER BY recorded_at ASC
+      `).all(since, iface);
+    }
+    return this.db.prepare(`
+      SELECT recorded_at, iface, rx_sec, tx_sec
+      FROM network_stats
+      WHERE recorded_at >= ?
+      ORDER BY recorded_at ASC
+    `).all(since);
+  }
+
+  pruneNetworkStats(retentionDays = 7) {
+    const cutoff = new Date(Date.now() - Number(retentionDays) * 86400 * 1000).toISOString();
+    return this.db.prepare('DELETE FROM network_stats WHERE recorded_at < ?').run(cutoff);
   }
 }
 

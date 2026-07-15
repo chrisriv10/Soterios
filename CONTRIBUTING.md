@@ -142,6 +142,14 @@ Soterios uses Node.js built-in test runner (`node:test`) for most unit tests. Te
 ### Run all tests
 
 ```bash
+npm test
+```
+
+This runs every Node `tests/*.test.js` file (via `scripts/run-node-tests.js`, excluding Jest-only suites), then Jest (`passwordTools`, `reportExport`).
+
+You can also invoke the Node runner directly:
+
+```bash
 node --test tests/
 ```
 
@@ -153,17 +161,14 @@ node --test tests/blocklistService.test.js
 node --test tests/scoringEngine.test.js
 ```
 
-### Run the default test command
-
-```bash
-node --test
-```
-
-The password tools suite (`tests/passwordTools.test.js`) uses Jest and can be run separately:
+### Jest-only suites
 
 ```bash
 npx jest tests/passwordTools.test.js
+npx jest tests/reportExport.test.js
 ```
+
+Contributors should run `npm test` before submitting a pull request.
 
 ### Expected output
 

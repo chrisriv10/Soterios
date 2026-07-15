@@ -391,6 +391,42 @@ function registerIpcHandlers(mainWindow, services) {
     return result.enabled;
   });
 
+  // -- Folder Watch --
+  ipcMain.handle('folderwatch:status', async () => {
+    return (services.folderWatcher && services.folderWatcher.getStatus()) || { running: false };
+  });
+
+  ipcMain.handle('folderwatch:toggle', async (_event, enable) => {
+    if (!services.folderWatcher) throw new Error('Folder watcher is unavailable.');
+    return enable ? services.folderWatcher.start() : services.folderWatcher.stop();
+  });
+
+  // -- Network suspicious-connection alerts --
+  ipcMain.handle('network-alerts:status', async () => {
+    return (services.networkAlertMonitor && services.networkAlertMonitor.getStatus()) || { running: false };
+  });
+
+  ipcMain.handle('network-alerts:toggle', async (_event, enable) => {
+    if (!services.networkAlertMonitor) throw new Error('Network alert monitor is unavailable.');
+    return enable ? services.networkAlertMonitor.start() : services.networkAlertMonitor.stop();
+  });
+
+  ipcMain.handle('network-alerts:ignore', async (_event, key) => {
+    if (!services.networkAlertMonitor) throw new Error('Network alert monitor is unavailable.');
+    return services.networkAlertMonitor.ignore(key);
+  });
+
+  ipcMain.handle('network-alerts:kill', async (_event, pid) => {
+    if (!services.networkAlertMonitor) throw new Error('Network alert monitor is unavailable.');
+    return services.networkAlertMonitor.kill(pid);
+  });
+
+  ipcMain.handle('network:history', async (_event, options = {}) => {
+    const hours = Math.min(168, Math.max(1, Number(options.hours) || 24));
+    const iface = options.iface || null;
+    return db.getNetworkStatsHistory(hours, iface);
+  });
+
   // -- Process Inspector --
   ipcMain.handle('process:list', async () => {
     return processInspector.getProcesses();

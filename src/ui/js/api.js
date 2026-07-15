@@ -65,6 +65,8 @@ const Api = {
     // directly for the real OS-level state and uses this purely as a
     // fallback if that IPC call fails.
     const launchAtStartup = await window.api.invoke('db:getSetting', 'feature.launchAtStartup', false);
+    const folderWatch = await window.api.invoke('db:getSetting', 'feature.folderWatch', true);
+    const networkAlerts = await window.api.invoke('db:getSetting', 'feature.networkAlerts', true);
     const dbTheme = await window.api.invoke('db:getSetting', 'ui.theme', 'dark');
     let storedTheme = null;
     try {
@@ -79,7 +81,19 @@ const Api = {
     if (window.AppState) window.AppState.currentTheme = theme;
     return {
       scanner: { defaultPath, maxDepth, maxFileSizeMB, includeCleanResults, excludedDirNames },
-      features: { realtimeProtection, autoReports, scanHistory, externalLookups, geoLookup, networkPerimeterMap, notificationsEnabled, scanNotifications, launchAtStartup },
+      features: {
+        realtimeProtection,
+        autoReports,
+        scanHistory,
+        externalLookups,
+        geoLookup,
+        networkPerimeterMap,
+        notificationsEnabled,
+        scanNotifications,
+        launchAtStartup,
+        folderWatch,
+        networkAlerts
+      },
       ui: { theme }
     };
   },
@@ -107,6 +121,16 @@ const Api = {
       if (Object.prototype.hasOwnProperty.call(f, 'notificationsEnabled')) await window.api.invoke('db:setSetting', 'feature.notificationsEnabled', !!f.notificationsEnabled);
       if (Object.prototype.hasOwnProperty.call(f, 'scanNotifications')) await window.api.invoke('db:setSetting', 'feature.scanNotifications', !!f.scanNotifications);
       if (Object.prototype.hasOwnProperty.call(f, 'launchAtStartup')) await window.api.invoke('db:setSetting', 'feature.launchAtStartup', !!f.launchAtStartup);
+      if (Object.prototype.hasOwnProperty.call(f, 'folderWatch')) {
+        const enable = !!f.folderWatch;
+        const result = await window.api.invoke('folderwatch:toggle', enable);
+        await window.api.invoke('db:setSetting', 'feature.folderWatch', !!(result && result.running));
+      }
+      if (Object.prototype.hasOwnProperty.call(f, 'networkAlerts')) {
+        const enable = !!f.networkAlerts;
+        const result = await window.api.invoke('network-alerts:toggle', enable);
+        await window.api.invoke('db:setSetting', 'feature.networkAlerts', !!(result && result.running));
+      }
     }
     if (patch.ui) {
       const u = patch.ui;

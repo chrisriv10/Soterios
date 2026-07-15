@@ -59,6 +59,8 @@ const ProcessInspector = require('../security/ProcessInspector');
 const SystemAudit = require('../security/SystemAudit');
 const FirewallManager = require('../security/FirewallManager');
 const NetworkMonitor = require('../security/NetworkMonitor');
+const FolderWatcher = require('../security/FolderWatcher');
+const NetworkAlertMonitor = require('../security/NetworkAlertMonitor');
 const { ProcessResolver } = require('../security/ProcessResolver');
 const { BlocklistService } = require('../security/BlocklistService');
 const { NetworkEnricher } = require('../security/NetworkEnricher');
@@ -555,6 +557,20 @@ app.whenReady().then(async () => {
   const networkEnricher = new NetworkEnricher(processResolver, blocklistService);
   const geoLocationService = new GeoLocationService(db);
 
+  const folderWatcher = new FolderWatcher({
+    db,
+    eventBus,
+    scanEngine,
+    notify: (title, body, level) => showNotification(title, body, level)
+  });
+  const networkAlertMonitor = new NetworkAlertMonitor({
+    networkMonitor,
+    blocklistService,
+    processInspector,
+    db,
+    notify: (title, body, level) => showNotification(title, body, level)
+  });
+
   // loadPlugins() is a synchronous filesystem scan, not a network call, so
   // it's cheap enough to keep here rather than deferring it.
   loadPlugins();
@@ -577,6 +593,8 @@ app.whenReady().then(async () => {
     blocklistService,
     networkEnricher,
     geoLocationService,
+    folderWatcher,
+    networkAlertMonitor,
     toolRegistry
   };
 
@@ -822,10 +840,43 @@ app.whenReady().then(async () => {
       logLine('error', 'Real-time protection init failed', { message: err.message });
     }
     try {
+      if (db.getSetting('feature.folderWatch', true)) {
+        folderWatcher.start();
+      }
+    } catch (err) {
+      logLine('error', 'Folder watcher init failed', { message: err.message });
+    }
+    try {
+      if (db.getSetting('feature.networkAlerts', true)) {
+        networkAlertMonitor.start();
+      }
+    } catch (err) {
+      logLine('error', 'Network alert monitor init failed', { message: err.message });
+    }
+    try {
       await blocklistService.refreshAll();
     } catch (err) {
       logLine('error', 'Blocklist refresh failed', { message: err.message });
     }
+    // Persist network bandwidth samples every 30s; prune >7 days hourly.
+    const sampleNetworkStats = async () => {
+      try {
+        const stats = await networkMonitor.getStats();
+        const recordedAt = new Date().toISOString();
+        for (const iface of (stats.interfaces || [])) {
+          db.addNetworkStatsSample(iface.iface, iface.rxSec || 0, iface.txSec || 0, recordedAt);
+        }
+      } catch (err) {
+        logLine('warn', 'Network stats sample failed', { message: err.message });
+      }
+    };
+    const networkStatsTimer = setInterval(sampleNetworkStats, 30_000);
+    if (typeof networkStatsTimer.unref === 'function') networkStatsTimer.unref();
+    sampleNetworkStats().catch(() => {});
+    const pruneTimer = setInterval(() => {
+      try { db.pruneNetworkStats(7); } catch (_) {}
+    }, 60 * 60_000);
+    if (typeof pruneTimer.unref === 'function') pruneTimer.unref();
     try {
       // systeminformation's networkStats() calculates rx_sec/tx_sec as a
       // rate between two internal samples. The very first call anywhere in
