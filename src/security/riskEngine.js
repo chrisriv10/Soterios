@@ -69,4 +69,5 @@ function recommendationForRisk(risk, subject = 'item') {
   return `Keep this ${subject} under observation.`;
 }
 
+
 module.exports = { levelFromScore, scoreSignals, makeRisk, recommendationForRisk };
