@@ -20,7 +20,7 @@ function levelFromScore(score) {
 
 /**
  * Calculates the total risk score from an array of detected signals.
- * Each signal contains a `points` and `message` property that contributes to the total score.
+ * Each signal contains a `points` and `message` property. The total score is the sum of all `points` values.
  * The resulting score is clamped between 0 and 100.
  *
  * @param {{ points?: number, message?: string }[]} signals - Array of risk signals.
