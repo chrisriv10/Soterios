@@ -16,5 +16,17 @@
   "uninstaller.title": "إزالة البرامج",
   "uninstaller.uninstall": "إزالة",
   "uninstaller.scanLeftovers": "فحص البقايا",
-  "uninstaller.removeSelected": "إزالة البقايا المحددة"
+  "uninstaller.removeSelected": "إزالة البقايا المحددة",
+  "uninstaller.leftoverFoldersFor": "Leftover items for {app}",
+  "uninstaller.launchConfirm": "Launch the native uninstaller for this application?\n\n{command}",
+  "uninstaller.launchSuccess": "Uninstaller launched.",
+  "uninstaller.launchFailed": "Failed to launch uninstaller.",
+  "uninstaller.removeFoldersConfirm": "Remove {count} leftover folder(s)? This cannot be undone.",
+  "uninstaller.dryRunConfirm": "Dry-run found {count} removable folder(s). Proceed with deletion?",
+  "uninstaller.removedSummary": "Removed {removed} folder(s).{skipped}",
+  "uninstaller.skippedSummary": " {skipped} skipped.",
+  "uninstaller.scanFailed": "Failed to scan for leftovers.",
+  "uninstaller.unavailable": "Software uninstaller is not available on this platform.",
+  "uninstaller.registryHint": "registry (read-only)",
+  "uninstaller.removedCount": "Removed {count} folder(s)"
 }

@@ -2,7 +2,7 @@
 
 const { execFile } = require('child_process');
 const { getProvider } = require('../../platform');
-const { normalizeApps, findLeftoverCandidates } = require('./uninstallUtils');
+const { normalizeApps, findLeftoverCandidates, findLeftoverRegistryCandidates } = require('./uninstallUtils');
 
 function runPowerShell(script) {
   return new Promise((resolve, reject) => {
@@ -49,7 +49,9 @@ module.exports = async function uninstallerReport(args = {}) {
   let leftovers = [];
   if (args.scanLeftoversFor) {
     const target = apps.find((app) => app.name === args.scanLeftoversFor);
-    leftovers = findLeftoverCandidates(args.scanLeftoversFor, target && target.installLocation);
+    const folderLeftovers = findLeftoverCandidates(args.scanLeftoversFor, target && target.installLocation);
+    const registryLeftovers = await findLeftoverRegistryCandidates(args.scanLeftoversFor);
+    leftovers = [...folderLeftovers, ...registryLeftovers];
   }
 
   return {

@@ -24,4 +24,9 @@ describe('platform abstraction', () => {
     const provider = getProvider('darwin');
     assert.match(provider.unavailableMessage('uninstaller'), /macOS/i);
   });
+
+  it('uses the base provider for unknown platforms', () => {
+    const provider = getProvider('freebsd');
+    assert.equal(provider.id, 'base');
+  });
 });

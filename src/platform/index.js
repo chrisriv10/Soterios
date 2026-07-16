@@ -1,5 +1,6 @@
 'use strict';
 
+const base = require('./base');
 const windows = require('./windows');
 const macos = require('./macos');
 const linux = require('./linux');
@@ -15,7 +16,7 @@ function getPlatformId() {
 }
 
 function getProvider(platform = process.platform) {
-  return PROVIDERS[platform] || linux;
+  return PROVIDERS[platform] || base;
 }
 
 function isFeatureSupported(feature, platform = process.platform) {

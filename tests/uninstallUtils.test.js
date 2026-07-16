@@ -23,6 +23,7 @@ describe('uninstallUtils', () => {
   it('refuses protected paths during leftover removal checks', () => {
     if (process.platform === 'win32') {
       assert.equal(isProtected('C:\\Windows\\Temp\\leftover'), true);
+      assert.equal(isProtected('C:\\Windows'), true);
     }
     assert.equal(isProtected(path.join(process.cwd(), 'safe-user-folder')), false);
   });

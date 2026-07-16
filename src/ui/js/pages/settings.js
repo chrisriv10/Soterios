@@ -32,7 +32,13 @@ window.Pages.settings = {
     } catch (_) {
       localeOptions = '<option value="en" selected>English</option>';
     }
-    const t = (key, fallback) => (window.I18n && typeof window.I18n.t === 'function' ? window.I18n.t(key) : fallback);
+    const t = (key, fallback) => {
+      if (window.I18n && typeof window.I18n.t === 'function') {
+        const translated = window.I18n.t(key);
+        if (translated && translated !== key) return translated;
+      }
+      return fallback || key;
+    };
     container.innerHTML = `
       <div class="page-header"><h1 class="page-title">Settings</h1>
         <div class="page-subtitle">Local app preferences and feature toggles</div></div>

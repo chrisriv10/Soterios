@@ -24,6 +24,7 @@ class WorkerManager {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
+        if (signal) signal.removeEventListener('abort', onAbort);
         this._tasks.delete(taskId);
         fn(value);
       };

@@ -65,8 +65,53 @@ function findLeftoverCandidates(appName, installLocation) {
   return matches;
 }
 
+async function findLeftoverRegistryCandidates(appName) {
+  if (process.platform !== 'win32') return [];
+  const tokens = tokenizeAppName(appName);
+  if (!tokens.length) return [];
+
+  const { execFile } = require('child_process');
+  const util = require('util');
+  const execFilePromise = util.promisify(execFile);
+  const tokenList = tokens.slice(0, 4).map((token) => `'${token.replace(/'/g, "''")}'`).join(',');
+  const script = [
+    `$tokens = @(${tokenList})`,
+    '$roots = @("HKCU:\\Software","HKLM:\\Software\\WOW6432Node","HKLM:\\Software")',
+    '$results = @()',
+    'foreach ($root in $roots) {',
+    '  Get-ChildItem -Path $root -ErrorAction SilentlyContinue | ForEach-Object {',
+    '    $name = $_.PSChildName.ToLower()',
+    '    foreach ($token in $tokens) {',
+    '      if ($name -like ("*" + $token + "*")) {',
+    '        $results += [PSCustomObject]@{ path = ($root + "\\" + $_.PSChildName); kind = "registry" }',
+    '        break',
+    '      }',
+    '    }',
+    '  }',
+    '}',
+    '$results | Select-Object -First 40 | ConvertTo-Json -Depth 3'
+  ].join('; ');
+
+  try {
+    const { stdout } = await execFilePromise(
+      'powershell.exe',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script],
+      { windowsHide: true, timeout: 30000, maxBuffer: 1024 * 1024 }
+    );
+    const parsed = stdout.trim() ? JSON.parse(stdout) : [];
+    const rows = Array.isArray(parsed) ? parsed : [parsed];
+    return rows.filter((row) => row && row.path).map((row) => ({
+      path: String(row.path),
+      kind: 'registry'
+    }));
+  } catch (_) {
+    return [];
+  }
+}
+
 module.exports = {
   normalizeApps,
   tokenizeAppName,
-  findLeftoverCandidates
+  findLeftoverCandidates,
+  findLeftoverRegistryCandidates
 };

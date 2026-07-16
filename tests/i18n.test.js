@@ -43,7 +43,7 @@ describe('i18n', () => {
   });
 
   it('replaces placeholders in translated strings', () => {
-    assert.equal(i18n.t('tools.completed', 'en', { count: 3 }), 'Completed');
+    assert.equal(i18n.t('uninstaller.removedCount', 'en', { count: 3 }), 'Removed 3 folder(s)');
   });
 
   it('detects RTL locales', () => {
