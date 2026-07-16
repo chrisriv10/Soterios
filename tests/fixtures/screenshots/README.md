@@ -14,7 +14,9 @@ Writes PNGs to this folder:
 
 - `01-dashboard.png`
 - `02-tools-page.png`
-- `03-uninstaller-mac-unsupported.png`
+- `03-uninstaller-unsupported.png` (macOS)
+- `03-uninstaller-windows.png` (Windows)
+- `03-uninstaller-linux-unsupported.png` (Linux)
 - `04-settings-language.png`
 
 Attach the PNGs to your pull request for visual verification. Do not commit them.

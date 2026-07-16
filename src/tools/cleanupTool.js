@@ -2,6 +2,9 @@ const { loadRegistry, runScript } = require('../scripts/scriptRunner');
 
 function summarizeScriptResult(result) {
   if (!result || typeof result !== 'object') return {};
+  if (Array.isArray(result.removed) || Array.isArray(result.skipped)) {
+    return { removedCount: result.removedCount, skippedCount: result.skippedCount, dryRun: result.dryRun };
+  }
   if (Array.isArray(result.log)) return { deletedCount: result.deletedCount, freedMB: result.freedMB, dryRun: result.dryRun };
   if (Array.isArray(result.files)) return { count: result.count, largestMB: result.files[0] && result.files[0].sizeMB };
   if (Array.isArray(result.browsers)) return { totalMB: result.totalMB };

@@ -14,6 +14,7 @@
   "settings.applyLanguage": "Applica lingua",
   "settings.languageUpdated": "Lingua aggiornata.",
   "uninstaller.title": "Disinstallatore software",
+  "uninstaller.installedApps": "Applicazioni installate",
   "uninstaller.uninstall": "Disinstalla",
   "uninstaller.scanLeftovers": "Cerca residui",
   "uninstaller.removeSelected": "Rimuovi residui selezionati",

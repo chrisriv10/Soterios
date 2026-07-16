@@ -225,7 +225,7 @@ window.Pages.tools = {
       if (result.supported === false) {
         html += `<div class="log-row"><span class="log-tag warn">info</span><span class="log-path">${escapeHtml(result.message || this.t('uninstaller.unavailable', 'Software uninstaller is not available on this platform.'))}</span></div>`;
       } else {
-        html += `<div class="log-row"><span class="log-tag info">${result.appCount || 0}</span><span class="log-path">${escapeHtml(this.t('uninstaller.title', 'Installed applications'))}</span></div>`;
+        html += `<div class="log-row"><span class="log-tag info">${result.appCount || 0}</span><span class="log-path">${escapeHtml(this.t('uninstaller.installedApps', 'Installed applications'))}</span></div>`;
         if (Array.isArray(result.leftovers) && result.leftovers.length) {
           html += `<div class="log-row"><span class="log-tag warn">${result.leftovers.length}</span><span class="log-path">${escapeHtml(this.t('uninstaller.leftoverFoldersFor', 'Leftover items for {app}').replace('{app}', result.scannedApp || 'selected app'))}</span></div>`;
           html += `<div style="display:flex; justify-content:flex-end; margin:8px 0;"><button class="btn btn-sm" id="removeLeftoversBtn" data-scanned-app="${escapeHtml(result.scannedApp || '')}" disabled>${escapeHtml(this.t('uninstaller.removeSelected', 'Remove selected leftovers'))} (0)</button></div>`;
@@ -421,6 +421,7 @@ window.Pages.tools = {
             scriptArgs: { scanLeftoversFor: appName }
           });
           output.innerHTML = this.renderOutput('uninstaller-report', refreshed, new Date().toLocaleString());
+          this._uninstallerApps = Array.isArray(refreshed.apps) ? refreshed.apps : [];
           if (appName) this._lastScannedAppName = appName;
           this.wireUninstallerActions(container);
         } catch (err) {
@@ -475,6 +476,8 @@ window.Pages.tools = {
           scriptArgs: appName ? { scanLeftoversFor: appName } : {}
         });
         output.innerHTML = this.renderOutput('uninstaller-report', refreshed, new Date().toLocaleString());
+        this._uninstallerApps = Array.isArray(refreshed.apps) ? refreshed.apps : [];
+        if (appName) this._lastScannedAppName = appName;
         this.wireUninstallerActions(container);
       } catch (err) {
         alert(err.message || 'Failed to remove leftovers.');

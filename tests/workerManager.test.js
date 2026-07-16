@@ -24,4 +24,12 @@ describe('workerManager', () => {
       /canceled/i
     );
   });
+
+  it('exposes cancel() on the returned task handle', async () => {
+    const scriptPath = path.join(__dirname, 'fixtures/workerSlowScript.js');
+    const task = workerManager.runTask({ scriptPath, args: { delayMs: 5000 } });
+    assert.equal(typeof task.cancel, 'function');
+    assert.equal(task.cancel(), true);
+    await assert.rejects(() => task, /canceled|exited/i);
+  });
 });

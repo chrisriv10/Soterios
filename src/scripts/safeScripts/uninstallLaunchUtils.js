@@ -77,7 +77,6 @@ function trustedInstallRoots() {
   const roots = [
     process.env.ProgramFiles,
     process.env['ProgramFiles(x86)'],
-    localAppData,
     localAppData ? path.win32.join(localAppData, 'Programs') : null
   ].filter(Boolean);
   return roots.map((root) => path.win32.resolve(root).toLowerCase() + '\\');
@@ -137,7 +136,8 @@ function validateUninstallLaunch(parsed) {
     if (!normalized.args.length) {
       return { ok: false, error: 'rundll32 uninstall requires a DLL path argument.' };
     }
-    const dllPath = normalized.args[0].replace(/^"|"$/g, '');
+    const dllArg = normalized.args[0].replace(/^"|"$/g, '');
+    const dllPath = dllArg.split(',')[0];
     if (!/\.dll$/i.test(dllPath)) {
       return { ok: false, error: 'rundll32 uninstall DLL path is invalid.' };
     }

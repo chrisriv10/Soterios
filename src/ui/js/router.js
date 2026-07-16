@@ -11,8 +11,12 @@
     mainContent.appendChild(el);
   }
 
+  function isKnownPage(pageId) {
+    return !!(pageId && window.Pages && Object.hasOwn(window.Pages, pageId));
+  }
+
   function navigate(pageId) {
-    const pageModule = window.Pages && window.Pages[pageId];
+    const pageModule = isKnownPage(pageId) ? window.Pages[pageId] : null;
     if (!pageModule) { showUnknownPage(pageId); return; }
     if (currentPage && currentPage !== pageId) {
       const prev = window.Pages[currentPage];
@@ -33,7 +37,7 @@
     await window.Api.initializeLanguage();
   }
   const hashPage = (window.location.hash || '').replace(/^#/, '');
-  const initialPage = hashPage && window.Pages && window.Pages[hashPage] ? hashPage : 'dashboard';
+  const initialPage = isKnownPage(hashPage) ? hashPage : 'dashboard';
   navigate(initialPage);
 
   // Listen for toast click to navigate to scanner

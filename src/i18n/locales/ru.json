@@ -14,6 +14,7 @@
   "settings.applyLanguage": "Применить язык",
   "settings.languageUpdated": "Язык обновлён.",
   "uninstaller.title": "Удаление программ",
+  "uninstaller.installedApps": "Установленные приложения",
   "uninstaller.uninstall": "Удалить",
   "uninstaller.scanLeftovers": "Сканировать остатки",
   "uninstaller.removeSelected": "Удалить выбранные остатки",

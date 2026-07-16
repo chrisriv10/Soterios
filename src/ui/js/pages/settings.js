@@ -286,8 +286,9 @@ window.Pages.settings = {
         status.textContent = window.I18n
           ? window.I18n.t('settings.languageUpdated')
           : 'Language updated.';
-        if (window.AppRouter && window.AppRouter.current() === 'tools') {
-          window.AppRouter.navigate('tools');
+        const currentRoute = window.AppRouter && window.AppRouter.current();
+        if (window.AppRouter && (currentRoute === 'tools' || currentRoute === 'settings')) {
+          window.AppRouter.navigate(currentRoute);
         }
       } catch (err) {
         status.textContent = err.message || String(err);

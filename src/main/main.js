@@ -356,18 +356,26 @@ function getScreenshotConfig() {
   const pageArg = process.argv.find((arg) => arg.startsWith('--screenshot-page='));
   const outArg = process.argv.find((arg) => arg.startsWith('--screenshot-out='));
   if (!pageArg || !outArg) return null;
+  const page = pageArg.split('=').slice(1).join('=');
+  const outPath = outArg.split('=').slice(1).join('=');
+  if (!page || !outPath) return null;
   return {
-    page: pageArg.split('=')[1],
-    outPath: outArg.split('=')[1],
+    page,
+    outPath,
     runUninstaller: process.argv.includes('--screenshot-run-uninstaller')
   };
+}
+
+function failScreenshotCapture(message) {
+  logLine('error', message);
+  app.exit(1);
 }
 
 function scheduleScreenshotCapture(win, config) {
   win.webContents.once('did-finish-load', () => {
     dismissSplash();
     if (config.page === 'tools') win.setSize(1280, 980);
-    const delayMs = config.runUninstaller ? 12000 : 8000;
+    const delayMs = config.runUninstaller ? 2000 : 8000;
     setTimeout(async () => {
       try {
         if (config.page === 'tools') {
@@ -382,20 +390,33 @@ function scheduleScreenshotCapture(win, config) {
         if (config.runUninstaller) {
           await win.webContents.executeJavaScript(`
             (async () => {
+              let clicked = false;
               for (let attempt = 0; attempt < 24; attempt += 1) {
                 const btn = document.querySelector('[data-script-id="uninstaller-report"]');
                 if (btn && !btn.disabled) {
                   btn.scrollIntoView({ block: 'center' });
                   btn.click();
+                  clicked = true;
                   break;
                 }
                 await new Promise((resolve) => setTimeout(resolve, 500));
               }
-              await new Promise((resolve) => setTimeout(resolve, 6000));
-              document.getElementById('toolOutput')?.scrollIntoView({ block: 'start' });
+              if (!clicked) throw new Error('Uninstaller report button was not available');
+
+              for (let attempt = 0; attempt < 60; attempt += 1) {
+                const output = document.getElementById('toolOutput');
+                const running = output && output.querySelector('.spinner');
+                const hasContent = output && output.textContent && output.textContent.trim().length > 20;
+                if (!running && hasContent) {
+                  output.scrollIntoView({ block: 'start' });
+                  return true;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 500));
+              }
+              throw new Error('Uninstaller report did not finish in time');
             })();
           `);
-          await new Promise((resolve) => setTimeout(resolve, 2000));
+          await new Promise((resolve) => setTimeout(resolve, 1000));
         }
         const image = await win.webContents.capturePage();
         fs.mkdirSync(path.dirname(config.outPath), { recursive: true });
@@ -450,6 +471,10 @@ function createWindow() {
 
   const shellHtmlPath = path.join(__dirname, '../ui/pages/shell.html');
   const screenshotConfig = getScreenshotConfig();
+  if (isScreenshotCaptureMode() && !screenshotConfig) {
+    failScreenshotCapture('Screenshot capture requires --screenshot-page= and --screenshot-out=');
+    return;
+  }
   if (screenshotConfig) {
     mainWindow.loadFile(shellHtmlPath, { hash: screenshotConfig.page });
     scheduleScreenshotCapture(mainWindow, screenshotConfig);

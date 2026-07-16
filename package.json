@@ -21,7 +21,7 @@
     "prepack": "node tools/download-clamav.js",
     "test": "node tests/node-test-runner.js && jest tests/passwordTools.test.js tests/reportExport.test.js",
     "smoke:integration": "node tests/smoke/integration-smoke.js",
-    "capture:screenshots": "bash tests/smoke/capture-pr-screenshots.sh"
+    "capture:screenshots": "node tests/smoke/capture-pr-screenshots.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",

@@ -57,6 +57,21 @@ describe('uninstallLaunchUtils', () => {
     assert.equal(result.ok, false);
   });
 
+  it('rejects executables under LocalAppData outside Programs', () => {
+    const tempExe = path.win32.join(process.env.LOCALAPPDATA || 'C:\\Users\\Example\\AppData\\Local', 'Temp', 'evil.exe');
+    const parsed = parseUninstallCommand(`"${tempExe}" /uninstall`);
+    const result = validateUninstallLaunch(parsed);
+    assert.equal(result.ok, false);
+  });
+
+  it('accepts rundll32 commands with comma-separated entry points', () => {
+    const dllPath = path.win32.join(process.env.ProgramFiles || 'C:\\Program Files', 'Example', 'uninstall.dll');
+    const parsed = parseUninstallCommand(`C:\\Windows\\System32\\rundll32.exe "${dllPath},LaunchINFSection"`);
+    const result = validateUninstallLaunch(parsed);
+    assert.equal(result.ok, false);
+    assert.match(result.error, /not found|not allowed/);
+  });
+
   it('allows per-user install roots under LocalAppData', () => {
     const localPrograms = path.win32.join(process.env.LOCALAPPDATA || 'C:\\Users\\Example\\AppData\\Local', 'Programs', 'Example', 'uninstall.exe');
     const parsed = parseUninstallCommand(`"${localPrograms}" /currentuser`);

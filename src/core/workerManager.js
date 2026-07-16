@@ -13,8 +13,8 @@ class WorkerManager {
   }
 
   runTask({ scriptPath, args, onProgress, signal, timeoutMs = DEFAULT_TIMEOUT_MS }) {
-    return new Promise((resolve, reject) => {
-      const taskId = this._nextTaskId++;
+    const taskId = this._nextTaskId++;
+    const promise = new Promise((resolve, reject) => {
       const worker = new Worker(WORKER_ENTRY, {
         workerData: { scriptPath, args: args || {} }
       });
@@ -72,6 +72,8 @@ class WorkerManager {
         finish(reject, new Error(`Worker exited before completing (code ${code})`));
       });
     });
+    promise.cancel = () => this.cancel(taskId);
+    return promise;
   }
 
   cancel(taskId) {

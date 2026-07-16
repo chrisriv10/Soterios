@@ -14,6 +14,7 @@
   "settings.applyLanguage": "भाषा लागू करें",
   "settings.languageUpdated": "भाषा अपडेट की गई।",
   "uninstaller.title": "सॉफ़्टवेयर अनइंस्टॉलर",
+  "uninstaller.installedApps": "इंस्टॉल किए गए ऐप",
   "uninstaller.uninstall": "अनइंस्टॉल",
   "uninstaller.scanLeftovers": "अवशेष स्कैन करें",
   "uninstaller.removeSelected": "चयनित अवशेष हटाएँ",

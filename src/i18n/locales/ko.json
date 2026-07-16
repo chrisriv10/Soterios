@@ -14,6 +14,7 @@
   "settings.applyLanguage": "언어 적용",
   "settings.languageUpdated": "언어가 업데이트되었습니다.",
   "uninstaller.title": "소프트웨어 제거 프로그램",
+  "uninstaller.installedApps": "설치된 애플리케이션",
   "uninstaller.uninstall": "제거",
   "uninstaller.scanLeftovers": "잔여 항목 검색",
   "uninstaller.removeSelected": "선택한 잔여 항목 제거",

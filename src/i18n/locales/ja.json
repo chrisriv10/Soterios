@@ -14,6 +14,7 @@
   "settings.applyLanguage": "言語を適用",
   "settings.languageUpdated": "言語を更新しました。",
   "uninstaller.title": "ソフトウェアアンインストーラー",
+  "uninstaller.installedApps": "インストール済みアプリケーション",
   "uninstaller.uninstall": "アンインストール",
   "uninstaller.scanLeftovers": "残存物をスキャン",
   "uninstaller.removeSelected": "選択した残存物を削除",

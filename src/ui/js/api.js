@@ -46,7 +46,9 @@ const Api = {
       }
       await window.I18n.setLocale(locale || 'en', { persist: false });
     } catch (_) {
-      await window.I18n.setLocale('en', { persist: false });
+      try {
+        await window.I18n.setLocale('en', { persist: false });
+      } catch (_) {}
     }
   },
   async listTools() { return window.soterios.tools.list(); },
