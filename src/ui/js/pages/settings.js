@@ -1,4 +1,5 @@
 let savedTheme = 'dark';
+let unsubscribeUpdateStatus = null;
 
 window.Pages = window.Pages || {};
 window.Pages.settings = {
@@ -163,6 +164,60 @@ window.Pages.settings = {
         </div>
 
         <div class="card">
+          <div class="panel-title" style="margin-bottom:16px;">Scheduled Maintenance</div>
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">Enable Scheduled Maintenance</div>
+              <div class="toggle-desc">Run safe cleanup and report tools on a recurring schedule</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="maintenanceEnabledToggle" /><span class="toggle-slider"></span></label>
+          </div>
+          <div class="field" style="margin-top:12px;">
+            <label class="field-label">Schedule</label>
+            <select id="maintenancePreset" class="field-input">
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="idle">When idle (app running)</option>
+              <option value="custom">Custom interval (hours)</option>
+            </select>
+          </div>
+          <div class="field" id="maintenanceCustomIntervalWrap" style="margin-top:12px; display:none;">
+            <label class="field-label">Interval (hours)</label>
+            <input type="number" id="maintenanceInterval" min="24" max="720" value="168" />
+          </div>
+          <div class="field" style="margin-top:12px;">
+            <label class="field-label">Scripts to run</label>
+            <div id="maintenanceScriptList" class="page-subtitle" style="font-size:0.85rem;">Loading scripts\u2026</div>
+          </div>
+          <div class="toggle-row" style="margin-top:8px;">
+            <div>
+              <div class="toggle-label">Notify on completion</div>
+              <div class="toggle-desc">Show a toast when scheduled maintenance finishes</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="maintenanceNotifyToggle" checked /><span class="toggle-slider"></span></label>
+          </div>
+          <button class="btn btn-primary" id="saveMaintenance" style="margin-top:12px;">Save Maintenance Schedule</button>
+          <button class="btn btn-secondary" id="runMaintenanceNow" style="margin-top:12px; margin-left:8px;">Run Now</button>
+          <div id="maintenanceStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
+        </div>
+
+        <div class="card">
+          <div class="panel-title" style="margin-bottom:16px;">Updates</div>
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">Automatic Updates</div>
+              <div class="toggle-desc">Check for updates in packaged builds and download in the background</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="autoUpdatesToggle" ${settings.features.autoUpdates !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+          </div>
+          <div id="updateStatusText" style="margin-top:12px; font-size:0.85rem; color:var(--text-muted);">Checking update status...</div>
+          <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-primary" id="checkUpdatesBtn">Check for Updates</button>
+            <button class="btn btn-secondary" id="installUpdateBtn" disabled>Restart & Install</button>
+          </div>
+        </div>
+
+        <div class="card">
           <div class="panel-title" style="margin-bottom:16px;">About</div>
           <div style="font-size:0.9rem; line-height:1.8;">
             <div><strong>Soterios</strong> v${escapeHtml(appInfo.version || '1.2.1')}</div>
@@ -283,9 +338,161 @@ window.Pages.settings = {
         input.disabled = false;
       }
     });
+
+    let maintenanceConfig = null;
+    let maintenanceScripts = [];
+    try {
+      const [configResponse, scriptsResponse] = await Promise.all([
+        window.api.invoke('maintenance:get'),
+        window.api.invoke('maintenance:getScripts')
+      ]);
+      maintenanceConfig = configResponse && configResponse.ok ? configResponse.data : null;
+      maintenanceScripts = scriptsResponse && scriptsResponse.ok ? scriptsResponse.data : [];
+    } catch (_) {
+      maintenanceConfig = null;
+      maintenanceScripts = [];
+    }
+
+    const scriptListEl = container.querySelector('#maintenanceScriptList');
+    const selectedScriptIds = new Set((maintenanceConfig && maintenanceConfig.scriptIds) || ['clear-temp-files', 'disk-space-report']);
+    if (maintenanceScripts.length) {
+      scriptListEl.innerHTML = maintenanceScripts.map((script) => `
+        <label style="display:flex; align-items:flex-start; gap:8px; margin-bottom:8px; cursor:pointer;">
+          <input type="checkbox" class="maintenance-script-checkbox" value="${escapeHtml(script.id)}" ${selectedScriptIds.has(script.id) ? 'checked' : ''} />
+          <span><strong>${escapeHtml(script.name)}</strong><br /><span style="color:var(--text-muted);">${escapeHtml(script.description || '')}</span></span>
+        </label>
+      `).join('');
+    } else {
+      scriptListEl.textContent = 'Maintenance scripts unavailable.';
+    }
+
+    const presetEl = container.querySelector('#maintenancePreset');
+    const customIntervalWrap = container.querySelector('#maintenanceCustomIntervalWrap');
+
+    const syncPresetUi = (preset) => {
+      customIntervalWrap.style.display = preset === 'custom' ? 'block' : 'none';
+    };
+
+    if (maintenanceConfig) {
+      container.querySelector('#maintenanceEnabledToggle').checked = !!maintenanceConfig.enabled;
+      presetEl.value = maintenanceConfig.schedulePreset || 'weekly';
+      container.querySelector('#maintenanceInterval').value = String(maintenanceConfig.intervalHours || 168);
+      container.querySelector('#maintenanceNotifyToggle').checked = maintenanceConfig.notifyOnComplete !== false;
+      syncPresetUi(presetEl.value);
+      if (maintenanceConfig.lastRun) {
+        container.querySelector('#maintenanceStatus').textContent = `Last run: ${new Date(maintenanceConfig.lastRun).toLocaleString()}`;
+      }
+    } else {
+      syncPresetUi(presetEl.value);
+    }
+
+    presetEl.addEventListener('change', () => syncPresetUi(presetEl.value));
+
+    container.querySelector('#saveMaintenance').addEventListener('click', async () => {
+      const status = container.querySelector('#maintenanceStatus');
+      const btn = container.querySelector('#saveMaintenance');
+      setButtonLoading(btn, true, 'Saving\u2026');
+      try {
+        const scriptIds = Array.from(container.querySelectorAll('.maintenance-script-checkbox:checked')).map((el) => el.value);
+        const response = await window.api.invoke('maintenance:set', {
+          enabled: container.querySelector('#maintenanceEnabledToggle').checked,
+          schedulePreset: presetEl.value,
+          intervalHours: Number(container.querySelector('#maintenanceInterval').value || 168),
+          scriptIds,
+          notifyOnComplete: container.querySelector('#maintenanceNotifyToggle').checked
+        });
+        if (!response || !response.ok) throw new Error(response?.error || 'Unable to save maintenance schedule.');
+        const saved = response.data;
+        const presetLabel = {
+          daily: 'daily',
+          weekly: 'weekly',
+          idle: 'when idle',
+          custom: `every ${saved.intervalHours} hour(s)`
+        }[saved.schedulePreset] || `every ${saved.intervalHours} hour(s)`;
+        status.textContent = saved.enabled
+          ? `Maintenance enabled (${presetLabel}, ${saved.scriptIds.length} script(s)).`
+          : 'Scheduled maintenance disabled.';
+      } catch (err) {
+        status.textContent = err.message || String(err);
+      } finally {
+        setButtonLoading(btn, false);
+      }
+    });
+
+    container.querySelector('#runMaintenanceNow').addEventListener('click', async () => {
+      const status = container.querySelector('#maintenanceStatus');
+      const btn = container.querySelector('#runMaintenanceNow');
+      setButtonLoading(btn, true, 'Running\u2026');
+      try {
+        const response = await window.api.invoke('maintenance:runNow');
+        if (!response || !response.ok) throw new Error(response?.error || 'Maintenance run failed.');
+        const result = response.data;
+        if (result.skipped) {
+          status.textContent = `Maintenance skipped: ${result.reason || 'unknown'}.`;
+        } else {
+          const okCount = (result.results || []).filter((row) => row.ok).length;
+          const total = (result.results || []).length;
+          status.textContent = `Maintenance completed (${okCount}/${total} tasks OK).`;
+        }
+      } catch (err) {
+        status.textContent = err.message || String(err);
+      } finally {
+        setButtonLoading(btn, false);
+      }
+    });
+
+    const updateStatusEl = container.querySelector('#updateStatusText');
+    const installUpdateBtn = container.querySelector('#installUpdateBtn');
+
+    async function refreshUpdateStatus() {
+      try {
+        const status = await window.api.invoke('update:status');
+        updateStatusEl.textContent = status.message || status.status || 'Update status unavailable.';
+        installUpdateBtn.disabled = status.status !== 'ready';
+      } catch (err) {
+        updateStatusEl.textContent = err.message || 'Unable to read update status.';
+        installUpdateBtn.disabled = true;
+      }
+    }
+
+    if (window.api.on) {
+      if (unsubscribeUpdateStatus) unsubscribeUpdateStatus();
+      unsubscribeUpdateStatus = window.api.on('update:status', refreshUpdateStatus);
+    }
+
+    container.querySelector('#autoUpdatesToggle').addEventListener('change', (event) => {
+      saveFeature('autoUpdates', event.target.checked, event.target, updateStatusEl);
+    });
+
+    container.querySelector('#checkUpdatesBtn').addEventListener('click', async () => {
+      const btn = container.querySelector('#checkUpdatesBtn');
+      setButtonLoading(btn, true, 'Checking\u2026');
+      try {
+        await window.api.invoke('update:check');
+        await refreshUpdateStatus();
+      } catch (err) {
+        updateStatusEl.textContent = err.message || String(err);
+      } finally {
+        setButtonLoading(btn, false);
+      }
+    });
+
+    installUpdateBtn.addEventListener('click', async () => {
+      try {
+        await window.api.invoke('update:install');
+      } catch (err) {
+        updateStatusEl.textContent = err.message || String(err);
+      }
+    });
+
+    refreshUpdateStatus();
   },
 
   destroy() {
+    if (unsubscribeUpdateStatus) {
+      unsubscribeUpdateStatus();
+      unsubscribeUpdateStatus = null;
+    }
     if (typeof savedTheme !== 'undefined') {
       Api.applyTheme(savedTheme);
     }

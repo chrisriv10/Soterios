@@ -205,7 +205,7 @@ class ScanEngine {
       this.isScanning = false;
       const durationMs = Date.now() - startTime;
       const status = wasCanceled ? 'canceled' : (errors.length === 0 ? 'completed' : 'failed');
-      const report = this.saveScanReport({
+      const reportPayload = {
         scanType,
         status,
         startedAt: this.currentScan ? this.currentScan.startedAt : new Date(startTime).toISOString(),
@@ -217,9 +217,13 @@ class ScanEngine {
         threats,
         errors,
         details: { threats, errors }
-      });
+      };
+      const shouldPersistReport = scanType !== 'folderwatch' && !wasCanceled;
+      const report = shouldPersistReport
+        ? this.saveScanReport(reportPayload)
+        : reportPayload;
       try {
-        if (this.db.getSetting('feature.scanHistory', true)) {
+        if (shouldPersistReport && this.db.getSetting('feature.scanHistory', true)) {
           this.db.logScan(scanType, totalFilesScanned, totalThreatsFound, durationMs);
         }
       } catch (_) {}
@@ -234,7 +238,16 @@ class ScanEngine {
           status: 'canceled'
         });
       }
-      this.eventBus.emit('scan:complete', { filesScanned: totalFilesScanned, threatsFound: totalThreatsFound, durationMs, threats, errors, status, report });
+      this.eventBus.emit('scan:complete', {
+        scanType,
+        filesScanned: totalFilesScanned,
+        threatsFound: totalThreatsFound,
+        durationMs,
+        threats,
+        errors,
+        status,
+        report
+      });
     }
 
     const notes = this._notes || [];
@@ -256,6 +269,9 @@ class ScanEngine {
   abortScan() {
     if (!this.isScanning) {
       return { success: false, canceled: false, error: 'No scan in progress' };
+    }
+    if (this.currentScan?.scanType === 'folderwatch') {
+      return { success: false, canceled: false, error: 'No user scan in progress' };
     }
     if (this.abortController) this.abortController.abort();
     if (this.clamEngine && typeof this.clamEngine.abortCurrentScan === 'function') {

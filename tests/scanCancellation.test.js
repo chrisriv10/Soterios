@@ -1,5 +1,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
+const os = require('os');
+const path = require('path');
 const { EventEmitter } = require('events');
 const ScanEngine = require('../src/security/ScanEngine');
 const ClamAVEngine = require('../src/security/ClamAVEngine');
@@ -89,6 +91,91 @@ describe('Scan cancellation cleanup', () => {
 
     const result = scanEngine.abortScan();
     assert.deepEqual(result, { success: false, canceled: false, error: 'No scan in progress' });
+  });
+
+  it('does not abort background folderwatch scans via abortScan guard pattern', async () => {
+    let aborted = false;
+    const fakeClam = {
+      scanFile: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return { success: true, threatsFound: 0, filesScanned: 1, threats: [] };
+      },
+      abortCurrentScan: () => { aborted = true; }
+    };
+    const scanEngine = new ScanEngine(
+      {
+        getSetting: () => false,
+        logScan: () => {},
+        addScanReport: () => {}
+      },
+      new EventEmitter(),
+      fakeClam,
+      { analyze: async () => ({ score: 0, signals: [] }) },
+      { checkHash: async () => null },
+      { quarantine: async () => ({ success: true }) }
+    );
+
+    const pending = scanEngine.runScan('folderwatch', [path.join(os.tmpdir(), 'watched.bin')], 'Folder watch');
+    await waitFor(() => scanEngine.getStatus().isScanning);
+    const blocked = scanEngine.abortScan();
+    assert.deepEqual(blocked, { success: false, canceled: false, error: 'No user scan in progress' });
+    assert.equal(aborted, false);
+    await pending;
+  });
+
+  it('does not persist reports for canceled or folderwatch scans', async () => {
+    let savedReports = 0;
+    let loggedScans = 0;
+    const db = {
+      getSetting: () => true,
+      logScan: () => { loggedScans += 1; },
+      addScanReport: () => { savedReports += 1; }
+    };
+    const syncClam = {
+      scanFile: async () => ({
+        success: true,
+        threatsFound: 0,
+        filesScanned: 1,
+        threats: []
+      })
+    };
+    const folderwatchEngine = new ScanEngine(
+      db,
+      new EventEmitter(),
+      syncClam,
+      { analyze: async () => ({ score: 0, signals: [] }) },
+      { checkHash: async () => null },
+      { quarantine: async () => ({ success: true }) }
+    );
+
+    await folderwatchEngine.runScan('folderwatch', [path.join(os.tmpdir(), 'watched.bin')], 'Folder watch');
+    assert.equal(savedReports, 0);
+    assert.equal(loggedScans, 0);
+
+    const fakeClam = new FakeClamEngine();
+    const scanEngine = new ScanEngine(
+      db,
+      new EventEmitter(),
+      fakeClam,
+      { analyze: async () => ({ score: 0, signals: [] }) },
+      { checkHash: async () => null },
+      { quarantine: async () => ({ success: true }) }
+    );
+
+    const pending = scanEngine.runCustomScan(['C:\\temp']);
+    await waitFor(() => fakeClam.pendingResolve !== null);
+    assert.deepEqual(scanEngine.abortScan(), { success: true, canceled: true });
+    fakeClam.pendingResolve({
+      success: false,
+      canceled: true,
+      error: 'Scan canceled',
+      threatsFound: 0,
+      filesScanned: 0,
+      output: ''
+    });
+    await pending;
+    assert.equal(savedReports, 0);
+    assert.equal(loggedScans, 0);
   });
 });
 

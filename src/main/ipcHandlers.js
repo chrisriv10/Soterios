@@ -15,6 +15,10 @@ const {
   csvPathForJson,
   generatePdfFromHtml
 } = require('../security/reportExport');
+const updater = require('./updater');
+const { getTrayHealthSummary } = require('./healthSummary');
+const { MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS, ALLOWED_SCRIPT_IDS, SCHEDULE_PRESETS } = require('./maintenanceScheduler');
+const { loadRegistry } = require('../scripts/scriptRunner');
 
 function isValidIp(ip) {
   const v4 = /^(\d{1,3}\.){3}\d{1,3}$/;
@@ -215,7 +219,18 @@ function deleteFileIfSafe(filePath) {
 }
 
 function registerIpcHandlers(mainWindow, services) {
-  const { db, eventBus, clamEngine, scanEngine, quarantineManager, realtimeWatcher, processInspector, reputationEngine } = services;
+  const {
+    db,
+    eventBus,
+    clamEngine,
+    scanEngine,
+    quarantineManager,
+    realtimeWatcher,
+    processInspector,
+    reputationEngine,
+    toolRegistry,
+    maintenanceScheduler
+  } = services;
 
   // -- System --
   ipcMain.handle('app:info', () => ({
@@ -299,6 +314,10 @@ function registerIpcHandlers(mainWindow, services) {
   });
 
   ipcMain.handle('scan:abort', () => {
+    const status = scanEngine.getStatus();
+    if (status.currentScan && status.currentScan.scanType === 'folderwatch') {
+      return { success: false, canceled: false, error: 'No user scan in progress' };
+    }
     return scanEngine.abortScan();
   });
 
@@ -763,6 +782,83 @@ function registerIpcHandlers(mainWindow, services) {
     const errorMessage = await shell.openPath(resolved);
     return errorMessage ? { success: false, error: errorMessage } : { success: true };
   });
+
+  // -- Scheduled maintenance (#71) --
+  ipcMain.handle('maintenance:get', () => {
+    if (!maintenanceScheduler) return { ok: false, error: 'Maintenance scheduler unavailable.' };
+    return { ok: true, data: maintenanceScheduler.loadConfig() };
+  });
+
+  ipcMain.handle('maintenance:set', (_event, partial) => {
+    if (!maintenanceScheduler) return { ok: false, error: 'Maintenance scheduler unavailable.' };
+    const next = { ...(partial || {}) };
+    if (Object.prototype.hasOwnProperty.call(next, 'intervalHours')) {
+      const hours = Number(next.intervalHours);
+      if (!Number.isFinite(hours) || hours < MIN_INTERVAL_HOURS || hours > MAX_INTERVAL_HOURS) {
+        return {
+          ok: false,
+          error: `Interval must be between ${MIN_INTERVAL_HOURS} and ${MAX_INTERVAL_HOURS} hours.`
+        };
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(next, 'schedulePreset')) {
+      if (!SCHEDULE_PRESETS[next.schedulePreset]) {
+        return { ok: false, error: 'Invalid schedule preset.' };
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(next, 'scriptIds')) {
+      if (!Array.isArray(next.scriptIds)) {
+        return { ok: false, error: 'scriptIds must be an array.' };
+      }
+      next.scriptIds = next.scriptIds.filter((id) => ALLOWED_SCRIPT_IDS.has(id));
+      if (!next.scriptIds.length) {
+        return { ok: false, error: 'Select at least one maintenance script.' };
+      }
+    }
+    return { ok: true, data: maintenanceScheduler.saveConfig(next) };
+  });
+
+  ipcMain.handle('maintenance:getScripts', () => {
+    const scripts = loadRegistry()
+      .filter((entry) => ALLOWED_SCRIPT_IDS.has(entry.id))
+      .map((entry) => ({ id: entry.id, name: entry.name, description: entry.description }));
+    return { ok: true, data: scripts };
+  });
+
+  ipcMain.handle('maintenance:getHistory', () => ({ ok: true, data: db.getMaintenanceHistory(25) }));
+
+  ipcMain.handle('maintenance:runNow', async () => {
+    if (!maintenanceScheduler) return { ok: false, error: 'Maintenance scheduler unavailable.' };
+    const result = await maintenanceScheduler.runNow({ dryRunCleanup: false, manual: true });
+    if (result.skipped) {
+      return {
+        ok: false,
+        error: result.reason === 'already-running'
+          ? 'Maintenance is already running.'
+          : `Maintenance skipped: ${result.reason || 'unknown'}.`,
+        data: result
+      };
+    }
+    return { ok: true, data: result };
+  });
+
+  // -- Auto-updater (#69) --
+  ipcMain.handle('update:check', () => updater.checkForUpdates());
+  ipcMain.handle('update:status', () => updater.getUpdateStatus());
+  ipcMain.handle('update:install', () => updater.quitAndInstall());
+
+  // -- System tray mini dashboard (#67) --
+  ipcMain.handle('tray:getSummary', async () => getTrayHealthSummary(db, toolRegistry));
+
+  ipcMain.handle('tray:openMain', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+
+  ipcMain.handle('tray:quit', () => app.quit());
 }
 
 module.exports = { registerIpcHandlers };

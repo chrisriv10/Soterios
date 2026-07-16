@@ -13,7 +13,8 @@ class FolderWatcher {
    * @param {object} options
    * @param {import('../core/database')} [options.db]
    * @param {{ emit: Function }} [options.eventBus]
-   * @param {{ runCustomScan: Function, isScanning?: boolean }} options.scanEngine
+   * @param {{ runCustomScan: Function, runScan?: Function, isScanning?: boolean }} options.scanEngine
+   * @param {{ isReady?: boolean }} [options.clamEngine]
    * @param {(title: string, body: string, level?: string) => void} [options.notify]
    * @param {string[]} [options.watchDirs]
    * @param {number} [options.debounceMs]
@@ -22,6 +23,7 @@ class FolderWatcher {
     this.db = options.db || null;
     this.eventBus = options.eventBus || null;
     this.scanEngine = options.scanEngine;
+    this.clamEngine = options.clamEngine || null;
     this.notify = options.notify || (() => {});
     this.debounceMs = options.debounceMs || 1500;
     this.watchDirs = options.watchDirs || FolderWatcher.defaultWatchDirs();
@@ -123,6 +125,10 @@ class FolderWatcher {
     this._draining = true;
     try {
       while (this._queue.length && this._running) {
+        if (this.clamEngine && !this.clamEngine.isReady) {
+          await new Promise((r) => setTimeout(r, 500));
+          continue;
+        }
         if (this.scanEngine && this.scanEngine.isScanning) {
           await new Promise((r) => setTimeout(r, 500));
           continue;
@@ -130,14 +136,10 @@ class FolderWatcher {
         const filePath = this._queue.shift();
         this._scannedRecently.set(filePath, Date.now());
         try {
-          let result;
-          if(typeof this.scanEngine.runScan === 'function') {
-            result = await this.scanEngine.runScan('folderwatch', [filePath], 'Folder watch scan starting...');
-          } else {
-            result = await this.scanEngine.runCustomScan([filePath]);
-          }
-
-          if (result && result.error) continue;
+          const result = typeof this.scanEngine.runScan === 'function'
+            ? await this.scanEngine.runScan('folderwatch', [filePath], 'Folder watch scan starting...')
+            : await this.scanEngine.runCustomScan([filePath]);
+          if (result && (result.error || result.canceled)) continue;
           const threats = (result && result.threatsFound) || 0;
           if (threats > 0) {
             const msg = `Folder watch found ${threats} threat(s) in ${filePath}`;

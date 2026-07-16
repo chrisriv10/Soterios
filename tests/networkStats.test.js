@@ -27,8 +27,10 @@ describe('DatabaseService network_stats', () => {
     const service = new DatabaseService(tempDb());
     const tables = service.db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map((r) => r.name);
     assert.ok(tables.includes('network_stats'));
-    service.addNetworkStatsSample('eth0', 12.5, 3.2, '2026-07-15T10:00:00.000Z');
-    service.addNetworkStatsSample('eth0', 20, 5, '2026-07-15T10:00:30.000Z');
+    const firstAt = new Date(Date.now() - 3600 * 1000).toISOString();
+    const secondAt = new Date(Date.now() - 1800 * 1000).toISOString();
+    service.addNetworkStatsSample('eth0', 12.5, 3.2, firstAt);
+    service.addNetworkStatsSample('eth0', 20, 5, secondAt);
     const rows = service.getNetworkStatsHistory(24, 'eth0');
     assert.equal(rows.length, 2);
     assert.equal(rows[0].rx_sec, 12.5);

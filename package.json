@@ -17,12 +17,14 @@
     "dist:win": "electron-builder --win --publish never",
     "dist:mac": "electron-builder --mac --publish never",
     "dist:linux": "electron-builder --linux --publish never",
-    "postinstall": "node scripts/download-clamav.js",
-    "prepack": "node scripts/download-clamav.js",
-    "test": "node scripts/run-node-tests.js && jest tests/passwordTools.test.js tests/reportExport.test.js"
+    "postinstall": "node tools/download-clamav.js",
+    "prepack": "node tools/download-clamav.js",
+    "test": "node tests/node-test-runner.js && jest tests/passwordTools.test.js tests/reportExport.test.js",
+    "smoke:integration": "node tests/smoke/integration-smoke.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",
+    "electron-updater": "^6.8.3",
     "ps-list": "^8.1.1",
     "systeminformation": "^5.23.5"
   },
@@ -99,6 +101,13 @@
       "target": "AppImage",
       "icon": "assets/icon.png",
       "category": "Utility"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "chrisriv10",
+        "repo": "Soterios"
+      }
+    ]
   }
 }

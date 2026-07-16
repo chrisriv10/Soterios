@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Soterios Tray</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: rgba(20, 26, 33, 0.96);
+      --border: rgba(255,255,255,0.08);
+      --text: #f2f5f8;
+      --muted: #aab4bf;
+      --accent: #58a6ff;
+    }
+    html, body {
+      margin: 0;
+      background: transparent;
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+      user-select: none;
+    }
+    .panel {
+      margin: 8px;
+      padding: 16px;
+      border-radius: 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      box-shadow: 0 12px 32px rgba(0,0,0,0.35);
+      color: var(--text);
+    }
+    .title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+    .score {
+      font-size: 42px;
+      font-weight: 700;
+      color: var(--accent);
+      line-height: 1;
+      margin: 8px 0;
+    }
+    .meta { font-size: 12px; color: var(--muted); line-height: 1.5; }
+    .actions { display: flex; gap: 8px; margin-top: 14px; }
+    button {
+      flex: 1;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    button.primary {
+      background: var(--accent);
+      border-color: transparent;
+      color: #0b0e14;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <div class="title">System Health</div>
+    <div class="score" id="healthScore">--</div>
+    <div class="meta" id="healthDetail">Loading summary...</div>
+    <div class="actions">
+      <button class="primary" id="openApp">Open Soterios</button>
+      <button id="quitApp">Quit</button>
+    </div>
+  </div>
+  <script>
+    const scoreEl = document.getElementById('healthScore');
+    const detailEl = document.getElementById('healthDetail');
+    window.api.on('tray:summary', (summary) => {
+      scoreEl.textContent = summary && summary.score != null ? String(summary.score) : 'N/A';
+      detailEl.textContent = summary && summary.detail ? summary.detail : 'Health summary unavailable.';
+    });
+    window.api.invoke('tray:getSummary').then((summary) => {
+      scoreEl.textContent = summary && summary.score != null ? String(summary.score) : 'N/A';
+      detailEl.textContent = summary && summary.detail ? summary.detail : 'Health summary unavailable.';
+    }).catch(() => {
+      detailEl.textContent = 'Unable to load health summary.';
+    });
+    document.getElementById('openApp').addEventListener('click', () => window.api.invoke('tray:openMain'));
+    document.getElementById('quitApp').addEventListener('click', () => window.api.invoke('tray:quit'));
+  </script>
+</body>
+</html>

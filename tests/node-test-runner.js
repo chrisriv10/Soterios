@@ -5,10 +5,10 @@ const fs = require('fs');
 const path = require('path');
 
 const JEST_ONLY = new Set(['passwordTools.test.js', 'reportExport.test.js']);
-const testsDir = path.join(__dirname, '..', 'tests');
+const testsDir = __dirname;
 const files = fs.readdirSync(testsDir)
   .filter((name) => name.endsWith('.test.js') && !JEST_ONLY.has(name))
-  .map((name) => path.join('tests', name))
+  .map((name) => path.join(testsDir, name))
   .sort();
 
 if (!files.length) {

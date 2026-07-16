@@ -95,6 +95,18 @@ class DatabaseService {
       )
     `);
 
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS maintenance_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        started_at TEXT,
+        ok_count INTEGER DEFAULT 0,
+        total_count INTEGER DEFAULT 0,
+        dry_run INTEGER DEFAULT 0,
+        results_json TEXT
+      )
+    `);
+
     // Reputation Cache (VirusTotal)
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS reputation_cache (
@@ -261,6 +273,50 @@ class DatabaseService {
   markAlertRead(id) {
     const stmt = this.db.prepare('UPDATE alerts SET is_read = 1 WHERE id = ?');
     return stmt.run(id);
+  }
+
+  addMaintenanceRun({ startedAt, results, dryRunCleanup = false }) {
+    const okCount = (results || []).filter((r) => r.ok).length;
+    const stmt = this.db.prepare(`
+      INSERT INTO maintenance_runs (started_at, ok_count, total_count, dry_run, results_json)
+      VALUES (@startedAt, @okCount, @totalCount, @dryRun, @resultsJson)
+    `);
+    return stmt.run({
+      startedAt: startedAt || new Date().toISOString(),
+      okCount,
+      totalCount: (results || []).length,
+      dryRun: dryRunCleanup ? 1 : 0,
+      resultsJson: JSON.stringify(results || [])
+    });
+  }
+
+  getMaintenanceHistory(limit = 25) {
+    return this.db.prepare(`
+      SELECT id, timestamp, started_at, ok_count, total_count, dry_run, results_json
+      FROM maintenance_runs ORDER BY timestamp DESC, id DESC LIMIT ?
+    `).all(limit).map((row) => ({
+      id: row.id,
+      timestamp: row.timestamp,
+      started_at: row.started_at,
+      ok_count: row.ok_count,
+      total_count: row.total_count,
+      dry_run: !!row.dry_run,
+      results: (() => {
+        try { return JSON.parse(row.results_json || '[]'); } catch (_) { return []; }
+      })()
+    }));
+  }
+
+  pruneMaintenanceRuns(keepCount = 100) {
+    const count = this.db.prepare('SELECT COUNT(*) AS total FROM maintenance_runs').get().total;
+    if (count <= keepCount) return { changes: 0 };
+    const deleteCount = count - keepCount;
+    return this.db.prepare(`
+      DELETE FROM maintenance_runs
+      WHERE id IN (
+        SELECT id FROM maintenance_runs ORDER BY timestamp ASC, id ASC LIMIT ?
+      )
+    `).run(deleteCount);
   }
 
   ignoreWarning(warning) {
