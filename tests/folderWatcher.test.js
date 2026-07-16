@@ -18,10 +18,15 @@ describe('FolderWatcher', () => {
     watcher = new FolderWatcher({
       watchDirs: [tmp],
       debounceMs: 50,
+      clamEngine: { isReady: true },
       scanEngine: {
         isScanning: false,
+        async runScan(scanType, paths) {
+          scanned.push({ scanType, paths });
+          return { success: true, threatsFound: 0, threats: [] };
+        },
         async runCustomScan(paths) {
-          scanned.push(...paths);
+          scanned.push({ scanType: 'custom', paths });
           return { success: true, threatsFound: 0, threats: [] };
         }
       }
@@ -45,14 +50,15 @@ describe('FolderWatcher', () => {
     assert.equal(missing.getStatus().running, false);
   });
 
-  it('debounces and queues a custom scan for new files', async () => {
+  it('debounces and queues a folderwatch scan for new files', async () => {
     watcher.start();
     const filePath = path.join(tmp, 'payload.bin');
     fs.writeFileSync(filePath, 'hello');
-    // Force schedule path used by watcher (fs.watch is flaky in CI/tmp).
     watcher._schedule(filePath);
     await new Promise((r) => setTimeout(r, 200));
-    assert.ok(scanned.includes(filePath));
+    assert.equal(scanned.length, 1);
+    assert.equal(scanned[0].scanType, 'folderwatch');
+    assert.deepEqual(scanned[0].paths, [filePath]);
   });
 
   it('skips duplicate scans within the cooldown window', async () => {
@@ -63,6 +69,17 @@ describe('FolderWatcher', () => {
     await new Promise((r) => setTimeout(r, 120));
     watcher._schedule(filePath);
     await new Promise((r) => setTimeout(r, 120));
-    assert.equal(scanned.filter((p) => p === filePath).length, 1);
+    assert.equal(scanned.filter((entry) => entry.paths[0] === filePath).length, 1);
+  });
+
+  it('does not scan when ClamAV is unavailable', async () => {
+    watcher.clamEngine = { isReady: false };
+    watcher.start();
+    const filePath = path.join(tmp, 'blocked.bin');
+    fs.writeFileSync(filePath, 'x');
+    watcher._enqueue(filePath);
+    await new Promise((r) => setTimeout(r, 120));
+    assert.equal(scanned.length, 0);
+    assert.equal(watcher.getStatus().queued, 1);
   });
 });

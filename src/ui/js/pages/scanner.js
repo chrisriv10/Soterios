@@ -335,6 +335,7 @@ container.innerHTML = `
     // Subscribe to scan progress events from main process
     this.cleanups.push(window.api.on('scan:progress', (data) => {
       if (!hasView()) return;
+      if (data?.scanType === 'folderwatch') return;
       if (data && data.pct !== undefined) {
         if (data.scanType) {
           activeAction = data.scanType === 'definitions' ? 'definitions' : 'virus';
@@ -347,6 +348,7 @@ container.innerHTML = `
 
     this.cleanups.push(window.api.on('scan:complete', async (data) => {
       if (!data) return;
+      if (data.scanType === 'folderwatch') return;
       if (window.AppRouter && window.AppRouter.current && window.AppRouter.current() !== 'scanner') return;
 
       const canceled = data.status === 'canceled';

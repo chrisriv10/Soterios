@@ -516,6 +516,7 @@ app.whenReady().then(async () => {
     db,
     eventBus,
     scanEngine,
+    clamEngine,
     notify: (title, body, level) => showNotification(title, body, level)
   });
   const networkAlertMonitor = new NetworkAlertMonitor({
@@ -571,13 +572,17 @@ app.whenReady().then(async () => {
 
   // Forward scan progress events from EventBus to renderer
   const announcedProgress = new Set();
+  const resolveScanType = (data) => data?.scanType || data?.report?.scanType || null;
+  const isBackgroundScan = (scanType) => scanType === 'folderwatch';
+
   eventBus.on('scan:progress', (data) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
+    const scanType = resolveScanType(data);
+    if (!isBackgroundScan(scanType) && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('scan:progress', data);
     }
     if (!data || typeof data.pct !== 'number') return;
     if (dbRef && !dbRef.getSetting('feature.scanNotifications', true)) return;
-    if (data.scanType === 'definitions') return;
+    if (scanType === 'definitions' || isBackgroundScan(scanType)) return;
     const milestone = [0, 25, 50, 75].find((value) => data.pct >= value && !announcedProgress.has(value));
     if (milestone !== undefined) {
       announcedProgress.add(milestone);
@@ -588,10 +593,13 @@ app.whenReady().then(async () => {
 
   // Forward scan complete events to renderer
   eventBus.on('scan:complete', (data) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
+    const scanType = resolveScanType(data);
+    if (!isBackgroundScan(scanType) && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('scan:complete', data);
     }
     announcedProgress.clear();
+    if (isBackgroundScan(scanType)) return;
+
     let label;
     let body;
     let level;
@@ -619,6 +627,8 @@ app.whenReady().then(async () => {
     (async () => {
       try {
         if (!db.getSetting('feature.autoReports', true)) return;
+        const isCanceled = data.status === 'canceled' || data.report?.status === 'canceled';
+        if (isCanceled || (scanType !== 'quick' && scanType !== 'full')) return;
         logLine('info', 'Generating scan report...');
         const result = await toolRegistry.run('generate-security-report', { version: app.getVersion() }, { toolRegistry, db, log: logLine });
         logLine('info', 'Scan report ' + (result.ok ? 'generated' : 'failed: ' + (result.error || 'unknown')));
