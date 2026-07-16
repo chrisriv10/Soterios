@@ -7,6 +7,8 @@ function summarizeScriptResult(result) {
   if (Array.isArray(result.browsers)) return { totalMB: result.totalMB };
   if (Array.isArray(result.interfaces)) return { interfaces: result.interfaces.length, establishedConnectionCount: result.establishedConnectionCount };
   if (Array.isArray(result.services)) return { autoStartCount: result.autoStartCount, flaggedCount: result.flaggedCount };
+  if (Array.isArray(result.apps)) return { appCount: result.appCount, leftoverCount: (result.leftovers || []).length };
+  if (Array.isArray(result.leftovers)) return { leftoverCount: result.leftovers.length, dryRun: result.dryRun };
   return {};
 }
 

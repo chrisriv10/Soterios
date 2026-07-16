@@ -1,0 +1,20 @@
+{
+  "app.name": "Soterios",
+  "tools.title": "Narzędzia i konserwacja",
+  "tools.subtitle": "Uruchamiaj ukierunkowane kontrole konserwacji.",
+  "tools.output": "Wynik",
+  "tools.clear": "Wyczyść",
+  "tools.run": "Uruchom",
+  "tools.running": "Uruchamianie...",
+  "tools.completed": "Ukończono",
+  "tools.notRunYet": "Jeszcze nie uruchomiono",
+  "settings.appearance": "Wygląd",
+  "settings.language": "Język",
+  "settings.languageHint": "Wybierz język interfejsu dla obsługiwanych stron.",
+  "settings.applyLanguage": "Zastosuj język",
+  "settings.languageUpdated": "Język zaktualizowany.",
+  "uninstaller.title": "Deinstalator oprogramowania",
+  "uninstaller.uninstall": "Odinstaluj",
+  "uninstaller.scanLeftovers": "Skanuj pozostałości",
+  "uninstaller.removeSelected": "Usuń wybrane pozostałości"
+}

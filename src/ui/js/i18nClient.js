@@ -1,0 +1,40 @@
+'use strict';
+
+window.I18n = {
+  locale: 'en',
+  catalog: {},
+  fallbackCatalog: {},
+
+  async initialize(locale) {
+    const requested = locale || await window.api.invoke('db:getSetting', 'ui.language', '');
+    await this.setLocale(requested || 'en', { persist: false });
+  },
+
+  async setLocale(locale, options = {}) {
+    const normalized = await window.api.invoke('i18n:normalizeLocale', locale || 'en');
+    this.catalog = await window.api.invoke('i18n:getCatalog', normalized);
+    this.fallbackCatalog = normalized === 'en'
+      ? this.catalog
+      : await window.api.invoke('i18n:getCatalog', 'en');
+    this.locale = normalized;
+    document.documentElement.setAttribute('lang', normalized);
+    const rtl = await window.api.invoke('i18n:isRtlLocale', normalized);
+    document.documentElement.setAttribute('dir', rtl ? 'rtl' : 'ltr');
+    if (window.AppState) window.AppState.currentLanguage = normalized;
+    if (options.persist !== false) {
+      await window.api.invoke('db:setSetting', 'ui.language', normalized);
+    }
+  },
+
+  t(key, vars) {
+    let value = this.catalog[key];
+    if (value == null) value = this.fallbackCatalog[key];
+    if (value == null) return key;
+    if (vars && typeof vars === 'object') {
+      value = String(value).replace(/\{(\w+)\}/g, (_match, name) => (
+        Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : `{${name}}`
+      ));
+    }
+    return value;
+  }
+};

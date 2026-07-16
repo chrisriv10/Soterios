@@ -22,8 +22,11 @@
   window.AppRouter = { navigate, current: () => currentPage };
   if (window.Api) {
     await window.Api.initializeTheme();
+    await window.Api.initializeLanguage();
   }
-  navigate('dashboard');
+  const hashPage = (window.location.hash || '').replace(/^#/, '');
+  const initialPage = hashPage && window.Pages && window.Pages[hashPage] ? hashPage : 'dashboard';
+  navigate(initialPage);
 
   // Listen for toast click to navigate to scanner
   if (window.api) {

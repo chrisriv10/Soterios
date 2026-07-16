@@ -1,0 +1,20 @@
+{
+  "app.name": "Soterios",
+  "tools.title": "टूल और रखरखाव",
+  "tools.subtitle": "केंद्रित रखरखाव जाँच चलाएँ।",
+  "tools.output": "आउटपुट",
+  "tools.clear": "साफ़ करें",
+  "tools.run": "चलाएँ",
+  "tools.running": "चल रहा है...",
+  "tools.completed": "पूर्ण",
+  "tools.notRunYet": "अभी तक नहीं चलाया गया",
+  "settings.appearance": "दिखावट",
+  "settings.language": "भाषा",
+  "settings.languageHint": "समर्थित पृष्ठों के लिए UI भाषा चुनें।",
+  "settings.applyLanguage": "भाषा लागू करें",
+  "settings.languageUpdated": "भाषा अपडेट की गई।",
+  "uninstaller.title": "सॉफ़्टवेयर अनइंस्टॉलर",
+  "uninstaller.uninstall": "अनइंस्टॉल",
+  "uninstaller.scanLeftovers": "अवशेष स्कैन करें",
+  "uninstaller.removeSelected": "चयनित अवशेष हटाएँ"
+}

@@ -347,6 +347,70 @@ function sendSplashProgress(pct, label) {
   }
 }
 
+function isScreenshotCaptureMode() {
+  return process.argv.includes('--screenshot-capture');
+}
+
+function getScreenshotConfig() {
+  if (!isScreenshotCaptureMode()) return null;
+  const pageArg = process.argv.find((arg) => arg.startsWith('--screenshot-page='));
+  const outArg = process.argv.find((arg) => arg.startsWith('--screenshot-out='));
+  if (!pageArg || !outArg) return null;
+  return {
+    page: pageArg.split('=')[1],
+    outPath: outArg.split('=')[1],
+    runUninstaller: process.argv.includes('--screenshot-run-uninstaller')
+  };
+}
+
+function scheduleScreenshotCapture(win, config) {
+  win.webContents.once('did-finish-load', () => {
+    dismissSplash();
+    if (config.page === 'tools') win.setSize(1280, 980);
+    const delayMs = config.runUninstaller ? 12000 : 8000;
+    setTimeout(async () => {
+      try {
+        if (config.page === 'tools') {
+          await win.webContents.executeJavaScript(`
+            (async () => {
+              await new Promise((resolve) => setTimeout(resolve, 1500));
+              document.querySelector('[data-script-id="uninstaller-report"]')?.scrollIntoView({ block: 'center' });
+            })();
+          `);
+          await new Promise((resolve) => setTimeout(resolve, 800));
+        }
+        if (config.runUninstaller) {
+          await win.webContents.executeJavaScript(`
+            (async () => {
+              for (let attempt = 0; attempt < 24; attempt += 1) {
+                const btn = document.querySelector('[data-script-id="uninstaller-report"]');
+                if (btn && !btn.disabled) {
+                  btn.scrollIntoView({ block: 'center' });
+                  btn.click();
+                  break;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 500));
+              }
+              await new Promise((resolve) => setTimeout(resolve, 6000));
+              document.getElementById('toolOutput')?.scrollIntoView({ block: 'start' });
+            })();
+          `);
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+        const image = await win.webContents.capturePage();
+        fs.mkdirSync(path.dirname(config.outPath), { recursive: true });
+        fs.writeFileSync(config.outPath, image.toPNG());
+        logLine('info', 'Screenshot saved', { path: config.outPath });
+        app.quit();
+      } catch (err) {
+        logLine('error', 'Screenshot capture failed', { error: err.message });
+        process.exitCode = 1;
+        app.quit();
+      }
+    }, delayMs);
+  });
+}
+
 // Called once the renderer's Dashboard has actually finished loading its data
 // (not just once the HTML has parsed), or after a maximum wait as a fallback
 // so a slow/failed load never leaves the user stuck looking at the splash
@@ -384,7 +448,14 @@ function createWindow() {
     show: false
   });
 
-  mainWindow.loadFile(path.join(__dirname, '../ui/pages/shell.html'));
+  const shellHtmlPath = path.join(__dirname, '../ui/pages/shell.html');
+  const screenshotConfig = getScreenshotConfig();
+  if (screenshotConfig) {
+    mainWindow.loadFile(shellHtmlPath, { hash: screenshotConfig.page });
+    scheduleScreenshotCapture(mainWindow, screenshotConfig);
+  } else {
+    mainWindow.loadFile(shellHtmlPath);
+  }
 
   // Intentionally no auto-show on 'ready-to-show' here -- the window stays
   // hidden until the renderer signals it has actually finished loading data
@@ -394,7 +465,7 @@ function createWindow() {
   // delayed or never arrives (e.g. an unexpected renderer error).
   splashTimeoutId = setTimeout(dismissSplash, 8000);
 
-  if (process.argv.includes('--dev') || process.env.NODE_ENV === 'development') {
+  if ((process.argv.includes('--dev') || process.env.NODE_ENV === 'development') && !isScreenshotCaptureMode()) {
     mainWindow.webContents.once('did-finish-load', () => {
       mainWindow.webContents.openDevTools({ mode: 'detach' });
     });
@@ -459,7 +530,9 @@ app.whenReady().then(async () => {
   // Peek the saved theme before creating the splash so the first paint
   // matches the user's preference instead of always flashing dark mode.
   currentUiTheme = peekUiTheme(dbPath);
-  createSplashWindow(currentUiTheme);
+  if (!isScreenshotCaptureMode()) {
+    createSplashWindow(currentUiTheme);
+  }
 
   logLine('info', 'App starting', { theme: currentUiTheme });
   sendSplashProgress(0, 'Starting Soterios...');

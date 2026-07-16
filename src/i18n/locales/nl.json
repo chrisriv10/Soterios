@@ -1,0 +1,20 @@
+{
+  "app.name": "Soterios",
+  "tools.title": "Tools en onderhoud",
+  "tools.subtitle": "Voer gerichte onderhoudscontroles uit.",
+  "tools.output": "Uitvoer",
+  "tools.clear": "Wissen",
+  "tools.run": "Uitvoeren",
+  "tools.running": "Bezig...",
+  "tools.completed": "Voltooid",
+  "tools.notRunYet": "Nog niet uitgevoerd",
+  "settings.appearance": "Weergave",
+  "settings.language": "Taal",
+  "settings.languageHint": "Kies de UI-taal voor ondersteunde pagina's.",
+  "settings.applyLanguage": "Taal toepassen",
+  "settings.languageUpdated": "Taal bijgewerkt.",
+  "uninstaller.title": "Softwareverwijderaar",
+  "uninstaller.uninstall": "Verwijderen",
+  "uninstaller.scanLeftovers": "Resten scannen",
+  "uninstaller.removeSelected": "Geselecteerde resten verwijderen"
+}

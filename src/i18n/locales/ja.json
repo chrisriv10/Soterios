@@ -1,0 +1,20 @@
+{
+  "app.name": "Soterios",
+  "tools.title": "ツールとメンテナンス",
+  "tools.subtitle": "重点的なメンテナンスチェックを実行します。",
+  "tools.output": "出力",
+  "tools.clear": "クリア",
+  "tools.run": "実行",
+  "tools.running": "実行中...",
+  "tools.completed": "完了",
+  "tools.notRunYet": "未実行",
+  "settings.appearance": "外観",
+  "settings.language": "言語",
+  "settings.languageHint": "対応ページの UI 言語を選択してください。",
+  "settings.applyLanguage": "言語を適用",
+  "settings.languageUpdated": "言語を更新しました。",
+  "uninstaller.title": "ソフトウェアアンインストーラー",
+  "uninstaller.uninstall": "アンインストール",
+  "uninstaller.scanLeftovers": "残存物をスキャン",
+  "uninstaller.removeSelected": "選択した残存物を削除"
+}

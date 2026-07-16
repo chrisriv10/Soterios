@@ -1,0 +1,20 @@
+{
+  "app.name": "Soterios",
+  "tools.title": "الأدوات والصيانة",
+  "tools.subtitle": "تشغيل فحوصات الصيانة المركّزة.",
+  "tools.output": "المخرجات",
+  "tools.clear": "مسح",
+  "tools.run": "تشغيل",
+  "tools.running": "جارٍ التشغيل...",
+  "tools.completed": "اكتمل",
+  "tools.notRunYet": "لم يُشغَّل بعد",
+  "settings.appearance": "المظهر",
+  "settings.language": "اللغة",
+  "settings.languageHint": "اختر لغة الواجهة للصفحات المدعومة.",
+  "settings.applyLanguage": "تطبيق اللغة",
+  "settings.languageUpdated": "تم تحديث اللغة.",
+  "uninstaller.title": "إزالة البرامج",
+  "uninstaller.uninstall": "إزالة",
+  "uninstaller.scanLeftovers": "فحص البقايا",
+  "uninstaller.removeSelected": "إزالة البقايا المحددة"
+}

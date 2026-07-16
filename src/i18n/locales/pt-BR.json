@@ -1,0 +1,20 @@
+{
+  "app.name": "Soterios",
+  "tools.title": "Ferramentas e manutenção",
+  "tools.subtitle": "Execute verificações de manutenção focadas.",
+  "tools.output": "Saída",
+  "tools.clear": "Limpar",
+  "tools.run": "Executar",
+  "tools.running": "Executando...",
+  "tools.completed": "Concluído",
+  "tools.notRunYet": "Ainda não executado",
+  "settings.appearance": "Aparência",
+  "settings.language": "Idioma",
+  "settings.languageHint": "Escolha o idioma da interface para as páginas compatíveis.",
+  "settings.applyLanguage": "Aplicar idioma",
+  "settings.languageUpdated": "Idioma atualizado.",
+  "uninstaller.title": "Desinstalador de software",
+  "uninstaller.uninstall": "Desinstalar",
+  "uninstaller.scanLeftovers": "Verificar restos",
+  "uninstaller.removeSelected": "Remover restos selecionados"
+}

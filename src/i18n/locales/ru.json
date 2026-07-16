@@ -1,0 +1,20 @@
+{
+  "app.name": "Soterios",
+  "tools.title": "Инструменты и обслуживание",
+  "tools.subtitle": "Запускайте целевые проверки обслуживания.",
+  "tools.output": "Вывод",
+  "tools.clear": "Очистить",
+  "tools.run": "Запустить",
+  "tools.running": "Выполняется...",
+  "tools.completed": "Завершено",
+  "tools.notRunYet": "Ещё не запускалось",
+  "settings.appearance": "Внешний вид",
+  "settings.language": "Язык",
+  "settings.languageHint": "Выберите язык интерфейса для поддерживаемых страниц.",
+  "settings.applyLanguage": "Применить язык",
+  "settings.languageUpdated": "Язык обновлён.",
+  "uninstaller.title": "Удаление программ",
+  "uninstaller.uninstall": "Удалить",
+  "uninstaller.scanLeftovers": "Сканировать остатки",
+  "uninstaller.removeSelected": "Удалить выбранные остатки"
+}

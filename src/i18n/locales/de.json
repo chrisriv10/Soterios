@@ -1,0 +1,20 @@
+{
+  "app.name": "Soterios",
+  "tools.title": "Tools & Wartung",
+  "tools.subtitle": "Fokussierte Wartungsprüfungen ausführen.",
+  "tools.output": "Ausgabe",
+  "tools.clear": "Leeren",
+  "tools.run": "Ausführen",
+  "tools.running": "Wird ausgeführt...",
+  "tools.completed": "Abgeschlossen",
+  "tools.notRunYet": "Noch nicht ausgeführt",
+  "settings.appearance": "Darstellung",
+  "settings.language": "Sprache",
+  "settings.languageHint": "Wählen Sie die UI-Sprache für unterstützte Seiten.",
+  "settings.applyLanguage": "Sprache anwenden",
+  "settings.languageUpdated": "Sprache aktualisiert.",
+  "uninstaller.title": "Software-Deinstaller",
+  "uninstaller.uninstall": "Deinstallieren",
+  "uninstaller.scanLeftovers": "Reste suchen",
+  "uninstaller.removeSelected": "Ausgewählte Reste entfernen"
+}

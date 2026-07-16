@@ -1,21 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-
-// Even though largeFilesReport.js already skips some risky directories when
-// scanning, a large file could still legitimately turn up under Windows or
-// Program Files (e.g. a big shared resource/DLL). Deleting those blind,
-// just because a user checked a box, risks breaking installed software or
-// the OS itself -- refuse those regardless of selection.
-const PROTECTED_PREFIXES = [
-  'c:\\windows\\',
-  'c:\\program files\\',
-  'c:\\program files (x86)\\'
-];
-
-function isProtected(p) {
-  const resolved = path.resolve(p).toLowerCase();
-  return PROTECTED_PREFIXES.some((prefix) => resolved.startsWith(prefix));
-}
+const { isProtected } = require('./protectedPaths');
 
 module.exports = async function deleteFiles(args = {}) {
   const paths = Array.isArray(args.paths) ? args.paths : [];

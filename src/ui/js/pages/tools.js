@@ -1,26 +1,36 @@
 window.Pages = window.Pages || {};
 window.Pages.tools = {
   _startupItems: [],
+  _uninstallerApps: [],
   allowedScripts: [
     'clear-temp-files',
     'large-files-report',
     'list-startup-items',
     'browser-cache-report',
     'disk-space-report',
-    'windows-services-report'
+    'windows-services-report',
+    'uninstaller-report'
   ],
+
+  t(key, fallback) {
+    if (window.I18n && typeof window.I18n.t === 'function') {
+      const translated = window.I18n.t(key);
+      if (translated && translated !== key) return translated;
+    }
+    return fallback || key;
+  },
 
   render(container) {
     container.innerHTML = `
       <div class="page-header">
-        <h1 class="page-title">Tools & Maintenance</h1>
-        <div class="page-subtitle">Run focused maintenance checks.</div>
+        <h1 class="page-title">${escapeHtml(this.t('tools.title', 'Tools & Maintenance'))}</h1>
+        <div class="page-subtitle">${escapeHtml(this.t('tools.subtitle', 'Run focused maintenance checks.'))}</div>
       </div>
       <div id="scriptList" class="dashboard-grid compact"></div>
       <div class="panel" style="padding:0; display:flex; flex-direction:column; margin-top:24px; max-height:calc(100vh - 220px);">
         <div style="padding:16px; background:var(--bg-surface-hover); border-bottom:1px solid var(--glass-border); font-weight:600; display:flex; justify-content:space-between; align-items:center;">
-          <span>Output</span>
-          <button class="btn btn-sm" id="clearOutputBtn" style="display:none;">Clear</button>
+          <span>${escapeHtml(this.t('tools.output', 'Output'))}</span>
+          <button class="btn btn-sm" id="clearOutputBtn" style="display:none;">${escapeHtml(this.t('tools.clear', 'Clear'))}</button>
         </div>
         <div class="log-surface" id="toolOutput" style="padding:16px; min-height:160px; overflow:auto; flex:1;"><div class="empty-state"></div></div>
       </div>`;
@@ -51,8 +61,8 @@ window.Pages.tools = {
             <input type="number" min="0" max="365" value="7" id="tempAgeDaysInput" style="width:60px;" />
             day(s)
           </label>` : ''}
-          <div class="history-meta" data-complete-for="${escapeHtml(s.id)}">Not run yet.</div>
-          <button class="btn btn-primary btn-sm" data-script-id="${escapeHtml(s.id)}">Run</button>
+          <div class="history-meta" data-complete-for="${escapeHtml(s.id)}">${escapeHtml(this.t('tools.notRunYet', 'Not run yet.'))}</div>
+          <button class="btn btn-primary btn-sm" data-script-id="${escapeHtml(s.id)}">${escapeHtml(this.t('tools.run', 'Run'))}</button>
         </div>`).join('');
       scriptList.querySelectorAll('[data-script-id]').forEach((btn) => btn.addEventListener('click', () => this.runScript(container, btn)));
     } catch (err) {
@@ -67,7 +77,8 @@ window.Pages.tools = {
       'list-startup-items': 'list',
       'browser-cache-report': 'archive',
       'disk-space-report': 'activity',
-      'windows-services-report': 'list-checks'
+      'windows-services-report': 'list-checks',
+      'uninstaller-report': 'archive'
     }[id] || 'terminal';
   },
 
@@ -87,7 +98,7 @@ window.Pages.tools = {
       ? { dryRun: false, maxAgeDays: this.getTempAgeDays(container) }
       : {};
     const originalLabel = btn.textContent;
-    setButtonLoading(btn, true, 'Running...');
+    setButtonLoading(btn, true, this.t('tools.running', 'Running...'));
 
     // Only these scripts actually report progress (see clearTemp.js,
     // largeFilesReport.js, browserCacheReport.js) -- everything else is a
@@ -123,6 +134,11 @@ window.Pages.tools = {
       const when = new Date().toLocaleString();
       if (status) status.textContent = `Completed ${when}`;
       output.innerHTML = this.renderOutput(scriptId, result, when);
+      if (scriptId === 'uninstaller-report') {
+        this._uninstallerApps = Array.isArray(result.apps) ? result.apps : [];
+        if (result.scannedApp) this._lastScannedAppName = result.scannedApp;
+        this.wireUninstallerActions(container);
+      }
       if (scriptId === 'large-files-report') this.wireLargeFilesActions(container);
       if (scriptId === 'browser-cache-report') this.wireBrowserCacheActions(container);
       if (scriptId === 'list-startup-items' && Array.isArray(result.items)) {
@@ -205,6 +221,27 @@ window.Pages.tools = {
       html += `<div class="log-row"><span class="log-tag info">${result.autoStartCount || 0}</span><span class="log-path">Auto-start services, ${result.flaggedCount || 0} flagged</span></div>`;
       html += (result.flagged || []).map(s => `<div class="log-row" style="${this.lazyRowStyle}"><span class="log-tag match">flag</span><span class="log-path">${escapeHtml(s.displayName || s.name)} ${s.pathName ? '(' + escapeHtml(s.pathName) + ')' : ''}</span></div>`).join('');
       html += (result.services || []).slice(0, 120).map(s => `<div class="log-row" style="${this.lazyRowStyle}"><span class="log-tag clean">${escapeHtml(s.state || '')}</span><span class="log-path">${escapeHtml(s.displayName || s.name)}</span></div>`).join('');
+    } else if (scriptId === 'uninstaller-report') {
+      if (result.supported === false) {
+        html += `<div class="log-row"><span class="log-tag warn">info</span><span class="log-path">${escapeHtml(result.message || 'Software uninstaller is not available on this platform.')}</span></div>`;
+      } else {
+        html += `<div class="log-row"><span class="log-tag info">${result.appCount || 0}</span><span class="log-path">${escapeHtml(this.t('uninstaller.title', 'Installed applications'))}</span></div>`;
+        if (Array.isArray(result.leftovers) && result.leftovers.length) {
+          html += `<div class="log-row"><span class="log-tag warn">${result.leftovers.length}</span><span class="log-path">Leftover folders for ${escapeHtml(result.scannedApp || 'selected app')}</span></div>`;
+          html += `<div style="display:flex; justify-content:flex-end; margin:8px 0;"><button class="btn btn-sm" id="removeLeftoversBtn" data-scanned-app="${escapeHtml(result.scannedApp || '')}" disabled>${escapeHtml(this.t('uninstaller.removeSelected', 'Remove selected leftovers'))} (0)</button></div>`;
+          html += result.leftovers.map((entry) => `
+            <div class="log-row leftover-row" style="display:flex; align-items:center; gap:8px; ${this.lazyRowStyle}">
+              <input type="checkbox" class="leftover-checkbox" data-leftover-path="${escapeHtml(entry.path)}" />
+              <span class="log-path" style="flex:1;">${escapeHtml(entry.path)}</span>
+            </div>`).join('');
+        }
+        html += (result.apps || []).slice(0, 120).map((app, idx) => `
+          <div class="log-row uninstaller-row" data-app-idx="${idx}" style="display:flex; align-items:center; gap:8px; ${this.lazyRowStyle}">
+            <span class="log-path" style="flex:1;">${escapeHtml(app.name)}${app.version ? ` (${escapeHtml(app.version)})` : ''}${app.estimatedSizeMB ? ` — ${app.estimatedSizeMB} MB` : ''}</span>
+            <button class="btn btn-sm uninstaller-scan-btn" data-app-name="${escapeHtml(app.name)}">${escapeHtml(this.t('uninstaller.scanLeftovers', 'Scan leftovers'))}</button>
+            <button class="btn btn-sm uninstaller-launch-btn" data-app-idx="${idx}" ${app.uninstallString ? '' : 'disabled'}>${escapeHtml(this.t('uninstaller.uninstall', 'Uninstall'))}</button>
+          </div>`).join('');
+      }
     } else {
       html += `<pre class="log-path" style="white-space:pre-wrap;">${escapeHtml(JSON.stringify(result, null, 2))}</pre>`;
     }
@@ -322,6 +359,101 @@ window.Pages.tools = {
         }
         btn.disabled = false;
       });
+    });
+  },
+
+  wireUninstallerActions(container) {
+    const output = container.querySelector('#toolOutput');
+    if (!output) return;
+
+    output.querySelectorAll('.uninstaller-launch-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const idx = Number(btn.dataset.appIdx);
+        const app = this._uninstallerApps[idx];
+        const uninstallString = app && app.uninstallString;
+        if (!uninstallString) return;
+        if (!window.confirm(`Launch the native uninstaller for this application?\n\n${uninstallString}`)) return;
+        btn.disabled = true;
+        try {
+          const result = await Api.runTool('run-script', {
+            scriptId: 'launch-uninstaller',
+            scriptArgs: { uninstallString }
+          });
+          alert(result.ok === false ? (result.error || 'Failed to launch uninstaller.') : 'Uninstaller launched.');
+        } catch (err) {
+          alert(err.message || 'Failed to launch uninstaller.');
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+
+    output.querySelectorAll('.uninstaller-scan-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const appName = btn.dataset.appName;
+        if (!appName) return;
+        btn.disabled = true;
+        btn.textContent = this.t('tools.running', 'Running...');
+        try {
+          const refreshed = await Api.runTool('run-script', {
+            scriptId: 'uninstaller-report',
+            scriptArgs: { scanLeftoversFor: appName }
+          });
+          output.innerHTML = this.renderOutput('uninstaller-report', refreshed, new Date().toLocaleString());
+          if (appName) this._lastScannedAppName = appName;
+          this.wireUninstallerActions(container);
+        } catch (err) {
+          alert(err.message || 'Failed to scan for leftovers.');
+          btn.textContent = this.t('uninstaller.scanLeftovers', 'Scan leftovers');
+          btn.disabled = false;
+        }
+      });
+    });
+
+    const removeBtn = output.querySelector('#removeLeftoversBtn');
+    if (!removeBtn) return;
+
+    const updateRemoveButton = () => {
+      const selected = output.querySelectorAll('.leftover-checkbox:checked');
+      removeBtn.textContent = `${this.t('uninstaller.removeSelected', 'Remove selected leftovers')} (${selected.length})`;
+      removeBtn.disabled = selected.length === 0;
+    };
+
+    output.querySelectorAll('.leftover-checkbox').forEach((cb) => cb.addEventListener('change', updateRemoveButton));
+
+    removeBtn.addEventListener('click', async () => {
+      const selected = [...output.querySelectorAll('.leftover-checkbox:checked')];
+      if (!selected.length) return;
+      const paths = selected.map((cb) => cb.dataset.leftoverPath);
+      if (!window.confirm(`Remove ${paths.length} leftover folder(s)? This cannot be undone.`)) return;
+
+      removeBtn.disabled = true;
+      removeBtn.textContent = this.t('tools.running', 'Running...');
+      try {
+        const preview = await Api.runTool('run-script', {
+          scriptId: 'remove-leftovers',
+          scriptArgs: { paths, dryRun: true }
+        });
+        if (!window.confirm(`Dry-run found ${preview.removedCount} removable folder(s). Proceed with deletion?`)) {
+          updateRemoveButton();
+          return;
+        }
+        const result = await Api.runTool('run-script', {
+          scriptId: 'remove-leftovers',
+          scriptArgs: { paths, dryRun: false }
+        });
+        alert(`Removed ${result.removedCount} folder(s). ${result.skippedCount ? `${result.skippedCount} skipped.` : ''}`);
+        const appName = removeBtn.dataset.scannedApp || this._lastScannedAppName;
+        const refreshed = await Api.runTool('run-script', {
+          scriptId: 'uninstaller-report',
+          scriptArgs: appName ? { scanLeftoversFor: appName } : {}
+        });
+        output.innerHTML = this.renderOutput('uninstaller-report', refreshed, new Date().toLocaleString());
+        this.wireUninstallerActions(container);
+      } catch (err) {
+        alert(err.message || 'Failed to remove leftovers.');
+        updateRemoveButton();
+      }
     });
   }
 };
