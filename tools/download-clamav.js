@@ -108,14 +108,19 @@ async function downloadClamAV() {
 
     try {
       fs.renameSync(tempDir, TARGET_DIR);
-      if (backupCreated && fs.existsSync(backupDir)) {
-        removePath(backupDir);
-        backupCreated = false;
-      }
     } catch (swapErr) {
       restoreBackupIfNeeded(backupDir, backupCreated);
       backupCreated = false;
       throw swapErr;
+    }
+
+    if (backupCreated && fs.existsSync(backupDir)) {
+      try {
+        removePath(backupDir);
+      } catch (cleanupErr) {
+        console.warn(`Failed to remove old ClamAV backup at ${backupDir}: ${cleanupErr.message}`);
+      }
+      backupCreated = false;
     }
 
     removePath(ZIP_PATH);
