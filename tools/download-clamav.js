@@ -12,6 +12,10 @@ const TARGET_DIR = path.join(__dirname, '..', 'assets', 'clamav');
 const ZIP_PATH = path.join(__dirname, '..', 'assets', 'clamav.zip');
 const DOWNLOAD_TIMEOUT_MS = 120000;
 
+function removePath(targetPath) {
+  fs.rmSync(targetPath, { recursive: true, force: true });
+}
+
 function sha256File(filePath) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('sha256');
@@ -47,6 +51,15 @@ function validateInstall(dir) {
   }
 }
 
+function restoreBackupIfNeeded(backupDir, backupCreated) {
+  if (!backupCreated || !fs.existsSync(backupDir)) return;
+  if (!fs.existsSync(TARGET_DIR)) {
+    fs.renameSync(backupDir, TARGET_DIR);
+    return;
+  }
+  removePath(backupDir);
+}
+
 async function downloadClamAV() {
   if (fs.existsSync(TARGET_DIR) && fs.existsSync(path.join(TARGET_DIR, 'clamscan.exe'))) {
     console.log('ClamAV already downloaded.');
@@ -56,43 +69,61 @@ async function downloadClamAV() {
   console.log(`Downloading ClamAV from ${CLAMAV_URL}...`);
   fs.mkdirSync(path.join(__dirname, '..', 'assets'), { recursive: true });
 
-  const response = await axios({
-    url: CLAMAV_URL,
-    method: 'GET',
-    responseType: 'stream',
-    timeout: DOWNLOAD_TIMEOUT_MS,
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
-    }
-  });
-
-  const writer = fs.createWriteStream(ZIP_PATH);
-  await pipeline(response.data, writer);
-
-  const digest = await sha256File(ZIP_PATH);
-  if (digest !== CLAMAV_SHA256) {
-    fs.rmSync(ZIP_PATH, { force: true });
-    throw new Error(`ClamAV archive checksum mismatch (expected ${CLAMAV_SHA256}, got ${digest})`);
-  }
-
   const tempDir = `${TARGET_DIR}.tmp-${process.pid}`;
-  fs.rmSync(tempDir, { recursive: true, force: true });
-  fs.mkdirSync(tempDir, { recursive: true });
+  const backupDir = `${TARGET_DIR}.bak-${process.pid}`;
+  let backupCreated = false;
 
   try {
+    const response = await axios({
+      url: CLAMAV_URL,
+      method: 'GET',
+      responseType: 'stream',
+      timeout: DOWNLOAD_TIMEOUT_MS,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
+      }
+    });
+
+    const writer = fs.createWriteStream(ZIP_PATH);
+    await pipeline(response.data, writer);
+
+    const digest = await sha256File(ZIP_PATH);
+    if (digest !== CLAMAV_SHA256) {
+      throw new Error(`ClamAV archive checksum mismatch (expected ${CLAMAV_SHA256}, got ${digest})`);
+    }
+
+    removePath(tempDir);
+    fs.mkdirSync(tempDir, { recursive: true });
+
     console.log('Extracting ClamAV...');
     const zip = new AdmZip(ZIP_PATH);
     zip.extractAllTo(tempDir, true);
     flattenExtractedDir(tempDir);
     validateInstall(tempDir);
 
-    fs.rmSync(TARGET_DIR, { recursive: true, force: true });
-    fs.renameSync(tempDir, TARGET_DIR);
-    fs.unlinkSync(ZIP_PATH);
+    if (fs.existsSync(TARGET_DIR)) {
+      fs.renameSync(TARGET_DIR, backupDir);
+      backupCreated = true;
+    }
+
+    try {
+      fs.renameSync(tempDir, TARGET_DIR);
+      if (backupCreated && fs.existsSync(backupDir)) {
+        removePath(backupDir);
+        backupCreated = false;
+      }
+    } catch (swapErr) {
+      restoreBackupIfNeeded(backupDir, backupCreated);
+      backupCreated = false;
+      throw swapErr;
+    }
+
+    removePath(ZIP_PATH);
     console.log('ClamAV downloaded and extracted successfully.');
   } catch (err) {
-    fs.rmSync(tempDir, { recursive: true, force: true });
-    fs.rmSync(ZIP_PATH, { force: true });
+    removePath(tempDir);
+    removePath(ZIP_PATH);
+    restoreBackupIfNeeded(backupDir, backupCreated);
     throw err;
   }
 }

@@ -5,6 +5,7 @@ const path = require('path');
 
 const TRAY_WIDTH = 320;
 const TRAY_HEIGHT = 220;
+const TRAY_MARGIN = 8;
 
 function createTrayIcon() {
   const iconPath = path.join(__dirname, '../../assets/icon.ico');
@@ -15,11 +16,13 @@ function positionTrayWindow(tray, trayWindow) {
   const trayBounds = tray.getBounds();
   const display = screen.getDisplayNearestPoint({ x: trayBounds.x, y: trayBounds.y });
   const { workArea } = display;
-  let x = Math.round(trayBounds.x + trayBounds.width / 2 - TRAY_WIDTH / 2);
-  let y = Math.round(trayBounds.y - TRAY_HEIGHT - 8);
-  x = Math.max(workArea.x + 8, Math.min(x, workArea.x + workArea.width - TRAY_WIDTH - 8));
-  y = Math.max(workArea.y + 8, Math.min(y, workArea.y + workArea.height - TRAY_HEIGHT - 8));
-  trayWindow.setBounds({ x, y, width: TRAY_WIDTH, height: TRAY_HEIGHT }, false);
+  const effectiveWidth = Math.min(TRAY_WIDTH, Math.max(1, workArea.width - TRAY_MARGIN * 2));
+  const effectiveHeight = Math.min(TRAY_HEIGHT, Math.max(1, workArea.height - TRAY_MARGIN * 2));
+  let x = Math.round(trayBounds.x + trayBounds.width / 2 - effectiveWidth / 2);
+  let y = Math.round(trayBounds.y - effectiveHeight - TRAY_MARGIN);
+  x = Math.max(workArea.x + TRAY_MARGIN, Math.min(x, workArea.x + workArea.width - effectiveWidth - TRAY_MARGIN));
+  y = Math.max(workArea.y + TRAY_MARGIN, Math.min(y, workArea.y + workArea.height - effectiveHeight - TRAY_MARGIN));
+  trayWindow.setBounds({ x, y, width: effectiveWidth, height: effectiveHeight }, false);
 }
 
 function initTrayDashboard({ app, mainWindow, getSummary }) {
@@ -78,7 +81,9 @@ function initTrayDashboard({ app, mainWindow, getSummary }) {
     positionTrayWindow(tray, trayWindow);
     trayWindow.show();
     await refreshTrayWindow();
-    trayWindow.focus();
+    if (trayWindow && !trayWindow.isDestroyed() && trayWindow.isVisible()) {
+      trayWindow.focus();
+    }
   });
 
   tray.on('double-click', showMain);

@@ -164,7 +164,7 @@ describe('Scan cancellation cleanup', () => {
 
     const pending = scanEngine.runCustomScan(['C:\\temp']);
     await waitFor(() => fakeClam.pendingResolve !== null);
-    scanEngine.abortScan();
+    assert.deepEqual(scanEngine.abortScan(), { success: true, canceled: true });
     fakeClam.pendingResolve({
       success: false,
       canceled: true,
