@@ -130,7 +130,13 @@ class FolderWatcher {
         const filePath = this._queue.shift();
         this._scannedRecently.set(filePath, Date.now());
         try {
-          const result = await this.scanEngine.runCustomScan([filePath]);
+          let result;
+          if(typeof this.scanEngine.runScan === 'function') {
+            result = await this.scanEngine.runScan('folderwatch', [filePath], 'Folder watch scan starting...');
+          } else {
+            result = await this.scanEngine.runCustomScan([filePath]);
+          }
+
           if (result && result.error) continue;
           const threats = (result && result.threatsFound) || 0;
           if (threats > 0) {

@@ -252,9 +252,16 @@ function registerIpcHandlers(mainWindow, services) {
 
   // -- Scanning Engine --
   ipcMain.handle('scan:status', () => {
+    const scanStatus = scanEngine.getStatus();
+    if (scanStatus.currentScan && scanStatus.currentScan.scanType === 'folderwatch') {
+      return {
+        engine: clamEngine.getStatus(),
+        scan: { isScanning: false, currentScan: null }
+      };
+    }
     return {
       engine: clamEngine.getStatus(),
-      scan: scanEngine.getStatus()
+      scan: scanStatus
     };
   });
 

@@ -76,7 +76,7 @@ let mainWindow;
 let splashWindow;
 let splashTimeoutId;
 let dbRef; // set once the database is created in app.whenReady() below, so
-           // showNotification (defined before that point) can check settings
+// showNotification (defined before that point) can check settings
 let currentUiTheme = 'dark';
 
 function logLine(level, message, meta) {
@@ -569,15 +569,26 @@ app.whenReady().then(async () => {
   registerIpcHandlers(mainWindow, services);
   sendSplashProgress(12, 'Registering services...');
 
+  //Clean up any existing listeners first to prevent dublicates duriing hot-relaod
+  eventBus._listeners.delete('scan:progress');
+  eventBus._listeners.delete('scan:complete');
+
   // Forward scan progress events from EventBus to renderer
   const announcedProgress = new Set();
   eventBus.on('scan:progress', (data) => {
+
+    //Ignore progress notifications for definitions updates and custom/watcher scans
+    const scanType = data.scanType || data.report?.scanType;
+    if(scanType === 'folderwatch') return;
+
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('scan:progress', data);
     }
     if (!data || typeof data.pct !== 'number') return;
     if (dbRef && !dbRef.getSetting('feature.scanNotifications', true)) return;
-    if (data.scanType === 'definitions') return;
+
+    if(scanType === 'definitions' || scanType === 'custom') return;
+
     const milestone = [0, 25, 50, 75].find((value) => data.pct >= value && !announcedProgress.has(value));
     if (milestone !== undefined) {
       announcedProgress.add(milestone);
@@ -588,10 +599,16 @@ app.whenReady().then(async () => {
 
   // Forward scan complete events to renderer
   eventBus.on('scan:complete', (data) => {
+    const scanType = data.scanType || data.report?.scanType;
+    if(scanType === 'folderwatch') return;
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('scan:complete', data);
     }
     announcedProgress.clear();
+
+    //Ignore notification and report for custom/watcher scans
+    if(scanType === 'custom') return;
+
     let label;
     let body;
     let level;
@@ -619,7 +636,14 @@ app.whenReady().then(async () => {
     (async () => {
       try {
         if (!db.getSetting('feature.autoReports', true)) return;
+
+        const scanType = data.scanType || data.report?.scanType;
+        const isCanceled = data.status === 'canceled' || data.report?.status === 'canceled';
+
+        //skip reports for cancelled scans. definition updates, and cutom/watcher scans
+        if (isCanceled || (scanType !== 'quick' && scanType !== 'full')) return;
         logLine('info', 'Generating scan report...');
+
         const result = await toolRegistry.run('generate-security-report', { version: app.getVersion() }, { toolRegistry, db, log: logLine });
         logLine('info', 'Scan report ' + (result.ok ? 'generated' : 'failed: ' + (result.error || 'unknown')));
       } catch (err) {
@@ -827,9 +851,9 @@ app.whenReady().then(async () => {
     };
     const networkStatsTimer = setInterval(sampleNetworkStats, 30_000);
     if (typeof networkStatsTimer.unref === 'function') networkStatsTimer.unref();
-    sampleNetworkStats().catch(() => {});
+    sampleNetworkStats().catch(() => { });
     const pruneTimer = setInterval(() => {
-      try { db.pruneNetworkStats(7); } catch (_) {}
+      try { db.pruneNetworkStats(7); } catch (_) { }
     }, 60 * 60_000);
     if (typeof pruneTimer.unref === 'function') pruneTimer.unref();
     try {
