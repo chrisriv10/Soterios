@@ -145,7 +145,13 @@ Soterios uses Node.js built-in test runner (`node:test`) for most unit tests. Te
 npm test
 ```
 
-This runs every Node `tests/*.test.js` file (via `scripts/run-node-tests.js`, excluding Jest-only suites), then Jest (`passwordTools`, `reportExport`).
+This runs every Node `tests/*.test.js` file (via `tests/node-test-runner.js`, excluding Jest-only suites), then Jest (`passwordTools`, `reportExport`).
+
+Integration smoke checks (maintenance, tray health summary, updater — no Electron UI):
+
+```bash
+npm run smoke:integration
+```
 
 You can also invoke the Node runner directly:
 

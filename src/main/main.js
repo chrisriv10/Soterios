@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, nativeImage, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, nativeImage, screen, powerMonitor } = require('electron');
 const { execFileSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -50,27 +50,14 @@ try {
 const DatabaseService = require('../core/database');
 const eventBus = require('../core/eventBus');
 const { registerIpcHandlers } = require('./ipcHandlers');
-
-const ClamAVEngine = require('../security/ClamAVEngine');
-const HeuristicEngine = require('../security/HeuristicEngine');
-const ReputationEngine = require('../security/ReputationEngine');
-const QuarantineManager = require('../security/QuarantineManager');
-const ScanEngine = require('../security/ScanEngine');
-const RealTimeWatcher = require('../security/RealTimeWatcher');
-const ProcessInspector = require('../security/ProcessInspector');
-const SystemAudit = require('../security/SystemAudit');
-const FirewallManager = require('../security/FirewallManager');
-const NetworkMonitor = require('../security/NetworkMonitor');
-const FolderWatcher = require('../security/FolderWatcher');
-const NetworkAlertMonitor = require('../security/NetworkAlertMonitor');
-const { ProcessResolver } = require('../security/ProcessResolver');
-const { BlocklistService } = require('../security/BlocklistService');
-const { NetworkEnricher } = require('../security/NetworkEnricher');
-const { GeoLocationService } = require('../security/GeoLocationService');
+const serviceRegistry = require('./serviceRegistry');
+const { MaintenanceScheduler } = require('./maintenanceScheduler');
+const { initTrayDashboard } = require('./trayDashboard');
+const updater = require('./updater');
+const { getTrayHealthSummary } = require('./healthSummary');
 
 // Legacy utilities
 const { loadPlugins } = require('../core/pluginLoader');
-const toolRegistry = require('../core/toolRegistry');
 
 let mainWindow;
 let splashWindow;
@@ -78,6 +65,13 @@ let splashTimeoutId;
 let dbRef; // set once the database is created in app.whenReady() below, so
            // showNotification (defined before that point) can check settings
 let currentUiTheme = 'dark';
+let isQuitting = false;
+const lifecycleRefs = {
+  maintenanceScheduler: null,
+  trayController: null,
+  networkStatsTimer: null,
+  pruneTimer: null
+};
 
 function logLine(level, message, meta) {
   const fn = logger[level] || logger.info;
@@ -485,73 +479,44 @@ app.whenReady().then(async () => {
   }
 
   // 2. Security Engines (Dependency Injection)
-  const clamEngine = new ClamAVEngine({
-    dbDir: path.join(app.getPath('userData'), 'clamav-db')
+  const services = serviceRegistry.create(db, eventBus, {
+    userDataPath: app.getPath('userData'),
+    notify: (title, body, level) => showNotification(title, body, level)
   });
-  const heuristicEngine = new HeuristicEngine();
-  const reputationEngine = new ReputationEngine(db);
-  const quarantineManager = new QuarantineManager(db);
+  const maintenanceScheduler = new MaintenanceScheduler({
+    db: services.db,
+    toolRegistry: services.toolRegistry,
+    getIdleTimeSeconds: () => {
+      try { return powerMonitor.getSystemIdleTime(); } catch (_) { return 0; }
+    },
+    notify: (title, body, level) => showNotification(title, body, level),
+    log: (level, message, meta) => logLine(level, message, meta)
+  });
+  maintenanceScheduler.start();
+  services.maintenanceScheduler = maintenanceScheduler;
+  lifecycleRefs.maintenanceScheduler = maintenanceScheduler;
 
-  const scanEngine = new ScanEngine(
-    db,
-    eventBus,
+  const {
     clamEngine,
-    heuristicEngine,
-    reputationEngine,
-    quarantineManager
-  );
-
-  const realtimeWatcher = new RealTimeWatcher(db, eventBus, scanEngine);
-  const processInspector = new ProcessInspector();
-  const systemAudit = new SystemAudit();
-  const firewallManager = new FirewallManager();
-  const networkMonitor = new NetworkMonitor();
-
-  const processResolver = new ProcessResolver(processInspector);
-  const blocklistService = new BlocklistService(db);
-  const networkEnricher = new NetworkEnricher(processResolver, blocklistService);
-  const geoLocationService = new GeoLocationService(db);
-
-  const folderWatcher = new FolderWatcher({
-    db,
-    eventBus,
-    scanEngine,
-    notify: (title, body, level) => showNotification(title, body, level)
-  });
-  const networkAlertMonitor = new NetworkAlertMonitor({
-    networkMonitor,
+    realtimeWatcher,
+    folderWatcher,
+    networkAlertMonitor,
     blocklistService,
-    processInspector,
-    db,
-    notify: (title, body, level) => showNotification(title, body, level)
+    networkMonitor,
+    toolRegistry
+  } = services;
+
+  updater.initAutoUpdater({ onNotify: (title, body, level) => showNotification(title, body, level) });
+  updater.subscribe((status) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.webContents.send('update:status', status);
+    }
   });
 
   // loadPlugins() is a synchronous filesystem scan, not a network call, so
   // it's cheap enough to keep here rather than deferring it.
   loadPlugins();
   sendSplashProgress(6, 'Loading security engines...');
-
-  const services = {
-    db,
-    eventBus,
-    clamEngine,
-    heuristicEngine,
-    reputationEngine,
-    quarantineManager,
-    scanEngine,
-    realtimeWatcher,
-    processInspector,
-    systemAudit,
-    firewallManager,
-    networkMonitor,
-    processResolver,
-    blocklistService,
-    networkEnricher,
-    geoLocationService,
-    folderWatcher,
-    networkAlertMonitor,
-    toolRegistry
-  };
 
   // Show the window as soon as possible instead of waiting on ClamAV/RTP
   // initialization below -- those can take a while (definitions download,
@@ -569,15 +534,46 @@ app.whenReady().then(async () => {
   registerIpcHandlers(mainWindow, services);
   sendSplashProgress(12, 'Registering services...');
 
+  try {
+    lifecycleRefs.trayController = initTrayDashboard({
+      app,
+      mainWindow,
+      getSummary: () => getTrayHealthSummary(db, toolRegistry)
+    });
+    services.trayController = lifecycleRefs.trayController;
+
+    mainWindow.on('close', (event) => {
+      if (!isQuitting && lifecycleRefs.trayController?.tray) {
+        event.preventDefault();
+        mainWindow.hide();
+      }
+    });
+  } catch (err) {
+    logLine('warn', 'Tray dashboard unavailable', { error: err.message });
+  }
+
+  setTimeout(() => {
+    if (db.getSetting('feature.autoUpdates', true)) {
+      updater.checkForUpdates().catch(() => {});
+    }
+  }, 30_000);
+
+  eventBus.removeAllListeners('scan:progress');
+  eventBus.removeAllListeners('scan:complete');
+
   // Forward scan progress events from EventBus to renderer
   const announcedProgress = new Set();
+  const resolveScanType = (data) => data?.scanType || data?.report?.scanType || null;
+  const isBackgroundScan = (scanType) => scanType === 'folderwatch';
+
   eventBus.on('scan:progress', (data) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
+    const scanType = resolveScanType(data);
+    if (!isBackgroundScan(scanType) && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('scan:progress', data);
     }
     if (!data || typeof data.pct !== 'number') return;
     if (dbRef && !dbRef.getSetting('feature.scanNotifications', true)) return;
-    if (data.scanType === 'definitions') return;
+    if (scanType === 'definitions' || isBackgroundScan(scanType)) return;
     const milestone = [0, 25, 50, 75].find((value) => data.pct >= value && !announcedProgress.has(value));
     if (milestone !== undefined) {
       announcedProgress.add(milestone);
@@ -588,10 +584,13 @@ app.whenReady().then(async () => {
 
   // Forward scan complete events to renderer
   eventBus.on('scan:complete', (data) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
+    const scanType = resolveScanType(data);
+    if (!isBackgroundScan(scanType) && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('scan:complete', data);
     }
     announcedProgress.clear();
+    if (isBackgroundScan(scanType)) return;
+
     let label;
     let body;
     let level;
@@ -619,6 +618,8 @@ app.whenReady().then(async () => {
     (async () => {
       try {
         if (!db.getSetting('feature.autoReports', true)) return;
+        const isCanceled = data.status === 'canceled' || data.report?.status === 'canceled';
+        if (isCanceled || (scanType !== 'quick' && scanType !== 'full')) return;
         logLine('info', 'Generating scan report...');
         const result = await toolRegistry.run('generate-security-report', { version: app.getVersion() }, { toolRegistry, db, log: logLine });
         logLine('info', 'Scan report ' + (result.ok ? 'generated' : 'failed: ' + (result.error || 'unknown')));
@@ -827,11 +828,16 @@ app.whenReady().then(async () => {
     };
     const networkStatsTimer = setInterval(sampleNetworkStats, 30_000);
     if (typeof networkStatsTimer.unref === 'function') networkStatsTimer.unref();
+    lifecycleRefs.networkStatsTimer = networkStatsTimer;
     sampleNetworkStats().catch(() => {});
     const pruneTimer = setInterval(() => {
-      try { db.pruneNetworkStats(7); } catch (_) {}
+      try {
+        db.pruneNetworkStats(7);
+        db.pruneMaintenanceRuns(100);
+      } catch (_) {}
     }, 60 * 60_000);
     if (typeof pruneTimer.unref === 'function') pruneTimer.unref();
+    lifecycleRefs.pruneTimer = pruneTimer;
     try {
       // systeminformation's networkStats() calculates rx_sec/tx_sec as a
       // rate between two internal samples. The very first call anywhere in
@@ -856,6 +862,18 @@ process.on('unhandledRejection', (err) => {
   logLine('fatal', 'Unhandled rejection', { message: err && err.message ? err.message : String(err), stack: err && err.stack });
 });
 
+app.on('before-quit', () => {
+  isQuitting = true;
+  lifecycleRefs.maintenanceScheduler?.stop();
+  lifecycleRefs.trayController?.dispose();
+  if (lifecycleRefs.networkStatsTimer) clearInterval(lifecycleRefs.networkStatsTimer);
+  if (lifecycleRefs.pruneTimer) clearInterval(lifecycleRefs.pruneTimer);
+  try {
+    if (dbRef?.db && typeof dbRef.db.close === 'function') dbRef.db.close();
+  } catch (_) {}
+});
+
 app.on('window-all-closed', () => {
+  if (lifecycleRefs.trayController?.tray) return;
   if (process.platform !== 'darwin') app.quit();
 });

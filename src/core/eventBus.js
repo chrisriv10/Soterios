@@ -9,6 +9,10 @@ class EventBus {
     if (!this._listeners.has(eventName)) return;
     this._listeners.get(eventName).delete(handler);
   }
+  removeAllListeners(eventName) {
+    if (eventName) this._listeners.delete(eventName);
+    else this._listeners.clear();
+  }
   emit(eventName, payload) {
     if (!this._listeners.has(eventName)) return;
     for (const handler of this._listeners.get(eventName)) {

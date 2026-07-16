@@ -118,3 +118,49 @@ describe('DatabaseService quarantine_path migration', () => {
     assert.throws(() => new DatabaseService(dbPath), /./);
   });
 });
+
+describe('DatabaseService maintenance_runs', () => {
+  const tempDbs = [];
+
+  afterEach(() => {
+    while (tempDbs.length) {
+      const p = tempDbs.pop();
+      try { fs.rmSync(p, { force: true }); } catch (_) {}
+      try { fs.rmSync(p + '-wal', { force: true }); } catch (_) {}
+      try { fs.rmSync(p + '-shm', { force: true }); } catch (_) {}
+    }
+  });
+
+  function tempDbPath() {
+    const p = path.join(os.tmpdir(), `soterios-db-maint-${Date.now()}-${Math.random().toString(16).slice(2)}.db`);
+    tempDbs.push(p);
+    return p;
+  }
+
+  it('pruneMaintenanceRuns keeps the most recent rows', () => {
+    const service = new DatabaseService(tempDbPath());
+    for (let i = 0; i < 5; i += 1) {
+      service.addMaintenanceRun({
+        startedAt: new Date(Date.now() + i).toISOString(),
+        results: [{ scriptId: 'disk-space-report', ok: true }],
+        dryRunCleanup: false
+      });
+    }
+    service.pruneMaintenanceRuns(2);
+    assert.equal(service.getMaintenanceHistory(10).length, 2);
+    service.db.close();
+  });
+
+  it('getMaintenanceHistory omits raw results_json from returned rows', () => {
+    const service = new DatabaseService(tempDbPath());
+    service.addMaintenanceRun({
+      startedAt: new Date().toISOString(),
+      results: [{ scriptId: 'disk-space-report', ok: true }],
+      dryRunCleanup: true
+    });
+    const [row] = service.getMaintenanceHistory(1);
+    assert.ok(Array.isArray(row.results));
+    assert.equal(Object.prototype.hasOwnProperty.call(row, 'results_json'), false);
+    service.db.close();
+  });
+});

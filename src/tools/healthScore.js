@@ -1,6 +1,33 @@
 const si = require('systeminformation');
 const os = require('os');
 
+const MIN_USER_VOLUME_BYTES = 1024 ** 3;
+
+/**
+ * Ignore tiny recovery/EFI/OEM partitions that are legitimately full but not
+ * user-facing storage when scoring disk health.
+ */
+function isUserFacingVolume(entry) {
+  if (!entry || typeof entry.size !== 'number' || entry.size < MIN_USER_VOLUME_BYTES) {
+    return false;
+  }
+  const mount = String(entry.mount || '');
+  if (process.platform === 'win32') {
+    return /^[A-Z]:/i.test(mount);
+  }
+  return mount.length > 0 && !mount.includes('\\?\\Volume{');
+}
+
+function worstUsageFromVolumes(volumes) {
+  const relevant = (volumes || []).filter(isUserFacingVolume);
+  if (!relevant.length) {
+    return { worstUse: 0, fullVolumes: [], hasRelevant: false };
+  }
+  const worstUse = Math.max(...relevant.map((d) => d.use));
+  const fullVolumes = relevant.filter((d) => d.use >= 85).map((d) => d.mount);
+  return { worstUse, fullVolumes, hasRelevant: true };
+}
+
 // Human-readable labels for each scoring category, used by the dashboard's
 // health score detail view.
 const LABELS = {
@@ -63,11 +90,14 @@ module.exports = {
 
     // --- Disk space: graduated bands instead of a single 90% cliff. ---
     const fsSize = await si.fsSize();
-    const worstUse = fsSize.length ? Math.max(...fsSize.map((d) => d.use)) : 0;
-    const fullVolumes = fsSize.filter((d) => d.use >= 85).map((d) => d.mount);
+    const { worstUse, fullVolumes, hasRelevant } = worstUsageFromVolumes(fsSize);
     breakdown.disk = {
       label: LABELS.disk, points: bandedPoints(worstUse, [[70, 15], [85, 10], [95, 5]]), max: 15,
-      reason: fullVolumes.length ? `Low space on: ${fullVolumes.join(', ')} (${worstUse.toFixed(0)}% used).` : `All volumes healthy (highest usage ${worstUse.toFixed(0)}%).`
+      reason: fullVolumes.length
+        ? `Low space on: ${fullVolumes.join(', ')} (${worstUse.toFixed(0)}% used).`
+        : !hasRelevant && fsSize.length
+          ? 'No user-facing volumes found for disk scoring.'
+          : `All volumes healthy (highest usage ${worstUse.toFixed(0)}%).`
     };
 
     // --- Memory usage: new signal, wasn't scored at all before. ---
@@ -131,5 +161,8 @@ module.exports = {
     const score = totals.max > 0 ? Math.round((totals.points / totals.max) * 100) : 0;
 
     return { score, breakdown, generatedAt: new Date().toISOString() };
-  }
+  },
+  isUserFacingVolume,
+  worstUsageFromVolumes,
+  MIN_USER_VOLUME_BYTES
 };

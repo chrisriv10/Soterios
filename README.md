@@ -51,6 +51,14 @@ Download the latest Windows release:
 
 ---
 
+## Screenshots
+
+UI screenshots are **not committed to the repo**. For visual verification, see the **Visual verification** section in [PR #82](https://github.com/chrisriv10/Soterios/pull/82).
+
+To capture for a future PR: run `npm start`, screenshot the main views, and attach them to the PR (see [tests/fixtures/screenshots/README.md](tests/fixtures/screenshots/README.md)).
+
+---
+
 ## Privacy
 
 Soterios does **not** collect telemetry or analytics. All scanning and system analysis happens locally on your machine. Network calls occur **only** when you explicitly trigger features that require them (ClamAV updates, HIBP checks, XposedOrNot lookups).
@@ -113,11 +121,12 @@ src/main/ IPC handlers and app/service orchestration
 src/core/ database, event bus, tool registry, plugin loader
 src/security/ scanning, quarantine, audit, firewall, network, process, and realtime services
 src/tools/ built-in tool modules
-src/scripts/ maintenance scripts and registry
+src/scripts/ maintenance scripts and registry (shipped with the app)
 src/ui/ shell, CSS, shared JS, and page modules
 assets/ Soterios icons and bundled ClamAV files
+tools/ build and install helpers (ClamAV download)
+tests/ unit tests, smoke checks, and validation fixtures
 build/ installer resources
-tests/ test suites
 ```
 
 ---

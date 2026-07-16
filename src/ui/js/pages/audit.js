@@ -91,8 +91,11 @@ window.Pages['audit'] = {
           ceilingPct = nextMilestone >= total ? 100 : Math.max(currentPct + 1, Math.round((nextMilestone / total) * 100) - 3);
         }
       });
-      const results = await window.api.invoke('audit:run');
-      const ignored = await window.api.invoke('warnings:listIgnored');
+      const [results, ignored, maintenanceHistoryResponse] = await Promise.all([
+        window.api.invoke('audit:run'),
+        window.api.invoke('warnings:listIgnored'),
+        window.api.invoke('maintenance:getHistory').catch(() => ({ ok: false, data: [] }))
+      ]);
       const ignoredIds = new Set((ignored || []).map((w) => w.id));
       if (!results || results.length === 0) {
         content.innerHTML = '<div class="empty-state">No audit results returned.</div>';
@@ -142,6 +145,7 @@ window.Pages['audit'] = {
             <div class="history-item"><div><div class="history-title">${escapeHtml(w.title)}</div><div class="history-meta">${escapeHtml(w.detail || '')}</div></div>
             <button class="btn btn-sm audit-restore" data-id="${escapeHtml(w.id)}">Restore</button></div>`).join('')}</div></div>`;
       }
+      html += this.renderMaintenanceHistory(maintenanceHistoryResponse?.data || []);
       content.innerHTML = html;
       content.querySelectorAll('.copy-command-btn').forEach((btn) => btn.addEventListener('click', async () => {
         const codeEl = content.querySelector(`#${btn.dataset.target}`);
@@ -213,5 +217,30 @@ window.Pages['audit'] = {
           <button type="button" class="btn btn-sm copy-command-btn" data-target="${commandId}" style="flex-shrink:0;">Copy</button>
         </div>
       </div>`;
+  },
+
+  renderMaintenanceHistory(rows) {
+    if (!rows || !rows.length) {
+      return `<div class="panel" style="margin-top:18px;">
+        <div class="panel-title">Scheduled Maintenance History</div>
+        <div class="page-subtitle" style="font-size:0.9rem;">No maintenance runs recorded yet. Enable scheduled maintenance in Settings.</div>
+      </div>`;
+    }
+    const items = rows.map((row) => {
+      const when = row.started_at || row.timestamp;
+      const whenLabel = when ? new Date(when).toLocaleString() : 'Unknown time';
+      const mode = row.dry_run ? 'scheduled (dry-run cleanup)' : 'manual';
+      const detail = (row.results || []).map((r) => `${r.scriptId}: ${r.ok ? 'OK' : (r.error || 'failed')}`).join('; ');
+      return `<div class="history-item">
+        <div>
+          <div class="history-title">Maintenance run (${row.ok_count || 0}/${row.total_count || 0} OK, ${mode})</div>
+          <div class="history-meta">${escapeHtml(whenLabel)}${detail ? ` — ${escapeHtml(detail)}` : ''}</div>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="panel" style="margin-top:18px;">
+      <div class="panel-title">Scheduled Maintenance History</div>
+      <div class="history-list">${items}</div>
+    </div>`;
   }
 };
