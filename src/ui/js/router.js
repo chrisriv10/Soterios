@@ -3,9 +3,17 @@
   const navItems = document.querySelectorAll('.nav-item[data-page]');
   let currentPage = null;
 
+  function showUnknownPage(pageId) {
+    mainContent.replaceChildren();
+    const el = document.createElement('div');
+    el.className = 'empty-state';
+    el.textContent = `Unknown page: ${pageId}`;
+    mainContent.appendChild(el);
+  }
+
   function navigate(pageId) {
     const pageModule = window.Pages && window.Pages[pageId];
-    if (!pageModule) { mainContent.innerHTML = `<div class="empty-state">Unknown page: ${pageId}</div>`; return; }
+    if (!pageModule) { showUnknownPage(pageId); return; }
     if (currentPage && currentPage !== pageId) {
       const prev = window.Pages[currentPage];
       if (prev && typeof prev.destroy === 'function') {
