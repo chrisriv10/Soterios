@@ -3,9 +3,21 @@
   const navItems = document.querySelectorAll('.nav-item[data-page]');
   let currentPage = null;
 
+  function showUnknownPage(pageId) {
+    mainContent.replaceChildren();
+    const el = document.createElement('div');
+    el.className = 'empty-state';
+    el.textContent = `Unknown page: ${pageId}`;
+    mainContent.appendChild(el);
+  }
+
+  function isKnownPage(pageId) {
+    return !!(pageId && window.Pages && Object.hasOwn(window.Pages, pageId));
+  }
+
   function navigate(pageId) {
-    const pageModule = window.Pages && window.Pages[pageId];
-    if (!pageModule) { mainContent.innerHTML = `<div class="empty-state">Unknown page: ${pageId}</div>`; return; }
+    const pageModule = isKnownPage(pageId) ? window.Pages[pageId] : null;
+    if (!pageModule) { showUnknownPage(pageId); return; }
     if (currentPage && currentPage !== pageId) {
       const prev = window.Pages[currentPage];
       if (prev && typeof prev.destroy === 'function') {
@@ -22,8 +34,11 @@
   window.AppRouter = { navigate, current: () => currentPage };
   if (window.Api) {
     await window.Api.initializeTheme();
+    await window.Api.initializeLanguage();
   }
-  navigate('dashboard');
+  const hashPage = (window.location.hash || '').replace(/^#/, '');
+  const initialPage = isKnownPage(hashPage) ? hashPage : 'dashboard';
+  navigate(initialPage);
 
   // Listen for toast click to navigate to scanner
   if (window.api) {

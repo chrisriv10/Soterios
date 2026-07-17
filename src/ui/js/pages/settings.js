@@ -20,6 +20,25 @@ window.Pages.settings = {
     savedTheme = settings.ui?.theme || 'dark';
     const activeTheme = (window.AppState && window.AppState.currentTheme) || savedTheme;
     Api.applyTheme(activeTheme);
+    let localeOptions = '';
+    try {
+      const locales = await window.api.invoke('i18n:listLocales');
+      const currentLanguage = (window.I18n && window.I18n.locale)
+        || settings.ui?.language
+        || 'en';
+      localeOptions = locales.map(({ code, label }) => (
+        `<option value="${escapeHtml(code)}" ${currentLanguage === code ? 'selected' : ''}>${escapeHtml(label)}</option>`
+      )).join('');
+    } catch (_) {
+      localeOptions = '<option value="en" selected>English</option>';
+    }
+    const t = (key, fallback) => {
+      if (window.I18n && typeof window.I18n.t === 'function') {
+        const translated = window.I18n.t(key);
+        if (translated && translated !== key) return translated;
+      }
+      return fallback || key;
+    };
     container.innerHTML = `
       <div class="page-header"><h1 class="page-title">Settings</h1>
         <div class="page-subtitle">Local app preferences and feature toggles</div></div>
@@ -94,7 +113,7 @@ window.Pages.settings = {
         </div>
 
         <div class="card">
-          <div class="panel-title" style="margin-bottom:16px;">Appearance</div>
+          <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.appearance', 'Appearance'))}</div>
           <div class="field">
             <label class="field-label">Color Scheme</label>
             <select id="themeSelect" style="width:100%;">
@@ -116,6 +135,15 @@ window.Pages.settings = {
           <div class="toggle-desc" style="margin-bottom:12px;">Choose a palette for the full app experience.</div>
           <button class="btn btn-primary" id="saveTheme" style="margin-top:4px;">Apply Theme</button>
           <div id="themeStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
+          <div class="field" style="margin-top:16px;">
+            <label class="field-label">${escapeHtml(t('settings.language', 'Language'))}</label>
+            <select id="languageSelect" style="width:100%;">
+              ${localeOptions}
+            </select>
+          </div>
+          <div class="toggle-desc" style="margin-bottom:12px;">${escapeHtml(t('settings.languageHint', 'Choose the UI language for supported pages.'))}</div>
+          <button class="btn btn-primary" id="saveLanguage" style="margin-top:4px;">${escapeHtml(t('settings.applyLanguage', 'Apply Language'))}</button>
+          <div id="languageStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
         </div>
 
         <div class="card">
@@ -248,6 +276,23 @@ window.Pages.settings = {
       Api.applyTheme(theme);
       const status = container.querySelector('#themeStatus');
       status.textContent = 'Preview updated. Click Apply Theme to save it.';
+    });
+
+    container.querySelector('#saveLanguage').addEventListener('click', async () => {
+      const language = container.querySelector('#languageSelect').value;
+      const status = container.querySelector('#languageStatus');
+      try {
+        await Api.updateSettings({ ui: { language } });
+        status.textContent = window.I18n
+          ? window.I18n.t('settings.languageUpdated')
+          : 'Language updated.';
+        const currentRoute = window.AppRouter && window.AppRouter.current();
+        if (window.AppRouter && (currentRoute === 'tools' || currentRoute === 'settings')) {
+          window.AppRouter.navigate(currentRoute);
+        }
+      } catch (err) {
+        status.textContent = err.message || String(err);
+      }
     });
 
     container.querySelector('#saveSettings').addEventListener('click', async () => {

@@ -8,6 +8,9 @@
     { "id": "windows-services-report", "name": "Windows Services Report", "description": "Lists auto-start Windows services and highlights unsigned-looking paths (read-only).", "file": "safeScripts/windowsServicesReport.js" },
     { "id": "network-report", "name": "Network Report", "description": "Reports network interfaces, default gateway, and active established connections (read-only).", "file": "safeScripts/networkReport.js" },
     { "id": "delete-files", "name": "Delete Selected Files", "description": "Deletes specific files selected from the Large Files Report. Not shown as a standalone tool card -- invoked only from within that report's UI.", "file": "safeScripts/deleteFiles.js" },
-    { "id": "clear-browser-cache", "name": "Clear Browser Cache", "description": "Clears cache for one or more browsers found by the Browser Cache Report. Not shown as a standalone tool card -- invoked only from within that report's UI.", "file": "safeScripts/clearBrowserCache.js" }
+    { "id": "clear-browser-cache", "name": "Clear Browser Cache", "description": "Clears cache for one or more browsers found by the Browser Cache Report. Not shown as a standalone tool card -- invoked only from within that report's UI.", "file": "safeScripts/clearBrowserCache.js" },
+    { "id": "uninstaller-report", "name": "Software Uninstaller", "description": "Lists installed applications, launches native uninstallers, and scans for leftover folders (Windows).", "file": "safeScripts/uninstallerReport.js" },
+    { "id": "launch-uninstaller", "name": "Launch Uninstaller", "description": "Starts the native uninstaller for a selected application. Invoked from the Software Uninstaller report UI.", "file": "safeScripts/launchUninstaller.js" },
+    { "id": "remove-leftovers", "name": "Remove Leftover Folders", "description": "Removes leftover folders selected from the Software Uninstaller report. Invoked from that report's UI.", "file": "safeScripts/removeLeftovers.js" }
   ]
 }

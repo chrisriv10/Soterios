@@ -55,7 +55,7 @@ Download the latest Windows release:
 
 UI screenshots are **not committed to the repo**. For visual verification, see the **Visual verification** section in [PR #82](https://github.com/chrisriv10/Soterios/pull/82).
 
-To capture for a future PR: run `npm start`, screenshot the main views, and attach them to the PR (see [tests/fixtures/screenshots/README.md](tests/fixtures/screenshots/README.md)).
+To capture for a future PR: run `npm run capture:screenshots` (or `npm start` manually) and attach PNGs to the PR (see [tests/fixtures/screenshots/README.md](tests/fixtures/screenshots/README.md)).
 
 ---
 

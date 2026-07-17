@@ -4,18 +4,30 @@ Screenshot PNGs are **not stored in git** (`tests/fixtures/screenshots/*.png` is
 
 Use this folder for **local captures during PR review** — not for shipped app assets.
 
-## For README / issue verification (#28)
+## Automated capture
 
-1. Run the app on Windows: `npm start`
+```bash
+npm run capture:screenshots
+```
+
+Writes PNGs to this folder:
+
+- `01-dashboard.png`
+- `02-tools-page.png`
+- `03-uninstaller-unsupported.png` (macOS)
+- `03-uninstaller-windows.png` (Windows)
+- `03-uninstaller-linux-unsupported.png` (Linux)
+- `04-settings-language.png`
+
+Attach the PNGs to your pull request for visual verification. Do not commit them.
+
+## Manual capture
+
+1. Run the app: `npm start`
 2. Capture dashboard, malware scan, process inspector, and firewall views
-3. Save PNGs here temporarily, then attach them to the pull request for reviewer reference
+3. Save PNGs here temporarily, then attach them to the PR
 
-## Suggested filenames
-
-- `dashboard.png`
-- `scan.png`
-- `processes.png`
-- `firewall.png`
+Suggested manual filenames: `dashboard.png`, `scan.png`, `processes.png`, `firewall.png`
 
 ## Notes
 

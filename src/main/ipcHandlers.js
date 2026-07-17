@@ -19,6 +19,7 @@ const updater = require('./updater');
 const { getTrayHealthSummary } = require('./healthSummary');
 const { MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS, ALLOWED_SCRIPT_IDS, SCHEDULE_PRESETS } = require('./maintenanceScheduler');
 const { loadRegistry } = require('../scripts/scriptRunner');
+const i18n = require('../i18n');
 
 function isValidIp(ip) {
   const v4 = /^(\d{1,3}\.){3}\d{1,3}$/;
@@ -261,6 +262,11 @@ function registerIpcHandlers(mainWindow, services) {
   ipcMain.handle('db:markAlertRead', (_event, id) => db.markAlertRead(id));
   ipcMain.handle('db:getSetting', (_event, key, def) => db.getSetting(key, def));
   ipcMain.handle('db:setSetting', (_event, key, value) => db.setSetting(key, value));
+  ipcMain.handle('i18n:getCatalog', (_event, locale) => i18n.loadCatalog(locale));
+  ipcMain.handle('i18n:normalizeLocale', (_event, locale) => i18n.normalizeLocale(locale));
+  ipcMain.handle('i18n:listLocales', () => i18n.listLocales());
+  ipcMain.handle('i18n:isRtlLocale', (_event, locale) => i18n.isRtlLocale(locale));
+  ipcMain.handle('i18n:getSystemLocale', () => app.getLocale());
   ipcMain.handle('warnings:ignore', (_event, warning) => db.ignoreWarning(warning));
   ipcMain.handle('warnings:unignore', (_event, id) => db.unignoreWarning(id));
   ipcMain.handle('warnings:listIgnored', () => db.getIgnoredWarnings());

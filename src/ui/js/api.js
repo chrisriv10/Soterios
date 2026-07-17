@@ -35,6 +35,22 @@ const Api = {
     } catch (_) {}
     this.applyTheme('dark');
   },
+  async initializeLanguage() {
+    if (!window.I18n) return;
+    try {
+      const saved = await window.api.invoke('db:getSetting', 'ui.language', '');
+      let locale = saved;
+      if (!locale) {
+        const systemLocale = await window.api.invoke('i18n:getSystemLocale');
+        locale = await window.api.invoke('i18n:normalizeLocale', systemLocale);
+      }
+      await window.I18n.setLocale(locale || 'en', { persist: false });
+    } catch (_) {
+      try {
+        await window.I18n.setLocale('en', { persist: false });
+      } catch (_) {}
+    }
+  },
   async listTools() { return window.soterios.tools.list(); },
   async runTool(toolId, args) {
     const result = await window.soterios.tools.run(toolId, args);
@@ -68,6 +84,22 @@ const Api = {
     const folderWatch = await window.api.invoke('db:getSetting', 'feature.folderWatch', true);
     const networkAlerts = await window.api.invoke('db:getSetting', 'feature.networkAlerts', true);
     const dbTheme = await window.api.invoke('db:getSetting', 'ui.theme', 'dark');
+    const savedLanguage = await window.api.invoke('db:getSetting', 'ui.language', '');
+    let language = savedLanguage;
+    if (!language) {
+      if (window.AppState && window.AppState.currentLanguage) {
+        language = window.AppState.currentLanguage;
+      } else if (window.I18n && window.I18n.locale) {
+        language = window.I18n.locale;
+      } else {
+        try {
+          const systemLocale = await window.api.invoke('i18n:getSystemLocale');
+          language = await window.api.invoke('i18n:normalizeLocale', systemLocale);
+        } catch (_) {
+          language = 'en';
+        }
+      }
+    }
     let storedTheme = null;
     try {
       storedTheme = window.localStorage && window.localStorage.getItem('soterios.theme');
@@ -94,7 +126,7 @@ const Api = {
         folderWatch,
         networkAlerts
       },
-      ui: { theme }
+      ui: { theme, language }
     };
   },
   async updateSettings(patch) {
@@ -139,6 +171,9 @@ const Api = {
         try {
           if (window.localStorage) window.localStorage.setItem('soterios.theme', u.theme || 'dark');
         } catch (_) {}
+      }
+      if (Object.prototype.hasOwnProperty.call(u, 'language') && window.I18n) {
+        await window.I18n.setLocale(u.language || 'en');
       }
     }
   },

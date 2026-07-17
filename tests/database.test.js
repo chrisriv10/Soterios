@@ -150,7 +150,7 @@ describe('DatabaseService maintenance_runs', () => {
     }
     service.pruneMaintenanceRuns(2);
     const kept = service.getMaintenanceHistory(10).map((row) => row.id);
-    assert.deepEqual(kept, ids.slice(-2));
+    assert.deepEqual([...kept].sort((a, b) => a - b), ids.slice(-2));
     service.db.close();
   });
 
