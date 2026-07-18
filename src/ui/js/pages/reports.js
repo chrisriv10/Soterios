@@ -65,6 +65,7 @@ function renderSystemSnapshot(system) {
 
 window.Pages.reports = {
   _currentScanReportId: null,
+  _currentSecurityReportPath: null,
   _lastExportPath: null,
 
   render(container) {
@@ -116,6 +117,7 @@ window.Pages.reports = {
 
   clearViewer(container) {
     this._currentScanReportId = null;
+    this._currentSecurityReportPath = null;
     this._lastExportPath = null;
     container.querySelector('#reportViewerTitle').textContent = 'Select a report';
     container.querySelector('#closeReportViewer').style.display = 'none';
@@ -128,6 +130,7 @@ window.Pages.reports = {
 
   setScanReportViewer(container, report) {
     this._currentScanReportId = report.id;
+    this._currentSecurityReportPath = null;
     this._lastExportPath = null;
     container.querySelector('#exportReportPdf').style.display = 'inline-flex';
     container.querySelector('#exportReportCsv').style.display = 'inline-flex';
@@ -137,6 +140,17 @@ window.Pages.reports = {
       `${report.scan_type} scan - ${parseUtcTimestamp(report.timestamp).toLocaleString()}`,
       this.renderScanReport(report)
     );
+  },
+
+  setSecurityReportViewer(container, filePath, report) {
+    this._currentScanReportId = null;
+    this._currentSecurityReportPath = filePath;
+    this._lastExportPath = null;
+    container.querySelector('#exportReportPdf').style.display = 'inline-flex';
+    container.querySelector('#exportReportCsv').style.display = 'inline-flex';
+    container.querySelector('#exportReportToast').style.display = 'none';
+    const title = (report && report.title) || 'Security report';
+    this.showViewer(container, title, this.renderSecurityReport(report));
   },
 
   showExportToast(container, message, filePath) {
@@ -155,12 +169,15 @@ window.Pages.reports = {
   },
 
   async exportCurrentReport(container, format) {
-    if (!this._currentScanReportId) return;
+    const isSecurityReport = this._currentSecurityReportPath !== null;
+    const reportId = isSecurityReport ? this._currentSecurityReportPath : this._currentScanReportId;
+    if (!reportId) return;
+    
     const btn = container.querySelector(format === 'pdf' ? '#exportReportPdf' : '#exportReportCsv');
     setButtonLoading(btn, true, 'Exporting...');
     try {
       const channel = format === 'pdf' ? 'report:exportPDF' : 'report:exportCSV';
-      const res = await window.api.invoke(channel, this._currentScanReportId);
+      const res = await window.api.invoke(channel, reportId, isSecurityReport ? 'security' : 'scan');
       if (!res.success) {
         alert(res.error || 'Export failed.');
         return;
@@ -175,7 +192,7 @@ window.Pages.reports = {
   showViewer(container, title, html) {
     container.querySelector('#reportViewerTitle').textContent = title;
     container.querySelector('#closeReportViewer').style.display = 'inline-flex';
-    if (!this._currentScanReportId) {
+    if (!this._currentScanReportId && !this._currentSecurityReportPath) {
       container.querySelector('#exportReportPdf').style.display = 'none';
       container.querySelector('#exportReportCsv').style.display = 'none';
       container.querySelector('#exportReportToast').style.display = 'none';
@@ -224,12 +241,16 @@ window.Pages.reports = {
 
   async generate(container) {
     this._currentScanReportId = null;
+    this._currentSecurityReportPath = null;
     const btn = container.querySelector('#generateReport');
     setButtonLoading(btn, true, 'Generating...');
     try {
       const appInfo = await Api.getAppInfo();
       const data = await Api.runTool('generate-security-report', { version: appInfo.version });
       const title = (data.report && data.report.title) || 'Generated security report';
+      // Security reports are saved to disk, get the path
+      const reportPath = data.path;
+      this._currentSecurityReportPath = reportPath;
       this.showViewer(container, title, this.renderSecurityReport(data.report));
       this.listReports(container);
     } catch (err) {
@@ -344,6 +365,7 @@ window.Pages.reports = {
       el.querySelectorAll('.open-report').forEach(btn => {
         btn.addEventListener('click', async () => {
           this._currentScanReportId = null;
+          this._currentSecurityReportPath = btn.dataset.path;
           const res = await window.api.invoke('reports:read', btn.dataset.path);
           if (!res.success) { alert(res.error || 'Unable to read report.'); return; }
           const entry = groups.find((g) => g.files.json && g.files.json.path === btn.dataset.path);

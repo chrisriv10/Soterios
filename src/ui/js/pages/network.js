@@ -120,9 +120,10 @@ window.Pages['network'] = {
     const searchSelectionStart = prevSearchEl ? prevSearchEl.selectionStart : null;
     const searchSelectionEnd = prevSearchEl ? prevSearchEl.selectionEnd : null;
     try {
-      const [statsResult, connectionsResult] = await Promise.allSettled([
+      const [statsResult, connectionsResult, settingsResult] = await Promise.allSettled([
         window.api.invoke('network:stats'),
-        window.api.invoke('network:connections')
+        window.api.invoke('network:connections'),
+        window.api.invoke('db:getSetting', 'feature.networkTrafficHistory', true)
       ]);
 
       // Verify container is still in DOM after async operation
@@ -132,6 +133,7 @@ window.Pages['network'] = {
 
       const stats = statsResult.status === 'fulfilled' ? statsResult.value : null;
       const connections = connectionsResult.status === 'fulfilled' ? connectionsResult.value : null;
+      const networkTrafficHistoryEnabled = settingsResult.status === 'fulfilled' ? settingsResult.value : true;
 
       let html = '';
 
@@ -308,18 +310,17 @@ window.Pages['network'] = {
 
       html += '</div>'; // end bandwidth/pie/flags row
 
-      // Traffic history chart (persisted network_stats samples)
-      html += '<div class="card" style="padding:14px 16px; margin-bottom:18px;">';
-      html += '<h3 style="margin-bottom:10px; font-size:1rem;">Traffic history (24h)</h3>';
-      html += '<canvas id="networkHistoryChart" width="900" height="180" style="width:100%; max-height:180px;"></canvas>';
-      html += '<div id="networkHistoryEmpty" class="empty-state" style="font-size:0.85rem; display:none;">No historical samples yet — samples are recorded every 30 seconds while the app runs.</div>';
-      html += '</div>';
+      // Traffic history chart (persisted network_stats samples) - only shown if feature is enabled
+      if (networkTrafficHistoryEnabled) {
+        html += '<div class="card" style="padding:14px 16px; margin-bottom:18px;">';
+        html += '<h3 style="margin-bottom:10px; font-size:1rem;">Traffic history (24h)</h3>';
+        html += '<canvas id="networkHistoryChart" width="900" height="180" style="width:100%; max-height:180px;"></canvas>';
+        html += '<div id="networkHistoryEmpty" class="empty-state" style="font-size:0.85rem; display:none;">No historical samples yet — samples are recorded every 30 seconds while the app runs.</div>';
+        html += '</div>';
+      }
 
-      // Recent suspicious network alert actions
-      html += '<div class="card" style="padding:14px 16px; margin-bottom:18px;" id="networkAlertsPanel">';
-      html += '<h3 style="margin-bottom:10px; font-size:1rem;">Suspicious connection alerts</h3>';
-      html += '<div id="networkAlertsList" class="empty-state" style="font-size:0.85rem;">Loading alerts…</div>';
-      html += '</div>';
+      // Placeholder for static network alerts panel (built once and reused)
+      html += '<div id="networkAlertsPanel"></div>';
 
       // Heat Map
       const uniqueIps = [...new Set(connections ? connections.map(c => firstDefined(c.remoteAddress, c.RemoteAddress)).filter(Boolean) : [])];
@@ -586,8 +587,7 @@ window.Pages['network'] = {
 
       content.innerHTML = html;
       this.paintHistoryChart(content).catch(() => {});
-      this.renderAlertHits(content).catch(() => {});
-
+      
       // The world map background (grid overlay + <img>) is static and never
       // changes between refreshes, so instead of letting content.innerHTML
       // tear it down and force the browser to re-decode the image every
@@ -604,6 +604,23 @@ window.Pages['network'] = {
           `;
         }
         mapBgMount.replaceWith(this._worldMapBgEl);
+      }
+      
+      // Network alerts panel - also static to prevent flashing on refresh
+      const alertsPanelMount = content.querySelector('#networkAlertsPanel');
+      if (alertsPanelMount) {
+        if (!this._alertsPanelEl) {
+          this._alertsPanelEl = document.createElement('div');
+          this._alertsPanelEl.id = 'networkAlertsPanel';
+          this._alertsPanelEl.className = 'card';
+          this._alertsPanelEl.style.cssText = 'padding:10px 12px; margin-bottom:18px;';
+          this._alertsPanelEl.innerHTML = `
+            <h3 style="margin-bottom:6px; font-size:0.9rem;">Suspicious connection alerts</h3>
+            <div id="networkAlertsList" class="empty-state" style="font-size:0.8rem;">Loading alerts…</div>
+          `;
+        }
+        alertsPanelMount.replaceWith(this._alertsPanelEl);
+        this.renderAlertHits(content).catch(() => {});
       }
 
       // Restore scroll position of the connections list so a background
@@ -677,6 +694,9 @@ window.Pages['network'] = {
     const canvas = content.querySelector('#networkHistoryChart');
     const empty = content.querySelector('#networkHistoryEmpty');
     if (!canvas) return;
+    // Check if feature is enabled before rendering
+    const networkTrafficHistoryEnabled = await window.api.invoke('db:getSetting', 'feature.networkTrafficHistory', true);
+    if (!networkTrafficHistoryEnabled) return;
     let rows = [];
     try {
       rows = await window.api.invoke('network:history', { hours: 24 }) || [];
@@ -739,26 +759,55 @@ window.Pages['network'] = {
       status = await window.api.invoke('network-alerts:status') || status;
     } catch (_) {}
     const hits = status.recentHits || [];
+    
+    // Cache previous hits to avoid unnecessary DOM rebuilds (fixes flashing)
+    const hitsKey = hits.map(h => h.key).join('|');
+    if (this._lastAlertHitsKey === hitsKey && list.innerHTML && !list.classList.contains('empty-state')) {
+      return;
+    }
+    this._lastAlertHitsKey = hitsKey;
+    
     if (!hits.length) {
       list.className = 'empty-state';
-      list.style.fontSize = '0.85rem';
+      list.style.fontSize = '0.8rem';
       list.textContent = 'No blocklisted connections detected this session.';
       return;
     }
+    
     list.className = '';
     list.style.fontSize = '';
-    list.innerHTML = hits.slice(0, 8).map((h) => `
-      <div class="list-row" style="display:flex; justify-content:space-between; gap:12px; align-items:center; padding:10px 0; border-bottom:1px solid var(--glass-border);">
-        <div style="font-size:0.85rem;">
+    
+    // Show only 1 item by default, expandable to show all
+    const showAll = this._alertsExpanded;
+    const displayHits = showAll ? hits.slice(0, 8) : hits.slice(0, 1);
+    const hasMore = hits.length > 1;
+    
+    list.innerHTML = displayHits.map((h) => `
+      <div class="list-row" style="display:flex; justify-content:space-between; gap:8px; align-items:center; padding:6px 0; border-bottom:1px solid var(--glass-border);">
+        <div style="font-size:0.8rem;">
           <div style="font-weight:600; font-family:monospace;">${escapeHtml(h.remoteAddress || '')}${h.remotePort ? ':' + escapeHtml(h.remotePort) : ''}</div>
-          <div class="page-subtitle">PID ${escapeHtml(h.pid || 'n/a')} · ${escapeHtml(h.state || '')}</div>
+          <div class="page-subtitle" style="font-size:0.75rem;">PID ${escapeHtml(h.pid || 'n/a')} · ${escapeHtml(h.state || '')}</div>
         </div>
-        <div style="display:flex; gap:8px;">
-          <button class="btn btn-sm" data-alert-ignore="${escapeHtml(h.key)}">Ignore</button>
-          <button class="btn btn-sm" style="color:var(--accent-danger);" data-alert-kill="${escapeHtml(h.pid || '')}" ${h.pid ? '' : 'disabled'}>Kill</button>
+        <div style="display:flex; gap:6px;">
+          <button class="btn btn-sm" style="font-size:0.75rem; padding:4px 8px;" data-alert-ignore="${escapeHtml(h.key)}">Ignore</button>
+          <button class="btn btn-sm" style="font-size:0.75rem; padding:4px 8px; color:var(--accent-danger);" data-alert-kill="${escapeHtml(h.pid || '')}" ${h.pid ? '' : 'disabled'}>Kill</button>
         </div>
       </div>
     `).join('');
+    
+    // Add expand/collapse button if there are multiple alerts
+    if (hasMore) {
+      const expandBtn = document.createElement('button');
+      expandBtn.className = 'btn btn-sm';
+      expandBtn.style.cssText = 'margin-top:6px; font-size:0.75rem; padding:4px 8px;';
+      expandBtn.textContent = showAll ? `Show less (${hits.length - 1} hidden)` : `Show ${hits.length - 1} more`;
+      expandBtn.onclick = () => {
+        this._alertsExpanded = !this._alertsExpanded;
+        this.renderAlertHits(content);
+      };
+      list.appendChild(expandBtn);
+    }
+    
     this.bindAlertActions(content);
   },
 
@@ -798,5 +847,8 @@ window.Pages['network'] = {
     this._selectedClusterIps = null;
     this._selectedClusterLoc = null;
     this._worldMapBgEl = null;
+    this._alertsPanelEl = null;
+    this._alertsExpanded = false;
+    this._lastAlertHitsKey = null;
   }
 };

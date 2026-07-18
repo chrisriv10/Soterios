@@ -83,6 +83,7 @@ const Api = {
     const launchAtStartup = await window.api.invoke('db:getSetting', 'feature.launchAtStartup', false);
     const folderWatch = await window.api.invoke('db:getSetting', 'feature.folderWatch', true);
     const networkAlerts = await window.api.invoke('db:getSetting', 'feature.networkAlerts', true);
+    const networkTrafficHistory = await window.api.invoke('db:getSetting', 'feature.networkTrafficHistory', true);
     const dbTheme = await window.api.invoke('db:getSetting', 'ui.theme', 'dark');
     const savedLanguage = await window.api.invoke('db:getSetting', 'ui.language', '');
     let language = savedLanguage;
@@ -124,7 +125,8 @@ const Api = {
         scanNotifications,
         launchAtStartup,
         folderWatch,
-        networkAlerts
+        networkAlerts,
+        networkTrafficHistory
       },
       ui: { theme, language }
     };
@@ -162,6 +164,11 @@ const Api = {
         const enable = !!f.networkAlerts;
         const result = await window.api.invoke('network-alerts:toggle', enable);
         await window.api.invoke('db:setSetting', 'feature.networkAlerts', !!(result && result.running));
+      }
+      if (Object.prototype.hasOwnProperty.call(f, 'networkTrafficHistory')) {
+        const enable = !!f.networkTrafficHistory;
+        const result = await window.api.invoke('network-traffic-history:toggle', enable);
+        await window.api.invoke('db:setSetting', 'feature.networkTrafficHistory', !!(result && result.running));
       }
     }
     if (patch.ui) {

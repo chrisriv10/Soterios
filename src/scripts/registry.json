@@ -11,6 +11,8 @@
     { "id": "clear-browser-cache", "name": "Clear Browser Cache", "description": "Clears cache for one or more browsers found by the Browser Cache Report. Not shown as a standalone tool card -- invoked only from within that report's UI.", "file": "safeScripts/clearBrowserCache.js" },
     { "id": "uninstaller-report", "name": "Software Uninstaller", "description": "Lists installed applications, launches native uninstallers, and scans for leftover folders (Windows).", "file": "safeScripts/uninstallerReport.js" },
     { "id": "launch-uninstaller", "name": "Launch Uninstaller", "description": "Starts the native uninstaller for a selected application. Invoked from the Software Uninstaller report UI.", "file": "safeScripts/launchUninstaller.js" },
-    { "id": "remove-leftovers", "name": "Remove Leftover Folders", "description": "Removes leftover folders selected from the Software Uninstaller report. Invoked from that report's UI.", "file": "safeScripts/removeLeftovers.js" }
+    { "id": "remove-leftovers", "name": "Remove Leftover Folders", "description": "Removes leftover folders selected from the Software Uninstaller report. Invoked from that report's UI.", "file": "safeScripts/removeLeftovers.js" },
+    { "id": "duplicate-finder", "name": "Duplicate File Finder", "description": "Finds duplicate files using SHA-256 hashing and allows deletion of duplicates.", "file": "safeScripts/duplicateFinder.js" },
+    { "id": "file-shredder", "name": "File Shredder", "description": "Securely deletes files using DoD 5220.22-M overwrite standard (3-pass: zeros, ones, random).", "file": "safeScripts/fileShredder.js" }
   ]
 }

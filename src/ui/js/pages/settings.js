@@ -72,6 +72,14 @@ window.Pages.settings = {
 
           <div class="toggle-row">
             <div>
+              <div class="toggle-label">Network Traffic History</div>
+              <div class="toggle-desc">Record network interface bandwidth samples for the history chart</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="networkTrafficHistoryToggle" ${settings.features.networkTrafficHistory !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+          </div>
+
+          <div class="toggle-row">
+            <div>
               <div class="toggle-label">Auto-Generate Reports</div>
               <div class="toggle-desc">Automatically create a security report after each scan completes</div>
             </div>
@@ -332,6 +340,7 @@ window.Pages.settings = {
     container.querySelector('#rtpToggle').addEventListener('change', (event) => saveFeature('realtimeProtection', event.target.checked, event.target));
     container.querySelector('#folderWatchToggle').addEventListener('change', (event) => saveFeature('folderWatch', event.target.checked, event.target));
     container.querySelector('#networkAlertsToggle').addEventListener('change', (event) => saveFeature('networkAlerts', event.target.checked, event.target));
+    container.querySelector('#networkTrafficHistoryToggle').addEventListener('change', (event) => saveFeature('networkTrafficHistory', event.target.checked, event.target));
     container.querySelector('#autoReportToggle').addEventListener('change', (event) => saveFeature('autoReports', event.target.checked, event.target));
     container.querySelector('#scanHistoryToggle').addEventListener('change', (event) => saveFeature('scanHistory', event.target.checked, event.target));
     container.querySelector('#externalLookupsToggle').addEventListener('change', (event) => saveFeature('externalLookups', event.target.checked, event.target));

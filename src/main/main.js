@@ -581,6 +581,35 @@ app.whenReady().then(async () => {
     userDataPath: app.getPath('userData'),
     notify: (title, body, level) => showNotification(title, body, level)
   });
+
+  // Network stats timer control (for feature toggle)
+  services.startNetworkStatsTimer = () => {
+    if (lifecycleRefs.networkStatsTimer) return { running: true };
+    const sampleNetworkStats = async () => {
+      try {
+        const stats = await networkMonitor.getStats();
+        const recordedAt = new Date().toISOString();
+        for (const iface of (stats.interfaces || [])) {
+          db.addNetworkStatsSample(iface.iface, iface.rxSec || 0, iface.txSec || 0, recordedAt);
+        }
+      } catch (err) {
+        logLine('warn', 'Network stats sample failed', { message: err.message });
+      }
+    };
+    const networkStatsTimer = setInterval(sampleNetworkStats, 30_000);
+    if (typeof networkStatsTimer.unref === 'function') networkStatsTimer.unref();
+    lifecycleRefs.networkStatsTimer = networkStatsTimer;
+    sampleNetworkStats().catch(() => {});
+    return { running: true };
+  };
+  services.stopNetworkStatsTimer = () => {
+    if (lifecycleRefs.networkStatsTimer) {
+      clearInterval(lifecycleRefs.networkStatsTimer);
+      lifecycleRefs.networkStatsTimer = null;
+    }
+    return { running: false };
+  };
+
   const maintenanceScheduler = new MaintenanceScheduler({
     db: services.db,
     toolRegistry: services.toolRegistry,
@@ -913,22 +942,9 @@ app.whenReady().then(async () => {
     } catch (err) {
       logLine('error', 'Blocklist refresh failed', { message: err.message });
     }
-    // Persist network bandwidth samples every 30s; prune >7 days hourly.
-    const sampleNetworkStats = async () => {
-      try {
-        const stats = await networkMonitor.getStats();
-        const recordedAt = new Date().toISOString();
-        for (const iface of (stats.interfaces || [])) {
-          db.addNetworkStatsSample(iface.iface, iface.rxSec || 0, iface.txSec || 0, recordedAt);
-        }
-      } catch (err) {
-        logLine('warn', 'Network stats sample failed', { message: err.message });
-      }
-    };
-    const networkStatsTimer = setInterval(sampleNetworkStats, 30_000);
-    if (typeof networkStatsTimer.unref === 'function') networkStatsTimer.unref();
-    lifecycleRefs.networkStatsTimer = networkStatsTimer;
-    sampleNetworkStats().catch(() => {});
+    if (db.getSetting('feature.networkTrafficHistory', true)) {
+      services.startNetworkStatsTimer();
+    }
     const pruneTimer = setInterval(() => {
       try {
         db.pruneNetworkStats(7);

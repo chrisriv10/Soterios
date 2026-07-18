@@ -20,12 +20,9 @@ const SCHEDULE_PRESETS = {
 
 const ALLOWED_SCRIPT_IDS = new Set([
   'clear-temp-files',
-  'list-startup-items',
   'disk-space-report',
   'large-files-report',
-  'browser-cache-report',
-  'windows-services-report',
-  'network-report'
+  'browser-cache-report'
 ]);
 
 const MIN_INTERVAL_HOURS = 24;

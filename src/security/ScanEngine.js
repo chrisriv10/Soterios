@@ -50,6 +50,7 @@ class ScanEngine {
     this.quarantineManager = quarantineManager;
     this.abortController = null;
     this.isScanning = false;
+    this.isFolderWatchScanning = false;
     this.currentScan = null;
   }
 
@@ -88,7 +89,13 @@ class ScanEngine {
   }
 
   async runScan(scanType, paths, startMessage) {
-    this.isScanning = true;
+    const isFolderWatch = scanType === 'folderwatch';
+    if (isFolderWatch) {
+      this.isFolderWatchScanning = true;
+    } else {
+      if (this.isScanning) return { error: 'Scan already in progress' };
+      this.isScanning = true;
+    }
     this.abortController = new AbortController();
     this.currentScan = { scanType, paths, startedAt: new Date().toISOString() };
 
@@ -202,7 +209,11 @@ class ScanEngine {
         errors.push(err.message || String(err));
       }
     } finally {
-      this.isScanning = false;
+      if (isFolderWatch) {
+        this.isFolderWatchScanning = false;
+      } else {
+        this.isScanning = false;
+      }
       const durationMs = Date.now() - startTime;
       const status = wasCanceled ? 'canceled' : (errors.length === 0 ? 'completed' : 'failed');
       const reportPayload = {
@@ -284,6 +295,7 @@ class ScanEngine {
   getStatus() {
     return {
       isScanning: this.isScanning,
+      isFolderWatchScanning: this.isFolderWatchScanning,
       currentScan: this.currentScan
     };
   }

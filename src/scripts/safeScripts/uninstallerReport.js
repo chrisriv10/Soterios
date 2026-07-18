@@ -35,7 +35,7 @@ module.exports = async function uninstallerReport(args = {}) {
     '  "HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*",',
     '  "HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*",',
     '  "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*"',
-    ')',
+    ');',
     'Get-ItemProperty $paths -ErrorAction SilentlyContinue',
     '| Where-Object { $_.DisplayName }',
     '| Select-Object DisplayName, DisplayVersion, Publisher, InstallLocation, UninstallString, QuietUninstallString, EstimatedSize, DisplayIcon',

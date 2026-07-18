@@ -12,6 +12,7 @@ const {
   isPathInsideDir,
   securityReportsDir,
   threatsToCsv,
+  securityReportToCsv,
   csvPathForJson,
   generatePdfFromHtml
 } = require('../security/reportExport');
@@ -443,6 +444,13 @@ function registerIpcHandlers(mainWindow, services) {
     return enable ? services.networkAlertMonitor.start() : services.networkAlertMonitor.stop();
   });
 
+  ipcMain.handle('network-traffic-history:toggle', async (_event, enable) => {
+    if (!services.startNetworkStatsTimer || !services.stopNetworkStatsTimer) {
+      throw new Error('Network stats timer control unavailable.');
+    }
+    return enable ? services.startNetworkStatsTimer() : services.stopNetworkStatsTimer();
+  });
+
   ipcMain.handle('network-alerts:ignore', async (_event, key) => {
     if (!services.networkAlertMonitor) throw new Error('Network alert monitor is unavailable.');
     return services.networkAlertMonitor.ignore(key);
@@ -649,8 +657,17 @@ function registerIpcHandlers(mainWindow, services) {
     return { success: true };
   });
 
-  ipcMain.handle('report:exportPDF', async (_event, reportId) => {
+  ipcMain.handle('report:exportPDF', async (_event, reportId, reportType = 'scan') => {
     try {
+      if (reportType === 'security') {
+        // Security report export - reportId is the file path
+        const resolved = path.resolve(reportId || '');
+        if (!isPathInsideDir(resolved, securityReportsDir())) return { success: false, error: 'Invalid report path.' };
+        if (!fs.existsSync(resolved)) return { success: false, error: 'Report file not found.' };
+        const pdfPath = await generatePdfFromHtml(resolved);
+        return { success: true, path: pdfPath };
+      }
+      // Scan report export
       const row = db.getScanReport(Number(reportId));
       if (!row) return { success: false, error: 'Report not found.' };
       if (!row.html_path || !fs.existsSync(row.html_path)) {
@@ -666,8 +683,19 @@ function registerIpcHandlers(mainWindow, services) {
     }
   });
 
-  ipcMain.handle('report:exportCSV', async (_event, reportId) => {
+  ipcMain.handle('report:exportCSV', async (_event, reportId, reportType = 'scan') => {
     try {
+      if (reportType === 'security') {
+        // Security report export - reportId is the file path
+        const resolved = path.resolve(reportId || '');
+        if (!isPathInsideDir(resolved, securityReportsDir())) return { success: false, error: 'Invalid report path.' };
+        if (!fs.existsSync(resolved)) return { success: false, error: 'Report file not found.' };
+        const report = JSON.parse(fs.readFileSync(resolved, 'utf8'));
+        const csvPath = resolved.replace(/\.json$/i, '.csv');
+        fs.writeFileSync(csvPath, securityReportToCsv(report), 'utf8');
+        return { success: true, path: csvPath };
+      }
+      // Scan report export
       const row = db.getScanReport(Number(reportId));
       if (!row) return { success: false, error: 'Report not found.' };
       if (!row.json_path || !fs.existsSync(row.json_path)) {

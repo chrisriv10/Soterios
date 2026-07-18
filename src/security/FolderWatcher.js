@@ -133,6 +133,10 @@ class FolderWatcher {
           await new Promise((r) => setTimeout(r, 500));
           continue;
         }
+        if (this.scanEngine && this.scanEngine.isFolderWatchScanning) {
+          await new Promise((r) => setTimeout(r, 500));
+          continue;
+        }
         const filePath = this._queue.shift();
         this._scannedRecently.set(filePath, Date.now());
         try {
