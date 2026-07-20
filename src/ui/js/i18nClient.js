@@ -24,6 +24,7 @@ window.I18n = {
     if (options.persist !== false) {
       await window.api.invoke('db:setSetting', 'ui.language', normalized);
     }
+    this.translateUI();
   },
 
   t(key, vars) {
@@ -36,5 +37,19 @@ window.I18n = {
       ));
     }
     return value;
+  },
+
+  translateUI() {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      const translated = this.t(key);
+      if (translated !== key) {
+        if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+          el.placeholder = translated;
+        } else {
+          el.textContent = translated;
+        }
+      }
+    });
   }
 };

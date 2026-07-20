@@ -6,70 +6,71 @@ window.Pages['scanner'] = {
     this.cleanups = [];
   },
   render(container) {
-container.innerHTML = `
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+    container.innerHTML = `
       <div style="overflow-y: auto; max-height: calc(100vh - 80px); padding-right: 8px;">
       <header class="page-header">
-        <h1 class="page-title">Malware Scan</h1>
-        <p class="page-subtitle">Scan your system for malware and threats using ClamAV</p>
+        <h1 class="page-title">${escapeHtml(t('scanner.title'))}</h1>
+        <p class="page-subtitle">${escapeHtml(t('scanner.subtitle'))}</p>
       </header>
       <div class="card" id="clamStatusCard" style="margin-bottom:24px;">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:16px;">
           <div>
-            <h3 style="margin:0;">ClamAV Engine</h3>
-            <p class="page-subtitle" id="clamStatusText" style="margin:4px 0 0;">Checking engine status...</p>
+            <h3 style="margin:0;">${escapeHtml(t('scanner.clamavEngine'))}</h3>
+            <p class="page-subtitle" id="clamStatusText" style="margin:4px 0 0;">${escapeHtml(t('scanner.checkingStatus'))}</p>
           </div>
-          <button class="btn" id="btnUpdateDefinitions">Update Definitions</button>
+          <button class="btn" id="btnUpdateDefinitions">${escapeHtml(t('scanner.updateDefinitions'))}</button>
         </div>
       </div>
       <div class="scanner-grid">
         <div class="card">
-          <h3>Quick Scan</h3>
-          <p class="page-subtitle">Scans common startup locations and temp folders.</p>
-          <button class="btn btn-primary" style="margin-top:12px;" id="btnScannerQuick">Start Quick Scan</button>
+          <h3>${escapeHtml(t('scanner.quickScan'))}</h3>
+          <p class="page-subtitle">${escapeHtml(t('scanner.quickDesc'))}</p>
+          <button class="btn btn-primary" style="margin-top:12px;" id="btnScannerQuick">${escapeHtml(t('scanner.quickStart'))}</button>
         </div>
         <div class="card">
-          <h3>Full Scan</h3>
-          <p class="page-subtitle">Scans entire C: drive (may take a while).</p>
-          <button class="btn" style="margin-top:12px;" id="btnScannerFull">Start Full Scan</button>
+          <h3>${escapeHtml(t('scanner.fullScan'))}</h3>
+          <p class="page-subtitle">${escapeHtml(t('scanner.fullDesc'))}</p>
+          <button class="btn" style="margin-top:12px;" id="btnScannerFull">${escapeHtml(t('scanner.fullStart'))}</button>
         </div>
         <div class="card">
-          <h3>Custom Scan</h3>
-          <p class="page-subtitle">Choose a specific folder to scan.</p>
-          <button class="btn" style="margin-top:12px;" id="btnScannerCustom">Select Folder\u2026</button>
+          <h3>${escapeHtml(t('scanner.customScan'))}</h3>
+          <p class="page-subtitle">${escapeHtml(t('scanner.customDesc'))}</p>
+          <button class="btn" style="margin-top:12px;" id="btnScannerCustom">${escapeHtml(t('scanner.customSelect'))}</button>
         </div>
       </div>
       <div class="card" id="scheduleCard" style="margin-top:24px;">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
           <div>
-            <h3 style="margin:0;">Scheduled Scans</h3>
-            <p class="page-subtitle" id="scheduleStatusText" style="margin:4px 0 0;">Loading schedule\u2026</p>
+            <h3 style="margin:0;">${escapeHtml(t('scanner.scheduledScans'))}</h3>
+            <p class="page-subtitle" id="scheduleStatusText" style="margin:4px 0 0;">${escapeHtml(t('scanner.scheduleStatusLoading'))}</p>
           </div>
-          <button class="btn" id="btnScheduleToggle">Enable</button>
+          <button class="btn" id="btnScheduleToggle">${escapeHtml(t('scanner.scheduleEnable'))}</button>
         </div>
         <div id="scheduleOptions" style="margin-top:16px; display:none; flex-direction:column; gap:12px;">
           <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:center;">
             <label style="font-size:0.85rem; color:var(--text-dim); display:flex; align-items:center; gap:8px;">
-              Scan type
+              ${escapeHtml(t('scanner.scheduleType'))}
               <select id="scheduleScanType" class="btn btn-sm">
-                <option value="quick">Quick Scan</option>
-                <option value="full">Full Scan</option>
-                <option value="custom">Custom Folder</option>
+                <option value="quick">${escapeHtml(t('scanner.scheduleTypeQuick'))}</option>
+                <option value="full">${escapeHtml(t('scanner.scheduleTypeFull'))}</option>
+                <option value="custom">${escapeHtml(t('scanner.scheduleTypeCustom'))}</option>
               </select>
             </label>
             <label style="font-size:0.85rem; color:var(--text-dim); display:flex; align-items:center; gap:8px;">
-              Frequency
+              ${escapeHtml(t('scanner.scheduleFrequency'))}
               <select id="scheduleInterval" class="btn btn-sm">
-                <option value="6">Every 6 hours</option>
-                <option value="12">Every 12 hours</option>
-                <option value="24">Daily</option>
-                <option value="72">Every 3 days</option>
-                <option value="168">Weekly</option>
+                <option value="6">${escapeHtml(t('scanner.scheduleFreq6'))}</option>
+                <option value="12">${escapeHtml(t('scanner.scheduleFreq12'))}</option>
+                <option value="24">${escapeHtml(t('scanner.scheduleFreq24'))}</option>
+                <option value="72">${escapeHtml(t('scanner.scheduleFreq72'))}</option>
+                <option value="168">${escapeHtml(t('scanner.scheduleFreq168'))}</option>
               </select>
             </label>
           </div>
           <div id="scheduleCustomRow" style="display:none; align-items:center; gap:10px;">
-            <button class="btn btn-sm" id="btnScheduleFolder">Choose Folder\u2026</button>
-            <span class="page-subtitle" id="scheduleFolderLabel" style="font-size:0.8rem;">No folder selected</span>
+            <button class="btn btn-sm" id="btnScheduleFolder">${escapeHtml(t('scanner.scheduleChooseFolder'))}</button>
+            <span class="page-subtitle" id="scheduleFolderLabel" style="font-size:0.8rem;">${escapeHtml(t('scanner.scheduleNoFolder'))}</span>
           </div>
         </div>
       </div>
@@ -79,13 +80,13 @@ container.innerHTML = `
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </div>
           <div style="flex:1;">
-            <div id="scanStatus" style="font-weight:600;">Ready</div>
+            <div id="scanStatus" style="font-weight:600;">${escapeHtml(t('scanner.statusReady'))}</div>
             <div id="scanDetail" class="page-subtitle" style="font-size:0.85rem;"></div>
           </div>
         </div>
         <div style="margin-top:12px; display:flex; gap:10px;">
-          <button class="btn btn-sm" id="btnCancelScan" disabled>Cancel Scan</button>
-          <button class="btn btn-sm" id="btnOpenScanReports">View Scan Reports</button>
+          <button class="btn btn-sm" id="btnCancelScan" disabled>${escapeHtml(t('scanner.cancelScan'))}</button>
+          <button class="btn btn-sm" id="btnOpenScanReports">${escapeHtml(t('scanner.viewReports'))}</button>
         </div>
         <div class="stat-bar-track" id="progressTrack" style="margin-top:12px; height:6px; border-radius:3px; overflow:hidden;">
           <div class="stat-bar-fill" id="scanProgressFill" style="width:0%; height:100%; background:var(--accent-primary); transition: width 0.3s ease;"></div>
@@ -144,8 +145,8 @@ container.innerHTML = `
       isScanRunning = active;
       if (active) {
         if (scanCard) scanCard.style.display = 'block';
-        if (scanStatus) scanStatus.textContent = 'Scanning\u2026';
-        if (scanDetail) scanDetail.textContent = 'Please wait while files are checked.';
+        if (scanStatus) scanStatus.textContent = t('scanner.statusScanning');
+        if (scanDetail) scanDetail.textContent = t('scanner.detailWait');
         if (scanIcon) {
           scanIcon.className = 'status-icon info';
           scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
@@ -153,9 +154,10 @@ container.innerHTML = `
         setProgress(30);
         scanButtons.forEach((b) => {
           b.disabled = true;
-          b.textContent = 'Scanning...';
+          b.textContent = t('scanner.statusScanning');
         });
       } else {
+        if (scanCard) scanCard.style.display = 'none';
         scanButtons.forEach((b) => {
           b.disabled = false;
           b.textContent = scanButtonOriginalLabels[b.id] || b.textContent;
@@ -173,9 +175,8 @@ container.innerHTML = `
       }
       setScanning(false);
       if (canceled) {
-        // Don't set progress to 100% on cancel - keep current percentage
-        if (scanStatus) scanStatus.textContent = 'Scan Canceled';
-        if (scanDetail) scanDetail.textContent = `${filesScanned} file(s) scanned before cancellation.` + (historyEnabled ? ' A scan report was saved.' : '');
+        if (scanStatus) scanStatus.textContent = t('scanner.statusScanCanceled');
+        if (scanDetail) scanDetail.textContent = t('scanner.detailCanceled', { count: filesScanned }) + (historyEnabled ? ' ' + t('common.scanReportSaved') : '');
         if (scanIcon) {
           scanIcon.className = 'status-icon warning';
           scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="13"/><circle cx="12" cy="16.5" r="1" fill="currentColor" stroke="none"/></svg>';
@@ -185,8 +186,8 @@ container.innerHTML = `
       }
       setProgress(100);
       if (success) {
-        if (scanStatus) scanStatus.textContent = 'Scan Complete';
-        if (scanDetail) scanDetail.textContent = `${filesScanned} file(s) scanned, ${threatsFound} threat(s) found.` + (note ? ' ' + note : '');
+        if (scanStatus) scanStatus.textContent = t('scanner.statusScanComplete');
+        if (scanDetail) scanDetail.textContent = t('scanner.detailComplete', { count: filesScanned, threats: threatsFound }) + (note ? ' ' + note : '');
         if (scanIcon) {
           scanIcon.className = 'status-icon ' + (threatsFound > 0 ? 'danger' : 'safe');
           scanIcon.innerHTML = threatsFound > 0
@@ -194,8 +195,8 @@ container.innerHTML = `
             : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
         }
       } else {
-        if (scanStatus) scanStatus.textContent = 'Scan Failed';
-        if (scanDetail) scanDetail.textContent = note || 'An error occurred during the scan.';
+        if (scanStatus) scanStatus.textContent = t('scanner.statusScanFailed');
+        if (scanDetail) scanDetail.textContent = note || t('scanner.statusScanFailed');
         if (scanIcon) {
           scanIcon.className = 'status-icon danger';
           scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
@@ -211,17 +212,28 @@ container.innerHTML = `
         if (status.scan && status.scan.isScanning) {
           activeAction = status.scan.currentScan && status.scan.currentScan.scanType === 'definitions' ? 'definitions' : 'virus';
           setScanning(true);
+          // Restore progress if available
+          if (status.scan.progress !== undefined) {
+            setProgress(status.scan.progress);
+          }
+          if (status.scan.filesScanned !== undefined && scanDetail) {
+            scanDetail.textContent = t('scan.progress', { files: status.scan.filesScanned, pct: status.scan.progress || 0 });
+          }
+          // Force scan card to be visible
+          if (scanCard) scanCard.style.display = 'block';
+        } else {
+          setScanning(false);
         }
         const engine = status.engine || status;
         if (!engine.ready) {
-          if (clamStatusText) clamStatusText.textContent = 'ClamAV is not ready. The bundled scanner could not be found.';
+          if (clamStatusText) clamStatusText.textContent = t('scanner.engineNotReady');
         } else if (!engine.hasDefinitions) {
-          if (clamStatusText) clamStatusText.textContent = 'Definitions are missing. They will be downloaded automatically before scanning.';
+          if (clamStatusText) clamStatusText.textContent = t('scanner.defsMissing');
         } else {
-          if (clamStatusText) clamStatusText.textContent = 'Ready with local ClamAV definitions.';
+          if (clamStatusText) clamStatusText.textContent = t('scanner.defsReady');
         }
       } catch (e) {
-        if (hasView() && clamStatusText) clamStatusText.textContent = e.message || 'Unable to read ClamAV status.';
+        if (hasView() && clamStatusText) clamStatusText.textContent = e.message || t('scanner.statusError');
       }
     }
 
@@ -229,33 +241,33 @@ container.innerHTML = `
     let scheduleConfig = { enabled: false, scanType: 'quick', customPath: null, intervalHours: 24, lastRun: null };
 
     function scheduleIntervalLabel(hours) {
-      const map = { 6: 'every 6 hours', 12: 'every 12 hours', 24: 'daily', 72: 'every 3 days', 168: 'weekly' };
-      return map[hours] || `every ${hours} hours`;
+      const map = { 6: t('scanner.scheduleFreq6'), 12: t('scanner.scheduleFreq12'), 24: t('scanner.scheduleFreq24'), 72: t('scanner.scheduleFreq72'), 168: t('scanner.scheduleFreq168') };
+      return map[hours] || t('scanner.scheduleFreqCustom', { hours });
     }
 
     function formatScheduleTimestamp(ts) {
-      if (!ts) return 'never';
-      try { return new Date(ts).toLocaleString(); } catch (_) { return 'never'; }
+      if (!ts) return t('common.never');
+      try { return new Date(ts).toLocaleString(); } catch (_) { return t('common.never'); }
     }
 
     function renderScheduleUI() {
       if (!hasView()) return;
-      scheduleToggleBtn.textContent = scheduleConfig.enabled ? 'Disable' : 'Enable';
+      scheduleToggleBtn.textContent = scheduleConfig.enabled ? t('scanner.scheduleDisable') : t('scanner.scheduleEnable');
       scheduleToggleBtn.className = scheduleConfig.enabled ? 'btn btn-primary' : 'btn';
       scheduleOptions.style.display = scheduleConfig.enabled ? 'flex' : 'none';
       scheduleScanType.value = scheduleConfig.scanType || 'quick';
       scheduleInterval.value = String(scheduleConfig.intervalHours || 24);
       scheduleCustomRow.style.display = scheduleConfig.scanType === 'custom' ? 'flex' : 'none';
-      scheduleFolderLabel.textContent = scheduleConfig.customPath || 'No folder selected';
+      scheduleFolderLabel.textContent = scheduleConfig.customPath || t('scanner.scheduleNoFolder');
 
       if (scheduleConfig.enabled) {
-        const typeLabel = scheduleConfig.scanType === 'full' ? 'Full scan'
-          : scheduleConfig.scanType === 'custom' ? 'Custom folder scan'
-          : 'Quick scan';
+        const typeLabel = scheduleConfig.scanType === 'full' ? t('scanner.scheduleTypeFull')
+          : scheduleConfig.scanType === 'custom' ? t('scanner.scheduleTypeCustom')
+          : t('scanner.scheduleTypeQuick');
         scheduleStatusText.textContent =
-          `${typeLabel} runs ${scheduleIntervalLabel(scheduleConfig.intervalHours)}. Last run: ${formatScheduleTimestamp(scheduleConfig.lastRun)}.`;
+          t('scanner.scheduleRunning', { type: typeLabel, freq: scheduleIntervalLabel(scheduleConfig.intervalHours), last: formatScheduleTimestamp(scheduleConfig.lastRun) });
       } else {
-        scheduleStatusText.textContent = 'Automatic scans are turned off.';
+        scheduleStatusText.textContent = t('scanner.scheduleEnabled');
       }
     }
 
@@ -269,7 +281,7 @@ container.innerHTML = `
         );
         renderScheduleUI();
       } catch (e) {
-        if (hasView()) scheduleStatusText.textContent = e.message || 'Unable to load schedule settings.';
+        if (hasView()) scheduleStatusText.textContent = e.message || t('scanner.scheduleLoadError');
       }
     }
 
@@ -280,14 +292,14 @@ container.innerHTML = `
         scheduleConfig = Object.assign({}, scheduleConfig, saved || {});
         renderScheduleUI();
       } catch (e) {
-        if (hasView()) scheduleStatusText.textContent = e.message || 'Unable to save schedule settings.';
+        if (hasView()) scheduleStatusText.textContent = e.message || t('scanner.scheduleSaveError');
       }
     }
 
     scheduleToggleBtn.addEventListener('click', () => {
       const enabling = !scheduleConfig.enabled;
       if (enabling && scheduleConfig.scanType === 'custom' && !scheduleConfig.customPath) {
-        scheduleStatusText.textContent = 'Choose a folder before enabling a custom scheduled scan.';
+        scheduleStatusText.textContent = t('scanner.scheduleChooseFolderFirst');
         return;
       }
       scheduleConfig.enabled = enabling;
@@ -317,7 +329,7 @@ container.innerHTML = `
     function setError(msg) {
       if (!hasView()) return;
       if (scanCard) scanCard.style.display = 'block';
-      if (scanStatus) scanStatus.textContent = 'Error';
+      if (scanStatus) scanStatus.textContent = t('scanner.statusError');
       if (scanDetail) scanDetail.textContent = msg;
       if (scanIcon) {
         scanIcon.className = 'status-icon danger';
@@ -342,7 +354,7 @@ container.innerHTML = `
         }
         if (scanCard) scanCard.style.display = 'block';
         setProgress(data.pct);
-        if (scanDetail) scanDetail.textContent = data.message || 'Scanning…';
+        if (scanDetail) scanDetail.textContent = data.message || t('scanner.statusScanning');
       }
     }));
 
@@ -356,12 +368,12 @@ container.innerHTML = `
       // ✅ Handle definition updates separately (prevents "0 threats found")
       if (data.scanType === 'definitions') {
         scanStatus.textContent = data.status === 'failed'
-          ? 'Definition Update Failed'
-          : 'Definitions Updated';
+          ? t('scanner.defsUpdateFailed')
+          : t('scanner.defsUpdated');
 
         scanDetail.textContent = data.status === 'failed'
-          ? (data.note || data.error || 'Update failed.')
-          : (data.note || 'ClamAV signatures are ready.');
+          ? (data.note || data.error || t('scanner.defsUpdateFailed'))
+          : (data.note || t('scanner.defsReady'));
 
         setProgress(100);
         isScanRunning = false;
@@ -394,7 +406,7 @@ container.innerHTML = `
 
     updateDefinitionsButton.addEventListener('click', async () => {
       if (isScanRunning) {
-        setError('A scan is already in progress. Cancel it or wait for it to complete before updating definitions.');
+        setError(t('scanner.scanAlreadyRunning'));
         return;
       }
       activeAction = 'definitions';
@@ -402,16 +414,16 @@ container.innerHTML = `
       showReportButton = false;
       updateFooterButtons();
       scanCard.style.display = 'block';
-      scanStatus.textContent = 'Updating Definitions';
-      scanDetail.textContent = 'Downloading the latest ClamAV signatures...';
+      scanStatus.textContent = t('scanner.updatingDefs');
+      scanDetail.textContent = t('scanner.downloadingDefs');
       setProgress(10);
       updateDefinitionsButton.disabled = true;
       try {
         const res = await window.api.invoke('scan:updateDefinitions');
         if (!hasView()) return;
-        if (!res.success) throw new Error(res.error || 'Definition update failed.');
-        scanStatus.textContent = 'Definitions Updated';
-        scanDetail.textContent = 'ClamAV signatures are ready.';
+        if (!res.success) throw new Error(res.error || t('scanner.defsUpdateFailed'));
+        scanStatus.textContent = t('scanner.defsUpdated');
+        scanDetail.textContent = t('scanner.defsReady');
         setProgress(100);
         await refreshStatus();
       } catch (e) {
@@ -428,8 +440,8 @@ container.innerHTML = `
     cancelButton.addEventListener('click', async () => {
       if (!isScanRunning || activeAction !== 'virus') return;
       cancelButton.disabled = true;
-      scanStatus.textContent = 'Canceling Scan';
-      scanDetail.textContent = 'Stopping the active scanner process...';
+      scanStatus.textContent = t('scanner.statusCanceling');
+      scanDetail.textContent = t('scanner.detailCanceling');
       try {
         await window.api.invoke('scan:abort');
         if (!hasView()) return;
@@ -443,7 +455,7 @@ container.innerHTML = `
 
     async function startScan(runner, beforeStart) {
       if (isScanRunning) {
-        setError('A scan is already in progress. Cancel it or wait for it to complete before starting another scan.');
+        setError(t('scanner.scanAlreadyRunning'));
         return;
       }
       activeAction = 'virus';
@@ -472,7 +484,7 @@ container.innerHTML = `
       const folder = await window.api.invoke('dialog:pickFolder');
       if (!folder) return;
       startScan(() => window.api.invoke('scan:custom', [folder]), () => {
-        scanDetail.textContent = 'Scanning ' + folder + '\u2026';
+        scanDetail.textContent = t('scanner.detailCustom', { folder });
       });
     });
 

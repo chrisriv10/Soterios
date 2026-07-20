@@ -30,7 +30,8 @@ function isPathInAllowedReportDir(filePath) {
 }
 
 function csvEscape(value) {
-  const s = String(value ?? '');
+  let s = String(value ?? '');
+  if (/^[=+\-@]/.test(s)) s = `'${s}`;
   if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }

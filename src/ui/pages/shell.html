@@ -27,7 +27,7 @@
       <div id="scanIndicator" class="scan-indicator" style="display:none;">
         <div class="scan-indicator-header">
           <span class="scan-indicator-dot"></span>
-          <span class="scan-indicator-label">Scanning…</span>
+          <span class="scan-indicator-label" data-i18n="nav.scanning">Scanning…</span>
           <span class="scan-indicator-pct" id="scanIndicatorPct">0%</span>
         </div>
         <div class="scan-indicator-track">
@@ -35,20 +35,20 @@
         </div>
         <div class="scan-indicator-msg" id="scanIndicatorMsg"></div>
       </div>
-        <div class="nav-group-label">Protection</div>
+        <div class="nav-group-label" data-i18n="nav.protection"></div>
         <div class="nav-item active" data-page="dashboard">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
             <polyline points="9 22 9 12 15 12 15 22" />
           </svg>
-          Dashboard
+          <span data-i18n="nav.dashboard"></span>
         </div>
         <div class="nav-item" data-page="scanner">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
-          Malware Scan
+          <span data-i18n="nav.scanner"></span>
         </div>
         <div class="nav-item" data-page="quarantine">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -57,17 +57,17 @@
             <line x1="12" y1="9" x2="12" y2="14" />
             <circle cx="12" cy="17" r="1" fill="currentColor" stroke="none" />
           </svg>
-          Quarantine
+          <span data-i18n="nav.quarantine"></span>
         </div>
 
-        <div class="nav-group-label">Analysis</div>
+        <div class="nav-group-label" data-i18n="nav.analysis"></div>
         <div class="nav-item" data-page="processes">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
             <line x1="8" y1="21" x2="16" y2="21" />
             <line x1="12" y1="17" x2="12" y2="21" />
           </svg>
-          Process Inspector
+          <span data-i18n="nav.processes"></span>
         </div>
         <div class="nav-item" data-page="audit">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -77,7 +77,7 @@
             <path d="M3 12.5h7v7L3 18z"/>
             <path d="M11.5 12.5H21v9l-9.5-1.5z"/>
           </svg>
-          Windows Audit
+          <span data-i18n="nav.audit"></span>
         </div>
         <div class="nav-item" data-page="firewall">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -91,8 +91,7 @@
             <line x1="9" y1="14" x2="9" y2="18" />
 
           </svg>
-
-          Firewall Management
+          <span data-i18n="nav.firewall"></span>
         </div>
         <div class="nav-item" data-page="network">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -100,23 +99,23 @@
             <line x1="2" y1="12" x2="22" y2="12" />
             <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
           </svg>
-          Network Monitor
+          <span data-i18n="nav.network"></span>
         </div>
 
-        <div class="nav-group-label">Utilities</div>
+        <div class="nav-group-label" data-i18n="nav.utilities"></div>
         <div class="nav-item" data-page="passwords">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
             <path d="M7 11V7a5 5 0 0 1 10 0v4" />
           </svg>
-          Credential Safety Hub
+          <span data-i18n="nav.passwords"></span>
         </div>
         <div class="nav-item" data-page="tools">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
             stroke-linecap="round" stroke-linejoin="round">
             <path d="M20 7a5 5 0 0 1-6 6L6 21l-3-3 8-8a5 5 0 0 1 6-6l-3 3 3 3 3-3z" />
           </svg>
-          Tools & Maintenance
+          <span data-i18n="nav.tools"></span>
         </div>
         <div class="nav-item" data-page="reports">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -124,17 +123,17 @@
             <path d="M14 2v6h6" />
             <path d="M8 13h8M8 17h8M8 9h2" />
           </svg>
-          Reports
+          <span data-i18n="nav.reports"></span>
         </div>
 
-        <div class="nav-group-label">App</div>
+        <div class="nav-group-label" data-i18n="nav.app"></div>
         <div class="nav-item" data-page="settings">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="3" />
             <path
               d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" />
           </svg>
-          Settings
+          <span data-i18n="nav.settings"></span>
         </div>
       </nav>
       <div class="sidebar-footer">Engine: ClamAV</div>

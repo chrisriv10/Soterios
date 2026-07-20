@@ -660,11 +660,15 @@ function registerIpcHandlers(mainWindow, services) {
   ipcMain.handle('report:exportPDF', async (_event, reportId, reportType = 'scan') => {
     try {
       if (reportType === 'security') {
-        // Security report export - reportId is the file path
-        const resolved = path.resolve(reportId || '');
-        if (!isPathInsideDir(resolved, securityReportsDir())) return { success: false, error: 'Invalid report path.' };
-        if (!fs.existsSync(resolved)) return { success: false, error: 'Report file not found.' };
-        const pdfPath = await generatePdfFromHtml(resolved);
+        // Security report export - reportId is the JSON file path
+        const jsonPath = path.resolve(reportId || '');
+        if (!isPathInsideDir(jsonPath, securityReportsDir()) ||
+            path.extname(jsonPath).toLowerCase() !== '.json') {
+          return { success: false, error: 'Invalid report path.' };
+        }
+        const htmlPath = jsonPath.replace(/\.json$/i, '.html');
+        if (!fs.existsSync(htmlPath)) return { success: false, error: 'Report HTML file not found.' };
+        const pdfPath = await generatePdfFromHtml(htmlPath);
         return { success: true, path: pdfPath };
       }
       // Scan report export
@@ -688,7 +692,10 @@ function registerIpcHandlers(mainWindow, services) {
       if (reportType === 'security') {
         // Security report export - reportId is the file path
         const resolved = path.resolve(reportId || '');
-        if (!isPathInsideDir(resolved, securityReportsDir())) return { success: false, error: 'Invalid report path.' };
+        if (!isPathInsideDir(resolved, securityReportsDir()) ||
+            path.extname(resolved).toLowerCase() !== '.json') {
+          return { success: false, error: 'Invalid report path.' };
+        }
         if (!fs.existsSync(resolved)) return { success: false, error: 'Report file not found.' };
         const report = JSON.parse(fs.readFileSync(resolved, 'utf8'));
         const csvPath = resolved.replace(/\.json$/i, '.csv');

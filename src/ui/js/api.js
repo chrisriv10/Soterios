@@ -44,10 +44,10 @@ const Api = {
         const systemLocale = await window.api.invoke('i18n:getSystemLocale');
         locale = await window.api.invoke('i18n:normalizeLocale', systemLocale);
       }
-      await window.I18n.setLocale(locale || 'en', { persist: false });
+      await window.I18n.setLocale(locale || 'en', { persist: true });
     } catch (_) {
       try {
-        await window.I18n.setLocale('en', { persist: false });
+        await window.I18n.setLocale('en', { persist: true });
       } catch (_) {}
     }
   },

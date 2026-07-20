@@ -2,18 +2,44 @@ window.Pages = window.Pages || {};
 
 window.Pages['dashboard'] = {
   async render(container) {
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+
+    // Warning title/detail translation map for security-overview tool
+    const warningTranslations = {
+      'Real-time protection is disabled': { title: 'dashboard.warn.rtpDisabled.title', detail: 'dashboard.warn.rtpDisabled.detail' },
+      'Folder watch is disabled': { title: 'dashboard.warn.folderWatchDisabled.title', detail: 'dashboard.warn.folderWatchDisabled.detail' },
+      'Suspicious network alerts are disabled': { title: 'dashboard.warn.networkAlertsDisabled.title', detail: 'dashboard.warn.networkAlertsDisabled.detail' },
+      'Network traffic history is disabled': { title: 'dashboard.warn.networkTrafficHistoryDisabled.title', detail: 'dashboard.warn.networkTrafficHistoryDisabled.detail' },
+      'Auto-generate reports is disabled': { title: 'dashboard.warn.autoReportsDisabled.title', detail: 'dashboard.warn.autoReportsDisabled.detail' },
+      'Scan history is disabled': { title: 'dashboard.warn.scanHistoryDisabled.title', detail: 'dashboard.warn.scanHistoryDisabled.detail' },
+      'External lookups are disabled': { title: 'dashboard.warn.externalLookupsDisabled.title', detail: 'dashboard.warn.externalLookupsDisabled.detail' },
+      'Geolocation heat map is disabled': { title: 'dashboard.warn.geoLookupDisabled.title', detail: 'dashboard.warn.geoLookupDisabled.detail' },
+      'Network perimeter map is disabled': { title: 'dashboard.warn.perimeterMapDisabled.title', detail: 'dashboard.warn.perimeterMapDisabled.detail' },
+      'ClamAV definitions are outdated': { title: 'dashboard.warn.definitionsOutdated.title', detail: 'dashboard.warn.definitionsOutdated.detail' },
+      'Windows Firewall is disabled': { title: 'dashboard.warn.firewallDisabled.title', detail: 'dashboard.warn.firewallDisabled.detail' },
+      'High memory usage detected': { title: 'dashboard.warn.highMemory.title', detail: 'dashboard.warn.highMemory.detail' },
+      'High CPU usage detected': { title: 'dashboard.warn.highCpu.title', detail: 'dashboard.warn.highCpu.detail' },
+      'Low disk space': { title: 'dashboard.warn.lowDisk.title', detail: 'dashboard.warn.lowDisk.detail' },
+    };
+
+    function translateWarning(w) {
+      const trans = warningTranslations[w.title];
+      if (trans) return { ...w, title: t(trans.title), detail: t(trans.detail) };
+      return w;
+    }
+
     container.innerHTML = `
       <header class="page-header">
-        <h1 class="page-title">Security Dashboard</h1>
-        <p class="page-subtitle">System status and real-time protection overview</p>
+        <h1 class="page-title">${escapeHtml(t('dashboard.title'))}</h1>
+        <p class="page-subtitle">${escapeHtml(t('dashboard.subtitle'))}</p>
       </header>
       <div id="dashboardContent" style="overflow-y:auto; margin-right:8px; padding-right:8px;">
         <div class="dashboard-grid">
-          <div class="card" id="healthCard" style="cursor:pointer;" title="Click for a detailed breakdown">
+          <div class="card" id="healthCard" style="cursor:pointer;" title="${escapeHtml(t('dashboard.healthClickDetails'))}">
             <div class="status-card">
               <div class="status-icon info" id="healthIcon">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 
   <rect x="3" y="4" width="18" height="13" rx="2"/>
   <path d="M8 21h8"/>
@@ -22,12 +48,12 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
 </svg>
               </div>
               <div class="status-info">
-                <h3>System Health Score</h3>
+                <h3>${escapeHtml(t('dashboard.healthScore'))}</h3>
                 <div class="value" id="healthScore">Loading...</div>
               </div>
             </div>
-            <div id="healthDetail" class="page-subtitle" style="margin-top:12px; font-size:0.85rem;">Calculating system health.</div>
-            <div class="page-subtitle" style="margin-top:8px; font-size:0.75rem; color:var(--accent-primary);">Click for full breakdown →</div>
+            <div id="healthDetail" class="page-subtitle" style="margin-top:12px; font-size:0.85rem;">${escapeHtml(t('dashboard.healthCalculating'))}</div>
+            <div class="page-subtitle" style="margin-top:8px; font-size:0.75rem; color:var(--accent-primary);">${escapeHtml(t('dashboard.healthClickDetails'))}</div>
           </div>
 
           <!-- Protection Status -->
@@ -37,12 +63,12 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
               </div>
               <div class="status-info">
-                <h3>Real-Time Protection</h3>
-                <div class="value" id="rtpStatusText">Active</div>
+                <h3>${escapeHtml(t('nav.scanner'))}</h3>
+                <div class="value" id="rtpStatusText">${escapeHtml(t('dashboard.rtpActive'))}</div>
               </div>
             </div>
             <div style="margin-top: 16px;">
-              <button class="btn" id="btnToggleRtp">Disable</button>
+              <button class="btn" id="btnToggleRtp">${escapeHtml(t('dashboard.rtpDisable'))}</button>
             </div>
           </div>
 
@@ -51,7 +77,7 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
             <div class="status-card">
               <div class="status-icon info" id="fwIcon">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 
   <rect x="3" y="6" width="18" height="12" rx="1" />
   <line x1="3" y1="10" x2="21" y2="10" />
@@ -59,15 +85,16 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
   <line x1="9" y1="6" x2="9" y2="10" />
   <line x1="15" y1="10" x2="15" y2="14" />
   <line x1="9" y1="14" x2="9" y2="18" />
+
 </svg>
               </div>
               <div class="status-info">
-                <h3>Windows Firewall</h3>
-                <div class="value" id="fwStatusText">Checking...</div>
+                <h3>${escapeHtml(t('nav.firewall'))}</h3>
+                <div class="value" id="fwStatusText">${escapeHtml(t('common.loading'))}</div>
               </div>
             </div>
             <div style="margin-top: 16px;">
-              <button class="btn" id="btnManageFirewall">Manage Firewall</button>
+              <button class="btn" id="btnManageFirewall">${escapeHtml(t('dashboard.firewallManage'))}</button>
             </div>
           </div>
 
@@ -78,13 +105,13 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               </div>
               <div class="status-info">
-                <h3>Last Scan</h3>
-                <div class="value" id="lastScanTime">Loading...</div>
+                <h3>${escapeHtml(t('dashboard.lastScan'))}</h3>
+                <div class="value" id="lastScanTime">${escapeHtml(t('dashboard.lastScanLoading'))}</div>
               </div>
             </div>
             <div style="margin-top: 16px; display: flex; gap: 12px;">
-              <button class="btn btn-primary" id="btnQuickScan">Quick Scan</button>
-              <button class="btn" id="btnFullScan">Full Scan</button>
+              <button class="btn btn-primary" id="btnQuickScan">${escapeHtml(t('dashboard.quickScan'))}</button>
+              <button class="btn" id="btnFullScan">${escapeHtml(t('dashboard.fullScan'))}</button>
             </div>
           </div>
 
@@ -93,7 +120,7 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
             <div class="status-card">
               <div class="status-icon warning">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 
   <!-- bug body -->
   <ellipse cx="10" cy="12" rx="4" ry="6"/>
@@ -119,12 +146,12 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
 </svg>
               </div>
               <div class="status-info">
-                <h3>ClamAV Definitions</h3>
-                <div class="value" id="dbAge">Up to date</div>
+                <h3>${escapeHtml(t('dashboard.dbDefinitions'))}</h3>
+                <div class="value" id="dbAge">${escapeHtml(t('dashboard.dbUpToDate'))}</div>
               </div>
             </div>
             <div style="margin-top: 16px;">
-              <button class="btn" id="btnUpdateDb">Check for Updates</button>
+              <button class="btn" id="btnUpdateDb">${escapeHtml(t('dashboard.dbUpdate'))}</button>
             </div>
           </div>
 
@@ -159,31 +186,31 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
 </svg>
               </div>
               <div class="status-info">
-                <h3>Threats Blocked</h3>
+                <h3>${escapeHtml(t('dashboard.threatsBlocked'))}</h3>
                 <div class="value" id="threatsCount">0</div>
               </div>
             </div>
             <div style="margin-top: 16px;">
-              <button class="btn" id="btnViewQuarantine">View Quarantine</button>
+              <button class="btn" id="btnViewQuarantine">${escapeHtml(t('dashboard.viewQuarantine'))}</button>
             </div>
           </div>
         </div>
         <div class="card" style="margin-top:24px;">
           <div class="flex-between">
             <div>
-              <div class="panel-title">Warnings</div>
-              <div class="page-subtitle" style="font-size:0.85rem;">Review or ignore warnings you have accepted.</div>
+              <div class="panel-title">${escapeHtml(t('dashboard.warnings'))}</div>
+              <div class="page-subtitle" style="font-size:0.85rem;">${escapeHtml(t('dashboard.warningsDesc'))}</div>
             </div>
-            <button class="btn btn-sm" id="btnRefreshWarnings">Refresh</button>
+            <button class="btn btn-sm" id="btnRefreshWarnings">${escapeHtml(t('dashboard.refreshWarnings'))}</button>
           </div>
-          <div id="warningList" class="history-list" style="margin-top:12px;"><div class="empty-state">Loading warnings...</div></div>
-          <div class="panel-title" style="margin-top:16px;">Ignored Warnings</div>
-          <div id="ignoredWarningList" class="history-list" style="max-height:300px; overflow-y:auto;"><div class="empty-state">Loading ignored warnings...</div></div>
+          <div id="warningList" class="history-list" style="margin-top:12px;"><div class="empty-state">${escapeHtml(t('common.loading'))}</div></div>
+          <div class="panel-title" style="margin-top:16px;">${escapeHtml(t('dashboard.ignoredWarnings'))}</div>
+          <div id="ignoredWarningList" class="history-list" style="max-height:300px; overflow-y:auto;"><div class="empty-state">${escapeHtml(t('common.loading'))}</div></div>
         </div>
       </div>
     `;
 
-    window.api.invoke('splash:progress', { pct: 20, label: 'Loading dashboard...' });
+    window.api.invoke('splash:progress', { pct: 20, label: t('splash.loadingDashboard') });
 
     const btnToggleRtp = document.getElementById('btnToggleRtp');
     const rtpStatusText = document.getElementById('rtpStatusText');
@@ -196,26 +223,116 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
     let lastHealthResult = null;
 
     function summarizeHealth(health) {
-      const entries = Object.values(health.breakdown || {});
+      const translatedBreakdown = translateHealthReason(health.breakdown || {});
+      const entries = Object.values(translatedBreakdown);
       const weak = entries.filter((e) => e.max > 0 && e.points < e.max);
-      if (!weak.length) return 'All checks passing.';
+      if (!weak.length) return t('dashboard.healthAllPassing');
       if (weak.length === 1) return weak[0].reason;
-      return `${weak.length} area(s) need attention — click for details.`;
+      return t('dashboard.healthWeakAreas', { count: weak.length });
+    }
+
+    function translateHealthReason(breakdown) {
+      const translated = { ...breakdown };
+      for (const [key, item] of Object.entries(translated)) {
+        // Translate labels
+        const labelMap = {
+          'Malware Scan Results': 'health.label.malware',
+          'Scan Recency': 'health.label.scanRecency',
+          'Disk Space': 'health.label.disk',
+          'Memory Usage': 'health.label.memory',
+          'CPU Load': 'health.label.load',
+          'System Uptime': 'health.label.uptime',
+          'Real-Time Protection': 'health.label.rtp',
+          'Firewall': 'health.label.firewall'
+        };
+        if (labelMap[item.label]) {
+          item.label = t(labelMap[item.label]);
+        }
+
+        if (item.reason) {
+          // Map known reasons to translation keys
+          if (item.reason === 'No scan has been run yet.') {
+            item.reason = t('health.reason.noScan');
+          } else if (item.reason === 'No threats found in the most recent scan.') {
+            item.reason = t('health.reason.noThreats');
+          } else if (item.reason.includes('threat match') && item.reason.includes('found in the most recent scan')) {
+            // Handle "X threat match(es) found..." and "X threat matches found..."
+            const match = item.reason.match(/^(\d+)\s+threat\s+match(?:es)?\s+found/);
+            if (match) item.reason = t('health.reason.threatsFound', { count: match[1] });
+          } else if (item.reason.startsWith('Last scan ran within the last day.')) {
+            item.reason = t('health.reason.scanToday');
+          } else if (item.reason.startsWith('Last scan ran ')) {
+            const days = item.reason.match(/Last scan ran (\d+) day\(s\) ago/);
+            if (days) item.reason = t('health.reason.scanDaysAgo', { days: days[1] });
+          } else if (item.reason.startsWith('Low space on:')) {
+            // Extract volumes and percentage
+            const match = item.reason.match(/Low space on: (.+) \((\d+)% used\)/);
+            if (match) item.reason = t('health.reason.diskLowSpace', { volumes: match[1], pct: match[2] });
+          } else if (item.reason === 'No user-facing volumes found for disk scoring.') {
+            item.reason = t('health.reason.diskNoVolumes');
+          } else if (item.reason.startsWith('All volumes healthy')) {
+            // Extract percentage
+            const pct = item.reason.match(/highest usage (\d+)%/);
+            if (pct) item.reason = t('health.reason.diskHealthy', { pct: pct[1] });
+          } else if (item.reason.endsWith('% of memory in use.')) {
+            // Extract percentage and use translation key
+            const pct = item.reason.match(/^(\d+)% of memory in use/);
+            if (pct) item.reason = t('health.reason.memoryUsage', { pct: pct[1] });
+          } else if (item.reason.startsWith('CPU load at ')) {
+            // Extract percentage and use translation key
+            const pct = item.reason.match(/CPU load at (\d+)%/);
+            if (pct) item.reason = t('health.reason.cpuLoad', { pct: pct[1] });
+          } else if (item.reason === 'Rebooted within the last day.') {
+            item.reason = t('health.reason.uptimeToday');
+          } else if (item.reason.startsWith('Restarted ') && item.reason.includes(' day(s) ago — within normal range.')) {
+            const days = item.reason.match(/Restarted (\d+) day\(s\) ago/);
+            if (days) item.reason = t('health.reason.uptimeDays', { days: days[1] });
+          } else if (item.reason.startsWith('Running ') && item.reason.includes(' days without a restart — consider rebooting soon')) {
+            const days = item.reason.match(/Running (\d+) days without a restart/);
+            if (days) item.reason = t('health.reason.uptimeWeeks', { days: days[1] });
+          } else if (item.reason.startsWith('Running ') && item.reason.includes(' days without a restart — a reboot is recommended')) {
+            const days = item.reason.match(/Running (\d+) days without a restart/);
+            if (days) item.reason = t('health.reason.uptimeLong', { days: days[1] });
+          } else if (item.reason === 'Real-time protection is active.') {
+            item.reason = t('health.reason.rtpActive');
+          } else if (item.reason === 'Real-time protection is disabled.') {
+            item.reason = t('health.reason.rtpDisabled');
+          } else if (item.reason === 'Windows Firewall is active.') {
+            item.reason = t('health.reason.firewallActive');
+          } else if (item.reason === 'Windows Firewall is disabled.') {
+            item.reason = t('health.reason.firewallDisabled');
+          } else if (item.reason.startsWith('Last scan ran ') && item.reason.includes(' day(s) ago.')) {
+            const days = item.reason.match(/Last scan ran (\d+) day\(s\) ago/);
+            if (days) item.reason = t('health.reason.scanDaysAgo', { days: days[1] });
+          } else if (item.reason.startsWith('Low space on:') && item.reason.includes('used)')) {
+            item.reason = item.reason; // Keep dynamic
+          } else if (item.reason.startsWith('All volumes healthy')) {
+            item.reason = item.reason; // Keep dynamic
+          } else if (item.reason.startsWith('CPU load at')) {
+            item.reason = item.reason; // Keep dynamic
+          } else if (item.reason.startsWith('Restarted ')) {
+            const days = item.reason.match(/Restarted (\d+) day\(s\) ago/);
+            if (days) item.reason = t('health.reason.uptimeDays', { days: days[1] });
+          }
+        }
+      }
+      return translated;
     }
 
     function showHealthDetailModal(health) {
       if (!health) return;
-      const entries = Object.values(health.breakdown || {});
+      const translatedBreakdown = translateHealthReason(health.breakdown || {});
+      const entries = Object.values(translatedBreakdown);
       const overlay = document.createElement('div');
       overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.85); display:flex; align-items:center; justify-content:center; z-index:1000; padding:24px;';
       overlay.innerHTML = `
         <div class="panel" style="max-width:520px; width:100%; max-height:80vh; overflow:auto;">
           <div class="flex-between">
             <div>
-              <div class="panel-title">System Health Score</div>
-              <div class="page-subtitle" style="font-size:0.85rem;">Score: ${escapeHtml(String(health.score))} / 100</div>
+              <div class="panel-title">${escapeHtml(t('dashboard.healthScore'))}</div>
+              <div class="page-subtitle" style="font-size:0.85rem;">${escapeHtml(t('dashboard.healthScoreDetail', { score: String(health.score) }))}</div>
             </div>
-            <button class="btn btn-sm" id="closeHealthModal">Close</button>
+            <button class="btn btn-sm" id="closeHealthModal">${escapeHtml(t('common.close'))}</button>
           </div>
           <div style="display:flex; flex-direction:column; gap:14px; margin-top:16px;">
             ${entries.map((item) => `
@@ -242,10 +359,6 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
       document.addEventListener('keydown', onKey);
     }
 
-    if (healthCard) {
-      healthCard.addEventListener('click', () => showHealthDetailModal(lastHealthResult));
-    }
-
     function parseSqliteTimestamp(value) {
       if (!value) return new Date(NaN);
       if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) {
@@ -260,7 +373,19 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
       const latest = await window.api.invoke('scanReports:latest');
       el.textContent = latest
         ? `${parseSqliteTimestamp(latest.timestamp).toLocaleString()} (${latest.status})`
-        : 'Never';
+        : t('dashboard.lastScanNever');
+    }
+
+    function translateWarning(w) {
+      const trans = warningTranslations[w.title];
+      if (trans) {
+        return {
+          ...w,
+          title: t(trans.title),
+          detail: t(trans.detail)
+        };
+      }
+      return w;
     }
 
     async function loadWarnings() {
@@ -270,17 +395,18 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
       try {
         const data = await Api.runTool('security-overview', {});
         const warnings = (data.recommendations || []).filter((i) => i.level === 'warn' || i.level === 'danger');
-        warningList.innerHTML = warnings.length ? warnings.map((w) => `
+        const translatedWarnings = warnings.map(translateWarning);
+        warningList.innerHTML = translatedWarnings.length ? translatedWarnings.map((w) => `
           <div class="history-item">
             <div>
               <div class="history-title">${escapeHtml(w.title)} <span class="log-tag ${w.level === 'danger' ? 'match' : 'warn'}">${escapeHtml(w.level)}</span></div>
               <div class="history-meta">${escapeHtml(w.detail)}</div>
             </div>
             <div style="display:flex; gap:6px;">
-              <button class="btn btn-sm" data-open-warning="${escapeHtml(w.actionPage || 'dashboard')}">Open</button>
-              <button class="btn btn-sm" data-ignore-warning="${escapeHtml(w.id || w.title)}" data-title="${escapeHtml(w.title)}" data-detail="${escapeHtml(w.detail)}">Ignore</button>
+              <button class="btn btn-sm" data-open-warning="${escapeHtml(w.actionPage || 'dashboard')}">${escapeHtml(t('dashboard.warningOpen'))}</button>
+              <button class="btn btn-sm" data-ignore-warning="${escapeHtml(w.id || w.title)}" data-title="${escapeHtml(w.title)}" data-detail="${escapeHtml(w.detail)}">${escapeHtml(t('dashboard.warningIgnore'))}</button>
             </div>
-          </div>`).join('') : '<div class="empty-state">No active warnings.</div>';
+          </div>`).join('') : `<div class="empty-state">${escapeHtml(t('dashboard.noWarnings'))}</div>`;
         warningList.querySelectorAll('[data-open-warning]').forEach((btn) => btn.addEventListener('click', () => window.AppRouter.navigate(btn.dataset.openWarning)));
         warningList.querySelectorAll('[data-ignore-warning]').forEach((btn) => btn.addEventListener('click', async () => {
           const item = btn.closest('.history-item');
@@ -291,19 +417,25 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
             await loadWarnings();
           } catch (err) {
             btn.disabled = false;
-            alert(err.message || 'Unable to ignore warning.');
+            alert(err.message || t('common.failed'));
           }
         }));
 
         const ignored = await window.api.invoke('warnings:listIgnored');
-        ignoredList.innerHTML = ignored.length ? ignored.map((w) => `
+        // Also translate ignored warnings if they match our known warnings
+        const translatedIgnored = ignored.map(w => {
+          const trans = warningTranslations[w.title];
+          if (trans) return { ...w, title: t(trans.title), detail: t(trans.detail) };
+          return w;
+        });
+        ignoredList.innerHTML = translatedIgnored.length ? translatedIgnored.map((w) => `
           <div class="history-item">
             <div>
               <div class="history-title">${escapeHtml(w.title)}</div>
               <div class="history-meta">${escapeHtml(w.detail || '')}</div>
             </div>
-            <button class="btn btn-sm" data-unignore-warning="${escapeHtml(w.id)}">Restore</button>
-          </div>`).join('') : '<div class="empty-state">No ignored warnings.</div>';
+            <button class="btn btn-sm" data-unignore-warning="${escapeHtml(w.id)}">${escapeHtml(t('dashboard.warningRestore'))}</button>
+          </div>`).join('') : `<div class="empty-state">${escapeHtml(t('dashboard.noIgnoredWarnings'))}</div>`;
         ignoredList.querySelectorAll('[data-unignore-warning]').forEach((btn) => btn.addEventListener('click', async () => {
           const item = btn.closest('.history-item');
           btn.disabled = true;
@@ -313,39 +445,30 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
             await loadWarnings();
           } catch (err) {
             btn.disabled = false;
-            alert(err.message || 'Unable to restore warning.');
+            alert(err.message || t('common.failed'));
           }
         }));
       } catch (err) {
-        if (warningList) warningList.innerHTML = `<div class="empty-state">Error: ${escapeHtml(err.message)}</div>`;
+        if (warningList) warningList.innerHTML = `<div class="empty-state">${escapeHtml(t('common.error') + ': ' + err.message)}</div>`;
       }
     }
 
     function errorMessage(err) {
       try {
         if (!err) return '';
-
-        const message = typeof err === 'string'
-          ? err
-          : err.message || String(err);
-
-        // Remove Electron IPC wrapper:
+        const message = typeof err === 'string' ? err : err.message || String(err);
         const match = message.match(/Error invoking remote method ['"].*?['"]:\s*(.*)/);
-
-        if (match && match[1]) {
-          return match[1];
-        }
-
+        if (match && match[1]) return match[1];
         return message;
       } catch (_) {
-        return 'An unknown error occurred.';
+        return t('common.errorUnknown');
       }
     }
 
     function setRtpState(active) {
       isRtpActive = !!active;
-      btnToggleRtp.textContent = isRtpActive ? 'Disable' : 'Enable';
-      rtpStatusText.textContent = isRtpActive ? 'Active' : 'Disabled';
+      btnToggleRtp.textContent = isRtpActive ? t('dashboard.rtpDisable') : t('dashboard.rtpEnable');
+      rtpStatusText.textContent = isRtpActive ? t('dashboard.rtpActive') : t('dashboard.rtpDisabled');
       rtpIcon.className = 'status-icon ' + (isRtpActive ? 'safe' : 'danger');
     }
 
@@ -355,23 +478,23 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
     } catch (_) {
       setRtpState(false);
     }
-    window.api.invoke('splash:progress', { pct: 35, label: 'Checking protection status...' });
+    window.api.invoke('splash:progress', { pct: 35, label: t('splash.checkingProtection') });
 
-    let fwEnabled = null; // null = unknown/unavailable
+    let fwEnabled = null;
     try {
       fwEnabled = await window.api.invoke('firewall:status');
       const fwIcon = document.getElementById('fwIcon');
       const fwStatusText = document.getElementById('fwStatusText');
-      if (fwStatusText) fwStatusText.textContent = fwEnabled ? 'Active' : 'Disabled';
+      if (fwStatusText) fwStatusText.textContent = fwEnabled ? t('dashboard.firewallActive') : t('dashboard.firewallDisabled');
       if (fwIcon) fwIcon.className = 'status-icon ' + (fwEnabled ? 'safe' : 'danger');
     } catch (_) {
       fwEnabled = null;
       const fwIcon = document.getElementById('fwIcon');
       const fwStatusText = document.getElementById('fwStatusText');
-      if (fwStatusText) fwStatusText.textContent = 'Unknown';
+      if (fwStatusText) fwStatusText.textContent = t('common.unknown');
       if (fwIcon) fwIcon.className = 'status-icon warning';
     }
-    window.api.invoke('splash:progress', { pct: 50, label: 'Verifying firewall...' });
+    window.api.invoke('splash:progress', { pct: 50, label: t('splash.verifyingFirewall') });
 
     let latestScanForHealth = null;
     try {
@@ -380,18 +503,14 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
       latestScanForHealth = null;
     }
 
-    // Set last scan text immediately from the already-fetched data so it never flashes "Never".
     const lastScanEl = container.querySelector('#lastScanTime');
     if (lastScanEl) {
       lastScanEl.textContent = latestScanForHealth
         ? `${parseSqliteTimestamp(latestScanForHealth.timestamp).toLocaleString()} (${latestScanForHealth.status})`
-        : 'Never';
+        : t('dashboard.lastScanNever');
     }
 
     try {
-      // Feed in whatever real signals are already available on this page --
-      // RTP/firewall status and the latest scan's result and date -- so the
-      // score reflects live protection state, not just resource usage.
       const health = await window.api.invoke('health:score', {
         lastScanMatches: latestScanForHealth ? (latestScanForHealth.threats_found ?? null) : null,
         lastScanDate: latestScanForHealth ? latestScanForHealth.timestamp : null,
@@ -404,11 +523,11 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
       healthIcon.className = 'status-icon ' + level;
       healthDetail.textContent = summarizeHealth(health);
     } catch (e) {
-      healthScore.textContent = 'N/A';
-      healthDetail.textContent = e.message || 'Unable to calculate health score.';
+      healthScore.textContent = t('common.notAvailable');
+      healthDetail.textContent = e.message || t('common.failed');
       healthIcon.className = 'status-icon warning';
     }
-    window.api.invoke('splash:progress', { pct: 65, label: 'Calculating health score...' });
+    window.api.invoke('splash:progress', { pct: 65, label: t('splash.calculatingHealth') });
 
     const btnManageFirewall = document.getElementById('btnManageFirewall');
     if (btnManageFirewall) {
@@ -417,26 +536,33 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
       });
     }
 
+    // Add click handler for health card to show detail modal
+    if (healthCard) {
+      healthCard.addEventListener('click', () => {
+        showHealthDetailModal(lastHealthResult);
+      });
+    }
+
     const btnRefreshWarnings = container.querySelector('#btnRefreshWarnings');
     const btnQuickScan = document.getElementById('btnQuickScan');
     const btnFullScan = document.getElementById('btnFullScan');
     const btnUpdateDb = document.getElementById('btnUpdateDb');
     const btnViewQuarantine = document.getElementById('btnViewQuarantine');
-    const originalQuickLabel = btnQuickScan ? btnQuickScan.textContent : 'Quick Scan';
-    const originalFullLabel = btnFullScan ? btnFullScan.textContent : 'Full Scan';
+    const originalQuickLabel = btnQuickScan ? btnQuickScan.textContent : t('dashboard.quickScan');
+    const originalFullLabel = btnFullScan ? btnFullScan.textContent : t('dashboard.fullScan');
     if (btnRefreshWarnings) btnRefreshWarnings.addEventListener('click', loadWarnings);
     if (btnUpdateDb) {
       btnUpdateDb.addEventListener('click', async () => {
         btnUpdateDb.disabled = true;
         const originalText = btnUpdateDb.textContent;
-        btnUpdateDb.textContent = 'Checking...';
+        btnUpdateDb.textContent = t('scanner.updatingDefs');
         try {
           const res = await window.api.invoke('scan:updateDefinitions');
           if (res && !res.success) {
-            alert(res.error || 'Definition update failed.');
+            alert(res.error || t('scanner.defsUpdateFailed'));
           }
         } catch (err) {
-          alert(err.message || 'Definition update failed.');
+          alert(err.message || t('scanner.defsUpdateFailed'));
         } finally {
           btnUpdateDb.disabled = false;
           btnUpdateDb.textContent = originalText;
@@ -449,32 +575,31 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
       });
     }
     await loadWarnings();
-    window.api.invoke('splash:progress', { pct: 75, label: 'Loading warnings...' });
+    window.api.invoke('splash:progress', { pct: 75, label: t('splash.loadingWarnings') });
 
     btnToggleRtp.addEventListener('click', async () => {
       const previous = isRtpActive;
       const next = !isRtpActive;
       btnToggleRtp.disabled = true;
-      btnToggleRtp.textContent = next ? 'Enabling...' : 'Disabling...';
+      btnToggleRtp.textContent = next ? t('dashboard.rtpEnabling') : t('dashboard.rtpDisabling');
       try {
         const status = await window.api.invoke('rtp:toggle', next);
         await window.api.invoke('db:setSetting', 'feature.realtimeProtection', !!status);
         setRtpState(status);
       } catch (err) {
         setRtpState(previous);
-        alert(errorMessage(err) || 'Unable to update real-time protection.');
+        alert(errorMessage(err) || t('common.failed'));
       } finally {
         btnToggleRtp.disabled = false;
       }
     });
 
-    // Scan buttons
     if (btnQuickScan) {
       btnQuickScan.addEventListener('click', async () => {
         const lastScanEl = container.querySelector('#lastScanTime');
-        if (lastScanEl) lastScanEl.textContent = 'Scanning...';
+        if (lastScanEl) lastScanEl.textContent = t('scanner.statusScanning');
         btnQuickScan.disabled = true;
-        btnQuickScan.textContent = 'Scanning...';
+        btnQuickScan.textContent = t('scanner.statusScanning');
         try {
           const res = await window.api.invoke('scan:quick');
           if (res.error) {
@@ -483,7 +608,7 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
             await loadLastScan();
           }
         } catch (e) {
-          alert('Scan failed: ' + e);
+          alert(t('scanner.scanFailed', { error: e }));
         } finally {
           btnQuickScan.disabled = false;
           btnQuickScan.textContent = originalQuickLabel;
@@ -494,9 +619,9 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
     if (btnFullScan) {
       btnFullScan.addEventListener('click', async () => {
         const lastScanEl = container.querySelector('#lastScanTime');
-        if (lastScanEl) lastScanEl.textContent = 'Scanning...';
+        if (lastScanEl) lastScanEl.textContent = t('scanner.statusScanning');
         btnFullScan.disabled = true;
-        btnFullScan.textContent = 'Scanning...';
+        btnFullScan.textContent = t('scanner.statusScanning');
         try {
           const res = await window.api.invoke('scan:full');
           if (res.error) {
@@ -505,7 +630,7 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
             await loadLastScan();
           }
         } catch (e) {
-          alert('Scan failed: ' + e);
+          alert(t('scanner.scanFailed', { error: e }));
         } finally {
           btnFullScan.disabled = false;
           btnFullScan.textContent = originalFullLabel;
@@ -513,10 +638,9 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
       });
     }
 
-    // We could fetch scan history and quarantine count here from API
     try {
       await loadLastScan();
-      window.api.invoke('splash:progress', { pct: 85, label: 'Loading scan history...' });
+      window.api.invoke('splash:progress', { pct: 85, label: t('dashboard.lastScan') });
 
       const quarantineList = await window.api.invoke('db:getQuarantineList');
       if (quarantineList) {
@@ -525,24 +649,17 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
           threatsCountEl.textContent = quarantineList.length;
         }
       }
-      window.api.invoke('splash:progress', { pct: 90, label: 'Checking quarantine...' });
+      window.api.invoke('splash:progress', { pct: 90, label: t('nav.quarantine') });
     } catch (e) {
       console.warn('Failed to load dashboard data:', e);
     }
 
-    // Signal the main process that the Dashboard has actually finished
-    // loading its data, so it can dismiss the startup splash screen and show
-    // the main window now rather than as soon as the HTML merely parsed.
-    // Placed after all the try/catch blocks above (each already handles its
-    // own failures independently) so this always fires exactly once the
-    // initial load sequence settles, success or partial failure alike.
     try {
-      window.api.invoke('splash:progress', { pct: 100, label: 'Ready' });
+      window.api.invoke('splash:progress', { pct: 100, label: t('splash.ready') });
+      // Small delay to allow progress bar to finish animating to 100%
+      await new Promise(resolve => setTimeout(resolve, 300));
       await window.api.invoke('app:ready');
     } catch (_) {
-      // If this fails for some reason, main.js's own fallback timeout will
-      // still show the window after a few seconds rather than leaving the
-      // user stuck on the splash screen indefinitely.
     }
   }
 };

@@ -489,8 +489,9 @@ describe('ScanEngine', () => {
     );
     
     const result = await engine.runScan('quick', [tmp], 'Starting...');
-    // Should still complete but with quarantine errors
-    assert.equal(result.success, true);
+    // Quarantine failure should result in failed scan
+    assert.equal(result.success, false);
+    assert.equal(result.status, 'failed');
     assert.ok(result.errors.some(e => e.includes('Failed to quarantine')));
   });
 });

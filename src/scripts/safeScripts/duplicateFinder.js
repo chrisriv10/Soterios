@@ -27,19 +27,28 @@ const PROTECTED_PATHS = [
   process.env.WINDIR
 ];
 
+function isPathInsideDir(filePath, rootDir) {
+  if (!filePath || !rootDir) return false;
+  const resolved = path.resolve(filePath);
+  const root = path.resolve(rootDir);
+  const relative = path.relative(root, resolved);
+  if (relative === '') return true;
+  return relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
 function isSafePath(filePath) {
-  const normalized = path.win32.resolve(filePath).toLowerCase();
+  const normalized = path.resolve(filePath);
   
   // Check if under protected paths
   for (const protectedPath of PROTECTED_PATHS) {
-    if (protectedPath && normalized.startsWith(path.win32.resolve(protectedPath).toLowerCase())) {
+    if (protectedPath && isPathInsideDir(normalized, protectedPath)) {
       return false;
     }
   }
   
   // Check if under safe roots
   for (const root of SAFE_ROOTS) {
-    if (normalized.startsWith(path.win32.resolve(root).toLowerCase())) {
+    if (isPathInsideDir(normalized, root)) {
       return true;
     }
   }
@@ -118,9 +127,18 @@ async function findDuplicates(scanPath = null) {
     allFiles.push(...files);
   }
   
+  // Deduplicate files by resolved path (case-insensitive on Windows)
+  // This handles overlapping scan roots (e.g., home dir + Downloads)
+  const uniqueFiles = [...new Map(
+    allFiles.map((file) => [
+      path.resolve(file.path).toLowerCase(),
+      file
+    ])
+  ).values()];
+  
   // Group by size first (optimization)
   const bySize = new Map();
-  for (const file of allFiles) {
+  for (const file of uniqueFiles) {
     if (!bySize.has(file.size)) {
       bySize.set(file.size, []);
     }
@@ -171,7 +189,7 @@ async function findDuplicates(scanPath = null) {
   duplicates.sort((a, b) => (b.size * (b.files.length - 1)) - (a.size * (a.files.length - 1)));
   
   return {
-    totalFilesScanned: allFiles.length,
+    totalFilesScanned: uniqueFiles.length,
     duplicateGroups: duplicates,
     totalDuplicates: duplicates.reduce((sum, group) => sum + group.files.length - 1, 0),
     totalWastedSpace: duplicates.reduce((sum, group) => sum + group.size * (group.files.length - 1), 0)

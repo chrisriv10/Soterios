@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 /**
@@ -14,22 +15,46 @@ const path = require('path');
  * 4. Verify overwrite
  */
 
+const USER_OWNED_ROOTS = [
+  os.homedir(),
+  process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs') : null,
+  process.env.ProgramFiles,
+  process.env['ProgramFiles(x86)']
+].filter(Boolean);
+
 const PROTECTED_PATHS = [
   process.env.ProgramData,
   process.env.WINDIR,
   path.join(process.env.USERPROFILE || '', 'AppData')
 ];
 
+function isPathInsideDir(filePath, rootDir) {
+  if (!filePath || !rootDir) return false;
+  const resolved = path.resolve(filePath);
+  const root = path.resolve(rootDir);
+  const relative = path.relative(root, resolved);
+  if (relative === '') return true;
+  return relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
 function isSafePath(filePath) {
-  const normalized = path.win32.resolve(filePath).toLowerCase();
+  const normalized = path.resolve(filePath);
   
+  // Check if under protected paths
   for (const protectedPath of PROTECTED_PATHS) {
-    if (protectedPath && normalized.startsWith(path.win32.resolve(protectedPath).toLowerCase())) {
+    if (protectedPath && isPathInsideDir(normalized, protectedPath)) {
       return false;
     }
   }
   
-  return true;
+  // Check if under explicit user-owned roots
+  for (const root of USER_OWNED_ROOTS) {
+    if (isPathInsideDir(normalized, root)) {
+      return true;
+    }
+  }
+  
+  return false;
 }
 
 function overwriteWithPattern(filePath, pattern) {
@@ -101,6 +126,45 @@ function verifyOverwrite(filePath, expectedPattern) {
   return true;
 }
 
+function generateAndVerifyRandom(filePath, fileSize) {
+  const chunkSize = 64 * 1024;
+  const fd = fs.openSync(filePath, 'r+');
+  
+  try {
+    let offset = 0;
+    while (offset < fileSize) {
+      const remaining = fileSize - offset;
+      const writeSize = Math.min(chunkSize, remaining);
+      
+      // Generate random buffer
+      const buffer = Buffer.alloc(writeSize);
+      crypto.randomFillSync(buffer);
+      
+      // Write the random data
+      fs.writeSync(fd, buffer, 0, writeSize, offset);
+      
+      // Verify by reading back
+      const verifyBuffer = Buffer.alloc(writeSize);
+      fs.readSync(fd, verifyBuffer, 0, writeSize, offset);
+      
+      // Compare byte by byte
+      for (let i = 0; i < writeSize; i++) {
+        if (buffer[i] !== verifyBuffer[i]) {
+          return false;
+        }
+      }
+      
+      offset += writeSize;
+    }
+    
+    // Sync to ensure data is written to disk
+    fs.fsyncSync(fd);
+    return true;
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 async function shredFile(filePath, passes = 3) {
   if (!isSafePath(filePath)) {
     return { success: false, error: 'Path is not safe for shredding' };
@@ -123,10 +187,17 @@ async function shredFile(filePath, passes = 3) {
     
     for (let i = 0; i < passes; i++) {
       const pattern = patterns[i % patterns.length];
-      overwriteWithPattern(filePath, pattern);
       
-      // Verify for deterministic patterns
-      if (pattern !== 'random') {
+      // For random pattern, generate and verify the random data
+      if (pattern === 'random') {
+        const randomBuffer = await generateAndVerifyRandom(filePath, fileSize);
+        if (!randomBuffer) {
+          return { success: false, error: `Verification failed on pass ${i + 1} (random)` };
+        }
+      } else {
+        overwriteWithPattern(filePath, pattern);
+        
+        // Verify for deterministic patterns
         const verified = verifyOverwrite(filePath, pattern);
         if (!verified) {
           return { success: false, error: `Verification failed on pass ${i + 1}` };
@@ -180,6 +251,14 @@ async function shredFiles(filePaths, passes = 3) {
 
 module.exports = async function fileShredder(args = {}) {
   const { filePaths, passes = 3 } = args;
+  
+  // Validate passes parameter - must be exactly 3 (DoD 5220.22-M standard)
+  if (!Number.isInteger(passes) || passes !== 3) {
+    return {
+      success: false,
+      error: 'passes must be exactly 3'
+    };
+  }
   
   if (!filePaths || !Array.isArray(filePaths) || filePaths.length === 0) {
     return {

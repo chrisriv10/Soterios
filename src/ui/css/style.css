@@ -382,6 +382,7 @@ body {
 .nav-item {
   display: flex;
   align-items: center;
+  flex-direction: row;
   padding: 10px 12px;
   margin-bottom: 4px;
   border-radius: 8px;
@@ -837,7 +838,7 @@ body {
 
 .log-path {
   flex: 1;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   font-family: var(--font-mono);
   font-size: 0.8rem;
 }
@@ -1065,7 +1066,7 @@ body {
 .log-tag.warn { background: rgba(210,153,34,0.15); color: var(--warn); }
 .log-tag.match { background: rgba(248,81,73,0.15); color: var(--danger); }
 .log-tag.info { background: rgba(88,166,255,0.15); color: var(--accent-primary); }
-.log-path { color: var(--text-main); word-break: break-all; }
+.log-path { color: var(--text-main); overflow-wrap: anywhere; }
 .section-spacer { height: 1px; }
 :root { --panel-raised: rgba(255,255,255,0.03); }
 .history-list { display: flex; flex-direction: column; gap: 8px; }
@@ -1397,4 +1398,101 @@ body {
 :root[data-theme="monochrome"] .btn-success:hover {
   background: linear-gradient(135deg, #a3a3a3, #737373);
   box-shadow: 0 6px 16px rgba(255, 255, 255, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+/* RTL Layout Fixes */
+[dir="rtl"] .sidebar {
+  border-right: none;
+  border-left: 1px solid var(--glass-border);
+}
+
+[dir="rtl"] .main {
+  padding: 40px;
+}
+
+[dir="rtl"] .card::before {
+  background: linear-gradient(-90deg, transparent, rgba(255,255,255,0.1), transparent);
+}
+
+[dir="rtl"] .dashboard-grid,
+[dir="rtl"] .status-card,
+[dir="rtl"] .card {
+  text-align: right;
+}
+
+[dir="rtl"] .nav-icon {
+  margin-right: 0;
+  margin-left: 12px;
+}
+
+[dir="rtl"] .brand-logo {
+  transform: scaleX(-1);
+}
+
+[dir="rtl"] .status-icon {
+  margin-right: 0;
+  margin-left: 16px;
+}
+
+[dir="rtl"] .btn {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .toggle-row {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .toggle-label {
+  text-align: right;
+}
+
+[dir="rtl"] .tool-row {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .tool-row .tool-action {
+  align-items: flex-start;
+}
+
+[dir="rtl"] .log-row {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .history-item {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .path-chip {
+  text-align: right;
+}
+
+[dir="rtl"] .report-stats {
+  direction: rtl;
+}
+
+[dir="rtl"] .scan-indicator-header {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .output-header {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .output-actions {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .status-card {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .tools-page {
+  direction: rtl;
+}
+
+[dir="rtl"] .tools-page .tools-column {
+  align-self: end;
+}
+
+[dir="rtl"] .output-panel {
+  align-self: stretch;
 }

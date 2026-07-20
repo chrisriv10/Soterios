@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { execFile } = require('child_process');
+const childProcess = require('child_process');
 
 describe('windowsChecks', () => {
   let windowsChecks;
@@ -14,10 +14,10 @@ describe('windowsChecks', () => {
 
   beforeEach(() => {
     // Mock execFile to avoid running actual PowerShell commands
-    originalExecFile = execFile;
+    originalExecFile = childProcess.execFile;
     mockExecResults = [];
     
-    execFile = (command, args, options, callback) => {
+    childProcess.execFile = (command, args, options, callback) => {
       mockExecResults.push({ command, args, options });
       
       // Simulate successful PowerShell execution
@@ -93,7 +93,7 @@ describe('windowsChecks', () => {
   });
 
   afterEach(() => {
-    execFile = originalExecFile;
+    childProcess.execFile = originalExecFile;
   });
 
   it('asArray returns empty array for null/undefined', () => {
@@ -123,64 +123,113 @@ describe('windowsChecks', () => {
   });
 
   it('runPowerShell executes successfully on Windows', async () => {
-    const result = await windowsChecks.runPowerShell('Get-Process');
-    assert.equal(result.ok, true);
-    assert.ok(result.stdout);
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    
+    try {
+      const result = await windowsChecks.runPowerShell('Get-Process');
+      assert.equal(result.ok, true);
+      assert.ok(result.stdout);
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    }
   });
 
   it('runPowerShell handles errors', async () => {
-    execFile = (command, args, options, callback) => {
-      callback(new Error('Failed'), '', 'Error output');
-    };
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
     
-    const result = await windowsChecks.runPowerShell('Invalid-Command');
-    assert.equal(result.ok, false);
-    assert.ok(result.error);
+    try {
+      childProcess.execFile = (command, args, options, callback) => {
+        callback(new Error('Failed'), '', 'Error output');
+      };
+      
+      const result = await windowsChecks.runPowerShell('Invalid-Command');
+      assert.equal(result.ok, false);
+      assert.ok(result.error);
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    }
   });
 
   it('runJsonPowerShell parses JSON output successfully', async () => {
-    const result = await windowsChecks.runJsonPowerShell('Get-Process');
-    assert.equal(result.ok, true);
-    assert.ok(result.data);
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    
+    try {
+      const result = await windowsChecks.runJsonPowerShell('Get-Process');
+      assert.equal(result.ok, true);
+      assert.ok(result.data);
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    }
   });
 
   it('runJsonPowerShell handles parse errors', async () => {
-    execFile = (command, args, options, callback) => {
-      callback(null, 'invalid json', '');
-    };
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
     
-    const result = await windowsChecks.runJsonPowerShell('Get-Process');
-    assert.equal(result.ok, false);
-    assert.ok(result.error);
+    try {
+      childProcess.execFile = (command, args, options, callback) => {
+        callback(null, 'invalid json', '');
+      };
+      
+      const result = await windowsChecks.runJsonPowerShell('Get-Process');
+      assert.equal(result.ok, false);
+      assert.ok(result.error);
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    }
   });
 
   it('runJsonPowerShell returns fallback on empty output', async () => {
-    execFile = (command, args, options, callback) => {
-      callback(null, '', '');
-    };
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
     
-    const fallback = { test: 'fallback' };
-    const result = await windowsChecks.runJsonPowerShell('Get-Process', fallback);
-    assert.equal(result.ok, true);
-    assert.deepEqual(result.data, fallback);
+    try {
+      childProcess.execFile = (command, args, options, callback) => {
+        callback(null, '', '');
+      };
+      
+      const fallback = { test: 'fallback' };
+      const result = await windowsChecks.runJsonPowerShell('Get-Process', fallback);
+      assert.equal(result.ok, true);
+      assert.deepEqual(result.data, fallback);
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    }
   });
 
   it('runJsonPowerShell returns fallback on PowerShell error', async () => {
-    execFile = (command, args, options, callback) => {
-      callback(new Error('Failed'), '', 'Error');
-    };
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
     
-    const fallback = { test: 'fallback' };
-    const result = await windowsChecks.runJsonPowerShell('Get-Process', fallback);
-    assert.equal(result.ok, false);
-    assert.deepEqual(result.data, fallback);
+    try {
+      childProcess.execFile = (command, args, options, callback) => {
+        callback(new Error('Failed'), '', 'Error');
+      };
+      
+      const fallback = { test: 'fallback' };
+      const result = await windowsChecks.runJsonPowerShell('Get-Process', fallback);
+      assert.equal(result.ok, false);
+      assert.deepEqual(result.data, fallback);
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    }
   });
 
   it('getDefenderStatus returns available status on Windows', async () => {
-    const result = await windowsChecks.getDefenderStatus();
-    assert.equal(result.available, true);
-    assert.equal(result.antivirusEnabled, true);
-    assert.equal(result.realTimeProtectionEnabled, true);
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    
+    try {
+      const result = await windowsChecks.getDefenderStatus();
+      assert.equal(result.available, true);
+      assert.equal(result.antivirusEnabled, true);
+      assert.equal(result.realTimeProtectionEnabled, true);
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    }
   });
 
   it('getDefenderStatus returns unavailable on non-Windows', async () => {
@@ -195,13 +244,20 @@ describe('windowsChecks', () => {
   });
 
   it('getDefenderStatus handles all strategy failures', async () => {
-    execFile = (command, args, options, callback) => {
-      callback(new Error('All strategies failed'), '', 'Error');
-    };
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
     
-    const result = await windowsChecks.getDefenderStatus();
-    assert.equal(result.available, false);
-    assert.ok(result.error);
+    try {
+      childProcess.execFile = (command, args, options, callback) => {
+        callback(new Error('All strategies failed'), '', 'Error');
+      };
+      
+      const result = await windowsChecks.getDefenderStatus();
+      assert.equal(result.available, false);
+      assert.ok(result.error);
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    }
   });
 
   it('getFirewallStatus returns firewall profiles', async () => {
@@ -343,14 +399,20 @@ describe('windowsChecks', () => {
     
     // Mock homedir to use temp directory
     const originalHomedir = os.homedir;
-    os.homedir = () => tmp;
+    const originalPlatform = process.platform;
     
-    const result = await windowsChecks.getStartupFolders();
-    assert.ok(Array.isArray(result));
-    assert.ok(result.some(item => item.source === 'Startup Folder'));
-    
-    os.homedir = originalHomedir;
-    fs.rmSync(tmp, { recursive: true, force: true });
+    try {
+      os.homedir = () => tmp;
+      Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+      
+      const result = await windowsChecks.getStartupFolders();
+      assert.ok(Array.isArray(result));
+      assert.ok(result.some(item => item.source === 'Startup Folder'));
+    } finally {
+      os.homedir = originalHomedir;
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
   });
 
   it('getStartupFolders handles non-existent folders', async () => {

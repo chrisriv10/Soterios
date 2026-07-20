@@ -2,7 +2,7 @@
 
 const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
-const { exec } = require('child_process');
+const childProcess = require('child_process');
 const util = require('util');
 
 describe('SystemAudit', () => {
@@ -12,11 +12,10 @@ describe('SystemAudit', () => {
 
   beforeEach(() => {
     // Mock exec to avoid running actual PowerShell commands
-    originalExec = exec;
+    originalExec = childProcess.exec;
     mockExecResults = [];
     
-    exec['native'] = originalExec;
-    exec[util.promisify.custom] = async (command, options) => {
+    childProcess.exec[util.promisify.custom] = async (command, options) => {
       mockExecResults.push({ command, options });
       
       // Return mock results based on command
@@ -65,14 +64,14 @@ describe('SystemAudit', () => {
       throw error;
     };
     
-    // Clear require cache
+    // Clear require cache and re-require to pick up the mock
     delete require.cache[require.resolve('../src/security/SystemAudit')];
     SystemAudit = require('../src/security/SystemAudit');
   });
 
   afterEach(() => {
-    exec = originalExec;
-    delete exec[util.promisify.custom];
+    childProcess.exec = originalExec;
+    delete childProcess.exec[util.promisify.custom];
   });
 
   it('runPowerShell executes PowerShell command successfully', async () => {
@@ -93,7 +92,7 @@ describe('SystemAudit', () => {
   it('runPowerShell handles timeout', async () => {
     const audit = new SystemAudit();
     // Mock a timeout scenario
-    exec[util.promisify.custom] = async () => {
+    childProcess.childProcess.exec[util.promisify.custom] = async () => {
       const error = new Error('Timeout');
       error.killed = true;
       error.signal = 'SIGTERM';
@@ -114,7 +113,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkDefender returns fail when Defender is disabled', async () => {
-    exec[util.promisify.custom] = async () => {
+    childProcess.childProcess.exec[util.promisify.custom] = async () => {
       return {
         stdout: JSON.stringify({
           AMServiceEnabled: true,
@@ -135,7 +134,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkDefender handles parse errors', async () => {
-    exec[util.promisify.custom] = async () => {
+    childProcess.childProcess.exec[util.promisify.custom] = async () => {
       return { stdout: 'invalid json', stderr: '' };
     };
     
@@ -146,7 +145,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkDefender handles query failures', async () => {
-    exec[util.promisify.custom] = async () => {
+    childProcess.childProcess.exec[util.promisify.custom] = async () => {
       throw new Error('Query failed');
     };
     
@@ -164,7 +163,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkUac returns fail when UAC is disabled', async () => {
-    exec[util.promisify.custom] = async () => {
+    childProcess.childProcess.exec[util.promisify.custom] = async () => {
       return { stdout: '0', stderr: '' };
     };
     
@@ -175,7 +174,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkUac handles query failures', async () => {
-    exec[util.promisify.custom] = async () => {
+    childProcess.childProcess.exec[util.promisify.custom] = async () => {
       throw new Error('Query failed');
     };
     
@@ -193,7 +192,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkWindowsUpdate returns warn when updates pending', async () => {
-    exec[util.promisify.custom] = async () => {
+    childProcess.childProcess.exec[util.promisify.custom] = async () => {
       return { stdout: '5', stderr: '' };
     };
     
@@ -204,7 +203,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkWindowsUpdate handles parse errors', async () => {
-    exec[util.promisify.custom] = async () => {
+    childProcess.childProcess.exec[util.promisify.custom] = async () => {
       return { stdout: 'invalid', stderr: '' };
     };
     
@@ -215,7 +214,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkWindowsUpdate handles query failures', async () => {
-    exec[util.promisify.custom] = async () => {
+    childProcess.childProcess.exec[util.promisify.custom] = async () => {
       throw new Error('Query failed');
     };
     
@@ -233,7 +232,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkBitLocker returns warn when drive not encrypted', async () => {
-    exec[util.promisify.custom] = async () => {
+    childProcess.childProcess.exec[util.promisify.custom] = async () => {
       return {
         stdout: JSON.stringify([{ ProtectionStatus: 0 }]),
         stderr: ''
@@ -247,7 +246,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkBitLocker handles unsupported systems', async () => {
-    exec[util.promisify.custom] = async () => {
+    childProcess.childProcess.exec[util.promisify.custom] = async () => {
       throw new Error('Not supported');
     };
     
@@ -265,7 +264,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkExecutionPolicy returns warn for insecure policies', async () => {
-    exec[util.promisify.custom] = async () => {
+    childProcess.childProcess.exec[util.promisify.custom] = async () => {
       return { stdout: 'Unrestricted', stderr: '' };
     };
     
@@ -276,7 +275,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkExecutionPolicy handles query failures', async () => {
-    exec[util.promisify.custom] = async () => {
+    childProcess.childProcess.exec[util.promisify.custom] = async () => {
       throw new Error('Query failed');
     };
     
@@ -294,7 +293,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkSecureBoot returns fail when disabled', async () => {
-    exec[util.promisify.custom] = async () => {
+    childProcess.childProcess.exec[util.promisify.custom] = async () => {
       return { stdout: 'False', stderr: '' };
     };
     
@@ -305,7 +304,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkSecureBoot handles unsupported systems', async () => {
-    exec[util.promisify.custom] = async () => {
+    childProcess.childProcess.exec[util.promisify.custom] = async () => {
       throw new Error('Not supported');
     };
     
@@ -357,7 +356,7 @@ describe('SystemAudit', () => {
   it('runAudit handles individual check failures gracefully', async () => {
     // Make one check fail
     let callCount = 0;
-    exec[util.promisify.custom] = async () => {
+    childProcess.childProcess.exec[util.promisify.custom] = async () => {
       callCount++;
       if (callCount === 1) {
         throw new Error('First check failed');
