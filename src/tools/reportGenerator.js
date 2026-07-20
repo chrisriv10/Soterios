@@ -67,6 +67,6 @@ module.exports = {
     fs.writeFileSync(htmlPath, renderHtml(report), 'utf-8');
 
     if (ctx.appStore) ctx.appStore.addHistory('reports', { title: friendlyTitle, htmlPath, jsonPath, score: report.overview ? report.overview.score : null }, 20);
-    return { report, files: { html: htmlPath, json: jsonPath } };
+    return { report, files: { html: htmlPath, json: jsonPath }, path: jsonPath };
   }
 };

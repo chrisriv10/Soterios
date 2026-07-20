@@ -5,19 +5,26 @@ window.Pages['network'] = {
   _connectionRiskFilter: 'all',
   _connectionStateFilter: 'all',
   _geoCache: {},
+
+  _classificationLabel(classification) {
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+    switch (classification) {
+      case 'SAFE': return t('network.flagSafe');
+      case 'UNKNOWN': return t('network.flagUnverified');
+      case 'MALICIOUS': return t('network.flagMalicious');
+      default: return classification;
+    }
+  },
+
   render(container) {
-    // Clear any previous auto-refresh timer (e.g. if this page is re-rendered)
     if (this._refreshTimer) {
       clearInterval(this._refreshTimer);
       this._refreshTimer = null;
     }
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+
     container.innerHTML = `
       <style>
-        /* GPU-accelerated pulse: animating transform + opacity (instead of
-           box-shadow) keeps this off the main-thread paint path, so it
-           doesn't fight page scrolling for repaint budget. The ring is a
-           ::after pseudo-element with its own transform, so it can animate
-           scale independently of the marker's own centering transform. */
         @keyframes heatmapPulseMalicious {
           0% { transform: translate(-50%, -50%) scale(0.7); opacity: 0.7; }
           70% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
@@ -54,11 +61,11 @@ window.Pages['network'] = {
         }
       </style>
       <header class="page-header">
-        <h1 class="page-title">Network Monitor</h1>
-        <p class="page-subtitle">Active connections and interface bandwidth</p>
+        <h1 class="page-title">${escapeHtml(t('network.title'))}</h1>
+        <p class="page-subtitle">${escapeHtml(t('network.subtitle'))}</p>
       </header>
       <div id="networkContent">
-        <div class="empty-state"><span class="spinner"></span>&nbsp;Loading network stats\u2026</div>
+        <div class="empty-state"><span class="spinner"></span>&nbsp;${escapeHtml(t('network.loading'))}</div>
       </div>
     `;
     this.load(container, true);
@@ -95,8 +102,6 @@ window.Pages['network'] = {
       });
     }
 
-    // Auto-refresh bandwidth + connections in real time. Stops itself if the
-    // page has been navigated away from (container removed from the DOM).
     this._refreshTimer = setInterval(() => {
       if (!document.body.contains(container)) {
         clearInterval(this._refreshTimer);
@@ -107,36 +112,32 @@ window.Pages['network'] = {
     }, this.REFRESH_INTERVAL_MS);
   },
   async load(container, isInitial) {
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const content = container.querySelector('#networkContent');
     if (!content) return;
-    // Preserve the connection list's scroll position across silent refreshes.
     const prevScrollEl = content?.querySelector('#activeConnectionsList');
     const prevScrollTop = prevScrollEl ? prevScrollEl.scrollTop : 0;
-    // Preserve focus/cursor position in the connection search box too, since
-    // content.innerHTML is fully rebuilt on every refresh (including silent
-    // background ones) and would otherwise steal focus mid-keystroke.
     const prevSearchEl = content?.querySelector('#connectionSearch');
     const searchWasFocused = !!(prevSearchEl && document.activeElement === prevSearchEl);
     const searchSelectionStart = prevSearchEl ? prevSearchEl.selectionStart : null;
     const searchSelectionEnd = prevSearchEl ? prevSearchEl.selectionEnd : null;
     try {
-      const [statsResult, connectionsResult] = await Promise.allSettled([
+      const [statsResult, connectionsResult, settingsResult] = await Promise.allSettled([
         window.api.invoke('network:stats'),
-        window.api.invoke('network:connections')
+        window.api.invoke('network:connections'),
+        window.api.invoke('db:getSetting', 'feature.networkTrafficHistory', true)
       ]);
 
-      // Verify container is still in DOM after async operation
       if (!document.body.contains(container)) {
         return;
       }
 
       const stats = statsResult.status === 'fulfilled' ? statsResult.value : null;
       const connections = connectionsResult.status === 'fulfilled' ? connectionsResult.value : null;
+      const networkTrafficHistoryEnabled = settingsResult.status === 'fulfilled' ? settingsResult.value : true;
 
       let html = '';
 
-      // Windows Get-NetTCPConnection can return the State field as a raw
-      // numeric code instead of a friendly name depending on how it was queried.
       const STATE_CODE_MAP = {
         1: 'CLOSED', 2: 'LISTEN', 3: 'SYN_SENT', 4: 'SYN_RECEIVED',
         5: 'ESTABLISHED', 6: 'FIN_WAIT_1', 7: 'FIN_WAIT_2', 8: 'CLOSE_WAIT',
@@ -147,8 +148,6 @@ window.Pages['network'] = {
         const raw = c.state ?? c.State ?? c.connectionState ?? c.ConnectionState ?? c.status ?? c.Status ?? '';
         return (STATE_CODE_MAP[raw] || raw).toString().toUpperCase() || 'UNKNOWN';
       };
-      // Helper: pick a field that may legitimately be 0 (e.g. port on a
-      // listening socket) without falling through to a fallback via `||`.
       const firstDefined = (...vals) => {
         for (const v of vals) {
           if (v !== undefined && v !== null && v !== '') return v;
@@ -156,13 +155,6 @@ window.Pages['network'] = {
         return '';
       };
 
-      // Shared filter logic for the connection search box + risk/state
-      // selects -- used both to drive the heat map's cluster data below
-      // (so filtering actually affects what's plotted) and, further down,
-      // to build each row's data-search/data-risk/data-state attributes
-      // that applyConnectionFilter() reads for its instant DOM show/hide.
-      // Keeping one implementation avoids the map and the list silently
-      // drifting out of sync on what "matches the current filters" means.
       const matchesConnectionFilters = (c) => {
         const state = getState(c);
         const risk = c.classification || 'UNKNOWN';
@@ -187,12 +179,10 @@ window.Pages['network'] = {
       };
       const filteredConnections = (connections || []).filter(matchesConnectionFilters);
 
-      // Classification counts (used by the Security Flags panel)
       const safeCount = connections ? connections.filter(c => c.classification === 'SAFE').length : 0;
       const maliciousCount = connections ? connections.filter(c => c.classification === 'MALICIOUS').length : 0;
       const unknownCount = connections ? connections.length - safeCount - maliciousCount : 0;
 
-      // Connection state counts (used by the Protocol Pie)
       const STATE_COLORS = {
         ESTABLISHED: 'var(--ok)',
         LISTEN: 'var(--accent-primary)',
@@ -216,25 +206,22 @@ window.Pages['network'] = {
         return fallbackPalette[paletteIdx++ % fallbackPalette.length];
       };
 
-      // Connection state summary
       if (stats && stats.connections) {
         const c = stats.connections;
         html += `<div class="grid grid-5" style="margin-bottom:18px;">
-          <div class="stat-tile"><div class="stat-label">Total TCP</div><div class="stat-value">${c.total}</div></div>
-          <div class="stat-tile"><div class="stat-label">Established</div><div class="stat-value" style="color:var(--ok);">${c.established}</div></div>
-          <div class="stat-tile"><div class="stat-label">Listening</div><div class="stat-value" style="color:var(--accent-primary);">${c.listen}</div></div>
-          <div class="stat-tile"><div class="stat-label">Time Wait</div><div class="stat-value" style="color:var(--warn);">${c.timeWait}</div></div>
-          <div class="stat-tile"><div class="stat-label">Close Wait</div><div class="stat-value" style="color:var(--danger);">${c.closeWait}</div></div>
+          <div class="stat-tile"><div class="stat-label">${escapeHtml(t('network.totalTcp'))}</div><div class="stat-value">${c.total}</div></div>
+          <div class="stat-tile"><div class="stat-label">${escapeHtml(t('network.established'))}</div><div class="stat-value" style="color:var(--ok);">${c.established}</div></div>
+          <div class="stat-tile"><div class="stat-label">${escapeHtml(t('network.listening'))}</div><div class="stat-value" style="color:var(--accent-primary);">${c.listen}</div></div>
+          <div class="stat-tile"><div class="stat-label">${escapeHtml(t('network.timeWait'))}</div><div class="stat-value" style="color:var(--warn);">${c.timeWait}</div></div>
+          <div class="stat-tile"><div class="stat-label">${escapeHtml(t('network.closeWait'))}</div><div class="stat-value" style="color:var(--danger);">${c.closeWait}</div></div>
         </div>`;
       }
 
-      // Bandwidth + Protocol Pie + Security Flags row
       html += '<div style="display:flex; gap:16px; margin-bottom:18px; flex-wrap:wrap; align-items:stretch;">';
 
-      // Bandwidth
       html += '<div style="flex:1 1 0; min-width:260px; display:flex; flex-direction:column;">';
       html += '<div class="card" style="padding:14px 16px; flex:1;">';
-      html += '<h3 style="margin-bottom:10px; font-size:1rem;">Bandwidth</h3>';
+      html += `<h3 style="margin-bottom:10px; font-size:1rem;">${escapeHtml(t('network.bandwidth'))}</h3>`;
       if (stats && stats.interfaces && stats.interfaces.length > 0) {
         html += '<div style="display:flex; flex-direction:column; gap:8px;">';
         for (const iface of stats.interfaces) {
@@ -244,22 +231,21 @@ window.Pages['network'] = {
               \u25B2 ${iface.txSec} KB/s &nbsp; \u25BC ${iface.rxSec} KB/s
             </div>
             <div style="font-size:0.7rem; color:var(--text-dim);">
-              Total: \u25B2 ${iface.txTotal} MB / \u25BC ${iface.rxTotal} MB
+              ${escapeHtml(t('network.totalStats', { txTotal: iface.txTotal, rxTotal: iface.rxTotal }))}
             </div>
           </div>`;
         }
         html += '</div>';
       } else {
-        html += '<div class="empty-state" style="font-size:0.85rem;">No interface data.</div>';
+        html += `<div class="empty-state" style="font-size:0.85rem;">${escapeHtml(t('network.noInterfaceData'))}</div>`;
       }
       html += '</div></div>';
 
-      // Protocol Pie
       html += '<div style="flex:1 1 0; min-width:260px; display:flex; flex-direction:column;">';
       html += '<div class="card" style="padding:14px 16px; flex:1;">';
-      html += '<h3 style="margin-bottom:10px; font-size:1rem;">Connection States</h3>';
+      html += `<h3 style="margin-bottom:10px; font-size:1rem;">${escapeHtml(t('network.connectionStates'))}</h3>`;
       if (stateTotal === 0) {
-        html += '<div class="empty-state" style="font-size:0.85rem;">No connection data.</div>';
+        html += `<div class="empty-state" style="font-size:0.85rem;">${escapeHtml(t('network.noConnectionData'))}</div>`;
       } else {
         let cumulative = 0;
         const gradientStops = stateEntries.map(([name, count]) => {
@@ -286,48 +272,42 @@ window.Pages['network'] = {
       }
       html += '</div></div>';
 
-      // Security Flags
       html += '<div style="flex:1 1 0; min-width:260px; display:flex; flex-direction:column;">';
       html += '<div class="card" style="padding:14px 16px; flex:1;">';
-      html += '<h3 style="margin-bottom:10px; font-size:1rem;">Security Flags</h3>';
+      html += `<h3 style="margin-bottom:10px; font-size:1rem;">${escapeHtml(t('network.securityFlags'))}</h3>`;
       html += `<div style="display:flex; flex-direction:column; gap:8px; font-size:0.85rem;">
         <div style="display:flex; align-items:center; justify-content:space-between;">
-          <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:50%; background:var(--ok); display:inline-block;"></span>Safe</span>
+          <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:50%; background:var(--ok); display:inline-block;"></span>${escapeHtml(t('network.flagSafe'))}</span>
           <span style="font-weight:600; color:var(--ok);">${safeCount}</span>
         </div>
         <div style="display:flex; align-items:center; justify-content:space-between;">
-          <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:50%; background:var(--warn); display:inline-block;"></span>Unverified</span>
+          <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:50%; background:var(--warn); display:inline-block;"></span>${escapeHtml(t('network.flagUnverified'))}</span>
           <span style="font-weight:600; color:var(--warn);">${unknownCount}</span>
         </div>
         <div style="display:flex; align-items:center; justify-content:space-between;">
-          <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:50%; background:var(--danger); display:inline-block;"></span>Malicious</span>
+          <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:50%; background:var(--danger); display:inline-block;"></span>${escapeHtml(t('network.flagMalicious'))}</span>
           <span style="font-weight:600; color:var(--danger);">${maliciousCount}</span>
         </div>
       </div>`;
       html += '</div></div>';
 
-      html += '</div>'; // end bandwidth/pie/flags row
-
-      // Traffic history chart (persisted network_stats samples)
-      html += '<div class="card" style="padding:14px 16px; margin-bottom:18px;">';
-      html += '<h3 style="margin-bottom:10px; font-size:1rem;">Traffic history (24h)</h3>';
-      html += '<canvas id="networkHistoryChart" width="900" height="180" style="width:100%; max-height:180px;"></canvas>';
-      html += '<div id="networkHistoryEmpty" class="empty-state" style="font-size:0.85rem; display:none;">No historical samples yet — samples are recorded every 30 seconds while the app runs.</div>';
       html += '</div>';
 
-      // Recent suspicious network alert actions
-      html += '<div class="card" style="padding:14px 16px; margin-bottom:18px;" id="networkAlertsPanel">';
-      html += '<h3 style="margin-bottom:10px; font-size:1rem;">Suspicious connection alerts</h3>';
-      html += '<div id="networkAlertsList" class="empty-state" style="font-size:0.85rem;">Loading alerts…</div>';
-      html += '</div>';
+      if (networkTrafficHistoryEnabled) {
+        html += '<div class="card" style="padding:14px 16px; margin-bottom:18px;">';
+        html += `<h3 style="margin-bottom:10px; font-size:1rem;">${escapeHtml(t('network.historyTitle'))}</h3>`;
+        html += '<canvas id="networkHistoryChart" width="900" height="180" style="width:100%; max-height:180px;"></canvas>';
+        html += `<div id="networkHistoryEmpty" class="empty-state" style="font-size:0.85rem; display:none;">${escapeHtml(t('network.historyEmpty'))}</div>`;
+        html += '</div>';
+      }
 
-      // Heat Map
+      html += '<div id="networkAlertsPanel"></div>';
+
       const uniqueIps = [...new Set(connections ? connections.map(c => firstDefined(c.remoteAddress, c.RemoteAddress)).filter(Boolean) : [])];
       const uncachedIps = uniqueIps.filter((ip) => !(ip in this._geoCache));
       if (uncachedIps.length) {
         try {
           const fresh = await window.api.invoke('network:geo', uncachedIps);
-          // Verify container is still in DOM after async operation
           if (!document.body.contains(container)) {
             return;
           }
@@ -344,12 +324,6 @@ window.Pages['network'] = {
         if (this._geoCache[ip]) geoData[ip] = this._geoCache[ip];
       }
 
-      // Three distinct numbers, mirroring the same "total vs filtered vs
-      // actually shown" distinction the connections list below makes:
-      // total connections regardless of filters, how many match the
-      // current search/risk/state filters, and how many of THOSE actually
-      // have resolved geolocation data (private IPs, failed lookups, etc.
-      // never get a dot no matter what).
       const totalConnectionsCount = (connections || []).length;
       const filteredConnectionsCount = filteredConnections.length;
       const mappedCount = filteredConnections.filter((c) => {
@@ -360,13 +334,13 @@ window.Pages['network'] = {
       if (Object.keys(geoData).length > 0) {
         html += '<div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px; flex-wrap:wrap; gap:8px;">';
         html += `<div>
-          <h3 style="margin:0; font-size:1rem;">Active Connections Heat Map</h3>
-          <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">${totalConnectionsCount} total connection${totalConnectionsCount === 1 ? '' : 's'} \u00b7 ${filteredConnectionsCount} match current filters \u00b7 ${mappedCount} mapped</div>
+          <h3 style="margin:0; font-size:1rem;">${escapeHtml(t('network.heatmapTitle'))}</h3>
+          <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">${escapeHtml(t('network.heatmapCounts', { total: totalConnectionsCount, filtered: filteredConnectionsCount, mapped: mappedCount }))}</div>
         </div>`;
         html += `<div style="display:flex; gap:12px; font-size:0.75rem; font-weight:600;">
-          <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--ok);"></span> Safe</span>
-          <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--warn);"></span> Unverified</span>
-          <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--danger);"></span> Malicious</span>
+          <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--ok);"></span> ${escapeHtml(t('network.heatmapLegendSafe'))}</span>
+          <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--warn);"></span> ${escapeHtml(t('network.heatmapLegendUnverified'))}</span>
+          <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--danger);"></span> ${escapeHtml(t('network.heatmapLegendMalicious'))}</span>
         </div>`;
         html += '</div>';
 
@@ -375,7 +349,7 @@ window.Pages['network'] = {
           <div style="position:absolute; top:0; left:0; bottom:0; right:0; pointer-events:none; z-index:2;">`;
 
         if (mappedCount === 0) {
-          html += `<div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; font-size:0.85rem; color:var(--text-dim); white-space:nowrap;">No connections match your current filters.</div>`;
+          html += `<div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; font-size:0.85rem; color:var(--text-dim); white-space:nowrap;">${escapeHtml(t('network.heatmapNoMatches'))}</div>`;
         }
 
         const clusters = {};
@@ -383,25 +357,25 @@ window.Pages['network'] = {
           const ip = firstDefined(c.remoteAddress, c.RemoteAddress);
           const geo = geoData[ip];
           if (!geo || geo.lat === undefined || geo.lon === undefined) continue;
-          
+
           const clusterX = Math.round(geo.lon / 2.5) * 2.5;
           const clusterY = Math.round(geo.lat / 2.5) * 2.5;
           const key = `${clusterX},${clusterY}`;
-          
+
           if (!clusters[key]) {
             clusters[key] = {
-              lat: clusterY, lon: clusterX, 
-              count: 0, 
+              lat: clusterY, lon: clusterX,
+              count: 0,
               ips: new Set(),
               classification: 'SAFE',
               locations: new Set()
             };
           }
-          
+
           clusters[key].count++;
           clusters[key].ips.add(ip);
           if (geo.city && geo.country) clusters[key].locations.add(`${geo.city}, ${geo.country}`);
-          
+
           if (c.classification === 'MALICIOUS') {
             clusters[key].classification = 'MALICIOUS';
           } else if (c.classification === 'UNKNOWN' && clusters[key].classification === 'SAFE') {
@@ -413,11 +387,11 @@ window.Pages['network'] = {
           const c = clusters[key];
           const x = ((c.lon + 180) / 360) * 100;
           const y = ((90 - c.lat) / 180) * 100;
-          
+
           let color = 'var(--ok)';
           let glow = 'var(--ok)';
           let pulseClass = '';
-          
+
           if (c.classification === 'MALICIOUS') {
             color = 'var(--danger)';
             glow = 'var(--danger)';
@@ -426,16 +400,17 @@ window.Pages['network'] = {
             color = 'var(--warn)';
             glow = 'var(--warn)';
           }
-          
+
           const size = Math.max(8, 6 + Math.log(c.count) * 4);
           const ipList = Array.from(c.ips).join(',');
-          const locList = Array.from(c.locations).join(' | ') || 'Unverified Location';
-          
+          const locList = Array.from(c.locations).join(' | ') || t('common.unverifiedLocation');
+          const classificationDisplay = this._classificationLabel(c.classification);
+
           html += `<div class="heatmap-marker ${pulseClass}" data-ips="${ipList}" data-loc="${escapeHtml(locList)}"
-            title="${escapeHtml(locList)}\nIPs: ${ipList}\nConnections: ${c.count}"
-            style="position:absolute; left:${x}%; top:${y}%; width:${size}px; height:${size}px; 
-            background-color:${color}; border-radius:50%; transform:translate(-50%, -50%); 
-            box-shadow:0 0 10px ${glow}; cursor:pointer; pointer-events:auto; display:flex; 
+            title="${escapeHtml(locList)}\\nIPs: ${ipList}\\nConnections: ${c.count}\\nClassification: ${escapeHtml(classificationDisplay)}"
+            style="position:absolute; left:${x}%; top:${y}%; width:${size}px; height:${size}px;
+            background-color:${color}; border-radius:50%; transform:translate(-50%, -50%);
+            box-shadow:0 0 10px ${glow}; cursor:pointer; pointer-events:auto; display:flex;
             align-items:center; justify-content:center; color:#fff; font-size:9px; font-weight:bold; transition: transform 0.15s ease-out;">
             ${c.count > 1 ? c.count : ''}
           </div>`;
@@ -448,14 +423,14 @@ window.Pages['network'] = {
              const ip = firstDefined(c.remoteAddress, c.RemoteAddress);
              return selectedIps.includes(ip);
           });
-          
+
           html += `<div style="position:absolute; top:10px; right:10px; width:320px; max-height:calc(100% - 20px); background:rgba(20, 26, 33, 0.95); border:1px solid rgba(255,255,255,0.1); border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,0.5); z-index:20; display:flex; flex-direction:column; backdrop-filter:blur(4px); pointer-events:auto;">
             <div style="padding:10px 14px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;">
-              <div style="font-weight:600; font-size:0.9rem;">${escapeHtml(loc || 'Cluster Details')}</div>
+              <div style="font-weight:600; font-size:0.9rem;">${escapeHtml(loc || t('network.clusterDetails'))}</div>
               <div class="heatmap-infobox-close" style="cursor:pointer; opacity:0.7; font-size:1.4rem; line-height:1;">&times;</div>
             </div>
             <div style="padding:10px 14px; overflow-y:auto; font-size:0.8rem; display:flex; flex-direction:column; gap:12px;">`;
-            
+
           for (const c of matchingConns) {
             const proc = c.processName ? `(${escapeHtml(c.processName)})` : (c.pid ? `(PID: ${escapeHtml(c.pid)})` : '');
             const ip = firstDefined(c.remoteAddress, c.RemoteAddress);
@@ -466,7 +441,7 @@ window.Pages['network'] = {
             else if (state === 'LISTEN' || state === 'LISTENING') stateColor = 'var(--accent-primary)';
             else if (state === 'TIME_WAIT') stateColor = 'var(--warn)';
             else if (state === 'CLOSE_WAIT') stateColor = 'var(--danger)';
-            
+
             html += `<div>
               <div style="font-family:monospace; color:var(--text-primary); font-size:0.85rem;">${escapeHtml(ip)}:${escapeHtml(port)}</div>
               <div style="color:var(--text-dim); display:flex; justify-content:space-between; margin-top:4px;">
@@ -475,42 +450,39 @@ window.Pages['network'] = {
               </div>
             </div>`;
           }
-            
+
           html += `</div></div>`;
         }
 
         html += `</div></div>`;
       }
 
-      // Active connections list
       html += `<div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px; flex-wrap:wrap;">
-        <h3 style="margin:0; font-size:1rem;">Active Connections</h3>
+        <h3 style="margin:0; font-size:1rem;">${escapeHtml(t('network.activeConnections'))}</h3>
         <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
           <span id="connectionCount" class="page-subtitle" style="font-size:0.8rem; white-space:nowrap;"></span>
           <select id="connectionStateFilter" style="padding:6px 10px; border-radius:8px; border:1px solid var(--glass-border); background:var(--bg-surface); color:inherit; font-size:0.85rem;">
-            <option value="all" ${this._connectionStateFilter === 'all' ? 'selected' : ''}>All States</option>
-            <option value="ESTABLISHED" ${this._connectionStateFilter === 'ESTABLISHED' ? 'selected' : ''}>Established</option>
-            <option value="LISTEN" ${this._connectionStateFilter === 'LISTEN' ? 'selected' : ''}>Listen</option>
-            <option value="TIME_WAIT" ${this._connectionStateFilter === 'TIME_WAIT' ? 'selected' : ''}>Time Wait</option>
-            <option value="CLOSE_WAIT" ${this._connectionStateFilter === 'CLOSE_WAIT' ? 'selected' : ''}>Close Wait</option>
-            <option value="BOUND" ${this._connectionStateFilter === 'BOUND' ? 'selected' : ''}>Bound</option>
+            <option value="all" ${this._connectionStateFilter === 'all' ? 'selected' : ''}>${escapeHtml(t('network.stateFilterAll'))}</option>
+            <option value="ESTABLISHED" ${this._connectionStateFilter === 'ESTABLISHED' ? 'selected' : ''}>${escapeHtml(t('network.stateFilterEstablished'))}</option>
+            <option value="LISTEN" ${this._connectionStateFilter === 'LISTEN' ? 'selected' : ''}>${escapeHtml(t('network.stateFilterListen'))}</option>
+            <option value="TIME_WAIT" ${this._connectionStateFilter === 'TIME_WAIT' ? 'selected' : ''}>${escapeHtml(t('network.stateFilterTimeWait'))}</option>
+            <option value="CLOSE_WAIT" ${this._connectionStateFilter === 'CLOSE_WAIT' ? 'selected' : ''}>${escapeHtml(t('network.stateFilterCloseWait'))}</option>
+            <option value="BOUND" ${this._connectionStateFilter === 'BOUND' ? 'selected' : ''}>${escapeHtml(t('network.stateFilterBound'))}</option>
           </select>
           <select id="connectionRiskFilter" style="padding:6px 10px; border-radius:8px; border:1px solid var(--glass-border); background:var(--bg-surface); color:inherit; font-size:0.85rem;">
-            <option value="all" ${this._connectionRiskFilter === 'all' ? 'selected' : ''}>All Risks</option>
-            <option value="SAFE" ${this._connectionRiskFilter === 'SAFE' ? 'selected' : ''}>Allowed</option>
-            <option value="UNKNOWN" ${this._connectionRiskFilter === 'UNKNOWN' ? 'selected' : ''}>Unverified</option>
-            <option value="MALICIOUS" ${this._connectionRiskFilter === 'MALICIOUS' ? 'selected' : ''}>Blocked</option>
+            <option value="all" ${this._connectionRiskFilter === 'all' ? 'selected' : ''}>${escapeHtml(t('network.riskFilterAll'))}</option>
+            <option value="SAFE" ${this._connectionRiskFilter === 'SAFE' ? 'selected' : ''}>${escapeHtml(t('network.riskFilterSafe'))}</option>
+            <option value="UNKNOWN" ${this._connectionRiskFilter === 'UNKNOWN' ? 'selected' : ''}>${escapeHtml(t('network.riskFilterUnverified'))}</option>
+            <option value="MALICIOUS" ${this._connectionRiskFilter === 'MALICIOUS' ? 'selected' : ''}>${escapeHtml(t('network.riskFilterMalicious'))}</option>
           </select>
-          <input type="text" id="connectionSearch" placeholder="Search IP, host, process, state\u2026"
+          <input type="text" id="connectionSearch" placeholder="${escapeHtml(t('network.searchPlaceholder'))}"
             value="${escapeHtml(this._connectionQuery || '')}"
             style="padding:6px 10px; border-radius:8px; border:1px solid var(--glass-border); background:var(--glass-bg,rgba(255,255,255,0.05)); color:inherit; font-size:0.85rem; width:220px;">
         </div>
       </div>`;
       if (!connections || connections.length === 0) {
-        html += '<div class="empty-state">No active connections found.</div>';
+        html += `<div class="empty-state">${escapeHtml(t('network.noConnections'))}</div>`;
       } else {
-        // Sort so SAFE connections come first, then UNKNOWN, then MALICIOUS.
-        // Within each of those groups, ESTABLISHED connections come first.
         const classificationOrder = { SAFE: 0, UNKNOWN: 1, MALICIOUS: 2 };
         const sortedConnections = [...connections].sort((a, b) => {
           const rankA = classificationOrder[a.classification] ?? 1;
@@ -533,7 +505,6 @@ window.Pages['network'] = {
           const localAddress = firstDefined(c.localAddress, c.LocalAddress);
           const localPort = firstDefined(c.localPort, c.LocalPort);
 
-          // Classification badge color
           let badgeColor = 'var(--text-dim)';
           let borderColor = 'var(--accent-primary)';
           if (c.classification === 'SAFE') {
@@ -547,7 +518,6 @@ window.Pages['network'] = {
             borderColor = 'var(--warn)';
           }
 
-          // State badge color (established, listen, time_wait, close_wait, etc.)
           let stateColor = 'var(--text-dim)';
           const stateUpper = state.toString().toUpperCase();
           if (stateUpper === 'ESTABLISHED') {
@@ -568,32 +538,25 @@ window.Pages['network'] = {
             remoteAddress, remotePort, localAddress, localPort, c.pid
           ].filter((v) => v !== undefined && v !== null && v !== '').join(' ').toLowerCase();
 
-          const riskDisplay = c.classification === 'UNKNOWN' ? 'UNVERIFIED' : c.classification;
+          const riskDisplay = this._classificationLabel(c.classification);
 
           html += `<div class="list-row connection-row" data-ip="${escapeHtml(remoteAddress)}" data-search="${escapeHtml(searchBlob)}" data-risk="${escapeHtml(c.classification || 'UNKNOWN')}" data-state="${escapeHtml(state)}" style="display:flex; flex-direction:column; gap:4px; padding:12px 16px; border-left:4px solid ${borderColor}; content-visibility:auto; contain-intrinsic-size:0 70px;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <div>
                 <div style="font-weight:600; font-family:monospace; word-break:break-all;">${stateBadge}${escapeHtml(remoteAddress)}:${escapeHtml(remotePort)}${service}${hostname}</div>
-                <div class="page-subtitle" style="font-size:0.85rem; word-break:break-all;">Local: ${escapeHtml(localAddress)}:${escapeHtml(localPort)}${proc}</div>
+                <div class="page-subtitle" style="font-size:0.85rem; word-break:break-all;">${escapeHtml(t('network.localConnection', { localIp: localAddress, localPort: localPort, proc: proc }))}</div>
               </div>
               <div style="font-size:0.75rem; font-weight:600; color:${badgeColor}; background:${badgeColor}15; padding:4px 8px; border-radius:4px;">${escapeHtml(riskDisplay)}</div>
             </div>
           </div>`;
         }
         html += '</div>';
-        html += '<div id="connectionNoResults" class="empty-state" style="display:none; margin-top:8px;">No connections match your search.</div>';
+        html += `<div id="connectionNoResults" class="empty-state" style="display:none; margin-top:8px;">${escapeHtml(t('network.noResults'))}</div>`;
       }
 
       content.innerHTML = html;
       this.paintHistoryChart(content).catch(() => {});
-      this.renderAlertHits(content).catch(() => {});
 
-      // The world map background (grid overlay + <img>) is static and never
-      // changes between refreshes, so instead of letting content.innerHTML
-      // tear it down and force the browser to re-decode the image every
-      // REFRESH_INTERVAL_MS, build it once and reuse the same DOM node,
-      // moving it into the fresh placeholder each time. Moving an already-
-      // loaded <img> node doesn't trigger a reload/re-decode.
       const mapBgMount = content.querySelector('#heatmapMapBgMount');
       if (mapBgMount) {
         if (!this._worldMapBgEl) {
@@ -606,21 +569,29 @@ window.Pages['network'] = {
         mapBgMount.replaceWith(this._worldMapBgEl);
       }
 
-      // Restore scroll position of the connections list so a background
-      // refresh doesn't yank the user back to the top of the list.
+      const alertsPanelMount = content.querySelector('#networkAlertsPanel');
+      if (alertsPanelMount) {
+        if (!this._alertsPanelEl) {
+          this._alertsPanelEl = document.createElement('div');
+          this._alertsPanelEl.id = 'networkAlertsPanel';
+          this._alertsPanelEl.className = 'card';
+          this._alertsPanelEl.style.cssText = 'padding:10px 12px; margin-bottom:18px;';
+          this._alertsPanelEl.innerHTML = `
+            <h3 style="margin-bottom:6px; font-size:0.9rem;">${escapeHtml(t('network.alertsTitle'))}</h3>
+            <div id="networkAlertsList" class="empty-state" style="font-size:0.8rem;">${escapeHtml(t('network.alertsLoading'))}</div>
+          `;
+        }
+        alertsPanelMount.replaceWith(this._alertsPanelEl);
+        this.renderAlertHits(content).catch(() => {});
+      }
+
       if (prevScrollTop) {
         const newScrollEl = content.querySelector('#activeConnectionsList');
         if (newScrollEl) newScrollEl.scrollTop = prevScrollTop;
       }
 
-      // Re-apply the connection search filter, since content.innerHTML was
-      // just rebuilt from scratch (this happens on every refresh, not just
-      // the first load).
       this.applyConnectionFilter(container);
 
-      // If the user was actively typing in the search box when this refresh
-      // landed, restore focus and cursor position on the new input so it
-      // doesn't feel like the page yanked focus away mid-keystroke.
       if (searchWasFocused) {
         const newSearchEl = content.querySelector('#connectionSearch');
         if (newSearchEl) {
@@ -630,17 +601,15 @@ window.Pages['network'] = {
       }
     } catch (e) {
       if (isInitial) {
-        content.innerHTML = `<div class="empty-state">Error loading network: ${escapeHtml(e.message)}</div>`;
+        content.innerHTML = `<div class="empty-state">${escapeHtml(t('network.error', { error: e.message }))}</div>`;
       } else {
         console.error('Network refresh failed:', e);
       }
     }
   },
 
-  // Shows/hides already-rendered .connection-row elements based on the
-  // current search query. No backend calls, no HTML re-parsing — just a
-  // display toggle on nodes that already exist, so it's instant.
   applyConnectionFilter(container) {
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const content = container.querySelector('#networkContent');
     if (!content) return;
     const listEl = content.querySelector('#activeConnectionsList');
@@ -665,8 +634,8 @@ window.Pages['network'] = {
 
     if (countEl) {
       countEl.textContent = query
-        ? `${visible} of ${rows.length} connections`
-        : `${rows.length} connection${rows.length === 1 ? '' : 's'}`;
+        ? t('network.connectionCountFiltered', { visible, total: rows.length })
+        : t('network.connectionCount', { count: rows.length });
     }
     if (noResultsEl) {
       noResultsEl.style.display = (rows.length > 0 && visible === 0) ? '' : 'none';
@@ -677,6 +646,8 @@ window.Pages['network'] = {
     const canvas = content.querySelector('#networkHistoryChart');
     const empty = content.querySelector('#networkHistoryEmpty');
     if (!canvas) return;
+    const networkTrafficHistoryEnabled = await window.api.invoke('db:getSetting', 'feature.networkTrafficHistory', true);
+    if (!networkTrafficHistoryEnabled) return;
     let rows = [];
     try {
       rows = await window.api.invoke('network:history', { hours: 24 }) || [];
@@ -693,7 +664,6 @@ window.Pages['network'] = {
     }
     if (empty) empty.style.display = 'none';
 
-    // Aggregate all interfaces into one rx/tx series by timestamp bucket.
     const buckets = new Map();
     for (const row of rows) {
       const key = row.recorded_at;
@@ -739,26 +709,52 @@ window.Pages['network'] = {
       status = await window.api.invoke('network-alerts:status') || status;
     } catch (_) {}
     const hits = status.recentHits || [];
-    if (!hits.length) {
-      list.className = 'empty-state';
-      list.style.fontSize = '0.85rem';
-      list.textContent = 'No blocklisted connections detected this session.';
+
+    const hitsKey = hits.map(h => h.key).join('|');
+    if (this._lastAlertHitsKey === hitsKey && list.innerHTML && !list.classList.contains('empty-state')) {
       return;
     }
+    this._lastAlertHitsKey = hitsKey;
+
+    if (!hits.length) {
+      list.className = 'empty-state';
+      list.style.fontSize = '0.8rem';
+      list.textContent = t('network.alertsNone');
+      return;
+    }
+
     list.className = '';
     list.style.fontSize = '';
-    list.innerHTML = hits.slice(0, 8).map((h) => `
-      <div class="list-row" style="display:flex; justify-content:space-between; gap:12px; align-items:center; padding:10px 0; border-bottom:1px solid var(--glass-border);">
-        <div style="font-size:0.85rem;">
+
+    const showAll = this._alertsExpanded;
+    const displayHits = showAll ? hits.slice(0, 8) : hits.slice(0, 1);
+    const hasMore = hits.length > 1;
+
+    list.innerHTML = displayHits.map((h) => `
+      <div class="list-row" style="display:flex; justify-content:space-between; gap:8px; align-items:center; padding:6px 0; border-bottom:1px solid var(--glass-border);">
+        <div style="font-size:0.8rem;">
           <div style="font-weight:600; font-family:monospace;">${escapeHtml(h.remoteAddress || '')}${h.remotePort ? ':' + escapeHtml(h.remotePort) : ''}</div>
-          <div class="page-subtitle">PID ${escapeHtml(h.pid || 'n/a')} · ${escapeHtml(h.state || '')}</div>
+          <div class="page-subtitle" style="font-size:0.75rem;">${escapeHtml(t('network.alertPidState', { pid: h.pid || 'n/a', state: h.state || '' }))}</div>
         </div>
-        <div style="display:flex; gap:8px;">
-          <button class="btn btn-sm" data-alert-ignore="${escapeHtml(h.key)}">Ignore</button>
-          <button class="btn btn-sm" style="color:var(--accent-danger);" data-alert-kill="${escapeHtml(h.pid || '')}" ${h.pid ? '' : 'disabled'}>Kill</button>
+        <div style="display:flex; gap:6px;">
+          <button class="btn btn-sm" style="font-size:0.75rem; padding:4px 8px;" data-alert-ignore="${escapeHtml(h.key)}">${escapeHtml(t('network.alertIgnore'))}</button>
+          <button class="btn btn-sm" style="font-size:0.75rem; padding:4px 8px; color:var(--accent-danger);" data-alert-kill="${escapeHtml(h.pid || '')}" ${h.pid ? '' : 'disabled'}>${escapeHtml(t('network.alertKill'))}</button>
         </div>
       </div>
     `).join('');
+
+    if (hasMore) {
+      const expandBtn = document.createElement('button');
+      expandBtn.className = 'btn btn-sm';
+      expandBtn.style.cssText = 'margin-top:6px; font-size:0.75rem; padding:4px 8px;';
+      expandBtn.textContent = showAll ? t('network.alertShowLess', { count: hits.length - 1 }) : t('network.alertShowMore', { count: hits.length - 1 });
+      expandBtn.onclick = () => {
+        this._alertsExpanded = !this._alertsExpanded;
+        this.renderAlertHits(content);
+      };
+      list.appendChild(expandBtn);
+    }
+
     this.bindAlertActions(content);
   },
 
@@ -777,7 +773,7 @@ window.Pages['network'] = {
       btn.onclick = async () => {
         try {
           const res = await window.api.invoke('network-alerts:kill', Number(btn.getAttribute('data-alert-kill')));
-          if (!res || !res.success) alert((res && res.error) || 'Kill failed');
+          if (!res || !res.success) alert((res && res.error) || t('network.alertKillFailed'));
           else btn.closest('.list-row')?.remove();
         } catch (e) {
           alert(e.message || String(e));
@@ -798,5 +794,8 @@ window.Pages['network'] = {
     this._selectedClusterIps = null;
     this._selectedClusterLoc = null;
     this._worldMapBgEl = null;
+    this._alertsPanelEl = null;
+    this._alertsExpanded = false;
+    this._lastAlertHitsKey = null;
   }
 };

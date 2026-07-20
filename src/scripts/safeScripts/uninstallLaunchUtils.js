@@ -74,8 +74,9 @@ function normalizeExePath(exe) {
 
 function trustedInstallRoots() {
   const localAppData = process.env.LOCALAPPDATA;
+  const programFiles = process.env.ProgramFiles;
   const roots = [
-    process.env.ProgramFiles,
+    programFiles,
     process.env['ProgramFiles(x86)'],
     localAppData ? path.win32.join(localAppData, 'Programs') : null
   ].filter(Boolean);

@@ -12,7 +12,7 @@
   }
 
   function isKnownPage(pageId) {
-    return !!(pageId && window.Pages && Object.hasOwn(window.Pages, pageId));
+    return !!(pageId && window.Pages && window.Pages[pageId]);
   }
 
   function navigate(pageId) {
@@ -28,6 +28,10 @@
     currentPage = pageId;
     mainContent.innerHTML = '';
     pageModule.render(mainContent);
+    // Re-translate UI after page render
+    if (window.I18n && window.I18n.translateUI) {
+      window.I18n.translateUI();
+    }
   }
 
   navItems.forEach((item) => { item.addEventListener('click', () => navigate(item.dataset.page)); });

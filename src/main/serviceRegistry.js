@@ -33,6 +33,7 @@ class ServiceRegistry {
   create(db, eventBus, options = {}) {
     const notify = options.notify || (() => {});
     const userDataPath = options.userDataPath;
+    const locale = options.locale || 'en';
 
     const clamEngine = new ClamAVEngine({
       dbDir: path.join(userDataPath, 'clamav-db')
@@ -51,6 +52,7 @@ class ServiceRegistry {
     const realtimeWatcher = new RealTimeWatcher(db, eventBus, scanEngine);
     const processInspector = new ProcessInspector();
     const systemAudit = new SystemAudit();
+    systemAudit.setLocale(locale);
     const firewallManager = new FirewallManager();
     const networkMonitor = new NetworkMonitor();
     const processResolver = new ProcessResolver(processInspector);

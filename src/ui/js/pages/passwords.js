@@ -1,56 +1,57 @@
 window.Pages = window.Pages || {};
 window.Pages.passwords = {
   render(container) {
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     container.innerHTML = `
-      <div class="page-header"><h1 class="page-title">Credential Safety Hub</h1>
-        <div class="page-subtitle">Generate strong passwords and check credentials against breach data</div></div>
+      <div class="page-header"><h1 class="page-title">${escapeHtml(t('passwords.title'))}</h1>
+        <div class="page-subtitle">${escapeHtml(t('passwords.subtitle'))}</div></div>
       <div class="grid grid-2">
-        <div class="panel"><div class="panel-title">Generator</div>
-          <div class="field"><label class="field-label">Length: <span id="lengthValue">16</span></label>
+        <div class="panel"><div class="panel-title">${escapeHtml(t('passwords.generator'))}</div>
+          <div class="field"><label class="field-label">${escapeHtml(t('passwords.length', { value: 16 }))}</label>
             <input type="range" id="lengthSlider" min="4" max="64" value="16" style="width:100%;" /></div>
-          <label class="checkbox-row"><input type="checkbox" id="optLower" checked />Lowercase</label>
-          <label class="checkbox-row"><input type="checkbox" id="optUpper" checked />Uppercase</label>
-          <label class="checkbox-row"><input type="checkbox" id="optDigits" checked />Digits</label>
-          <label class="checkbox-row"><input type="checkbox" id="optSymbols" checked />Symbols</label>
-          <label class="checkbox-row"><input type="checkbox" id="optAmbiguous" />Exclude ambiguous (l,1,O,0)</label>
-          <button class="btn btn-primary" id="generateBtn" style="margin-top:6px;width:100%;justify-content:center;">Generate Password</button>
+          <label class="checkbox-row"><input type="checkbox" id="optLower" checked />${escapeHtml(t('passwords.lowercase'))}</label>
+          <label class="checkbox-row"><input type="checkbox" id="optUpper" checked />${escapeHtml(t('passwords.uppercase'))}</label>
+          <label class="checkbox-row"><input type="checkbox" id="optDigits" checked />${escapeHtml(t('passwords.digits'))}</label>
+          <label class="checkbox-row"><input type="checkbox" id="optSymbols" checked />${escapeHtml(t('passwords.symbols'))}</label>
+          <label class="checkbox-row"><input type="checkbox" id="optAmbiguous" />${escapeHtml(t('passwords.excludeAmbiguous'))}</label>
+          <button class="btn btn-primary" id="generateBtn" style="margin-top:6px;width:100%;justify-content:center;">${escapeHtml(t('passwords.generate'))}</button>
           <div id="generatedOut" style="margin-top:16px;display:none;">
             <div class="password-display" id="generatedPassword"></div>
-            <div style="display:flex;gap:8px;margin-top:8px;"><button class="btn btn-sm" id="copyBtn">Copy to Clipboard</button></div>
+            <div style="display:flex;gap:8px;margin-top:8px;"><button class="btn btn-sm" id="copyBtn">${escapeHtml(t('passwords.copy'))}</button></div>
             <div id="generatedStrength" style="margin-top:10px;"></div>
           </div>
         </div>
-        <div class="panel"><div class="panel-title">Strength Checker</div>
-          <div class="field"><label class="field-label">Enter a password to analyze</label>
+        <div class="panel"><div class="panel-title">${escapeHtml(t('passwords.strengthChecker'))}</div>
+          <div class="field"><label class="field-label">${escapeHtml(t('passwords.enterPassword'))}</label>
             <div style="position:relative;">
-              <input type="password" id="checkInput" placeholder="Type a password..." style="width:100%; padding-right:36px; box-sizing:border-box;" />
-              <button type="button" class="password-toggle-visibility" data-target="checkInput" title="Show password" style="position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:var(--text-dim); padding:4px; display:flex;">
+              <input type="password" id="checkInput" placeholder="${escapeHtml(t('passwords.typePassword'))}" style="width:100%; padding-right:36px; box-sizing:border-box;" />
+              <button type="button" class="password-toggle-visibility" data-target="checkInput" title="${escapeHtml(t('passwords.showPassword'))}" style="position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:var(--text-dim); padding:4px; display:flex;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
               </button>
             </div>
           </div>
           <div id="checkStrength"></div>
-          <div style="font-size:11px;color:var(--text-dim);margin-top:10px;">Strength is analyzed locally.</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:10px;">${escapeHtml(t('passwords.localAnalysis'))}</div>
         </div>
-        <div class="panel"><div class="panel-title">Password Leak Check</div>
-          <div class="field"><label class="field-label">Check against HIBP Pwned Passwords</label>
+        <div class="panel"><div class="panel-title">${escapeHtml(t('passwords.leakCheck'))}</div>
+          <div class="field"><label class="field-label">${escapeHtml(t('passwords.leakCheckDesc'))}</label>
             <div style="position:relative;">
-              <input type="password" id="leakPasswordInput" placeholder="Type a password to check" style="width:100%; padding-right:36px; box-sizing:border-box;" />
-              <button type="button" class="password-toggle-visibility" data-target="leakPasswordInput" title="Show password" style="position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:var(--text-dim); padding:4px; display:flex;">
+              <input type="password" id="leakPasswordInput" placeholder="${escapeHtml(t('passwords.typePasswordCheck'))}" style="width:100%; padding-right:36px; box-sizing:border-box;" />
+              <button type="button" class="password-toggle-visibility" data-target="leakPasswordInput" title="${escapeHtml(t('passwords.showPassword'))}" style="position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:var(--text-dim); padding:4px; display:flex;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
               </button>
             </div>
           </div>
-          <button class="btn btn-primary" id="checkPasswordLeak">Check Password</button>
+          <button class="btn btn-primary" id="checkPasswordLeak">${escapeHtml(t('passwords.checkPassword'))}</button>
           <div id="passwordLeakResult" style="margin-top:12px;"></div>
-          <div style="font-size:11px;color:var(--text-dim);margin-top:10px;">Uses HIBP k-anonymity: only the first 5 SHA-1 hash characters are sent. Disable in Settings for offline-only use.</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:10px;">${escapeHtml(t('passwords.hibpNote'))}</div>
         </div>
-        <div class="panel"><div class="panel-title">Email Breach Check</div>
-          <div class="field"><label class="field-label">Email address</label>
-            <input type="text" id="leakEmailInput" placeholder="name@example.com" /></div>
-          <button class="btn btn-primary" id="checkEmailLeak">Check Email</button>
+        <div class="panel"><div class="panel-title">${escapeHtml(t('passwords.emailBreachCheck'))}</div>
+          <div class="field"><label class="field-label">${escapeHtml(t('passwords.emailLabel'))}</label>
+            <input type="text" id="leakEmailInput" placeholder="${escapeHtml(t('passwords.emailPlaceholder'))}" /></div>
+          <button class="btn btn-primary" id="checkEmailLeak">${escapeHtml(t('passwords.checkEmail'))}</button>
           <div id="emailLeakResult" style="margin-top:12px;"></div>
-          <div style="font-size:11px;color:var(--text-dim);margin-top:10px;">Uses the XposedOrNot email breach API. Disable in Settings for offline-only use.</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:10px;">${escapeHtml(t('passwords.xposedNote'))}</div>
         </div>
       </div>`;
     this.wireGenerator(container);
@@ -60,13 +61,14 @@ window.Pages.passwords = {
   },
 
   wirePasswordVisibilityToggles(container) {
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     container.querySelectorAll('.password-toggle-visibility').forEach((btn) => {
       btn.addEventListener('click', () => {
         const input = container.querySelector(`#${btn.dataset.target}`);
         if (!input) return;
         const showing = input.type === 'text';
         input.type = showing ? 'password' : 'text';
-        btn.title = showing ? 'Show password' : 'Hide password';
+        btn.title = showing ? t('passwords.showPassword') : t('passwords.hidePassword');
         btn.innerHTML = showing
           ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
           : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.6 21.6 0 0 1 5.06-6.06M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a21.6 21.6 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
@@ -75,6 +77,7 @@ window.Pages.passwords = {
   },
 
   wireGenerator(container) {
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const slider = container.querySelector('#lengthSlider');
     slider.addEventListener('input', () => { container.querySelector('#lengthValue').textContent = slider.value; });
     container.querySelector('#generateBtn').addEventListener('click', async () => {
@@ -99,12 +102,13 @@ window.Pages.passwords = {
       const text = container.querySelector('#generatedPassword').textContent;
       navigator.clipboard.writeText(text);
       const btn = container.querySelector('#copyBtn');
-      btn.textContent = 'Copied!';
-      setTimeout(() => { btn.textContent = 'Copy to Clipboard'; }, 1200);
+      btn.textContent = t('passwords.copied');
+      setTimeout(() => { btn.textContent = t('passwords.copy'); }, 1200);
     });
   },
 
   wireChecker(container) {
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const input = container.querySelector('#checkInput');
     const out = container.querySelector('#checkStrength');
     let timer = null;
@@ -123,23 +127,24 @@ window.Pages.passwords = {
   },
 
   async wireLeakChecks(container) {
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const settings = await Api.getSettings();
     const externalLookups = settings.features.externalLookups;
 
-    const disabledHtml = '<div class="empty-state">External lookups are disabled. Enable them in&nbsp;<a href="#" class="goto-settings" style="color:var(--accent-primary);">Settings</a>.</div>';
+    const disabledHtml = `<div class="empty-state">${escapeHtml(t('passwords.externalDisabled'))}</div>`;
 
     container.querySelector('#checkPasswordLeak').addEventListener('click', async () => {
       const btn = container.querySelector('#checkPasswordLeak');
       const out = container.querySelector('#passwordLeakResult');
       const password = container.querySelector('#leakPasswordInput').value;
-      if (!password) { out.innerHTML = '<div class="empty-state">Enter a password first.</div>'; return; }
+      if (!password) { out.innerHTML = `<div class="empty-state">${escapeHtml(t('passwords.enterPasswordFirst'))}</div>`; return; }
       if (!externalLookups) { out.innerHTML = disabledHtml; return; }
-      setButtonLoading(btn, true, 'Checking...');
+      setButtonLoading(btn, true, t('passwords.checking'));
       try {
         const result = await window.api.invoke('hibp:password', password);
         out.innerHTML = result.found
-          ? `<div class="log-row"><span class="log-tag match">pwned</span><span class="log-path">This password appears ${result.count.toLocaleString()} time(s) in known breaches. Do not use it.</span></div>`
-          : '<div class="log-row"><span class="log-tag clean">clear</span><span class="log-path">This password was not found in HIBP Pwned Passwords.</span></div>';
+          ? `<div class="log-row"><span class="log-tag match">${escapeHtml(t('common.pwned'))}</span><span class="log-path">${escapeHtml(t('passwords.pwned', { count: result.count.toLocaleString() }))}</span></div>`
+          : `<div class="log-row"><span class="log-tag clean">${escapeHtml(t('common.clear'))}</span><span class="log-path">${escapeHtml(t('passwords.notPwned'))}</span></div>`;
       } catch (err) { showToolError(out, err); }
       finally { setButtonLoading(btn, false); }
     });
@@ -147,16 +152,16 @@ window.Pages.passwords = {
       const btn = container.querySelector('#checkEmailLeak');
       const out = container.querySelector('#emailLeakResult');
       const email = container.querySelector('#leakEmailInput').value.trim();
-      if (!email) { out.innerHTML = '<div class="empty-state">Enter an email first.</div>'; return; }
+      if (!email) { out.innerHTML = `<div class="empty-state">${escapeHtml(t('passwords.enterEmailFirst'))}</div>`; return; }
       if (!externalLookups) { out.innerHTML = disabledHtml; return; }
-      setButtonLoading(btn, true, 'Checking...');
+      setButtonLoading(btn, true, t('passwords.checking'));
       try {
         const result = await window.api.invoke('xon:email', email);
         if (!result.found) {
-          out.innerHTML = '<div class="log-row"><span class="log-tag clean">clear</span><span class="log-path">No breaches returned for this email.</span></div>';
+          out.innerHTML = `<div class="log-row"><span class="log-tag clean">${escapeHtml(t('common.clear'))}</span><span class="log-path">${escapeHtml(t('passwords.noBreaches'))}</span></div>`;
         } else {
-          out.innerHTML = `<div class="log-row"><span class="log-tag match">breached</span><span class="log-path">${result.breaches.length} breach(es) returned.</span></div>` +
-            result.breaches.map(b => `<div class="log-row"><span class="log-tag warn">breach</span><span class="log-path">${escapeHtml(typeof b === 'string' ? b : (b.Name || b.name || b.breach || b.breach_name || JSON.stringify(b)))}</span></div>`).join('');
+          out.innerHTML = `<div class="log-row"><span class="log-tag match">${escapeHtml(t('common.breached'))}</span><span class="log-path">${escapeHtml(t('passwords.breachesFound', { count: result.breaches.length }))}</span></div>` +
+            result.breaches.map(b => `<div class="log-row"><span class="log-tag warn">${escapeHtml(t('common.breach'))}</span><span class="log-path">${escapeHtml(typeof b === 'string' ? b : (b.Name || b.name || b.breach || b.breach_name || JSON.stringify(b)))}</span></div>`).join('');
         }
       } catch (err) { showToolError(out, err); }
       finally { setButtonLoading(btn, false); }
@@ -165,8 +170,41 @@ window.Pages.passwords = {
 };
 
 function renderStrengthMeter(el, strength, showIssues) {
+  const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
   const color = strength.label === 'Very Strong' || strength.label === 'Strong' ? 'var(--ok)' : strength.label === 'Moderate' ? 'var(--warn)' : 'var(--danger)';
-  const issuesHtml = (showIssues && strength.issues && strength.issues.length) ? `<ul class="issue-list">${strength.issues.map((i) => `<li>${escapeHtml(i)}</li>`).join('')}</ul>` : '';
-  const crackHtml = strength.crackTimeEstimate ? `<div style="font-size:11px; color:var(--text-dim); margin-top:6px;">Estimated time to crack: <strong>${escapeHtml(strength.crackTimeEstimate)}</strong></div>` : '';
-  el.innerHTML = `<div class="flex-between" style="font-size:12px;"><span style="color:${color};font-weight:600;">${strength.label}</span><span class="mono" style="color:var(--text-dim);">~${strength.entropyBits} bits entropy</span></div><div class="strength-meter-track"><div class="strength-meter-fill" style="width:${strength.score}%;background:${color};"></div></div>${crackHtml}${issuesHtml}`;
+  
+  // Translate strength issues
+  const translatedIssues = (strength.issues || []).map(issue => {
+    const issueMap = {
+      'No uppercase letters': 'passwords.strengthIssues.noUppercase',
+      'No lowercase letters': 'passwords.strengthIssues.noLowercase',
+      'No digits': 'passwords.strengthIssues.noDigits',
+      'No symbols': 'passwords.strengthIssues.noSymbols',
+      'Too short': 'passwords.strengthIssues.tooShort',
+      'Common pattern detected': 'passwords.strengthIssues.commonPattern',
+      'Repeated characters': 'passwords.strengthIssues.repeatedChars',
+      'Sequential characters': 'passwords.strengthIssues.sequentialChars'
+    };
+    return issueMap[issue] ? t(issueMap[issue]) : issue;
+  });
+  
+  const issuesHtml = (showIssues && translatedIssues.length) ? `<ul class="issue-list">${translatedIssues.map((i) => `<li>${escapeHtml(i)}</li>`).join('')}</ul>` : '';
+  
+  // Translate crack time
+  let crackTimeHtml = '';
+  if (strength.crackTimeEstimate) {
+    const crackTimeMap = {
+      'Instantly': 'passwords.crackTimeInstant',
+      'Instant': 'passwords.crackTimeInstant'
+    };
+    let timeKey = crackTimeMap[strength.crackTimeEstimate] || 'passwords.crackTime';
+    let timeVars = { time: strength.crackTimeEstimate };
+    if (crackTimeMap[strength.crackTimeEstimate]) {
+      timeVars = {};
+    }
+    const translatedTime = t(timeKey, timeVars);
+    crackTimeHtml = `<div style="font-size:11px; color:var(--text-dim); margin-top:6px;">${escapeHtml(t('passwords.crackTime', { time: translatedTime }))}</div>`;
+  }
+  
+  el.innerHTML = `<div class="flex-between" style="font-size:12px;"><span style="color:${color};font-weight:600;">${escapeHtml(strength.label)}</span><span class="mono" style="color:var(--text-dim);">~${strength.entropyBits} ${escapeHtml(t('common.bits'))} ${escapeHtml(t('common.entropy'))}</span></div><div class="strength-meter-track"><div class="strength-meter-fill" style="width:${strength.score}%;background:${color};"></div></div>${crackTimeHtml}${issuesHtml}`;
 }

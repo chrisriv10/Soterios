@@ -4,15 +4,11 @@ let unsubscribeUpdateStatus = null;
 window.Pages = window.Pages || {};
 window.Pages.settings = {
   async render(container) {
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const settings = await Api.getSettings();
     const appInfo = await Api.getAppInfo();
     let launchAtStartup = false;
     try {
-      // Assumes 'app:getLaunchAtStartup' reflects the real OS-level login
-      // item state (e.g. via Electron's app.getLoginItemSettings()), not
-      // just a saved preference -- so this stays accurate even if the user
-      // changed it outside the app. Falls back to the saved flag if that
-      // channel isn't wired up yet.
       launchAtStartup = await window.api.invoke('app:getLaunchAtStartup');
     } catch (_) {
       launchAtStartup = !!(settings.features && settings.features.launchAtStartup);
@@ -32,80 +28,81 @@ window.Pages.settings = {
     } catch (_) {
       localeOptions = '<option value="en" selected>English</option>';
     }
-    const t = (key, fallback) => {
-      if (window.I18n && typeof window.I18n.t === 'function') {
-        const translated = window.I18n.t(key);
-        if (translated && translated !== key) return translated;
-      }
-      return fallback || key;
-    };
     container.innerHTML = `
-      <div class="page-header"><h1 class="page-title">Settings</h1>
-        <div class="page-subtitle">Local app preferences and feature toggles</div></div>
+      <div class="page-header"><h1 class="page-title">${escapeHtml(t('nav.settings'))}</h1>
+        <div class="page-subtitle">${escapeHtml(t('settings.pageSubtitle'))}</div></div>
       <div class="dashboard-grid">
         <div class="card">
-          <div class="panel-title" style="margin-bottom:16px;">Feature Toggles</div>
+          <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.featureToggles'))}</div>
 
           <div class="toggle-row">
             <div>
-              <div class="toggle-label">Real-Time Protection</div>
-              <div class="toggle-desc">Monitor file system changes and alert on suspicious activity</div>
+              <div class="toggle-label">${escapeHtml(t('settings.rtp.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.rtp.desc'))}</div>
             </div>
             <label class="toggle" id="rtpToggleWrap"><input type="checkbox" id="rtpToggle" ${settings.features.realtimeProtection ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
 
           <div class="toggle-row">
             <div>
-              <div class="toggle-label">Folder Watch Scans</div>
-              <div class="toggle-desc">Automatically scan new/changed files in Downloads, Temp, and Startup folders</div>
+              <div class="toggle-label">${escapeHtml(t('settings.folderWatch.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.folderWatch.desc'))}</div>
             </div>
             <label class="toggle"><input type="checkbox" id="folderWatchToggle" ${settings.features.folderWatch !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
 
           <div class="toggle-row">
             <div>
-              <div class="toggle-label">Suspicious Network Alerts</div>
-              <div class="toggle-desc">Toast + audit alert when a connection hits a blocklisted IP</div>
+              <div class="toggle-label">${escapeHtml(t('settings.networkAlerts.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.networkAlerts.desc'))}</div>
             </div>
             <label class="toggle"><input type="checkbox" id="networkAlertsToggle" ${settings.features.networkAlerts !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
 
           <div class="toggle-row">
             <div>
-              <div class="toggle-label">Auto-Generate Reports</div>
-              <div class="toggle-desc">Automatically create a security report after each scan completes</div>
+              <div class="toggle-label">${escapeHtml(t('settings.networkTrafficHistory.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.networkTrafficHistory.desc'))}</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="networkTrafficHistoryToggle" ${settings.features.networkTrafficHistory !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+          </div>
+
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">${escapeHtml(t('settings.autoReports.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.autoReports.desc'))}</div>
             </div>
             <label class="toggle"><input type="checkbox" id="autoReportToggle" ${settings.features.autoReports ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
 
           <div class="toggle-row">
             <div>
-              <div class="toggle-label">Scan History</div>
-              <div class="toggle-desc">Keep a record of all past scan results</div>
+              <div class="toggle-label">${escapeHtml(t('settings.scanHistory.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.scanHistory.desc'))}</div>
             </div>
             <label class="toggle"><input type="checkbox" id="scanHistoryToggle" ${settings.features.scanHistory ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
 
           <div class="toggle-row">
             <div>
-              <div class="toggle-label">External Lookups</div>
-              <div class="toggle-desc">Allow breach checks using HIBP and XposedOrNot</div>
+              <div class="toggle-label">${escapeHtml(t('settings.externalLookups.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.externalLookups.desc'))}</div>
             </div>
             <label class="toggle"><input type="checkbox" id="externalLookupsToggle" ${settings.features.externalLookups ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
 
           <div class="toggle-row">
             <div>
-              <div class="toggle-label">Geolocation Heat Map</div>
-              <div class="toggle-desc">Resolve IP addresses to display a world map of active connections</div>
+              <div class="toggle-label">${escapeHtml(t('settings.geoLookup.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.geoLookup.desc'))}</div>
             </div>
             <label class="toggle"><input type="checkbox" id="geoLookupToggle" ${settings.features.geoLookup ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
 
           <div class="toggle-row">
             <div>
-              <div class="toggle-label">Network Perimeter Map</div>
-              <div class="toggle-desc">Show the live connection visualization on the Firewall page</div>
+              <div class="toggle-label">${escapeHtml(t('settings.networkPerimeterMap.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.networkPerimeterMap.desc'))}</div>
             </div>
             <label class="toggle"><input type="checkbox" id="networkPerimeterMapToggle" ${settings.features.networkPerimeterMap !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
@@ -113,66 +110,66 @@ window.Pages.settings = {
         </div>
 
         <div class="card">
-          <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.appearance', 'Appearance'))}</div>
+          <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.appearance'))}</div>
           <div class="field">
-            <label class="field-label">Color Scheme</label>
+            <label class="field-label">${escapeHtml(t('settings.colorScheme'))}</label>
             <select id="themeSelect" style="width:100%;">
-              <option value="dark" ${settings.ui?.theme === 'dark' ? 'selected' : ''}>Dark</option>
-              <option value="light" ${settings.ui?.theme === 'light' ? 'selected' : ''}>Light</option>
-              <option value="ocean" ${settings.ui?.theme === 'ocean' ? 'selected' : ''}>Ocean</option>
-              <option value="emerald" ${settings.ui?.theme === 'emerald' ? 'selected' : ''}>Emerald</option>
-              <option value="sunset" ${settings.ui?.theme === 'sunset' ? 'selected' : ''}>Sunset</option>
-              <option value="violet" ${settings.ui?.theme === 'violet' ? 'selected' : ''}>Violet</option>
-              <option value="crimson" ${settings.ui?.theme === 'crimson' ? 'selected' : ''}>Crimson</option>
-              <option value="terminal" ${settings.ui?.theme === 'terminal' ? 'selected' : ''}>Terminal</option>
-              <option value="midnight" ${settings.ui?.theme === 'midnight' ? 'selected' : ''}>Midnight</option>
-              <option value="bumblebee" ${settings.ui?.theme === 'bumblebee' ? 'selected' : ''}>Bumblebee</option>
-              <option value="monochrome" ${settings.ui?.theme === 'monochrome' ? 'selected' : ''}>Monochrome</option>
-              <option value="rose" ${settings.ui?.theme === 'rose' ? 'selected' : ''}>Rose</option>
-              <option value='aurora' ${settings.ui?.theme === 'aurora' ? 'selected' : ''}>Aurora</option>
+              <option value="dark" ${settings.ui?.theme === 'dark' ? 'selected' : ''}>${escapeHtml(t('settings.theme.dark'))}</option>
+              <option value="light" ${settings.ui?.theme === 'light' ? 'selected' : ''}>${escapeHtml(t('settings.theme.light'))}</option>
+              <option value="ocean" ${settings.ui?.theme === 'ocean' ? 'selected' : ''}>${escapeHtml(t('settings.theme.ocean'))}</option>
+              <option value="emerald" ${settings.ui?.theme === 'emerald' ? 'selected' : ''}>${escapeHtml(t('settings.theme.emerald'))}</option>
+              <option value="sunset" ${settings.ui?.theme === 'sunset' ? 'selected' : ''}>${escapeHtml(t('settings.theme.sunset'))}</option>
+              <option value="violet" ${settings.ui?.theme === 'violet' ? 'selected' : ''}>${escapeHtml(t('settings.theme.violet'))}</option>
+              <option value="crimson" ${settings.ui?.theme === 'crimson' ? 'selected' : ''}>${escapeHtml(t('settings.theme.crimson'))}</option>
+              <option value="terminal" ${settings.ui?.theme === 'terminal' ? 'selected' : ''}>${escapeHtml(t('settings.theme.terminal'))}</option
+              <option value="midnight" ${settings.ui?.theme === 'midnight' ? 'selected' : ''}>${escapeHtml(t('settings.theme.midnight'))}</option>
+              <option value="bumblebee" ${settings.ui?.theme === 'bumblebee' ? 'selected' : ''}>${escapeHtml(t('settings.theme.bumblebee'))}</option>
+              <option value="monochrome" ${settings.ui?.theme === 'monochrome' ? 'selected' : ''}>${escapeHtml(t('settings.theme.monochrome'))}</option>
+              <option value="rose" ${settings.ui?.theme === 'rose' ? 'selected' : ''}>${escapeHtml(t('settings.theme.rose'))}</option>
+              <option value='aurora' ${settings.ui?.theme === 'aurora' ? 'selected' : ''}>${escapeHtml(t('settings.theme.aurora'))}</option>
             </select>
           </div>
-          <div class="toggle-desc" style="margin-bottom:12px;">Choose a palette for the full app experience.</div>
-          <button class="btn btn-primary" id="saveTheme" style="margin-top:4px;">Apply Theme</button>
+          <div class="toggle-desc" style="margin-bottom:12px;">${escapeHtml(t('settings.themeDesc'))}</div>
+          <button class="btn btn-primary" id="saveTheme" style="margin-top:4px;">${escapeHtml(t('settings.applyTheme'))}</button>
           <div id="themeStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
           <div class="field" style="margin-top:16px;">
-            <label class="field-label">${escapeHtml(t('settings.language', 'Language'))}</label>
+            <label class="field-label">${escapeHtml(t('settings.language'))}</label>
             <select id="languageSelect" style="width:100%;">
               ${localeOptions}
             </select>
           </div>
-          <div class="toggle-desc" style="margin-bottom:12px;">${escapeHtml(t('settings.languageHint', 'Choose the UI language for supported pages.'))}</div>
-          <button class="btn btn-primary" id="saveLanguage" style="margin-top:4px;">${escapeHtml(t('settings.applyLanguage', 'Apply Language'))}</button>
+          <div class="toggle-desc" style="margin-bottom:12px;">${escapeHtml(t('settings.languageHint'))}</div>
+          <button class="btn btn-primary" id="saveLanguage" style="margin-top:4px;">${escapeHtml(t('settings.applyLanguage'))}</button>
           <div id="languageStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
         </div>
 
         <div class="card">
-          <div class="panel-title" style="margin-bottom:16px;">Scanner Defaults</div>
+          <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.scannerDefaults'))}</div>
 
-          <div class="field"><label class="field-label">Default scan path</label><input type="text" id="defaultPath" value="${escapeHtml(settings.scanner.defaultPath || '')}" placeholder="e.g. C:\\Users\\..." /></div>
+          <div class="field"><label class="field-label">${escapeHtml(t('settings.defaultScanPath'))}</label><input type="text" id="defaultPath" value="${escapeHtml(settings.scanner.defaultPath || '')}" placeholder="e.g. C:\\Users\\..." /></div>
           <div class="grid grid-2">
-            <div class="field"><label class="field-label">Max directory depth</label><input type="number" id="maxDepthSetting" min="1" max="32" value="${escapeHtml(settings.scanner.maxDepth)}" /></div>
-            <div class="field"><label class="field-label">Max file size (MB)</label><input type="number" id="maxFileSizeSetting" min="1" max="4096" value="${escapeHtml(settings.scanner.maxFileSizeMB)}" /></div>
+            <div class="field"><label class="field-label">${escapeHtml(t('settings.maxDepth'))}</label><input type="number" id="maxDepthSetting" min="1" max="32" value="${escapeHtml(settings.scanner.maxDepth)}" /></div>
+            <div class="field"><label class="field-label">${escapeHtml(t('settings.maxFileSize'))}</label><input type="number" id="maxFileSizeSetting" min="1" max="4096" value="${escapeHtml(settings.scanner.maxFileSizeMB)}" /></div>
           </div>
-          <label class="checkbox-row"><input type="checkbox" id="includeCleanSetting" ${settings.scanner.includeCleanResults ? 'checked' : ''} />Include clean files in results</label>
-          <div class="field"><label class="field-label">Excluded directories (comma-separated)</label><input type="text" id="excludedDirs" value="${escapeHtml((settings.scanner.excludedDirNames || []).join(', '))}" /></div>
-          <button class="btn btn-primary" id="saveSettings" style="margin-top:12px;">Save Scanner Settings</button>
+          <label class="checkbox-row"><input type="checkbox" id="includeCleanSetting" ${settings.scanner.includeCleanResults ? 'checked' : ''} />${escapeHtml(t('settings.includeClean'))}</label>
+          <div class="field"><label class="field-label">${escapeHtml(t('settings.excludedDirs'))}</label><input type="text" id="excludedDirs" value="${escapeHtml((settings.scanner.excludedDirNames || []).join(', '))}" /></div>
+          <button class="btn btn-primary" id="saveSettings" style="margin-top:12px;">${escapeHtml(t('settings.saveScannerSettings'))}</button>
           <div id="settingsStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
         </div>
 
         <div class="card">
-          <div class="panel-title" style="margin-bottom:16px;">Notifications</div>
+          <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.notifications'))}</div>
           <div class="toggle-row">
             <div>
-              <div class="toggle-label">Enable Notifications</div>
-              <div class="toggle-desc">Show desktop notifications for scan results, threats, and completed reports</div>
+              <div class="toggle-label">${escapeHtml(t('settings.enableNotifications.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.enableNotifications.desc'))}</div>
             </div>
             <label class="toggle"><input type="checkbox" id="notificationsToggle" ${settings.features.notificationsEnabled !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
           <div class="toggle-row" style="margin-top:8px;">
             <div>
-              <div class="toggle-label">Scan Progress Notifications</div>
-              <div class="toggle-desc">Show desktop notifications as a scan progresses</div>
+              <div class="toggle-label">${escapeHtml(t('settings.scanNotifications.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.scanNotifications.desc'))}</div>
             </div>
             <label class="toggle"><input type="checkbox" id="scanNotificationsToggle" ${settings.features.scanNotifications !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
@@ -180,11 +177,11 @@ window.Pages.settings = {
         </div>
 
         <div class="card">
-          <div class="panel-title" style="margin-bottom:16px;">Startup</div>
+          <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.startup'))}</div>
           <div class="toggle-row">
             <div>
-              <div class="toggle-label">Launch at System Startup</div>
-              <div class="toggle-desc">Automatically start Soterios in the background when you log in to Windows</div>
+              <div class="toggle-label">${escapeHtml(t('settings.launchAtStartup.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.launchAtStartup.desc'))}</div>
             </div>
             <label class="toggle"><input type="checkbox" id="launchAtStartupToggle" ${launchAtStartup ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
@@ -192,67 +189,67 @@ window.Pages.settings = {
         </div>
 
         <div class="card">
-          <div class="panel-title" style="margin-bottom:16px;">Scheduled Maintenance</div>
+          <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.scheduledMaintenance'))}</div>
           <div class="toggle-row">
             <div>
-              <div class="toggle-label">Enable Scheduled Maintenance</div>
-              <div class="toggle-desc">Run safe cleanup and report tools on a recurring schedule</div>
+              <div class="toggle-label">${escapeHtml(t('settings.enableMaintenance.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.enableMaintenance.desc'))}</div>
             </div>
             <label class="toggle"><input type="checkbox" id="maintenanceEnabledToggle" /><span class="toggle-slider"></span></label>
           </div>
           <div class="field" style="margin-top:12px;">
-            <label class="field-label">Schedule</label>
+            <label class="field-label">${escapeHtml(t('settings.schedule'))}</label>
             <select id="maintenancePreset" class="field-input">
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="idle">When idle (app running)</option>
-              <option value="custom">Custom interval (hours)</option>
+              <option value="daily">${escapeHtml(t('settings.daily'))}</option>
+              <option value="weekly">${escapeHtml(t('settings.weekly'))}</option>
+              <option value="idle">${escapeHtml(t('settings.idle'))}</option>
+              <option value="custom">${escapeHtml(t('settings.custom'))}</option>
             </select>
           </div>
           <div class="field" id="maintenanceCustomIntervalWrap" style="margin-top:12px; display:none;">
-            <label class="field-label">Interval (hours)</label>
+            <label class="field-label">${escapeHtml(t('settings.intervalHours'))}</label>
             <input type="number" id="maintenanceInterval" min="24" max="720" value="168" />
           </div>
           <div class="field" style="margin-top:12px;">
-            <label class="field-label">Scripts to run</label>
-            <div id="maintenanceScriptList" class="page-subtitle" style="font-size:0.85rem;">Loading scripts\u2026</div>
+            <label class="field-label">${escapeHtml(t('settings.scriptsToRun'))}</label>
+            <div id="maintenanceScriptList" class="page-subtitle" style="font-size:0.85rem;">${escapeHtml(t('settings.loadingScripts'))}</div>
           </div>
           <div class="toggle-row" style="margin-top:8px;">
             <div>
-              <div class="toggle-label">Notify on completion</div>
-              <div class="toggle-desc">Show a toast when scheduled maintenance finishes</div>
+              <div class="toggle-label">${escapeHtml(t('settings.notifyOnComplete.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.notifyOnComplete.desc'))}</div>
             </div>
             <label class="toggle"><input type="checkbox" id="maintenanceNotifyToggle" checked /><span class="toggle-slider"></span></label>
           </div>
-          <button class="btn btn-primary" id="saveMaintenance" style="margin-top:12px;">Save Maintenance Schedule</button>
-          <button class="btn btn-secondary" id="runMaintenanceNow" style="margin-top:12px; margin-left:8px;">Run Now</button>
+          <button class="btn btn-primary" id="saveMaintenance" style="margin-top:12px;">${escapeHtml(t('settings.saveMaintenance'))}</button>
+          <button class="btn btn-secondary" id="runMaintenanceNow" style="margin-top:12px; margin-left:8px;">${escapeHtml(t('settings.runNow'))}</button>
           <div id="maintenanceStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
         </div>
 
         <div class="card">
-          <div class="panel-title" style="margin-bottom:16px;">Updates</div>
+          <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.updates'))}</div>
           <div class="toggle-row">
             <div>
-              <div class="toggle-label">Automatic Updates</div>
-              <div class="toggle-desc">Check for updates in packaged builds and download in the background</div>
+              <div class="toggle-label">${escapeHtml(t('settings.autoUpdates.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.autoUpdates.desc'))}</div>
             </div>
             <label class="toggle"><input type="checkbox" id="autoUpdatesToggle" ${settings.features.autoUpdates !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
-          <div id="updateStatusText" style="margin-top:12px; font-size:0.85rem; color:var(--text-muted);">Checking update status...</div>
+          <div id="updateStatusText" style="margin-top:12px; font-size:0.85rem; color:var(--text-muted);">${escapeHtml(t('settings.checkingUpdateStatus'))}</div>
           <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
-            <button class="btn btn-primary" id="checkUpdatesBtn">Check for Updates</button>
-            <button class="btn btn-secondary" id="installUpdateBtn" disabled>Restart & Install</button>
+            <button class="btn btn-primary" id="checkUpdatesBtn">${escapeHtml(t('settings.checkUpdates'))}</button>
+            <button class="btn btn-secondary" id="installUpdateBtn" disabled>${escapeHtml(t('settings.installUpdate'))}</button>
           </div>
         </div>
 
         <div class="card">
-          <div class="panel-title" style="margin-bottom:16px;">About</div>
+          <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.about'))}</div>
           <div style="font-size:0.9rem; line-height:1.8;">
             <div><strong>Soterios</strong> v${escapeHtml(appInfo.version || '1.2.1')}</div>
-            <div style="color:var(--text-muted); margin-top:8px;">Local-first security and maintenance platform.</div>
+            <div style="color:var(--text-muted); margin-top:8px;">${escapeHtml(t('settings.aboutDesc'))}</div>
             <div style="margin-top:12px; font-size:0.8rem;">
-              <div>ClamAV engine at <code style="color:var(--accent-primary);">assets/clamav/</code></div>
-              <div>Quarantine path: <code style="color:var(--accent-primary);">~/.soterios-quarantine</code></div>
+              <div>${escapeHtml(t('settings.clamavPath'))}</div>
+              <div>${escapeHtml(t('settings.quarantinePath'))}</div>
             </div>
           </div>
         </div>
@@ -265,7 +262,7 @@ window.Pages.settings = {
         Api.applyTheme(theme);
         await Api.updateSettings({ ui: { theme } });
         savedTheme = theme;
-        status.textContent = `Theme updated to ${theme.charAt(0).toUpperCase() + theme.slice(1)}.`;
+        status.textContent = t('settings.themeApplied', { theme: theme.charAt(0).toUpperCase() + theme.slice(1) });
       } catch (err) {
         status.textContent = err.message || String(err);
       }
@@ -275,20 +272,18 @@ window.Pages.settings = {
       const theme = event.target.value;
       Api.applyTheme(theme);
       const status = container.querySelector('#themeStatus');
-      status.textContent = 'Preview updated. Click Apply Theme to save it.';
+      status.textContent = t('settings.themePreview');
     });
 
     container.querySelector('#saveLanguage').addEventListener('click', async () => {
       const language = container.querySelector('#languageSelect').value;
       const status = container.querySelector('#languageStatus');
       try {
+        await window.I18n.setLocale(language);
         await Api.updateSettings({ ui: { language } });
-        status.textContent = window.I18n
-          ? window.I18n.t('settings.languageUpdated')
-          : 'Language updated.';
-        const currentRoute = window.AppRouter && window.AppRouter.current();
-        if (window.AppRouter && (currentRoute === 'tools' || currentRoute === 'settings')) {
-          window.AppRouter.navigate(currentRoute);
+        // Re-render the current page so template-literal text updates to the new locale
+        if (window.AppRouter && typeof window.AppRouter.navigate === 'function') {
+          window.AppRouter.navigate(window.AppRouter.current() || 'settings');
         }
       } catch (err) {
         status.textContent = err.message || String(err);
@@ -298,7 +293,7 @@ window.Pages.settings = {
     container.querySelector('#saveSettings').addEventListener('click', async () => {
       const btn = container.querySelector('#saveSettings');
       const status = container.querySelector('#settingsStatus');
-      setButtonLoading(btn, true, 'Saving\u2026');
+      setButtonLoading(btn, true, t('common.saving'));
       try {
         await Api.updateSettings({
           scanner: {
@@ -309,7 +304,7 @@ window.Pages.settings = {
             excludedDirNames: container.querySelector('#excludedDirs').value.split(',').map(i => i.trim()).filter(Boolean)
           }
         });
-        status.textContent = 'Settings saved.';
+        status.textContent = t('settings.settingsSaved');
       } catch (err) { status.textContent = err.message || String(err); }
       finally { setButtonLoading(btn, false); }
     });
@@ -320,7 +315,7 @@ window.Pages.settings = {
       input.disabled = true;
       try {
         await Api.updateSettings({ features: { [key]: value } });
-        statusEl.textContent = 'Feature toggle saved.';
+        statusEl.textContent = t('settings.featureSaved');
       } catch (err) {
         input.checked = !value;
         statusEl.textContent = err.message || String(err);
@@ -332,6 +327,7 @@ window.Pages.settings = {
     container.querySelector('#rtpToggle').addEventListener('change', (event) => saveFeature('realtimeProtection', event.target.checked, event.target));
     container.querySelector('#folderWatchToggle').addEventListener('change', (event) => saveFeature('folderWatch', event.target.checked, event.target));
     container.querySelector('#networkAlertsToggle').addEventListener('change', (event) => saveFeature('networkAlerts', event.target.checked, event.target));
+    container.querySelector('#networkTrafficHistoryToggle').addEventListener('change', (event) => saveFeature('networkTrafficHistory', event.target.checked, event.target));
     container.querySelector('#autoReportToggle').addEventListener('change', (event) => saveFeature('autoReports', event.target.checked, event.target));
     container.querySelector('#scanHistoryToggle').addEventListener('change', (event) => saveFeature('scanHistory', event.target.checked, event.target));
     container.querySelector('#externalLookupsToggle').addEventListener('change', (event) => saveFeature('externalLookups', event.target.checked, event.target));
@@ -351,7 +347,7 @@ window.Pages.settings = {
             await Api.updateSettings({ features: { scanNotifications: false } });
           }
         }
-        statusEl.textContent = 'Feature toggle saved.';
+        statusEl.textContent = t('settings.featureSaved');
       } catch (err) {
         event.target.checked = !checked;
         statusEl.textContent = err.message || String(err);
@@ -368,17 +364,13 @@ window.Pages.settings = {
       input.disabled = true;
       status.textContent = '';
       try {
-        // Assumes 'app:setLaunchAtStartup' actually flips the OS-level login
-        // item (e.g. via Electron's app.setLoginItemSettings) and returns
-        // the resulting boolean -- not just a saved preference, since a
-        // saved-only flag wouldn't make Windows launch the app at all.
         const result = await window.api.invoke('app:setLaunchAtStartup', checked);
         await Api.updateSettings({ features: { launchAtStartup: !!result } });
         input.checked = !!result;
-        status.textContent = result ? 'Soterios will launch at startup.' : 'Startup launch disabled.';
+        status.textContent = result ? t('settings.startupEnabled') : t('settings.startupDisabled');
       } catch (err) {
         input.checked = !checked;
-        status.textContent = err.message || 'Unable to update startup setting.';
+        status.textContent = err.message || t('settings.startupError');
       } finally {
         input.disabled = false;
       }
@@ -408,7 +400,7 @@ window.Pages.settings = {
         </label>
       `).join('');
     } else {
-      scriptListEl.textContent = 'Maintenance scripts unavailable.';
+      scriptListEl.textContent = t('settings.maintenanceUnavailable');
     }
 
     const presetEl = container.querySelector('#maintenancePreset');
@@ -425,7 +417,7 @@ window.Pages.settings = {
       container.querySelector('#maintenanceNotifyToggle').checked = maintenanceConfig.notifyOnComplete !== false;
       syncPresetUi(presetEl.value);
       if (maintenanceConfig.lastRun) {
-        container.querySelector('#maintenanceStatus').textContent = `Last run: ${new Date(maintenanceConfig.lastRun).toLocaleString()}`;
+        container.querySelector('#maintenanceStatus').textContent = t('settings.lastRun', { when: new Date(maintenanceConfig.lastRun).toLocaleString() });
       }
     } else {
       syncPresetUi(presetEl.value);
@@ -436,7 +428,7 @@ window.Pages.settings = {
     container.querySelector('#saveMaintenance').addEventListener('click', async () => {
       const status = container.querySelector('#maintenanceStatus');
       const btn = container.querySelector('#saveMaintenance');
-      setButtonLoading(btn, true, 'Saving\u2026');
+      setButtonLoading(btn, true, t('common.saving'));
       try {
         const scriptIds = Array.from(container.querySelectorAll('.maintenance-script-checkbox:checked')).map((el) => el.value);
         const response = await window.api.invoke('maintenance:set', {
@@ -446,17 +438,17 @@ window.Pages.settings = {
           scriptIds,
           notifyOnComplete: container.querySelector('#maintenanceNotifyToggle').checked
         });
-        if (!response || !response.ok) throw new Error(response?.error || 'Unable to save maintenance schedule.');
+        if (!response || !response.ok) throw new Error(response?.error || t('settings.saveMaintenanceError'));
         const saved = response.data;
         const presetLabel = {
-          daily: 'daily',
-          weekly: 'weekly',
-          idle: 'when idle',
-          custom: `every ${saved.intervalHours} hour(s)`
-        }[saved.schedulePreset] || `every ${saved.intervalHours} hour(s)`;
+          daily: t('settings.daily'),
+          weekly: t('settings.weekly'),
+          idle: t('settings.idle'),
+          custom: t('settings.customInterval', { hours: saved.intervalHours })
+        }[saved.schedulePreset] || t('settings.customInterval', { hours: saved.intervalHours });
         status.textContent = saved.enabled
-          ? `Maintenance enabled (${presetLabel}, ${saved.scriptIds.length} script(s)).`
-          : 'Scheduled maintenance disabled.';
+          ? t('settings.maintenanceEnabled', { preset: presetLabel, count: saved.scriptIds.length })
+          : t('settings.maintenanceDisabled');
       } catch (err) {
         status.textContent = err.message || String(err);
       } finally {
@@ -467,17 +459,17 @@ window.Pages.settings = {
     container.querySelector('#runMaintenanceNow').addEventListener('click', async () => {
       const status = container.querySelector('#maintenanceStatus');
       const btn = container.querySelector('#runMaintenanceNow');
-      setButtonLoading(btn, true, 'Running\u2026');
+      setButtonLoading(btn, true, t('common.running'));
       try {
         const response = await window.api.invoke('maintenance:runNow');
-        if (!response || !response.ok) throw new Error(response?.error || 'Maintenance run failed.');
+        if (!response || !response.ok) throw new Error(response?.error || t('settings.runFailed'));
         const result = response.data;
         if (result.skipped) {
-          status.textContent = `Maintenance skipped: ${result.reason || 'unknown'}.`;
+          status.textContent = t('settings.maintenanceSkipped', { reason: result.reason || 'unknown' });
         } else {
           const okCount = (result.results || []).filter((row) => row.ok).length;
           const total = (result.results || []).length;
-          status.textContent = `Maintenance completed (${okCount}/${total} tasks OK).`;
+          status.textContent = t('settings.maintenanceCompleted', { ok: okCount, total });
         }
       } catch (err) {
         status.textContent = err.message || String(err);
@@ -492,10 +484,10 @@ window.Pages.settings = {
     async function refreshUpdateStatus() {
       try {
         const status = await window.api.invoke('update:status');
-        updateStatusEl.textContent = status.message || status.status || 'Update status unavailable.';
+        updateStatusEl.textContent = status.message || status.status || t('settings.updateUnavailable');
         installUpdateBtn.disabled = status.status !== 'ready';
       } catch (err) {
-        updateStatusEl.textContent = err.message || 'Unable to read update status.';
+        updateStatusEl.textContent = err.message || t('settings.updateReadError');
         installUpdateBtn.disabled = true;
       }
     }
@@ -511,7 +503,7 @@ window.Pages.settings = {
 
     container.querySelector('#checkUpdatesBtn').addEventListener('click', async () => {
       const btn = container.querySelector('#checkUpdatesBtn');
-      setButtonLoading(btn, true, 'Checking\u2026');
+      setButtonLoading(btn, true, t('settings.checking'));
       try {
         await window.api.invoke('update:check');
         await refreshUpdateStatus();

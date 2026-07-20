@@ -2,6 +2,7 @@ window.Pages = window.Pages || {};
 window.Pages.tools = {
   _startupItems: [],
   _uninstallerApps: [],
+  _selectedShredFiles: [],
   allowedScripts: [
     'clear-temp-files',
     'large-files-report',
@@ -9,65 +10,177 @@ window.Pages.tools = {
     'browser-cache-report',
     'disk-space-report',
     'windows-services-report',
-    'uninstaller-report'
+    'uninstaller-report',
+    'duplicate-finder',
+    'file-shredder'
   ],
 
-  t(key, fallback) {
-    if (window.I18n && typeof window.I18n.t === 'function') {
-      const translated = window.I18n.t(key);
-      if (translated && translated !== key) return translated;
+  toolCategories: [
+    {
+      id: 'cleanup',
+      labelKey: 'tools.category.cleanup',
+      icon: 'archive',
+      scripts: ['clear-temp-files', 'large-files-report', 'browser-cache-report']
+    },
+    {
+      id: 'diagnostics',
+      labelKey: 'tools.category.diagnostics',
+      icon: 'activity',
+      scripts: ['disk-space-report', 'windows-services-report', 'duplicate-finder']
+    },
+    {
+      id: 'management',
+      labelKey: 'tools.category.management',
+      icon: 'settings',
+      scripts: ['list-startup-items', 'uninstaller-report', 'file-shredder']
     }
-    return fallback || key;
+  ],
+
+  t(key, vars) {
+    return window.I18n?.t(key, vars) ?? key;
   },
 
   render(container) {
+    this._selectedShredFiles = [];
     container.innerHTML = `
       <div class="page-header">
-        <h1 class="page-title">${escapeHtml(this.t('tools.title', 'Tools & Maintenance'))}</h1>
-        <div class="page-subtitle">${escapeHtml(this.t('tools.subtitle', 'Run focused maintenance checks.'))}</div>
+        <h1 class="page-title">${escapeHtml(this.t('tools.title'))}</h1>
+        <div class="page-subtitle">${escapeHtml(this.t('tools.subtitle'))}</div>
       </div>
-      <div id="scriptList" class="dashboard-grid compact"></div>
-      <div class="panel" style="padding:0; display:flex; flex-direction:column; margin-top:24px; max-height:calc(100vh - 220px);">
-        <div style="padding:16px; background:var(--bg-surface-hover); border-bottom:1px solid var(--glass-border); font-weight:600; display:flex; justify-content:space-between; align-items:center;">
-          <span>${escapeHtml(this.t('tools.output', 'Output'))}</span>
-          <button class="btn btn-sm" id="clearOutputBtn" style="display:none;">${escapeHtml(this.t('tools.clear', 'Clear'))}</button>
+      <div class="tools-page" id="toolsPage">
+        <div class="tools-column" id="toolsColumn">
+          ${this.toolCategories.map(cat => this.renderCategory(cat)).join('')}
         </div>
-        <div class="log-surface" id="toolOutput" style="padding:16px; min-height:160px; overflow:auto; flex:1;"><div class="empty-state"></div></div>
+        <aside class="output-panel" id="outputPanel">
+          <div class="output-header">
+            <span>${escapeHtml(this.t('tools.output'))}</span>
+            <button class="btn btn-sm btn-ghost" id="clearOutputBtn" style="display:none;">${escapeHtml(this.t('tools.clear'))}</button>
+          </div>
+          <div class="output-body" id="toolOutput">
+            <div class="empty-state">${escapeHtml(this.t('tools.noOutput'))}</div>
+          </div>
+          <div class="output-actions">
+            <div class="output-status" id="outputStatus">${escapeHtml(this.t('tools.ready'))}</div>
+            <button class="btn btn-sm btn-ghost" id="exportLogBtn" style="display:none;">${escapeHtml(this.t('tools.export'))}</button>
+          </div>
+        </aside>
       </div>`;
     this.load(container);
   },
 
+  renderCategory(cat) {
+    const scripts = cat.scripts.map(id => this.allowedScripts.includes(id) ? id : null).filter(Boolean);
+    return `
+      <section class="tool-section" data-category="${cat.id}">
+        <header class="tool-section-header">
+          <span class="tool-section-icon">${iconFor(cat.icon)}</span>
+          ${escapeHtml(this.t(cat.labelKey))}
+        </header>
+        <div class="tool-list" id="toolList-${cat.id}"></div>
+      </section>`;
+  },
+
   async load(container) {
-    const scriptList = container.querySelector('#scriptList');
     container.querySelector('#clearOutputBtn').addEventListener('click', () => {
       container.querySelector('#toolOutput').innerHTML = '<div class="empty-state">Cleared.</div>';
       container.querySelector('#clearOutputBtn').style.display = 'none';
+      container.querySelector('#exportLogBtn').style.display = 'none';
+    });
+
+    container.querySelector('#exportLogBtn').addEventListener('click', () => {
+      const output = container.querySelector('#toolOutput');
+      const text = output.innerText || output.textContent || '';
+      const blob = new Blob([text], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `soterios-tools-log-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
     });
 
     try {
       const scripts = (await Api.runTool('list-scripts', {}))
         .filter((script) => this.allowedScripts.includes(script.id))
         .sort((a, b) => this.allowedScripts.indexOf(a.id) - this.allowedScripts.indexOf(b.id));
-      scriptList.innerHTML = scripts.map((s) => `
-        <div class="card compact" style="display:flex; flex-direction:column; gap:10px;">
-          <div style="display:flex; align-items:center; gap:12px;">
-            <div class="status-icon info" style="width:38px;height:38px;">${iconFor(this.iconForScript(s.id))}</div>
-            <div style="font-weight:600;">${escapeHtml(s.name)}</div>
-          </div>
-          <div class="page-subtitle" style="font-size:0.85rem;">${escapeHtml(s.description)}</div>
-          ${s.id === 'clear-temp-files' ? `
-          <label class="page-subtitle" style="font-size:0.8rem; display:flex; align-items:center; gap:8px;">
-            Delete files older than
-            <input type="number" min="0" max="365" value="7" id="tempAgeDaysInput" style="width:60px;" />
-            day(s)
-          </label>` : ''}
-          <div class="history-meta" data-complete-for="${escapeHtml(s.id)}">${escapeHtml(this.t('tools.notRunYet', 'Not run yet.'))}</div>
-          <button class="btn btn-primary btn-sm" data-script-id="${escapeHtml(s.id)}">${escapeHtml(this.t('tools.run', 'Run'))}</button>
-        </div>`).join('');
-      scriptList.querySelectorAll('[data-script-id]').forEach((btn) => btn.addEventListener('click', () => this.runScript(container, btn)));
+
+      const scriptMap = Object.fromEntries(scripts.map(s => [s.id, s]));
+
+      this.toolCategories.forEach(cat => {
+        const listEl = container.querySelector(`#toolList-${cat.id}`);
+        const catScripts = cat.scripts.map(id => scriptMap[id]).filter(Boolean);
+        listEl.innerHTML = catScripts.map(s => this.renderToolRow(s)).join('');
+      });
+
+      container.querySelectorAll('.tool-action .btn[data-script-id]').forEach((btn) =>
+        btn.addEventListener('click', (e) => { e.stopPropagation(); this.runScript(container, btn); })
+      );
+
+      const selectFilesBtn = container.querySelector('#selectFilesToShredBtn');
+      if (selectFilesBtn) {
+        selectFilesBtn.addEventListener('click', async () => {
+          try {
+            const files = await Api.pickFiles();
+            if (files && files.length > 0) {
+              this._selectedShredFiles = files;
+              const listEl = container.querySelector('#selectedFilesList');
+              const basenames = files.map(f => f.split(/[\\/]/).pop());
+              listEl.textContent = `${files.length} file(s) selected: ${basenames.join(', ')}`;
+            }
+          } catch (err) {
+            console.error('File picker error:', err);
+          }
+        });
+      }
     } catch (err) {
-      showToolError(scriptList, err);
+      showToolError(container.querySelector('#toolsColumn'), err);
     }
+  },
+
+  renderToolRow(s) {
+    const hasInput = s.id === 'clear-temp-files' || s.id === 'file-shredder';
+    const inputHtml = s.id === 'clear-temp-files' ? `
+      <div class="tool-input-inline">
+        <label style="display:flex; align-items:center; gap:8px; font-size:0.8rem; color:var(--text-muted); cursor:pointer;">
+          ${escapeHtml(this.t('tools.deleteOlderThan'))}
+          <input type="number" min="0" max="365" value="7" id="tempAgeDaysInput" class="temp-age-input" style="width:56px;" />
+          ${escapeHtml(this.t('tools.days'))}
+        </label>
+      </div>` : s.id === 'file-shredder' ? `
+      <div class="tool-input-inline">
+        <button class="btn btn-sm" id="selectFilesToShredBtn" style="flex:1;">${escapeHtml(this.t('tools.selectFilesToShred'))}</button>
+      </div>
+      <div id="selectedFilesList" style="font-size:0.75rem; color:var(--text-muted); min-height:20px;"></div>` : '';
+
+    // Translate tool names and descriptions
+    const toolTranslations = {
+      'clear-temp-files': { name: 'tools.script.clearTempFiles.name', desc: 'tools.script.clearTempFiles.desc' },
+      'large-files-report': { name: 'tools.script.largeFilesReport.name', desc: 'tools.script.largeFilesReport.desc' },
+      'list-startup-items': { name: 'tools.script.listStartupItems.name', desc: 'tools.script.listStartupItems.desc' },
+      'browser-cache-report': { name: 'tools.script.browserCacheReport.name', desc: 'tools.script.browserCacheReport.desc' },
+      'disk-space-report': { name: 'tools.script.diskSpaceReport.name', desc: 'tools.script.diskSpaceReport.desc' },
+      'windows-services-report': { name: 'tools.script.windowsServicesReport.name', desc: 'tools.script.windowsServicesReport.desc' },
+      'uninstaller-report': { name: 'tools.script.uninstallerReport.name', desc: 'tools.script.uninstallerReport.desc' },
+      'duplicate-finder': { name: 'tools.script.duplicateFinder.name', desc: 'tools.script.duplicateFinder.desc' },
+      'file-shredder': { name: 'tools.script.fileShredder.name', desc: 'tools.script.fileShredder.desc' },
+    };
+    const trans = toolTranslations[s.id];
+    const toolName = trans ? this.t(trans.name, s.name) : s.name;
+    const toolDesc = trans ? this.t(trans.desc, s.description) : s.description;
+
+    return `
+      <div class="tool-row">
+        <div class="tool-icon status-icon info" style="width:34px;height:34px;">${iconFor(this.iconForScript(s.id))}</div>
+        <div class="tool-info">
+          <span class="tool-name">${escapeHtml(toolName)}</span>
+          <span class="tool-desc">${escapeHtml(toolDesc)}</span>
+          ${inputHtml}
+        </div>
+        <div class="tool-action">
+          <button class="btn btn-primary btn-sm" data-script-id="${escapeHtml(s.id)}">${escapeHtml(this.t('tools.run'))}</button>
+          <div class="history-meta" data-complete-for="${escapeHtml(s.id)}">${escapeHtml(this.t('tools.notRunYet'))}</div>
+        </div>
+      </div>`;
   },
 
   iconForScript(id) {
@@ -78,7 +191,9 @@ window.Pages.tools = {
       'browser-cache-report': 'archive',
       'disk-space-report': 'activity',
       'windows-services-report': 'list-checks',
-      'uninstaller-report': 'archive'
+      'uninstaller-report': 'archive',
+      'duplicate-finder': 'copy',
+      'file-shredder': 'trash-2'
     }[id] || 'terminal';
   },
 
@@ -90,39 +205,44 @@ window.Pages.tools = {
     return val;
   },
 
-  async runScript(container, btn) {
+async runScript(container, btn) {
     const scriptId = btn.dataset.scriptId;
     const output = container.querySelector('#toolOutput');
-    const status = container.querySelector(`[data-complete-for="${scriptId}"]`);
-    const scriptArgs = scriptId === 'clear-temp-files'
+    const statusEl = container.querySelector(`[data-complete-for="${scriptId}"]`);
+    const outputStatus = container.querySelector('#outputStatus');
+    const exportBtn = container.querySelector('#exportLogBtn');
+    let scriptArgs = scriptId === 'clear-temp-files'
       ? { dryRun: false, maxAgeDays: this.getTempAgeDays(container) }
       : {};
-    const originalLabel = btn.textContent;
-    setButtonLoading(btn, true, this.t('tools.running', 'Running...'));
 
-    // Only these scripts actually report progress (see clearTemp.js,
-    // largeFilesReport.js, browserCacheReport.js) -- everything else is a
-    // single atomic call with no real subdivision to report, so it just
-    // gets an honest spinner rather than a fabricated percentage.
+    if (scriptId === 'file-shredder') {
+      if (this._selectedShredFiles.length === 0) {
+        alert(this.t('tools.selectFilesFirst'));
+        return;
+      }
+      scriptArgs = { filePaths: this._selectedShredFiles, passes: 3 };
+    }
+
+    const originalLabel = btn.textContent;
+    setButtonLoading(btn, true, this.t('tools.running'));
+
     const reportsProgress = ['clear-temp-files', 'large-files-report', 'browser-cache-report'].includes(scriptId);
     output.innerHTML = reportsProgress
       ? '<div class="empty-state"><span class="spinner"></span>&nbsp;<span id="scriptProgressLabel">Starting...</span></div>'
       : '<div class="empty-state"><span class="spinner"></span>&nbsp;Running...</div>';
-    if (status) status.textContent = 'Running...';
+    if (statusEl) statusEl.textContent = this.t('tools.running');
+    if (outputStatus) outputStatus.textContent = this.t('tools.runningStatus', { script: scriptId });
 
     let unsubscribeProgress = null;
     if (reportsProgress) {
       unsubscribeProgress = Api.onToolProgress('run-script', (progress) => {
         const labelEl = output.querySelector('#scriptProgressLabel');
         if (!labelEl || !progress) return;
-        const label = progress.label || 'Working';
+        const label = progress.label || this.t('tools.working');
         if (typeof progress.total === 'number' && progress.total > 0) {
-          // Real fraction (e.g. browser-cache-report: known total of 4).
           labelEl.textContent = `${label}... (${progress.count}/${progress.total})`;
         } else if (typeof progress.count === 'number') {
-          // Live count only -- total isn't knowable ahead of a file walk,
-          // so this reports what's genuinely been scanned, not a percentage.
-          labelEl.textContent = `${label}... (${progress.count.toLocaleString()} scanned)`;
+          labelEl.textContent = `${label}... (${progress.count.toLocaleString()} ${this.t('tools.scanned')})`;
         } else {
           labelEl.textContent = label;
         }
@@ -132,71 +252,70 @@ window.Pages.tools = {
     try {
       const result = await Api.runTool('run-script', { scriptId, scriptArgs });
       const when = new Date().toLocaleString();
-      if (status) status.textContent = `Completed ${when}`;
+      if (statusEl) statusEl.textContent = `${this.t('tools.completed')} ${when}`;
       output.innerHTML = this.renderOutput(scriptId, result, when);
+      if (outputStatus) outputStatus.textContent = this.t('tools.completedStatus', { script: scriptId, when });
+      if (exportBtn) exportBtn.style.display = 'inline-flex';
+
       if (scriptId === 'uninstaller-report') {
         this._uninstallerApps = Array.isArray(result.apps) ? result.apps : [];
         if (result.scannedApp) this._lastScannedAppName = result.scannedApp;
         this.wireUninstallerActions(container);
       }
       if (scriptId === 'large-files-report') this.wireLargeFilesActions(container);
+      if (scriptId === 'duplicate-finder') this.wireDuplicateFinderActions(container);
       if (scriptId === 'browser-cache-report') this.wireBrowserCacheActions(container);
       if (scriptId === 'list-startup-items' && Array.isArray(result.items)) {
         this._startupItems = result.items;
         this.wireStartupActions(container);
       }
       setButtonLoading(btn, false);
-      btn.textContent = 'Completed';
+      btn.textContent = this.t('tools.completed');
       btn.classList.add('btn-success');
       setTimeout(() => {
         btn.textContent = originalLabel;
         btn.classList.remove('btn-success');
       }, 2000);
     } catch (err) {
-      if (status) status.textContent = 'Failed.';
+      if (statusEl) statusEl.textContent = this.t('tools.failed');
+      if (outputStatus) outputStatus.textContent = this.t('tools.failedStatus', { script: scriptId });
       showToolError(output, err);
       setButtonLoading(btn, false);
     } finally {
       if (typeof unsubscribeProgress === 'function') unsubscribeProgress();
-      container.querySelector('#clearOutputBtn').style.display = 'block';
+      container.querySelector('#clearOutputBtn').style.display = 'inline-flex';
     }
   },
 
-  // Applied to rows in long lists (services, large files) so the browser can
-  // skip layout/paint for rows that are scrolled out of view. This is what
-  // actually fixes scroll jank on 100+ row outputs -- it's not the row count
-  // itself that's expensive, it's repainting every row's card styling
-  // (borders/backgrounds) on every scroll frame.
   lazyRowStyle: 'content-visibility:auto;contain-intrinsic-size:0 36px;',
 
   renderOutput(scriptId, result, when) {
-    let html = `<div class="log-row" style="background:var(--panel-raised);"><span class="log-tag clean">done</span><span class="log-path">Completed ${escapeHtml(when)}</span></div>`;
+    let html = `<div class="log-row" style="background:var(--panel-raised);"><span class="log-tag clean">${this.t('tools.done')}</span><span class="log-path">${this.t('tools.completedAt', { when: escapeHtml(when) })}</span></div>`;
     const truncate = (s, n = 80) => (typeof s === 'string' && s.length > n) ? s.slice(0, n - 1) + '…' : (s || '');
     if (scriptId === 'clear-temp-files') {
-      html += `<div class="log-row"><span class="log-tag clean">cleared</span><span class="log-path">${result.deletedCount || 0} file(s), ${result.freedMB || 0} MB freed (older than ${result.maxAgeDays ?? '?'} day(s))</span></div>`;
-      if (result.skippedCount) html += `<div class="log-row"><span class="log-tag warn">skipped</span><span class="log-path">${result.skippedCount} item(s) (locked/denied)</span></div>`;
-      // show up to 15 important log lines (dry-run or actual)
+      html += `<div class="log-row"><span class="log-tag clean">${this.t('tools.cleared')}</span><span class="log-path">${result.deletedCount || 0} ${this.t('tools.files')} ${this.t('tools.comma')} ${result.freedMB || 0} MB ${this.t('tools.freed')} (${this.t('tools.olderThan')} ${result.maxAgeDays ?? '?'} ${this.t('tools.daysShort')})</span></div>`;
+      if (result.skippedCount) html += `<div class="log-row"><span class="log-tag warn">${this.t('tools.skipped')}</span><span class="log-path">${result.skippedCount} ${this.t('tools.items')} (${this.t('tools.lockedDenied')})</span></div>`;
       const logs = (result.log || []).filter(Boolean).slice(0, 15);
       if (logs.length) html += logs.map(line => `<div class="log-row"><span class="log-path">${escapeHtml(truncate(line, 200))}</span></div>`).join('');
-      if ((result.log || []).length > 15) html += `<div class="log-row"><span class="log-path">... ${escapeHtml(String((result.log || []).length - 15))} more lines omitted</span></div>`;
+      if ((result.log || []).length > 15) html += `<div class="log-row"><span class="log-path">... ${escapeHtml(String((result.log || []).length - 15))} ${this.t('tools.moreLinesOmitted')}</span></div>`;
     } else if (scriptId === 'disk-space-report' && Array.isArray(result.volumes)) {
-      html += result.volumes.map(v => `<div class="log-row"><span class="log-tag ${v.usePercent > 90 ? 'match' : v.usePercent > 75 ? 'warn' : 'clean'}">${v.usePercent}%</span><span class="log-path">${escapeHtml(v.mount)} - ${v.usedGB}/${v.sizeGB} GB used, ${v.freeGB} GB free</span></div>`).join('');
+      html += result.volumes.map(v => `<div class="log-row"><span class="log-tag ${v.usePercent > 90 ? 'match' : v.usePercent > 75 ? 'warn' : 'clean'}">${v.usePercent}%</span><span class="log-path">${escapeHtml(v.mount)} - ${v.usedGB}/${v.sizeGB} GB ${this.t('tools.used')}, ${v.freeGB} GB ${this.t('tools.free')}</span></div>`).join('');
     } else if (scriptId === 'browser-cache-report' && Array.isArray(result.browsers)) {
       const anyExists = result.browsers.some((b) => b.exists);
       html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-        <div class="log-row" style="border:none; padding:0;"><span class="log-tag info">total</span><span class="log-path">${result.totalMB || 0} MB</span></div>
-        <button class="btn btn-sm" id="clearAllCacheBtn" ${anyExists ? '' : 'disabled'}>Clear All Caches</button>
+        <div class="log-row" style="border:none; padding:0;"><span class="log-tag info">${this.t('tools.total')}</span><span class="log-path">${result.totalMB || 0} MB</span></div>
+        <button class="btn btn-sm" id="clearAllCacheBtn" ${anyExists ? '' : 'disabled'}>${this.t('tools.clearAllCaches')}</button>
       </div>`;
       html += result.browsers.map((b) => `
         <div class="log-row" style="display:flex; align-items:center; gap:8px;">
           <span class="log-tag ${b.exists ? 'info' : 'warn'}">${b.sizeMB || 0} MB</span>
-          <span class="log-path" style="flex:1;">${escapeHtml(b.name)}${b.exists ? '' : ' (not found)'}</span>
-          ${b.exists ? `<button class="btn btn-sm clear-single-cache-btn" data-browser="${escapeHtml(b.name)}" style="flex-shrink:0;">Clear</button>` : ''}
+          <span class="log-path" style="flex:1;">${escapeHtml(b.name)}${b.exists ? '' : ` (${this.t('tools.notFound')})`}</span>
+          ${b.exists ? `<button class="btn btn-sm clear-single-cache-btn" data-browser="${escapeHtml(b.name)}" style="flex-shrink:0;">${this.t('tools.clear')}</button>` : ''}
         </div>`).join('');
     } else if (scriptId === 'large-files-report' && Array.isArray(result.files)) {
-      html += `<div class="log-row"><span class="log-tag info">${result.count || 0}</span><span class="log-path">Files over ${result.minSizeMB || 0} MB under ${escapeHtml(result.root || '')}</span></div>`;
+      html += `<div class="log-row"><span class="log-tag info">${result.count || 0}</span><span class="log-path">${this.t('tools.filesOver', { count: result.minSizeMB || 0 })} ${escapeHtml(this.t('tools.under', { root: result.root || '' }))}</span></div>`;
       if (result.files.length) {
-        html += `<div style="display:flex; justify-content:flex-end; margin:8px 0;"><button class="btn btn-sm" style="color:var(--accent-danger);" id="deleteSelectedFilesBtn" disabled>Delete Selected (0)</button></div>`;
+        html += `<div style="display:flex; justify-content:flex-end; margin:8px 0;"><button class="btn btn-sm" style="color:var(--accent-danger);" id="deleteSelectedFilesBtn" disabled>${this.t('tools.deleteSelected', { count: 0 })}</button></div>`;
         html += result.files.slice(0, 100).map((f) => `
           <div class="log-row" style="display:flex; align-items:center; gap:8px; ${this.lazyRowStyle}">
             <input type="checkbox" class="large-file-checkbox" data-file-path="${escapeHtml(f.path)}" data-file-size="${f.sizeMB}" />
@@ -205,7 +324,7 @@ window.Pages.tools = {
           </div>`).join('');
       }
     } else if (scriptId === 'list-startup-items' && Array.isArray(result.items)) {
-      html += `<div class="log-row"><span class="log-tag info">${result.itemCount || result.items.length}</span><span class="log-path">Startup entries — click a toggle to disable/enable an item</span></div>`;
+      html += `<div class="log-row"><span class="log-tag info">${result.itemCount || result.items.length}</span><span class="log-path">${this.t('tools.startupEntries')}</span></div>`;
       result.items.forEach((item, idx) => {
         const name = item.name || item.raw || item.path || 'unknown';
         const cmd = item.command || item.path || item.raw || '';
@@ -214,25 +333,25 @@ window.Pages.tools = {
           <img class="startup-icon" data-exe="${escapeHtml(item.exePath || '')}" src="" alt="" />
           <span class="log-tag info">${escapeHtml(item.source || 'unknown')}</span>
           <span class="log-path" style="flex:1;">${escapeHtml(displayCmd)}</span>
-          <button class="btn btn-sm startup-toggle-btn" data-idx="${idx}">Disable</button>
+          <button class="btn btn-sm startup-toggle-btn" data-idx="${idx}">${this.t('tools.disable')}</button>
         </div>`;
       });
     } else if (scriptId === 'windows-services-report') {
-      html += `<div class="log-row"><span class="log-tag info">${result.autoStartCount || 0}</span><span class="log-path">Auto-start services, ${result.flaggedCount || 0} flagged</span></div>`;
-      html += (result.flagged || []).map(s => `<div class="log-row" style="${this.lazyRowStyle}"><span class="log-tag match">flag</span><span class="log-path">${escapeHtml(s.displayName || s.name)} ${s.pathName ? '(' + escapeHtml(s.pathName) + ')' : ''}</span></div>`).join('');
+      html += `<div class="log-row"><span class="log-tag info">${result.autoStartCount || 0}</span><span class="log-path">${this.t('tools.autoStartServices')}, ${result.flaggedCount || 0} ${this.t('tools.flagged')}</span></div>`;
+      html += (result.flagged || []).map(s => `<div class="log-row" style="${this.lazyRowStyle}"><span class="log-tag match">${this.t('tools.flag')}</span><span class="log-path">${escapeHtml(s.displayName || s.name)} ${s.pathName ? '(' + escapeHtml(s.pathName) + ')' : ''}</span></div>`).join('');
       html += (result.services || []).slice(0, 120).map(s => `<div class="log-row" style="${this.lazyRowStyle}"><span class="log-tag clean">${escapeHtml(s.state || '')}</span><span class="log-path">${escapeHtml(s.displayName || s.name)}</span></div>`).join('');
     } else if (scriptId === 'uninstaller-report') {
       if (result.supported === false) {
-        html += `<div class="log-row"><span class="log-tag warn">info</span><span class="log-path">${escapeHtml(result.message || this.t('uninstaller.unavailable', 'Software uninstaller is not available on this platform.'))}</span></div>`;
+        html += `<div class="log-row"><span class="log-tag warn">${this.t('tools.info')}</span><span class="log-path">${escapeHtml(result.message || this.t('uninstaller.unavailable'))}</span></div>`;
       } else {
-        html += `<div class="log-row"><span class="log-tag info">${result.appCount || 0}</span><span class="log-path">${escapeHtml(this.t('uninstaller.installedApps', 'Installed applications'))}</span></div>`;
+        html += `<div class="log-row"><span class="log-tag info">${result.appCount || 0}</span><span class="log-path">${escapeHtml(this.t('uninstaller.installedApps'))}</span></div>`;
         if (Array.isArray(result.leftovers) && result.leftovers.length) {
-          html += `<div class="log-row"><span class="log-tag warn">${result.leftovers.length}</span><span class="log-path">${escapeHtml(this.t('uninstaller.leftoverFoldersFor', 'Leftover items for {app}').replace('{app}', result.scannedApp || 'selected app'))}</span></div>`;
-          html += `<div style="display:flex; justify-content:flex-end; margin:8px 0;"><button class="btn btn-sm" id="removeLeftoversBtn" data-scanned-app="${escapeHtml(result.scannedApp || '')}" disabled>${escapeHtml(this.t('uninstaller.removeSelected', 'Remove selected leftovers'))} (0)</button></div>`;
+          html += `<div class="log-row"><span class="log-tag warn">${result.leftovers.length}</span><span class="log-path">${escapeHtml(this.t('uninstaller.leftoverFoldersFor', { app: result.scannedApp || this.t('tools.selectedApp') }))}</span></div>`;
+          html += `<div style="display:flex; justify-content:flex-end; margin:8px 0;"><button class="btn btn-sm" id="removeLeftoversBtn" data-scanned-app="${escapeHtml(result.scannedApp || '')}" disabled>${escapeHtml(this.t('uninstaller.removeSelected'))} (0)</button></div>`;
           html += result.leftovers.map((entry) => `
             <div class="log-row leftover-row" style="display:flex; align-items:center; gap:8px; ${this.lazyRowStyle}">
               ${entry.kind === 'registry'
-    ? `<span class="log-tag info">${escapeHtml(this.t('uninstaller.registryHint', 'registry (read-only)'))}</span>`
+    ? `<span class="log-tag info">${escapeHtml(this.t('uninstaller.registryHint'))}</span>`
     : `<input type="checkbox" class="leftover-checkbox" data-leftover-path="${escapeHtml(entry.path)}" />`}
               <span class="log-path" style="flex:1;">${escapeHtml(entry.path)}</span>
             </div>`).join('');
@@ -241,9 +360,47 @@ window.Pages.tools = {
           <div class="log-row uninstaller-row" data-app-idx="${idx}" style="display:flex; align-items:center; gap:8px; ${this.lazyRowStyle}">
             <img class="uninstaller-icon" data-exe="${escapeHtml(app.iconPath || '')}" src="" alt="" style="width:20px;height:20px;flex-shrink:0;" />
             <span class="log-path" style="flex:1;">${escapeHtml(app.name)}${app.version ? ` (${escapeHtml(app.version)})` : ''}${app.estimatedSizeMB ? ` — ${app.estimatedSizeMB} MB` : ''}</span>
-            <button class="btn btn-sm uninstaller-scan-btn" data-app-name="${escapeHtml(app.name)}">${escapeHtml(this.t('uninstaller.scanLeftovers', 'Scan leftovers'))}</button>
-            <button class="btn btn-sm uninstaller-launch-btn" data-app-idx="${idx}" ${app.uninstallString ? '' : 'disabled'}>${escapeHtml(this.t('uninstaller.uninstall', 'Uninstall'))}</button>
+            <button class="btn btn-sm uninstaller-scan-btn" data-app-name="${escapeHtml(app.name)}">${escapeHtml(this.t('uninstaller.scanLeftovers'))}</button>
+            <button class="btn btn-sm uninstaller-launch-btn" data-app-idx="${idx}" ${app.uninstallString ? '' : 'disabled'}>${escapeHtml(this.t('uninstaller.uninstall'))}</button>
           </div>`).join('');
+      }
+    } else if (scriptId === 'duplicate-finder' && Array.isArray(result.duplicateGroups)) {
+      html += `<div class="log-row"><span class="log-tag info">${result.totalFilesScanned || 0}</span><span class="log-path">${this.t('tools.filesScanned')}</span></div>`;
+      html += `<div class="log-row"><span class="log-tag warn">${result.duplicateGroups.length}</span><span class="log-path">${this.t('tools.duplicateGroups')}</span></div>`;
+      html += `<div class="log-row"><span class="log-tag match">${result.totalDuplicates || 0}</span><span class="log-path">${this.t('tools.totalDuplicates')}</span></div>`;
+      html += `<div class="log-row"><span class="log-tag clean">${((result.totalWastedSpace || 0) / 1024 / 1024).toFixed(1)} MB</span><span class="log-path">${this.t('tools.wastedSpace')}</span></div>`;
+      if (result.duplicateGroups.length) {
+        html += `<div style="display:flex; justify-content:flex-end; margin:8px 0;"><button class="btn btn-sm" style="color:var(--accent-danger);" id="deleteDuplicatesBtn" disabled>${this.t('tools.deleteSelected', { count: 0 })}</button></div>`;
+        html += result.duplicateGroups.slice(0, 50).map((group, gIdx) => `
+          <div class="log-row" style="background:var(--panel-raised); padding:8px; margin:4px 0;">
+            <div style="font-weight:600; margin-bottom:4px;">${this.t('tools.group')} ${gIdx + 1} — ${group.files.length} ${this.t('tools.copies')}, ${((group.size || 0) / 1024).toFixed(1)} KB ${this.t('tools.each')}</div>
+            ${group.files.map((f, fIdx) => `
+              <div class="log-row" style="display:flex; align-items:center; gap:8px; ${this.lazyRowStyle}">
+                ${fIdx === 0
+                  ? `<span class="log-tag clean">${this.t('tools.original')}</span>`
+                  : `<input type="checkbox" class="duplicate-checkbox" data-file-path="${escapeHtml(f.path)}" />`}
+                <span class="log-path" style="flex:1;">${escapeHtml(f.path)}</span>
+              </div>`).join('')}
+          </div>`).join('');
+      }
+    } else if (scriptId === 'file-shredder') {
+      if (result.success === false) {
+        html += `<div class="log-row"><span class="log-tag match">${this.t('tools.error')}</span><span class="log-path">${escapeHtml(result.error || this.t('tools.shreddingFailed'))}</span></div>`;
+      } else if (result.results && Array.isArray(result.results)) {
+        html += `<div class="log-row"><span class="log-tag info">${result.total || 0}</span><span class="log-path">${this.t('tools.filesProcessed')}</span></div>`;
+        html += `<div class="log-row"><span class="log-tag clean">${result.successful || 0}</span><span class="log-path">${this.t('tools.successfullyShredded')}</span></div>`;
+        html += `<div class="log-row"><span class="log-tag match">${result.failed || 0}</span><span class="log-path">${this.t('tools.failed')}</span></div>`;
+        html += `<div class="log-row"><span class="log-tag clean">${((result.totalBytesShredded || 0) / 1024 / 1024).toFixed(2)} MB</span><span class="log-path">${this.t('tools.totalDataShredded')}</span></div>`;
+        html += result.results.map(r => `
+          <div class="log-row" style="${this.lazyRowStyle}">
+            <span class="log-tag ${r.success ? 'clean' : 'match'}">${r.success ? this.t('tools.shredded') : this.t('tools.failed')}</span>
+            <span class="log-path" style="flex:1;">${escapeHtml(r.originalPath || r.path || 'unknown')}</span>
+            ${r.error ? `<span class="log-tag warn">${escapeHtml(r.error)}</span>` : ''}
+          </div>`).join('');
+      } else if (result.success) {
+        html += `<div class="log-row"><span class="log-tag clean">${this.t('tools.shredded')}</span><span class="log-path">${escapeHtml(result.originalPath)}</span></div>`;
+        html += `<div class="log-row"><span class="log-tag clean">${((result.sizeBytes || 0) / 1024).toFixed(1)} KB</span><span class="log-path">${this.t('tools.size')}</span></div>`;
+        html += `<div class="log-row"><span class="log-tag info">${result.passes || 3}</span><span class="log-path">${this.t('tools.passesCompleted')}</span></div>`;
       }
     } else {
       html += `<pre class="log-path" style="white-space:pre-wrap;">${escapeHtml(JSON.stringify(result, null, 2))}</pre>`;
@@ -258,7 +415,7 @@ window.Pages.tools = {
 
     const updateButton = () => {
       const selected = output.querySelectorAll('.large-file-checkbox:checked');
-      deleteBtn.textContent = `Delete Selected (${selected.length})`;
+      deleteBtn.textContent = `${this.t('tools.deleteSelected', { count: selected.length })}`;
       deleteBtn.disabled = selected.length === 0;
     };
 
@@ -268,20 +425,56 @@ window.Pages.tools = {
       const selected = [...output.querySelectorAll('.large-file-checkbox:checked')];
       if (!selected.length) return;
       const totalMB = selected.reduce((sum, cb) => sum + Number(cb.dataset.fileSize || 0), 0).toFixed(1);
-      if (!window.confirm(`Permanently delete ${selected.length} file(s), freeing about ${totalMB} MB? This cannot be undone.`)) return;
+      if (!window.confirm(`${this.t('tools.confirmDelete', { count: selected.length, mb: totalMB })}`)) return;
 
       deleteBtn.disabled = true;
-      deleteBtn.textContent = 'Deleting...';
+      deleteBtn.textContent = this.t('tools.deleting');
       try {
         const paths = selected.map((cb) => cb.dataset.filePath);
         const result = await Api.runTool('run-script', { scriptId: 'delete-files', scriptArgs: { paths } });
-        alert(`Deleted ${result.deletedCount} file(s), freed ${result.freedMB} MB.${result.skippedCount ? ` ${result.skippedCount} skipped.` : ''}`);
+        alert(`${this.t('tools.deleted', { count: result.deletedCount })} ${this.t('tools.freed', { mb: result.freedMB })}${result.skippedCount ? ` ${this.t('tools.skipped', { count: result.skippedCount })}` : ''}`);
 
         const refreshed = await Api.runTool('run-script', { scriptId: 'large-files-report', scriptArgs: {} });
         output.innerHTML = this.renderOutput('large-files-report', refreshed, new Date().toLocaleString());
         this.wireLargeFilesActions(container);
       } catch (err) {
-        alert(err.message || 'Failed to delete selected files.');
+        alert(err.message || this.t('tools.failedDelete'));
+        deleteBtn.disabled = false;
+        updateButton();
+      }
+    });
+  },
+
+  wireDuplicateFinderActions(container) {
+    const output = container.querySelector('#toolOutput');
+    const deleteBtn = output.querySelector('#deleteDuplicatesBtn');
+    if (!deleteBtn) return;
+
+    const updateButton = () => {
+      const selected = output.querySelectorAll('.duplicate-checkbox:checked');
+      deleteBtn.textContent = `${t('tools.deleteSelected', { count: selected.length })}`;
+      deleteBtn.disabled = selected.length === 0;
+    };
+
+    output.querySelectorAll('.duplicate-checkbox').forEach((cb) => cb.addEventListener('change', updateButton));
+
+    deleteBtn.addEventListener('click', async () => {
+      const selected = [...output.querySelectorAll('.duplicate-checkbox:checked')];
+      if (!selected.length) return;
+      if (!window.confirm(`${this.t('tools.confirmDeleteDuplicates', { count: selected.length })}`)) return;
+
+      deleteBtn.disabled = true;
+      deleteBtn.textContent = this.t('tools.deleting');
+      try {
+        const paths = selected.map((cb) => cb.dataset.filePath);
+        const result = await Api.runTool('run-script', { scriptId: 'duplicate-finder', scriptArgs: { deletePaths: paths } });
+        alert(`${this.t('tools.deleted', { count: result.deleted.length })}${result.failed.length ? ` ${this.t('tools.failed', { count: result.failed.length })}` : ''}`);
+
+        const refreshed = await Api.runTool('run-script', { scriptId: 'duplicate-finder', scriptArgs: {} });
+        output.innerHTML = this.renderOutput('duplicate-finder', refreshed, new Date().toLocaleString());
+        this.wireDuplicateFinderActions(container);
+      } catch (err) {
+        alert(err.message || this.t('tools.failedDelete'));
         deleteBtn.disabled = false;
         updateButton();
       }
@@ -294,20 +487,20 @@ window.Pages.tools = {
     const singleBtns = output.querySelectorAll('.clear-single-cache-btn');
 
     const runClear = async (browsers, triggerBtn) => {
-      const label = browsers.length === 1 ? browsers[0] : 'all browsers';
-      if (!window.confirm(`Clear cache for ${label}? Saved logins and bookmarks are not affected, but you may be signed out of some sites.`)) return;
+      const label = browsers.length === 1 ? browsers[0] : this.t('tools.allBrowsers');
+      if (!window.confirm(`${this.t('tools.confirmClearCache', { label })}`)) return;
       const originalLabel = triggerBtn.textContent;
       triggerBtn.disabled = true;
-      triggerBtn.textContent = 'Clearing...';
+      triggerBtn.textContent = this.t('tools.clearing');
       try {
         const result = await Api.runTool('run-script', { scriptId: 'clear-browser-cache', scriptArgs: { browsers } });
-        alert(`Freed ${result.totalMB} MB.${result.note ? ' ' + result.note : ''}`);
+        alert(`${this.t('tools.freed', { mb: result.totalMB })}${result.note ? ' ' + result.note : ''}`);
 
         const refreshed = await Api.runTool('run-script', { scriptId: 'browser-cache-report', scriptArgs: {} });
         output.innerHTML = this.renderOutput('browser-cache-report', refreshed, new Date().toLocaleString());
         this.wireBrowserCacheActions(container);
       } catch (err) {
-        alert(err.message || 'Failed to clear browser cache.');
+        alert(err.message || this.t('tools.failedClearCache'));
         triggerBtn.disabled = false;
         triggerBtn.textContent = originalLabel;
       }
@@ -320,7 +513,6 @@ window.Pages.tools = {
   wireStartupActions(container) {
     const output = container.querySelector('#toolOutput');
 
-    // Load icons
     const iconImgs = output.querySelectorAll('.startup-icon[data-exe]');
     const exePaths = [...new Set([...iconImgs].map((img) => img.dataset.exe).filter(Boolean))];
     if (exePaths.length) {
@@ -337,7 +529,6 @@ window.Pages.tools = {
       iconImgs.forEach((img) => img.style.display = 'none');
     }
 
-    // Wire toggle buttons
     output.querySelectorAll('.startup-toggle-btn').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const idx = parseInt(btn.dataset.idx, 10);
@@ -350,15 +541,15 @@ window.Pages.tools = {
           const result = await window.api.invoke('startup:toggle', item, !currentlyEnabled);
           if (result.ok) {
             btn.dataset.enabled = String(!currentlyEnabled);
-            btn.textContent = !currentlyEnabled ? 'Disable' : 'Enable';
+            btn.textContent = !currentlyEnabled ? this.t('tools.disable') : this.t('tools.enable');
             btn.classList.toggle('btn-success', !currentlyEnabled);
           } else {
-            alert(result.error || 'Failed to toggle startup item');
-            btn.textContent = currentlyEnabled ? 'Disable' : 'Enable';
+            alert(result.error || this.t('tools.failedToggle'));
+            btn.textContent = currentlyEnabled ? this.t('tools.disable') : this.t('tools.enable');
           }
         } catch (err) {
-          alert(err.message || 'Failed to toggle startup item');
-          btn.textContent = currentlyEnabled ? 'Disable' : 'Enable';
+          alert(err.message || this.t('tools.failedToggle'));
+          btn.textContent = currentlyEnabled ? this.t('tools.disable') : this.t('tools.enable');
         }
         btn.disabled = false;
       });
@@ -391,7 +582,7 @@ window.Pages.tools = {
         const app = this._uninstallerApps[idx];
         const uninstallString = app && app.uninstallString;
         if (!uninstallString) return;
-        if (!window.confirm(this.t('uninstaller.launchConfirm', 'Launch the native uninstaller for this application?\n\n{command}').replace('{command}', uninstallString))) return;
+        if (!window.confirm(this.t('uninstaller.launchConfirm', { command: uninstallString }))) return;
         btn.disabled = true;
         try {
           const result = await Api.runTool('run-script', {
@@ -399,10 +590,10 @@ window.Pages.tools = {
             scriptArgs: { uninstallString }
           });
           alert(result.ok === false
-            ? (result.error || this.t('uninstaller.launchFailed', 'Failed to launch uninstaller.'))
-            : this.t('uninstaller.launchSuccess', 'Uninstaller launched.'));
+            ? (result.error || this.t('uninstaller.launchFailed'))
+            : this.t('uninstaller.launchSuccess'));
         } catch (err) {
-          alert(err.message || this.t('uninstaller.launchFailed', 'Failed to launch uninstaller.'));
+          alert(err.message || this.t('uninstaller.launchFailed'));
         } finally {
           btn.disabled = false;
         }
@@ -414,7 +605,7 @@ window.Pages.tools = {
         const appName = btn.dataset.appName;
         if (!appName) return;
         btn.disabled = true;
-        btn.textContent = this.t('tools.running', 'Running...');
+        btn.textContent = this.t('tools.running');
         try {
           const refreshed = await Api.runTool('run-script', {
             scriptId: 'uninstaller-report',
@@ -425,8 +616,8 @@ window.Pages.tools = {
           if (appName) this._lastScannedAppName = appName;
           this.wireUninstallerActions(container);
         } catch (err) {
-          alert(err.message || this.t('uninstaller.scanFailed', 'Failed to scan for leftovers.'));
-          btn.textContent = this.t('uninstaller.scanLeftovers', 'Scan leftovers');
+          alert(err.message || this.t('uninstaller.scanFailed'));
+          btn.textContent = this.t('uninstaller.scanLeftovers');
           btn.disabled = false;
         }
       });
@@ -437,7 +628,7 @@ window.Pages.tools = {
 
     const updateRemoveButton = () => {
       const selected = output.querySelectorAll('.leftover-checkbox:checked');
-      removeBtn.textContent = `${this.t('uninstaller.removeSelected', 'Remove selected leftovers')} (${selected.length})`;
+      removeBtn.textContent = `${this.t('uninstaller.removeSelected')} (${selected.length})`;
       removeBtn.disabled = selected.length === 0;
     };
 
@@ -447,16 +638,16 @@ window.Pages.tools = {
       const selected = [...output.querySelectorAll('.leftover-checkbox:checked')];
       if (!selected.length) return;
       const paths = selected.map((cb) => cb.dataset.leftoverPath);
-      if (!window.confirm(this.t('uninstaller.removeFoldersConfirm', 'Remove {count} leftover folder(s)? This cannot be undone.').replace('{count}', String(paths.length)))) return;
+      if (!window.confirm(this.t('uninstaller.removeFoldersConfirm', { count: String(paths.length) }))) return;
 
       removeBtn.disabled = true;
-      removeBtn.textContent = this.t('tools.running', 'Running...');
+      removeBtn.textContent = this.t('tools.running');
       try {
         const preview = await Api.runTool('run-script', {
           scriptId: 'remove-leftovers',
           scriptArgs: { paths, dryRun: true }
         });
-        if (!window.confirm(this.t('uninstaller.dryRunConfirm', 'Dry-run found {count} removable folder(s). Proceed with deletion?').replace('{count}', String(preview.removedCount)))) {
+        if (!window.confirm(this.t('uninstaller.dryRunConfirm', { count: String(preview.removedCount) }))) {
           updateRemoveButton();
           return;
         }
@@ -465,11 +656,9 @@ window.Pages.tools = {
           scriptArgs: { paths, dryRun: false }
         });
         const skippedText = result.skippedCount
-          ? this.t('uninstaller.skippedSummary', ' {skipped} skipped.').replace('{skipped}', String(result.skippedCount))
+          ? this.t('uninstaller.skippedSummary', { skipped: String(result.skippedCount) })
           : '';
-        alert(this.t('uninstaller.removedSummary', 'Removed {removed} folder(s).{skipped}')
-          .replace('{removed}', String(result.removedCount))
-          .replace('{skipped}', skippedText));
+        alert(this.t('uninstaller.removedSummary', { removed: String(result.removedCount), skipped: skippedText }));
         const appName = removeBtn.dataset.scannedApp || this._lastScannedAppName;
         const refreshed = await Api.runTool('run-script', {
           scriptId: 'uninstaller-report',
@@ -480,7 +669,7 @@ window.Pages.tools = {
         if (appName) this._lastScannedAppName = appName;
         this.wireUninstallerActions(container);
       } catch (err) {
-        alert(err.message || 'Failed to remove leftovers.');
+        alert(err.message || this.t('tools.failedRemove'));
         updateRemoveButton();
       }
     });

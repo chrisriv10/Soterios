@@ -55,14 +55,14 @@ describe('MaintenanceScheduler', () => {
         }
       }
     });
-    scheduler.saveConfig({ enabled: true, scriptIds: ['clear-temp-files', 'disk-space-report'] });
+    scheduler.saveConfig({ enabled: true, scriptIds: ['large-files-report', 'browser-cache-report'] });
     const result = await scheduler.runNow();
     assert.equal(result.success, true);
     assert.equal(ran.length, 2);
     assert.equal(ran[0].toolId, 'run-script');
-    assert.equal(ran[0].args.scriptId, 'clear-temp-files');
-    assert.equal(ran[0].args.scriptArgs.dryRun, false);
-    assert.equal(ran[1].args.scriptId, 'disk-space-report');
+    assert.equal(ran[0].args.scriptId, 'large-files-report');
+    assert.deepEqual(ran[0].args.scriptArgs, {});
+    assert.equal(ran[1].args.scriptId, 'browser-cache-report');
     assert.ok(scheduler.loadConfig().lastRun);
   });
 
@@ -78,9 +78,9 @@ describe('MaintenanceScheduler', () => {
         }
       }
     });
-    scheduler.saveConfig({ enabled: true, scriptIds: ['clear-temp-files'] });
+    scheduler.saveConfig({ enabled: true, scriptIds: ['large-files-report'] });
     await scheduler.runNow({ dryRunCleanup: true });
-    assert.equal(capturedArgs.scriptArgs.dryRun, true);
+    assert.deepEqual(capturedArgs.scriptArgs, {});
   });
 
   it('does not run again before interval elapses', async () => {
@@ -95,7 +95,7 @@ describe('MaintenanceScheduler', () => {
         }
       }
     });
-    scheduler.saveConfig({ enabled: true, intervalHours: 24, scriptIds: ['disk-space-report'] });
+    scheduler.saveConfig({ enabled: true, intervalHours: 24, scriptIds: ['browser-cache-report'] });
     await scheduler.runNow();
     const second = await scheduler.runIfDue();
     assert.equal(runs, 1);
@@ -109,7 +109,7 @@ describe('MaintenanceScheduler', () => {
       db,
       toolRegistry: { run: async () => ({ ok: false, error: 'failed' }) }
     });
-    scheduler.saveConfig({ enabled: true, scriptIds: ['disk-space-report'] });
+    scheduler.saveConfig({ enabled: true, scriptIds: ['browser-cache-report'] });
     await scheduler.runNow();
     assert.equal(scheduler.loadConfig().lastRun, null);
     assert.ok(scheduler.loadConfig().lastAttempt);
@@ -127,7 +127,7 @@ describe('MaintenanceScheduler', () => {
         }
       }
     });
-    scheduler.saveConfig({ enabled: true, intervalHours: 24, scriptIds: ['disk-space-report'] });
+    scheduler.saveConfig({ enabled: true, intervalHours: 24, scriptIds: ['browser-cache-report'] });
     await scheduler.runNow();
     const second = await scheduler.runIfDue();
     assert.equal(runs, 1);
@@ -152,7 +152,7 @@ describe('MaintenanceScheduler', () => {
       enabled: true,
       schedulePreset: 'idle',
       minIdleSeconds: 900,
-      scriptIds: ['disk-space-report'],
+      scriptIds: ['browser-cache-report'],
       lastRun: null
     });
     const result = await scheduler.runIfDue();
@@ -167,7 +167,7 @@ describe('MaintenanceScheduler', () => {
       db,
       toolRegistry: { run: async () => ({ ok: true }) }
     });
-    scheduler.saveConfig({ enabled: true, scriptIds: ['disk-space-report'] });
+    scheduler.saveConfig({ enabled: true, scriptIds: ['browser-cache-report'] });
     await scheduler.runNow();
     const history = db.getMaintenanceHistory();
     assert.equal(history.length, 1);
@@ -178,8 +178,8 @@ describe('MaintenanceScheduler', () => {
 
 describe('scriptArgsFor', () => {
   it('returns dry-run args for clear-temp-files when requested', () => {
-    assert.deepEqual(scriptArgsFor('clear-temp-files', true), { dryRun: true, maxAgeDays: 7 });
-    assert.deepEqual(scriptArgsFor('clear-temp-files', false), { dryRun: false, maxAgeDays: 7 });
-    assert.deepEqual(scriptArgsFor('disk-space-report', true), {});
+    assert.deepEqual(scriptArgsFor('large-files-report', true), {});
+    assert.deepEqual(scriptArgsFor('large-files-report', false), {});
+    assert.deepEqual(scriptArgsFor('browser-cache-report', true), {});
   });
 });

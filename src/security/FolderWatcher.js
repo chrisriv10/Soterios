@@ -129,7 +129,12 @@ class FolderWatcher {
           await new Promise((r) => setTimeout(r, 500));
           continue;
         }
+        // Only wait if a user scan is in progress - folder watch should not block user scans
         if (this.scanEngine && this.scanEngine.isScanning) {
+          await new Promise((r) => setTimeout(r, 500));
+          continue;
+        }
+        if (this.scanEngine && this.scanEngine.isFolderWatchScanning) {
           await new Promise((r) => setTimeout(r, 500));
           continue;
         }

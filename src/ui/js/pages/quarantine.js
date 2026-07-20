@@ -5,10 +5,11 @@ function confirmAction(message) {
 window.Pages = window.Pages || {};
 window.Pages['quarantine'] = {
   async render(container) {
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     container.innerHTML = `
       <header class="page-header">
-        <h1 class="page-title">Quarantine</h1>
-        <p class="page-subtitle">Isolated files that were detected as threats.</p>
+        <h1 class="page-title">${escapeHtml(t('quarantine.title'))}</h1>
+        <p class="page-subtitle">${escapeHtml(t('quarantine.subtitle'))}</p>
       </header>
       <div class="card">
         <div id="quarantineActions" style="display:flex; justify-content:flex-end; gap:8px; margin-bottom:12px;"></div>
@@ -25,13 +26,13 @@ window.Pages['quarantine'] = {
 
       if (!qList || qList.length === 0) {
         actionsContainer.innerHTML = '';
-        listContainer.innerHTML = '<div class="empty-state">No items in quarantine.</div>';
+        listContainer.innerHTML = `<div class="empty-state">${escapeHtml(t('quarantine.empty'))}</div>`;
         return;
       }
 
       actionsContainer.innerHTML = `
-        <button class="btn" id="restoreAllBtn">Restore All</button>
-        <button class="btn" style="color: var(--accent-danger);" id="deleteAllBtn">Delete All</button>
+        <button class="btn" id="restoreAllBtn">${escapeHtml(t('quarantine.restoreAll'))}</button>
+        <button class="btn" style="color: var(--accent-danger);" id="deleteAllBtn">${escapeHtml(t('quarantine.deleteAll'))}</button>
       `;
 
       listContainer.innerHTML = '';
@@ -45,8 +46,8 @@ window.Pages['quarantine'] = {
             <div class="page-subtitle" style="font-size: 0.75rem;">${item.date_quarantined} | ${item.engine}</div>
           </div>
           <div style="display: flex; gap: 8px;">
-            <button class="btn" data-restore="${item.id}">Restore</button>
-            <button class="btn" style="color: var(--accent-danger);" data-delete="${item.id}">Delete</button>
+            <button class="btn" data-restore="${item.id}">${escapeHtml(t('quarantine.restore'))}</button>
+            <button class="btn" style="color: var(--accent-danger);" data-delete="${item.id}">${escapeHtml(t('quarantine.delete'))}</button>
           </div>
         `;
         listContainer.appendChild(itemEl);
@@ -55,12 +56,12 @@ window.Pages['quarantine'] = {
       // Attach event listeners to individual restore buttons
       listContainer.querySelectorAll('[data-restore]').forEach(btn => {
         btn.addEventListener('click', async () => {
-          if (!confirmAction('Restore this file to its original location?')) return;
+          if (!confirmAction(t('quarantine.confirmRestore'))) return;
           try {
             const id = Number(btn.dataset.restore);
             const res = await window.api.invoke('quarantine:restore', id);
             if (res.success) this.render(container);
-            else alert('Failed to restore: ' + res.error);
+            else alert(t('quarantine.failedRestore', { error: res.error }));
           } catch (e) { alert(e.message || String(e)); }
         });
       });
@@ -68,12 +69,12 @@ window.Pages['quarantine'] = {
       // Attach event listeners to individual delete buttons
       listContainer.querySelectorAll('[data-delete]').forEach(btn => {
         btn.addEventListener('click', async () => {
-          if (!confirmAction('Permanently delete this quarantined file? This cannot be undone.')) return;
+          if (!confirmAction(t('quarantine.confirmDelete'))) return;
           try {
             const id = Number(btn.dataset.delete);
             const res = await window.api.invoke('quarantine:delete', id);
             if (res.success) this.render(container);
-            else alert('Failed to delete: ' + res.error);
+            else alert(t('quarantine.failedDelete', { error: res.error }));
           } catch (e) { alert(e.message || String(e)); }
         });
       });
@@ -82,11 +83,11 @@ window.Pages['quarantine'] = {
       const restoreAllBtn = actionsContainer.querySelector('#restoreAllBtn');
       if (restoreAllBtn) {
         restoreAllBtn.addEventListener('click', async () => {
-          if (!confirmAction(`Restore all ${qList.length} quarantined file(s) to their original locations?`)) return;
+          if (!confirmAction(t('quarantine.confirmRestoreAll', { count: qList.length }))) return;
           restoreAllBtn.disabled = true;
           const deleteAllBtnRef = actionsContainer.querySelector('#deleteAllBtn');
           if (deleteAllBtnRef) deleteAllBtnRef.disabled = true;
-          restoreAllBtn.textContent = 'Restoring...';
+          restoreAllBtn.textContent = t('scanner.statusScanning');
           const failures = [];
           for (const item of qList) {
             try {
@@ -96,7 +97,7 @@ window.Pages['quarantine'] = {
               failures.push(`${item.threat_name}: ${e.message || String(e)}`);
             }
           }
-          if (failures.length) alert('Some items failed to restore:\n' + failures.join('\n'));
+          if (failures.length) alert(t('quarantine.someFailed', { failures: failures.join('\n') }));
           this.render(container);
         });
       }
@@ -105,11 +106,11 @@ window.Pages['quarantine'] = {
       const deleteAllBtn = actionsContainer.querySelector('#deleteAllBtn');
       if (deleteAllBtn) {
         deleteAllBtn.addEventListener('click', async () => {
-          if (!confirmAction(`Permanently delete all ${qList.length} quarantined file(s)? This cannot be undone.`)) return;
+          if (!confirmAction(t('quarantine.confirmDeleteAll', { count: qList.length }))) return;
           deleteAllBtn.disabled = true;
           const restoreAllBtnRef = actionsContainer.querySelector('#restoreAllBtn');
           if (restoreAllBtnRef) restoreAllBtnRef.disabled = true;
-          deleteAllBtn.textContent = 'Deleting...';
+          deleteAllBtn.textContent = t('scanner.statusScanning');
           const failures = [];
           for (const item of qList) {
             try {
@@ -119,12 +120,12 @@ window.Pages['quarantine'] = {
               failures.push(`${item.threat_name}: ${e.message || String(e)}`);
             }
           }
-          if (failures.length) alert('Some items failed to delete:\n' + failures.join('\n'));
+          if (failures.length) alert(t('quarantine.someFailed', { failures: failures.join('\n') }));
           this.render(container);
         });
       }
     } catch (e) {
-      document.getElementById('quarantineList').innerHTML = `<div class="empty-state">Failed to load quarantine: ${e.message}</div>`;
+      document.getElementById('quarantineList').innerHTML = `<div class="empty-state">${escapeHtml(t('quarantine.failedLoad', { error: e.message }))}</div>`;
     }
   }
 };

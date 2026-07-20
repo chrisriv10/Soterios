@@ -30,7 +30,8 @@ function isPathInAllowedReportDir(filePath) {
 }
 
 function csvEscape(value) {
-  const s = String(value ?? '');
+  let s = String(value ?? '');
+  if (/^[=+\-@]/.test(s)) s = `'${s}`;
   if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
@@ -57,6 +58,53 @@ function threatsToCsv(report) {
     ].join(','));
   }
   return `${lines.join('\n')}\n`;
+}
+
+function securityReportToCsv(report) {
+  const lines = [];
+  
+  // Overview section
+  lines.push(csvEscape('=== OVERVIEW ==='));
+  const overview = report.overview || {};
+  lines.push(['score', 'level', 'generated_at'].join(','));
+  lines.push([
+    csvEscape(overview.score ?? ''),
+    csvEscape(overview.level ?? ''),
+    csvEscape(report.generatedAt ?? '')
+  ].join(','));
+  lines.push('');
+  
+  // Recommendations section
+  lines.push(csvEscape('=== RECOMMENDATIONS ==='));
+  const recommendations = report.recommendations || overview.recommendations || [];
+  lines.push(['level', 'title', 'detail'].join(','));
+  for (const rec of recommendations) {
+    lines.push([
+      csvEscape(rec.level ?? ''),
+      csvEscape(rec.title ?? ''),
+      csvEscape(rec.detail ?? '')
+    ].join(','));
+  }
+  lines.push('');
+  
+  // System snapshot section
+  lines.push(csvEscape('=== SYSTEM SNAPSHOT ==='));
+  const system = report.system || {};
+  const snapshotEntries = Object.entries(system);
+  lines.push(['category', 'key', 'value'].join(','));
+  for (const [category, data] of snapshotEntries) {
+    if (data && typeof data === 'object') {
+      for (const [key, value] of Object.entries(data)) {
+        lines.push([
+          csvEscape(category),
+          csvEscape(key),
+          csvEscape(String(value ?? ''))
+        ].join(','));
+      }
+    }
+  }
+  
+  return lines.join('\n') + '\n';
 }
 
 function pdfPathForHtml(htmlPath) {
@@ -106,6 +154,7 @@ module.exports = {
   csvEscape,
   isThreatQuarantined,
   threatsToCsv,
+  securityReportToCsv,
   pdfPathForHtml,
   csvPathForJson,
   generatePdfFromHtml

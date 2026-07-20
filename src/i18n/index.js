@@ -24,7 +24,7 @@ const LOCALE_LABELS = {
   hi: 'हिन्दी'
 };
 
-const RTL_LOCALES = new Set(['ar', 'he', 'fa', 'ur']);
+const RTL_LOCALES = new Set(['he', 'fa', 'ur', 'ar']);
 
 const catalogCache = new Map();
 let availableLocalesCache = null;

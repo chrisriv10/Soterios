@@ -5,10 +5,20 @@ const MIN_USER_VOLUME_BYTES = 1024 ** 3;
 
 /**
  * Ignore tiny recovery/EFI/OEM partitions that are legitimately full but not
- * user-facing storage when scoring disk health.
+ * user-facing storage when scoring disk health. Also ignore read-only optical
+ * drives (CD/DVD) which always report 100% usage.
  */
 function isUserFacingVolume(entry) {
   if (!entry || typeof entry.size !== 'number' || entry.size < MIN_USER_VOLUME_BYTES) {
+    return false;
+  }
+  // Skip read-only drives (optical media, etc.)
+  if (entry.rw === false) {
+    return false;
+  }
+  // Skip optical filesystems
+  const fs = String(entry.fs || '').toUpperCase();
+  if (fs === 'CDFS' || fs === 'UDF') {
     return false;
   }
   const mount = String(entry.mount || '');

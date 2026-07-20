@@ -7,7 +7,11 @@
   const label = el.querySelector('.scan-indicator-label');
   const dot = el.querySelector('.scan-indicator-dot');
 
+  const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+
   let doneTimer = null;
+  let progressTimer = null;
+  const PROGRESS_THROTTLE_MS = 500;
 
   function show() {
     el.style.display = 'block';
@@ -18,7 +22,7 @@
   }
 
   function setProgress(percent, message) {
-    if (percent === null) return; // Don't update progress if null (used during cancel)
+    if (percent === null) return;
     const p = Math.max(0, Math.min(100, percent || 0));
     fill.style.width = p + '%';
     pct.textContent = p + '%';
@@ -27,10 +31,11 @@
 
   function markDone(status, threatsFound = 0) {
     clearTimeout(doneTimer);
+    clearTimeout(progressTimer);
     el.classList.add('scan-indicator--done');
     if (status === 'canceled') {
       fill.style.width = pct.textContent;
-      label.textContent = 'Scan canceled';
+      label.textContent = t('scanIndicator.canceled');
       msg.textContent = '';
       el.style.borderColor = 'rgba(234,179,8,0.35)';
       el.style.background = 'rgba(234,179,8,0.07)';
@@ -39,22 +44,22 @@
     } else if (status === 'failed') {
       fill.style.width = '100%';
       pct.textContent = '100%';
-      label.textContent = 'Scan failed';
+      label.textContent = t('scanIndicator.failed');
       el.style.borderColor = 'rgba(239,68,68,0.35)';
       el.style.background = 'rgba(239,68,68,0.07)';
       if (dot) dot.style.background = '#ef4444';
     } else if (threatsFound > 0) {
       fill.style.width = '100%';
       pct.textContent = '100%';
-      label.textContent = 'Scan complete';
-      msg.textContent = `${threatsFound} threat(s) found`;
+      label.textContent = t('scanIndicator.complete');
+      msg.textContent = t('scanIndicator.threatsFound', { count: threatsFound });
       el.style.borderColor = 'rgba(239,68,68,0.35)';
       el.style.background = 'rgba(239,68,68,0.07)';
       if (dot) dot.style.background = '#ef4444';
     } else {
       fill.style.width = '100%';
       pct.textContent = '100%';
-      label.textContent = 'Scan complete';
+      label.textContent = t('scanIndicator.complete');
       msg.textContent = '';
     }
     doneTimer = setTimeout(() => {
@@ -64,7 +69,7 @@
       el.style.background = '';
       if (dot) dot.style.background = '';
       if (pct) pct.style.color = '';
-      label.textContent = 'Scanning\u2026';
+      label.textContent = t('scanIndicator.scanning');
       setProgress(0, '');
     }, 3000);
   }
@@ -75,9 +80,13 @@
     el.style.borderColor = '';
     el.style.background = '';
     if (dot) dot.style.background = '';
-    label.textContent = 'Scanning\u2026';
+    label.textContent = t('scanIndicator.scanning');
     show();
-    setProgress(data.pct, data.message);
+    
+    clearTimeout(progressTimer);
+    progressTimer = setTimeout(() => {
+      setProgress(data.pct, data.message);
+    }, PROGRESS_THROTTLE_MS);
   });
 
   window.api.on('scan:complete', (data) => {

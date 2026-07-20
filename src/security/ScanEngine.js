@@ -48,13 +48,40 @@ class ScanEngine {
     this.heuristicEngine = heuristicEngine;
     this.reputationEngine = reputationEngine;
     this.quarantineManager = quarantineManager;
-    this.abortController = null;
-    this.isScanning = false;
-    this.currentScan = null;
+    
+    // Separate state for user scans and folder-watch scans
+    this.userScan = {
+      abortController: null,
+      isScanning: false,
+      currentScan: null,
+      notes: [],
+      progress: 0,
+      filesScanned: 0
+    };
+
+    this.folderWatchScan = {
+      abortController: null,
+      isScanning: false,
+      currentScan: null,
+      notes: [],
+      progress: 0,
+      filesScanned: 0
+    };
+  }
+
+  // Compat getters: FolderWatcher and other callers historically read these
+  // directly off the engine instance. Keep them working after the
+  // userScan/folderWatchScan state split.
+  get isScanning() {
+    return this.userScan.isScanning;
+  }
+
+  get isFolderWatchScanning() {
+    return this.folderWatchScan.isScanning;
   }
 
   async runQuickScan() {
-    if (this.isScanning) return { error: 'Scan already in progress' };
+    if (this.userScan.isScanning) return { error: 'Scan already in progress' };
 
     const windir = process.env.WINDIR || 'C:\\Windows';
     const localAppData = process.env.LOCALAPPDATA || process.env.USERPROFILE + '\\AppData\\Local';
@@ -77,20 +104,35 @@ class ScanEngine {
   }
 
   async runFullScan() {
-    if (this.isScanning) return { error: 'Scan already in progress' };
+    if (this.userScan.isScanning) return { error: 'Scan already in progress' };
 
     return this.runScan('full', ['C:\\'], 'Full scan starting (this may take a while)...');
   }
 
   async runCustomScan(paths) {
-    if (this.isScanning) return { error: 'Scan already in progress' };
+    if (this.userScan.isScanning) return { error: 'Scan already in progress' };
     return this.runScan('custom', paths, 'Custom scan starting...');
   }
 
   async runScan(scanType, paths, startMessage) {
-    this.isScanning = true;
-    this.abortController = new AbortController();
-    this.currentScan = { scanType, paths, startedAt: new Date().toISOString() };
+    const isFolderWatch = scanType === 'folderwatch';
+    const scanState = isFolderWatch ? this.folderWatchScan : this.userScan;
+    
+    if (isFolderWatch) {
+      if (scanState.isScanning) return { error: 'Folder watch scan already in progress' };
+      // A user scan takes priority over the ClamAV process; folder-watch defers.
+      if (this.userScan.isScanning) return { error: 'Scan already in progress' };
+    } else {
+      if (scanState.isScanning) return { error: 'Scan already in progress' };
+      // Only one scan can hold the ClamAV process at a time; wait out a
+      // running folder-watch scan rather than clobbering it.
+      if (this.folderWatchScan.isScanning) return { error: 'Scan already in progress' };
+    }
+    
+    scanState.isScanning = true;
+    scanState.abortController = new AbortController();
+    scanState.currentScan = { scanType, paths, startedAt: new Date().toISOString() };
+    scanState.notes = [];
 
     const startTime = Date.now();
     let totalFilesScanned = 0;
@@ -110,6 +152,10 @@ class ScanEngine {
     const emitProgress = (pctCandidate, message, extra) => {
       const pct = Math.max(maxEmittedPct, Math.min(100, pctCandidate));
       maxEmittedPct = pct;
+      scanState.progress = pct;
+      if (extra && extra.filesScanned) {
+        scanState.filesScanned = extra.filesScanned;
+      }
       this.eventBus.emit('scan:progress', { scanType, pct, message, ...extra });
     };
 
@@ -117,7 +163,7 @@ class ScanEngine {
       emitProgress(5, startMessage);
 
       for (let i = 0; i < paths.length; i++) {
-        if (this.abortController.signal.aborted) {
+        if (scanState.abortController.signal.aborted) {
           wasCanceled = true;
           break;
         }
@@ -142,7 +188,7 @@ class ScanEngine {
           emitProgress(pct, 'Scanning ' + targetPath + ' (' + checked + ' files checked)...', { filesScanned: cumulativeFiles });
         });
 
-        if (this.abortController.signal.aborted) {
+        if (scanState.abortController.signal.aborted) {
           wasCanceled = true;
           break;
         }
@@ -157,8 +203,7 @@ class ScanEngine {
           totalFilesScanned += result.filesScanned || 0;
           if (Array.isArray(result.threats)) threats.push(...result.threats);
           if (result.note) {
-            this._notes = this._notes || [];
-            this._notes.push(result.note);
+            scanState.notes.push(result.note);
           }
 
           // Quarantine each newly-found threat from this iteration
@@ -195,20 +240,20 @@ class ScanEngine {
         }
       }
     } catch (err) {
-      if (this.abortController && this.abortController.signal.aborted) {
+      if (scanState.abortController && scanState.abortController.signal.aborted) {
         wasCanceled = true;
       } else {
         logger.error('Scan error:', err);
         errors.push(err.message || String(err));
       }
     } finally {
-      this.isScanning = false;
+      scanState.isScanning = false;
       const durationMs = Date.now() - startTime;
       const status = wasCanceled ? 'canceled' : (errors.length === 0 ? 'completed' : 'failed');
       const reportPayload = {
         scanType,
         status,
-        startedAt: this.currentScan ? this.currentScan.startedAt : new Date(startTime).toISOString(),
+        startedAt: scanState.currentScan ? scanState.currentScan.startedAt : new Date(startTime).toISOString(),
         completedAt: new Date().toISOString(),
         targetPaths: paths,
         filesScanned: totalFilesScanned,
@@ -227,8 +272,8 @@ class ScanEngine {
           this.db.logScan(scanType, totalFilesScanned, totalThreatsFound, durationMs);
         }
       } catch (_) {}
-      this.currentScan = null;
-      this.abortController = null;
+      scanState.currentScan = null;
+      scanState.abortController = null;
       if (wasCanceled) {
         this.eventBus.emit('scan:canceled', {
           scanType,
@@ -250,8 +295,7 @@ class ScanEngine {
       });
     }
 
-    const notes = this._notes || [];
-    this._notes = undefined;
+    const notes = scanState.notes || [];
     const note = notes.length ? notes.join(' ') : undefined;
     return {
       success: !wasCanceled && errors.length === 0,
@@ -267,13 +311,11 @@ class ScanEngine {
   }
 
   abortScan() {
-    if (!this.isScanning) {
-      return { success: false, canceled: false, error: 'No scan in progress' };
-    }
-    if (this.currentScan?.scanType === 'folderwatch') {
+    // Only abort user scans, not folder-watch scans
+    if (!this.userScan.isScanning) {
       return { success: false, canceled: false, error: 'No user scan in progress' };
     }
-    if (this.abortController) this.abortController.abort();
+    if (this.userScan.abortController) this.userScan.abortController.abort();
     if (this.clamEngine && typeof this.clamEngine.abortCurrentScan === 'function') {
       this.clamEngine.abortCurrentScan();
     }
@@ -282,9 +324,15 @@ class ScanEngine {
   }
 
   getStatus() {
+    const activeScan = this.userScan.isScanning ? this.userScan
+      : this.folderWatchScan.isScanning ? this.folderWatchScan
+      : null;
     return {
-      isScanning: this.isScanning,
-      currentScan: this.currentScan
+      isScanning: this.userScan.isScanning,
+      isFolderWatchScanning: this.folderWatchScan.isScanning,
+      currentScan: this.userScan.currentScan || this.folderWatchScan.currentScan,
+      progress: activeScan ? activeScan.progress : 0,
+      filesScanned: activeScan ? activeScan.filesScanned : 0
     };
   }
 

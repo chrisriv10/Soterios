@@ -5,6 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const logger = require('../utils/logger');
 const { TOAST_THEMES, resolveThemeName, themeBackground } = require('../utils/themes');
+const i18n = require('../i18n');
 
 // Ensure Chromium/Electron uses a writable data/cache location instead of
 // falling back to a restricted or temp-based path on Windows.
@@ -65,6 +66,8 @@ let splashTimeoutId;
 let dbRef; // set once the database is created in app.whenReady() below, so
 // showNotification (defined before that point) can check settings
 let currentUiTheme = 'dark';
+let startupLocale = 'en'; // set from peekUiLanguage() before the DB is ready,
+// so the earliest splash messages respect the saved language
 let isQuitting = false;
 const lifecycleRefs = {
   maintenanceScheduler: null,
@@ -78,6 +81,23 @@ function logLine(level, message, meta) {
   fn(message, meta || undefined);
 }
 
+function peekUiLanguage(dbPath) {
+  try {
+    if (!fs.existsSync(dbPath)) return 'en';
+    const Database = require('better-sqlite3');
+    const peek = new Database(dbPath, { readonly: true, fileMustExist: true });
+    try {
+      const row = peek.prepare('SELECT value FROM settings WHERE key = ?').get('ui.language');
+      if (!row || row.value == null) return 'en';
+      return JSON.parse(row.value);
+    } finally {
+      peek.close();
+    }
+  } catch (_) {
+    return 'en';
+  }
+}
+
 function peekUiTheme(dbPath) {
   try {
     if (!fs.existsSync(dbPath)) return 'dark';
@@ -86,13 +106,29 @@ function peekUiTheme(dbPath) {
     try {
       const row = peek.prepare('SELECT value FROM settings WHERE key = ?').get('ui.theme');
       if (!row || row.value == null) return 'dark';
-      return resolveThemeName(JSON.parse(row.value));
+      return JSON.parse(row.value);
     } finally {
       peek.close();
     }
   } catch (_) {
     return 'dark';
   }
+}
+
+function getLocale() {
+  if (dbRef) {
+    try {
+      const lang = dbRef.getSetting('ui.language', 'en');
+      return i18n.normalizeLocale(lang);
+    } catch (_) {
+      return startupLocale;
+    }
+  }
+  return startupLocale;
+}
+
+function t(key, vars) {
+  return i18n.t(key, getLocale(), vars);
 }
 
 function createIcon() {
@@ -285,8 +321,11 @@ function showNotification(title, body, level = 'info', iconOverride = null) {
         sandbox: false
       }
     });
+    // Translate title and body before rendering
+    const translatedTitle = t(title);
+    const translatedBody = t(body);
     toastWindow.setAlwaysOnTop(true, 'screen-saver');
-    toastWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(toastHtml(title, body, level, themeName, iconOverride)));
+    toastWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(toastHtml(translatedTitle, translatedBody, level, themeName, iconOverride)));
     toastWindow.once('ready-to-show', () => toastWindow.show());
     toastWindow.on('closed', () => {
       const idx = activeToasts.indexOf(toastWindow);
@@ -555,18 +594,21 @@ app.whenReady().then(async () => {
   // Peek the saved theme before creating the splash so the first paint
   // matches the user's preference instead of always flashing dark mode.
   currentUiTheme = peekUiTheme(dbPath);
+  // Peek the saved locale too, so the earliest splash progress messages
+  // are in the user's language instead of always starting in English.
+  startupLocale = i18n.normalizeLocale(peekUiLanguage(dbPath));
   if (!isScreenshotCaptureMode()) {
     createSplashWindow(currentUiTheme);
   }
 
   logLine('info', 'App starting', { theme: currentUiTheme });
-  sendSplashProgress(0, 'Starting Soterios...');
+  sendSplashProgress(0, t('splash.starting'));
 
   // 1. Database
   const db = new DatabaseService(dbPath);
   dbRef = db;
   currentUiTheme = resolveThemeName(db.getSetting('ui.theme', currentUiTheme));
-  sendSplashProgress(3, 'Connecting to database...');
+  sendSplashProgress(3, t('splash.connectingDb'));
 
   // Migrate old feature.systemMonitoring key to feature.externalLookups
   const oldVal = db.getSetting('feature.systemMonitoring', null);
@@ -579,15 +621,45 @@ app.whenReady().then(async () => {
   // 2. Security Engines (Dependency Injection)
   const services = serviceRegistry.create(db, eventBus, {
     userDataPath: app.getPath('userData'),
-    notify: (title, body, level) => showNotification(title, body, level)
+    locale: getLocale(),
+    notify: (title, body, level) => showNotification(t(title), t(body), level),
   });
+
+  // Network stats timer control (for feature toggle)
+  services.startNetworkStatsTimer = () => {
+    if (lifecycleRefs.networkStatsTimer) return { running: true };
+    const sampleNetworkStats = async () => {
+      try {
+        const stats = await networkMonitor.getStats();
+        const recordedAt = new Date().toISOString();
+        for (const iface of (stats.interfaces || [])) {
+          db.addNetworkStatsSample(iface.iface, iface.rxSec || 0, iface.txSec || 0, recordedAt);
+        }
+      } catch (err) {
+        logLine('warn', 'Network stats sample failed', { message: err.message });
+      }
+    };
+    const networkStatsTimer = setInterval(sampleNetworkStats, 30_000);
+    if (typeof networkStatsTimer.unref === 'function') networkStatsTimer.unref();
+    lifecycleRefs.networkStatsTimer = networkStatsTimer;
+    sampleNetworkStats().catch(() => {});
+    return { running: true };
+  };
+  services.stopNetworkStatsTimer = () => {
+    if (lifecycleRefs.networkStatsTimer) {
+      clearInterval(lifecycleRefs.networkStatsTimer);
+      lifecycleRefs.networkStatsTimer = null;
+    }
+    return { running: false };
+  };
+
   const maintenanceScheduler = new MaintenanceScheduler({
     db: services.db,
     toolRegistry: services.toolRegistry,
     getIdleTimeSeconds: () => {
       try { return powerMonitor.getSystemIdleTime(); } catch (_) { return 0; }
     },
-    notify: (title, body, level) => showNotification(title, body, level),
+    notify: (title, body, level) => showNotification(t(title), t(body), level),
     log: (level, message, meta) => logLine(level, message, meta)
   });
   maintenanceScheduler.start();
@@ -604,7 +676,7 @@ app.whenReady().then(async () => {
     toolRegistry
   } = services;
 
-  updater.initAutoUpdater({ onNotify: (title, body, level) => showNotification(title, body, level) });
+  updater.initAutoUpdater({ onNotify: (title, body, level) => showNotification(t(title), t(body), level) });
   updater.subscribe((status) => {
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) win.webContents.send('update:status', status);
@@ -614,7 +686,7 @@ app.whenReady().then(async () => {
   // loadPlugins() is a synchronous filesystem scan, not a network call, so
   // it's cheap enough to keep here rather than deferring it.
   loadPlugins();
-  sendSplashProgress(6, 'Loading security engines...');
+  sendSplashProgress(6, t('splash.loadingEngines'));
 
   // Show the window as soon as possible instead of waiting on ClamAV/RTP
   // initialization below -- those can take a while (definitions download,
@@ -622,7 +694,7 @@ app.whenReady().then(async () => {
   // at all until they finished.
   buildAppMenu();
   createWindow();
-  sendSplashProgress(9, 'Building interface...');
+  sendSplashProgress(9, t('splash.buildingInterface'));
 
   // Register IPC handlers only once mainWindow actually exists. Previously
   // this ran before createWindow(), so the mainWindow parameter passed in
@@ -630,7 +702,7 @@ app.whenReady().then(async () => {
   // handlers like dialog:pickFolder/pickFiles silently fell back to
   // BrowserWindow.getFocusedWindow() instead of targeting the real window.
   registerIpcHandlers(mainWindow, services);
-  sendSplashProgress(12, 'Registering services...');
+  sendSplashProgress(12, t('splash.registeringServices'));
 
   try {
     lifecycleRefs.trayController = initTrayDashboard({
@@ -656,77 +728,95 @@ app.whenReady().then(async () => {
     }
   }, 30_000);
 
-  eventBus.removeAllListeners('scan:progress');
-  eventBus.removeAllListeners('scan:complete');
+  // Module-level tracking for announced progress milestones to prevent duplicate notifications
+  let announcedProgress = new Set();
+  let progressListenersRegistered = false;
 
-  // Forward scan progress events from EventBus to renderer
-  const announcedProgress = new Set();
-  const resolveScanType = (data) => data?.scanType || data?.report?.scanType || null;
-  const isBackgroundScan = (scanType) => scanType === 'folderwatch';
+  function registerScanProgressListeners() {
+    if (progressListenersRegistered) return;
+    progressListenersRegistered = true;
 
-  eventBus.on('scan:progress', (data) => {
-    const scanType = resolveScanType(data);
-    if (!isBackgroundScan(scanType) && mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('scan:progress', data);
-    }
-    if (!data || typeof data.pct !== 'number') return;
-    if (dbRef && !dbRef.getSetting('feature.scanNotifications', true)) return;
-    if (scanType === 'definitions' || isBackgroundScan(scanType) || scanType === 'custom') return;
-    const milestone = [0, 25, 50, 75].find((value) => data.pct >= value && !announcedProgress.has(value));
-    if (milestone !== undefined) {
-      announcedProgress.add(milestone);
-      const files = data.filesScanned || 0;
-      showNotification('Soterios scan progress', `${files} file${files === 1 ? '' : 's'} scanned — ${data.pct}% complete.`, 'info');
-    }
-  });
+    const resolveScanType = (data) => data?.scanType || data?.report?.scanType || null;
+    const isBackgroundScan = (scanType) => scanType === 'folderwatch';
 
-  // Forward scan complete events to renderer
-  eventBus.on('scan:complete', (data) => {
-    const scanType = resolveScanType(data);
-    if (!isBackgroundScan(scanType) && mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('scan:complete', data);
-    }
-    announcedProgress.clear();
-    if (isBackgroundScan(scanType) || scanType === 'custom') return;
+    eventBus.on('scan:progress', (data) => {
+      const scanType = resolveScanType(data);
+      // Don't forward folder watch progress to UI to prevent interference
+      if (!isBackgroundScan(scanType) && mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('scan:progress', data);
+      }
+      if (!data || typeof data.pct !== 'number') return;
+      if (dbRef && !dbRef.getSetting('feature.scanNotifications', true)) return;
+      // Explicitly filter out folder watch, definitions, and custom scans from notifications
+      if (scanType === 'definitions' || isBackgroundScan(scanType) || scanType === 'custom') return;
+      const milestone = [0, 25, 50, 75].find((value) => data.pct >= value && !announcedProgress.has(value));
+      if (milestone !== undefined) {
+        announcedProgress.add(milestone);
+        const files = data.filesScanned || 0;
+        showNotification(t('toast.scanProgressTitle'), t('scan.progress', { files, pct: data.pct }), 'info');
+      }
+    });
 
-    let label;
-    let body;
-    let level;
-    if (data && data.scanType === 'definitions') {
-      label = data.status === 'completed' ? 'Signatures updated' : data.status === 'canceled' ? 'Definitions update canceled' : 'Definitions update failed';
-      body = data.status === 'completed'
-        ? 'ClamAV signatures are up to date.'
-        : data.error || 'ClamAV signature update failed.';
-      level = data.status === 'completed' ? 'success' : data.status === 'canceled' ? 'warn' : 'danger';
-    } else {
-      // Only show notification if not canceled
-      if (data.status === 'canceled') {
-        label = 'Scan canceled';
-        body = `${data.filesScanned || 0} file(s) scanned before cancellation.`;
-        level = 'warn';
+    // Forward scan complete events to renderer
+    eventBus.on('scan:complete', (data) => {
+      const scanType = resolveScanType(data);
+      // Clear announced progress milestones when scan completes
+      announcedProgress.clear();
+      if (!isBackgroundScan(scanType) && mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('scan:complete', data);
+      }
+      if (isBackgroundScan(scanType) || scanType === 'custom') return;
+
+      let label;
+      let body;
+      let level;
+      if (data.scanType === 'definitions') {
+        if (data.status === 'completed') {
+          label = t('toast.signaturesUpdated');
+          body = t('toast.definitionsUpdatedDetail');
+          level = 'success';
+        } else if (data.status === 'canceled') {
+          label = t('toast.definitionsUpdateCanceled');
+          body = t('toast.definitionsUpdateCanceledDetail');
+          level = 'warn';
+        } else {
+          label = t('toast.definitionsUpdateFailed');
+          body = data.error || t('toast.definitionsUpdateFailedDetail');
+          level = 'danger';
+        }
       } else {
-        label = data.status === 'completed' ? 'Scan completed' : 'Scan finished with issues';
-        body = `${data.filesScanned || 0} file(s) scanned, ${data.threatsFound || 0} threat(s) found.`;
-        level = data.status !== 'completed' ? 'warn' : (data.threatsFound ? 'danger' : 'success');
+        // Only show notification if not canceled
+        if (data.status === 'canceled') {
+          label = t('toast.scanCanceled');
+          body = t('toast.scanCanceledDetail', { count: data.filesScanned || 0 });
+          level = 'warn';
+        } else {
+          label = data.status === 'completed' ? t('toast.scanCompleted') : t('toast.scanFinishedWithIssues');
+          body = t('toast.scanSummary', { files: data.filesScanned || 0, threats: data.threatsFound || 0 });
+          level = data.status !== 'completed' ? 'warn' : (data.threatsFound ? 'danger' : 'success');
+        }
       }
-    }
-    const iconOverride = (data.threatsFound && data.threatsFound > 0) ? TOAST_ICONS.threat : null;
-    showNotification(label, body, level, iconOverride);
-    // Auto-generate a scan report
-    (async () => {
-      try {
-        if (!db.getSetting('feature.autoReports', true)) return;
-        const isCanceled = data.status === 'canceled' || data.report?.status === 'canceled';
-        if (isCanceled || (scanType !== 'quick' && scanType !== 'full')) return;
-        logLine('info', 'Generating scan report...');
+      const iconOverride = (data.threatsFound && data.threatsFound > 0) ? TOAST_ICONS.threat : null;
+      showNotification(label, body, level, iconOverride);
+      // Auto-generate a scan report
+      (async () => {
+        try {
+          if (!db.getSetting('feature.autoReports', true)) return;
+          const isCanceled = data.status === 'canceled' || data.report?.status === 'canceled';
+          if (isCanceled || (scanType !== 'quick' && scanType !== 'full')) return;
+          logLine('info', 'Generating scan report...');
 
-        const result = await toolRegistry.run('generate-security-report', { version: app.getVersion() }, { toolRegistry, db, log: logLine });
-        logLine('info', 'Scan report ' + (result.ok ? 'generated' : 'failed: ' + (result.error || 'unknown')));
-      } catch (err) {
-        logLine('error', 'Auto-report generation threw: ' + (err.message || err));
-      }
-    })();
-  });
+          const result = await toolRegistry.run('generate-security-report', { version: app.getVersion() }, { toolRegistry, db, log: logLine });
+          logLine('info', 'Scan report ' + (result.ok ? 'generated' : 'failed: ' + (result.error || 'unknown')));
+        } catch (err) {
+          logLine('error', 'Auto-report generation threw: ' + (err.message || err));
+        }
+      })();
+    });
+  }
+
+  // Register the scan progress listeners
+  registerScanProgressListeners();
 
   // 4. Expose legacy utilities
   // Expose legacy utility running mechanism
@@ -759,7 +849,7 @@ app.whenReady().then(async () => {
     }
   });
 
-  sendSplashProgress(15, 'Loading dashboard...');
+  sendSplashProgress(15, t('splash.loadingDashboard'));
 
   // Extract icons from executable paths for the startup items tool
   const _startupIconCache = {};
@@ -913,22 +1003,9 @@ app.whenReady().then(async () => {
     } catch (err) {
       logLine('error', 'Blocklist refresh failed', { message: err.message });
     }
-    // Persist network bandwidth samples every 30s; prune >7 days hourly.
-    const sampleNetworkStats = async () => {
-      try {
-        const stats = await networkMonitor.getStats();
-        const recordedAt = new Date().toISOString();
-        for (const iface of (stats.interfaces || [])) {
-          db.addNetworkStatsSample(iface.iface, iface.rxSec || 0, iface.txSec || 0, recordedAt);
-        }
-      } catch (err) {
-        logLine('warn', 'Network stats sample failed', { message: err.message });
-      }
-    };
-    const networkStatsTimer = setInterval(sampleNetworkStats, 30_000);
-    if (typeof networkStatsTimer.unref === 'function') networkStatsTimer.unref();
-    lifecycleRefs.networkStatsTimer = networkStatsTimer;
-    sampleNetworkStats().catch(() => {});
+    if (db.getSetting('feature.networkTrafficHistory', true)) {
+      services.startNetworkStatsTimer();
+    }
     const pruneTimer = setInterval(() => {
       try {
         db.pruneNetworkStats(7);
