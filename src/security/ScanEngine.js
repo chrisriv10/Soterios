@@ -69,6 +69,17 @@ class ScanEngine {
     };
   }
 
+  // Compat getters: FolderWatcher and other callers historically read these
+  // directly off the engine instance. Keep them working after the
+  // userScan/folderWatchScan state split.
+  get isScanning() {
+    return this.userScan.isScanning;
+  }
+
+  get isFolderWatchScanning() {
+    return this.folderWatchScan.isScanning;
+  }
+
   async runQuickScan() {
     if (this.userScan.isScanning) return { error: 'Scan already in progress' };
 
@@ -109,8 +120,13 @@ class ScanEngine {
     
     if (isFolderWatch) {
       if (scanState.isScanning) return { error: 'Folder watch scan already in progress' };
+      // A user scan takes priority over the ClamAV process; folder-watch defers.
+      if (this.userScan.isScanning) return { error: 'Scan already in progress' };
     } else {
       if (scanState.isScanning) return { error: 'Scan already in progress' };
+      // Only one scan can hold the ClamAV process at a time; wait out a
+      // running folder-watch scan rather than clobbering it.
+      if (this.folderWatchScan.isScanning) return { error: 'Scan already in progress' };
     }
     
     scanState.isScanning = true;

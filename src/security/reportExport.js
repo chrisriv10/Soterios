@@ -64,7 +64,7 @@ function securityReportToCsv(report) {
   const lines = [];
   
   // Overview section
-  lines.push('=== OVERVIEW ===');
+  lines.push(csvEscape('=== OVERVIEW ==='));
   const overview = report.overview || {};
   lines.push(['score', 'level', 'generated_at'].join(','));
   lines.push([
@@ -75,7 +75,7 @@ function securityReportToCsv(report) {
   lines.push('');
   
   // Recommendations section
-  lines.push('=== RECOMMENDATIONS ===');
+  lines.push(csvEscape('=== RECOMMENDATIONS ==='));
   const recommendations = report.recommendations || overview.recommendations || [];
   lines.push(['level', 'title', 'detail'].join(','));
   for (const rec of recommendations) {
@@ -88,7 +88,7 @@ function securityReportToCsv(report) {
   lines.push('');
   
   // System snapshot section
-  lines.push('=== SYSTEM SNAPSHOT ===');
+  lines.push(csvEscape('=== SYSTEM SNAPSHOT ==='));
   const system = report.system || {};
   const snapshotEntries = Object.entries(system);
   lines.push(['category', 'key', 'value'].join(','));

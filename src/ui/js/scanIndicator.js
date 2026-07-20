@@ -31,6 +31,7 @@
 
   function markDone(status, threatsFound = 0) {
     clearTimeout(doneTimer);
+    clearTimeout(progressTimer);
     el.classList.add('scan-indicator--done');
     if (status === 'canceled') {
       fill.style.width = pct.textContent;

@@ -251,11 +251,17 @@ window.Pages['audit'] = {
   },
 
   warningId(result) {
+    // Prefer the stable id captured from the untranslated backend result
+    // (see translateAuditResult) so ignored warnings don't depend on locale.
+    if (result._ignoreId) return result._ignoreId;
     return 'audit:' + String(result.name || result.message || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   },
 
   translateAuditResult(result) {
-    const translated = { ...result };
+    // Compute the stable ignore id from the raw, untranslated backend fields
+    // BEFORE any translation is applied, so it stays consistent across locales.
+    const ignoreId = this.warningId(result);
+    const translated = { ...result, _ignoreId: ignoreId };
     const map = this.auditTranslations;
 
     // Translate name

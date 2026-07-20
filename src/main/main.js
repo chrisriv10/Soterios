@@ -66,6 +66,8 @@ let splashTimeoutId;
 let dbRef; // set once the database is created in app.whenReady() below, so
 // showNotification (defined before that point) can check settings
 let currentUiTheme = 'dark';
+let startupLocale = 'en'; // set from peekUiLanguage() before the DB is ready,
+// so the earliest splash messages respect the saved language
 let isQuitting = false;
 const lifecycleRefs = {
   maintenanceScheduler: null,
@@ -119,10 +121,10 @@ function getLocale() {
       const lang = dbRef.getSetting('ui.language', 'en');
       return i18n.normalizeLocale(lang);
     } catch (_) {
-      return 'en';
+      return startupLocale;
     }
   }
-  return 'en';
+  return startupLocale;
 }
 
 function t(key, vars) {
@@ -592,6 +594,9 @@ app.whenReady().then(async () => {
   // Peek the saved theme before creating the splash so the first paint
   // matches the user's preference instead of always flashing dark mode.
   currentUiTheme = peekUiTheme(dbPath);
+  // Peek the saved locale too, so the earliest splash progress messages
+  // are in the user's language instead of always starting in English.
+  startupLocale = i18n.normalizeLocale(peekUiLanguage(dbPath));
   if (!isScreenshotCaptureMode()) {
     createSplashWindow(currentUiTheme);
   }
