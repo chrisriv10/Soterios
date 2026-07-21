@@ -119,6 +119,21 @@ window.Pages.settings = {
             </div>
             <label class="toggle"><input type="checkbox" id="networkPerimeterMapToggle" ${settings.features.networkPerimeterMap !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
+<div class="toggle-row">
+            <div>
+              <div class="toggle-label">${escapeHtml(t('settings.networkPerimeterMap.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.networkPerimeterMap.desc'))}</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="networkPerimeterMapToggle" ${settings.features.networkPerimeterMap !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+          </div>
+
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">${escapeHtml(t('settings.browserExtension.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.browserExtension.desc'))}</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="browserExtensionToggle" ${settings.features.browserExtension ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+          </div>
           <div id="featureToggleStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
         </div>
 
@@ -384,6 +399,33 @@ window.Pages.settings = {
     container.querySelector('#externalLookupsToggle').addEventListener('change', (event) => saveFeature('externalLookups', event.target.checked, event.target));
     container.querySelector('#geoLookupToggle').addEventListener('change', (event) => saveFeature('geoLookup', event.target.checked, event.target));
     container.querySelector('#networkPerimeterMapToggle').addEventListener('change', (event) => saveFeature('networkPerimeterMap', event.target.checked, event.target));
+    container.querySelector('#browserExtensionToggle').addEventListener('change', async (event) => {
+      const checked = event.target.checked;
+      const statusEl = container.querySelector('#featureToggleStatus');
+      statusEl.textContent = '';
+      event.target.disabled = true;
+      try {
+        await Api.updateSettings({ features: { browserExtension: checked } });
+        if (checked) {
+          statusEl.textContent = t('settings.browserExtension.installing');
+          const result = await window.api.invoke('browserExtension:installNativeHost');
+          if (result.ok) {
+            statusEl.textContent = t('settings.browserExtension.installed');
+          } else {
+            event.target.checked = false;
+            await Api.updateSettings({ features: { browserExtension: false } });
+            statusEl.textContent = result.error || t('settings.browserExtension.installFailed');
+          }
+        } else {
+          statusEl.textContent = t('settings.featureSaved');
+        }
+      } catch (err) {
+        event.target.checked = !checked;
+        statusEl.textContent = err.message || String(err);
+      } finally {
+        event.target.disabled = false;
+      }
+    });
     container.querySelector('#notificationsToggle').addEventListener('change', async (event) => {
       const checked = event.target.checked;
       const statusEl = container.querySelector('#notificationStatus');

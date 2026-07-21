@@ -918,6 +918,37 @@ function registerIpcHandlers(mainWindow, services) {
   });
 
   ipcMain.handle('tray:quit', () => app.quit());
+
+  // -- Browser Extension Native Host --
+  ipcMain.handle('browserExtension:installNativeHost', async () => {
+    if (process.platform !== 'win32') {
+      return { ok: false, error: 'Native host install only supported on Windows' };
+    }
+    const { execSync } = require('child_process');
+    const fs = require('fs');
+    const path = require('path');
+    const extDir = path.join(__dirname, '..', '..', 'browser-extension');
+    const manifestPath = path.join(extDir, 'native-host-manifest.json');
+    const batPath = path.join(extDir, 'native-host.bat');
+    const jsPath = path.join(extDir, 'native-host.js');
+    if (!fs.existsSync(manifestPath) || !fs.existsSync(batPath) || !fs.existsSync(jsPath)) {
+      return { ok: false, error: 'Extension files not found. Reinstall Soterios.' };
+    }
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    const extId = process.env.SOTERIOS_EXT_ID || 'YOUR_EXTENSION_ID_HERE';
+    manifest.allowed_origins = [manifest.allowed_origins[0].replace('<EXTENSION_ID>', extId)];
+    const regPath = `HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${manifest.name}`;
+    const regCmd = `reg add "${regPath}" /ve /t REG_SZ /d "${manifestPath.replace(/\\/g, '\\\\')}" /f`;
+    try {
+      execSync(regCmd, { stdio: 'ignore' });
+      const regPathEdge = `HKCU\\Software\\Microsoft\\Edge\\NativeMessagingHosts\\${manifest.name}`;
+      const regCmdEdge = `reg add "${regPathEdge}" /ve /t REG_SZ /d "${manifestPath.replace(/\\/g, '\\\\')}" /f`;
+      try { execSync(regCmdEdge, { stdio: 'ignore' }); } catch (_) {}
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e.message || String(e) };
+    }
+  });
 }
 
 module.exports = { registerIpcHandlers };
