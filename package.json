@@ -32,7 +32,7 @@
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",
     "@types/jest": "^30.0.0",
-    "adm-zip": "^0.5.17",
+    "adm-zip": "^0.6.0",
     "ajv-keywords": "^5.1.0",
     "axios": "^1.18.1",
     "electron": "^42.6.1",

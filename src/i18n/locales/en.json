@@ -492,7 +492,7 @@
   "firewall.importErrors": "\nErrors:\n- {errors}",
   "firewall.perimeterDetail": "What am I looking at?",
   "firewall.perimeterDesc1": "Click any dot on the map, or a row in the table below, to see its details and actions here.",
-  "firewall.perimeterDesc2": "Unverified — not on a known-safe list yet. Most ordinary connections start out this way.",
+  "firewall.perimeterDesc2": "{unverified} — not on a known-safe list yet. Most ordinary connections start out this way.",
   "firewall.perimeterDesc3": "— direction of the connection.",
   "firewall.perimeterDesc4": "— hover any term shown in a connection's details for a description.",
   "firewall.detailProcess": "{process}",

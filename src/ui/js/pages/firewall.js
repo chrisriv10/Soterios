@@ -775,7 +775,7 @@ window.Pages['firewall'] = {
           <div style="font-weight:600; font-size:0.85rem;">${escapeHtml(t('firewall.perimeterDetail'))}</div>
           <div style="font-size:0.78rem; color:var(--text-dim); display:flex; flex-direction:column; gap:6px;">
             <div>${escapeHtml(t('firewall.perimeterDesc1'))}</div>
-            <div style="margin-top:6px;">${escapeHtml(t('firewall.perimeterDesc2', { unverified: `<span class="glossary-term" title="${escapeHtml(this._glossary('unverified'))}">${escapeHtml(t('common.unverified'))}</span>` }))}</div>
+            <div style="margin-top:6px;">${t('firewall.perimeterDesc2', { unverified: `<span class="glossary-term" title="${escapeHtml(this._glossary('unverified'))}">${escapeHtml(t('common.unverified'))}</span>` })}</div>
             <div><span class="glossary-term" title="${escapeHtml(this._glossary('inbound'))}">${escapeHtml(t('firewall.inbound'))}</span> / <span class="glossary-term" title="${escapeHtml(this._glossary('outbound'))}">${escapeHtml(t('firewall.outbound'))}</span> ${escapeHtml(t('firewall.perimeterDesc3'))}</div>
             <div><span class="glossary-term" title="${escapeHtml(this._glossary('established'))}">${escapeHtml(t('firewall.established'))}</span>, <span class="glossary-term" title="${escapeHtml(this._glossary('listen'))}">${escapeHtml(t('firewall.listen'))}</span>, <span class="glossary-term" title="${escapeHtml(this._glossary('time_wait'))}">${escapeHtml(t('firewall.time_wait'))}</span> ${escapeHtml(t('firewall.perimeterDesc4'))}</div>
           </div>
