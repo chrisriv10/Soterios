@@ -57,12 +57,28 @@ function isSafePath(filePath) {
   return false;
 }
 
+// On POSIX, O_NOFOLLOW causes open() to fail with ELOOP if the final path
+// component is a symlink, closing the TOCTOU gap between the lstat safety
+// check and the actual overwrite. Windows has no equivalent flag, so the
+// upfront lstat check in shredFile() is the primary guard there.
+const NOFOLLOW_FLAGS = (fs.constants && fs.constants.O_NOFOLLOW && process.platform !== 'win32')
+  ? fs.constants.O_NOFOLLOW
+  : 0;
+
+function openNoFollow(filePath, mode) {
+  const base = mode === 'r' ? fs.constants.O_RDONLY : (fs.constants.O_RDWR);
+  return fs.openSync(filePath, base | NOFOLLOW_FLAGS);
+}
+
 function overwriteWithPattern(filePath, pattern) {
-  const stats = fs.statSync(filePath);
+  const stats = fs.lstatSync(filePath);
+  if (stats.isSymbolicLink()) {
+    throw new Error('Refusing to write through a symbolic link');
+  }
   const fileSize = stats.size;
   const chunkSize = 64 * 1024; // 64KB chunks
   
-  const fd = fs.openSync(filePath, 'r+');
+  const fd = openNoFollow(filePath, 'r+');
   
   try {
     let offset = 0;
@@ -91,11 +107,14 @@ function overwriteWithPattern(filePath, pattern) {
 }
 
 function verifyOverwrite(filePath, expectedPattern) {
-  const stats = fs.statSync(filePath);
+  const stats = fs.lstatSync(filePath);
+  if (stats.isSymbolicLink()) {
+    throw new Error('Refusing to read through a symbolic link');
+  }
   const fileSize = stats.size;
   const chunkSize = 64 * 1024;
   
-  const fd = fs.openSync(filePath, 'r');
+  const fd = openNoFollow(filePath, 'r');
   
   try {
     let offset = 0;
@@ -128,7 +147,11 @@ function verifyOverwrite(filePath, expectedPattern) {
 
 function generateAndVerifyRandom(filePath, fileSize) {
   const chunkSize = 64 * 1024;
-  const fd = fs.openSync(filePath, 'r+');
+  const lst = fs.lstatSync(filePath);
+  if (lst.isSymbolicLink()) {
+    throw new Error('Refusing to write through a symbolic link');
+  }
+  const fd = openNoFollow(filePath, 'r+');
   
   try {
     let offset = 0;
@@ -174,9 +197,25 @@ async function shredFile(filePath, passes = 3) {
     return { success: false, error: 'File does not exist' };
   }
   
-  const stats = fs.statSync(filePath);
+  const stats = fs.lstatSync(filePath);
+  if (stats.isSymbolicLink()) {
+    return { success: false, error: 'Refusing to shred a symbolic link' };
+  }
   if (!stats.isFile()) {
     return { success: false, error: 'Path is not a file' };
+  }
+
+  // Re-validate against the fully resolved path so a symlinked parent
+  // directory can't redirect an otherwise "safe" path outside the
+  // allowed roots / into a protected path.
+  let realPath;
+  try {
+    realPath = fs.realpathSync(filePath);
+  } catch (err) {
+    return { success: false, error: 'Unable to resolve real path' };
+  }
+  if (!isSafePath(realPath)) {
+    return { success: false, error: 'Resolved path is not safe for shredding' };
   }
   
   const fileSize = stats.size;

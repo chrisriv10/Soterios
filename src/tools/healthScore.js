@@ -64,6 +64,7 @@ function bandedPoints(value, bands) {
 }
 
 module.exports = {
+  isUserFacingVolume,
   id: 'health-score', name: 'System Health Score',
   description: 'Composite score summarizing scan results, resource health, and protection status.',
   category: 'Dashboard', icon: 'gauge',

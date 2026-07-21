@@ -115,6 +115,26 @@ function csvPathForJson(jsonPath) {
   return String(jsonPath).replace(/\.json$/i, '.csv');
 }
 
+// Guards against writing through a symlink/hardlink that an attacker may
+// have pre-created at the derived export destination. Export paths are
+// timestamp-derived, so they should never need to overwrite an existing
+// file; if one exists and isn't a symlink we still refuse, to keep the
+// exclusive-create semantics simple and predictable.
+function safeWriteFileSync(destPath, data, encoding) {
+  if (fs.existsSync(destPath)) {
+    const lst = fs.lstatSync(destPath);
+    if (lst.isSymbolicLink() || !lst.isFile()) {
+      throw new Error('Refusing to write export: destination is not a regular file.');
+    }
+  }
+  const fd = fs.openSync(destPath, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC);
+  try {
+    fs.writeSync(fd, encoding ? Buffer.from(data, encoding) : Buffer.from(data));
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 async function generatePdfFromHtml(htmlPath) {
   if (!htmlPath || !fs.existsSync(htmlPath)) {
     throw new Error('Report HTML file not found.');
@@ -138,7 +158,7 @@ async function generatePdfFromHtml(htmlPath) {
     await win.loadFile(htmlPath);
     const pdfBuffer = await win.webContents.printToPDF({ printBackground: true });
     const pdfPath = pdfPathForHtml(htmlPath);
-    fs.writeFileSync(pdfPath, pdfBuffer);
+    safeWriteFileSync(pdfPath, pdfBuffer);
     return pdfPath;
   } finally {
     if (!win.isDestroyed()) win.destroy();
@@ -153,6 +173,7 @@ module.exports = {
   isPathInAllowedReportDir,
   csvEscape,
   isThreatQuarantined,
+  safeWriteFileSync,
   threatsToCsv,
   securityReportToCsv,
   pdfPathForHtml,

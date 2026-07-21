@@ -311,7 +311,7 @@ window.Pages['audit'] = {
   renderRecommendation(rec) {
     const match = String(rec).match(/^(.*?):\s*((?:Set|Get|Enable|Disable|Add|Remove|New|Start|Stop|Restart|Install|Uninstall)-[A-Za-z]+\b[\s\S]*)$/);
     if (!match) {
-      return `<div style="font-size:0.85rem;"><strong>${escapeHtml(this.t('audit.recommendation', { rec }))}</strong> ${escapeHtml(rec)}</div>`;
+      return `<div style="font-size:0.85rem;"><strong>${escapeHtml(this.t('audit.recommendation', { rec }))}</strong></div>`;
     }
     const prose = match[1].trim();
     const command = match[2].trim();

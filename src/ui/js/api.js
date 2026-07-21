@@ -44,10 +44,14 @@ const Api = {
         const systemLocale = await window.api.invoke('i18n:getSystemLocale');
         locale = await window.api.invoke('i18n:normalizeLocale', systemLocale);
       }
-      await window.I18n.setLocale(locale || 'en', { persist: true });
+      // Only persist when we're establishing a fresh default (no saved
+      // preference yet) - applying an already-saved preference shouldn't
+      // re-write it, and the transient failure fallback below must never
+      // clobber it.
+      await window.I18n.setLocale(locale || 'en', { persist: !saved });
     } catch (_) {
       try {
-        await window.I18n.setLocale('en', { persist: true });
+        await window.I18n.setLocale('en', { persist: false });
       } catch (_) {}
     }
   },

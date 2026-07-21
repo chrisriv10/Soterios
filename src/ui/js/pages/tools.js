@@ -469,7 +469,7 @@ async runScript(container, btn) {
 
     const updateButton = () => {
       const selected = output.querySelectorAll('.duplicate-checkbox:checked');
-      deleteBtn.textContent = `${t('tools.deleteSelected', { count: selected.length })}`;
+      deleteBtn.textContent = `${this.t('tools.deleteSelected', { count: selected.length })}`;
       deleteBtn.disabled = selected.length === 0;
     };
 
