@@ -4,9 +4,20 @@ const si = require('systeminformation');
 const execPromise = util.promisify(exec);
 const path = require('path');
 const fs = require('fs');
+const i18n = require('../i18n');
 
 class SystemAudit {
-  constructor() {}
+  constructor() {
+    this.locale = 'en';
+  }
+
+  setLocale(locale) {
+    this.locale = locale || 'en';
+  }
+
+  t(key, vars = {}) {
+    return i18n.t(key, this.locale, vars);
+  }
 
   async runPowerShell(script, timeoutMs = 15000) {
     try {
