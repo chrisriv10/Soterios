@@ -86,14 +86,18 @@ class SystemAudit {
       return [{ name: 'Windows Updates', status: 'warn', message: `${count} update(s) pending.`, detail: `${count} update(s) are waiting to be installed.`, recommendation: 'Open Settings > Windows Update and install pending updates.' }];
     }
     // Fallback: Try WU API via UsoClient for basic status
-    const fallback = await this.runPowerShell(`try { $session = New-Object -ComObject Microsoft.Update.Session -ErrorAction Stop; $searcher = $session.CreateUpdateSearcher(); $result = $searcher.Search('IsInstalled=0 and IsHidden=0'); $result.Updates.Count } catch { 0 }`, 30000);
+    const fallback = await this.runPowerShell(`try { $session = New-Object -ComObject Microsoft.Update.Session -ErrorAction Stop; $searcher = $session.CreateUpdateSearcher(); $result = $searcher.Search('IsInstalled=0 and IsHidden=0'); $result.Updates.Count } catch { '_ERROR_' }`, 30000);
     if (fallback.ok) {
       const raw = fallback.stdout.trim();
-      const count = /^[0-9]+$/.test(raw) ? Number(raw) : null;
-      if (count !== null && count === 0) {
-        return [{ name: 'Windows Updates', status: 'pass', message: 'No pending updates.', detail: 'All available updates are installed.', recommendation: 'Keep automatic updates enabled.' }];
-      } else if (count !== null && count > 0) {
-        return [{ name: 'Windows Updates', status: 'warn', message: `${count} update(s) pending.`, detail: `${count} update(s) are waiting to be installed.`, recommendation: 'Open Settings > Windows Update and install pending updates.' }];
+      if (raw === '_ERROR_') {
+        // Explicit error sentinel - fall through to warning
+      } else {
+        const count = /^[0-9]+$/.test(raw) ? Number(raw) : null;
+        if (count !== null && count === 0) {
+          return [{ name: 'Windows Updates', status: 'pass', message: 'No pending updates.', detail: 'All available updates are installed.', recommendation: 'Keep automatic updates enabled.' }];
+        } else if (count !== null && count > 0) {
+          return [{ name: 'Windows Updates', status: 'warn', message: `${count} update(s) pending.`, detail: `${count} update(s) are waiting to be installed.`, recommendation: 'Open Settings > Windows Update and install pending updates.' }];
+        }
       }
     }
     return [{ name: 'Windows Updates', status: 'warn', message: 'Could not query update status.', detail: up.error || 'Windows Update may be disabled or the COM query timed out.', recommendation: 'Check Windows Update in Settings manually.' }];

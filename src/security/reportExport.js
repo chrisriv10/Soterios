@@ -118,16 +118,15 @@ function csvPathForJson(jsonPath) {
 // Guards against writing through a symlink/hardlink that an attacker may
 // have pre-created at the derived export destination. Export paths are
 // timestamp-derived, so they should never need to overwrite an existing
-// file; if one exists and isn't a symlink we still refuse, to keep the
-// exclusive-create semantics simple and predictable.
+// file. Use atomic open flags to avoid TOCTOU: O_EXCL for exclusive
+// create, O_NOFOLLOW on POSIX to refuse symlinks at open time.
 function safeWriteFileSync(destPath, data, encoding) {
-  if (fs.existsSync(destPath)) {
-    const lst = fs.lstatSync(destPath);
-    if (lst.isSymbolicLink() || !lst.isFile()) {
-      throw new Error('Refusing to write export: destination is not a regular file.');
-    }
-  }
-  const fd = fs.openSync(destPath, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC);
+  const isWin = process.platform === 'win32';
+  const flags = isWin
+    ? fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_TRUNC
+    : fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW;
+  
+  const fd = fs.openSync(destPath, flags);
   try {
     fs.writeSync(fd, encoding ? Buffer.from(data, encoding) : Buffer.from(data));
   } finally {

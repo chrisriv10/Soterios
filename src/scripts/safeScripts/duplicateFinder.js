@@ -22,7 +22,7 @@ const PROTECTED_PATHS = [
   path.join(os.homedir(), 'AppData'),
   path.join(os.homedir(), '.ssh'),
   path.join(os.homedir(), '.gnupg'),
-  os.homedir() + '\\.config',
+  path.join(os.homedir(), '.config'),
   process.env.ProgramData,
   process.env.WINDIR
 ];
@@ -127,13 +127,16 @@ async function findDuplicates(scanPath = null) {
     allFiles.push(...files);
   }
   
-  // Deduplicate files by resolved path (case-insensitive on Windows)
-  // This handles overlapping scan roots (e.g., home dir + Downloads)
+  // Deduplicate files by resolved path (case-insensitive on Windows only)
+// This handles overlapping scan roots (e.g., home dir + Downloads)
   const uniqueFiles = [...new Map(
-    allFiles.map((file) => [
-      path.resolve(file.path).toLowerCase(),
-      file
-    ])
+    allFiles.map((file) => {
+      const resolved = path.resolve(file.path);
+      // On Windows, use lowercase for deduplication since filesystem is case-insensitive
+      // On POSIX, preserve case since filesystem is case-sensitive
+      const key = process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+      return [key, file];
+    })
   ).values()];
   
   // Group by size first (optimization)

@@ -17,9 +17,7 @@ const path = require('path');
 
 const USER_OWNED_ROOTS = [
   os.homedir(),
-  process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs') : null,
-  process.env.ProgramFiles,
-  process.env['ProgramFiles(x86)']
+  process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs') : null
 ].filter(Boolean);
 
 const PROTECTED_PATHS = [

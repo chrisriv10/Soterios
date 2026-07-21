@@ -376,7 +376,7 @@ function registerIpcHandlers(mainWindow, services) {
     if (config.scanType === 'custom' && !config.customPath) return;
 
     const engineStatus = scanEngine.getStatus();
-    if (engineStatus && engineStatus.isScanning) return; // don't collide with a manual/other scan
+    if (engineStatus && (engineStatus.isScanning || engineStatus.isFolderWatchScanning)) return; // don't collide with any scan
 
     const intervalMs = Math.max(1, Number(config.intervalHours) || 24) * 60 * 60 * 1000;
     const lastRunMs = config.lastRun ? new Date(config.lastRun).getTime() : 0;

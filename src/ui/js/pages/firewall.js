@@ -651,6 +651,10 @@ window.Pages['firewall'] = {
     g.setAttribute('data-key', item.key);
     g.setAttribute('transform-origin', `${item.x}px ${item.y}px`);
     g.style.pointerEvents = 'all';
+    // Make keyboard accessible
+    g.setAttribute('role', 'button');
+    g.setAttribute('tabindex', '0');
+    g.setAttribute('aria-label', label);
 
     let inner = `<title>${label}</title>`;
     if (item.blocked) {
@@ -674,6 +678,14 @@ window.Pages['firewall'] = {
     };
     g.querySelector('.perim-hit').addEventListener('click', handleNodeClick);
     g.querySelector('.perim-dot').addEventListener('click', handleNodeClick);
+
+    // Keyboard accessibility: Enter/Space to activate
+    g.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        handleNodeClick();
+      }
+    });
 
     return {
       g,
