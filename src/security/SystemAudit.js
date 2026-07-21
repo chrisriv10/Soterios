@@ -4,20 +4,9 @@ const si = require('systeminformation');
 const execPromise = util.promisify(exec);
 const path = require('path');
 const fs = require('fs');
-const i18n = require('../i18n');
 
 class SystemAudit {
-  constructor() {
-    this.locale = 'en';
-  }
-
-  setLocale(locale) {
-    this.locale = locale || 'en';
-  }
-
-  t(key, vars = {}) {
-    return i18n.t(key, this.locale, vars);
-  }
+  constructor() {}
 
   async runPowerShell(script, timeoutMs = 15000) {
     try {
@@ -73,8 +62,8 @@ class SystemAudit {
   }
 
   async checkWindowsUpdate() {
-    // Primary: COM query (most comprehensive but can find driver/optional updates)
-    const up = await this.runPowerShell(`$session = New-Object -ComObject Microsoft.Update.Session -ErrorAction Stop; $searcher = $session.CreateUpdateSearcher(); $pending = $searcher.Search('IsInstalled=0 and IsHidden=0 and Type=\'Software\' and IsAssigned=1'); $pending.Updates.Count`, 90000);
+    // Primary: COM query (comprehensive but may include driver/optional updates)
+    const up = await this.runPowerShell(`$session = New-Object -ComObject Microsoft.Update.Session -ErrorAction Stop; $searcher = $session.CreateUpdateSearcher(); $pending = $searcher.Search('IsInstalled=0 and IsHidden=0 and Type=\'Software\''); $pending.Updates.Count`, 90000);
     if (up.ok) {
       const raw = up.stdout.trim();
       const count = /^[0-9]+$/.test(raw) ? Number(raw) : null;
