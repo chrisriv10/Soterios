@@ -766,6 +766,23 @@ function registerIpcHandlers(mainWindow, services) {
     return { found: count > 0, count };
   });
 
+  ipcMain.handle('credential-leak:notify', async (_event, payload) => {
+    if (!payload?.password) return { ok: false, error: 'Missing password' };
+    const sha = crypto.createHash('sha1').update(payload.password).digest('hex').toUpperCase();
+    const alert = {
+      level: 'danger',
+      source: 'Browser Extension',
+      title: 'Credential Leak Detected',
+      message: `Password found in ${payload.count} breach${payload.count > 1 ? 'es' : ''} via browser extension`,
+      detail: `SHA-1 prefix: ${sha.slice(0, 5)}... | Breaches: ${payload.count}`,
+      timestamp: new Date().toISOString(),
+      metadata: { source: 'browser-extension', hashPrefix: sha.slice(0, 5), count: payload.count }
+    };
+    db.addAlert(alert);
+    if (services.eventBus) services.eventBus.emit('alert:new', alert);
+    return { ok: true };
+  });
+
   ipcMain.handle('xon:email', async (_event, email) => {
     if (!email) return { found: false, breaches: [] };
     if (!db.getSetting('feature.externalLookups', true)) throw new Error('External lookups are disabled in Settings.');
