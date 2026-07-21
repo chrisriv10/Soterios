@@ -80,9 +80,10 @@ module.exports = {
   category: 'System', icon: 'list',
   run: async () => {
     try {
-      const [procData, loadData] = await Promise.all([
+      const [procData, loadData, memData] = await Promise.all([
         si.processes(),
-        si.currentLoad()
+        si.currentLoad(),
+        si.mem()
       ]);
       const processList = procData.list || [];
 
@@ -112,13 +113,16 @@ module.exports = {
         return usageB - usageA;
       });
 
+      const totalMemory = memData.total > 0 ? ((memData.total - memData.available) / memData.total) * 100 : 0;
+
       return {
         totalCpu: loadData.currentLoad,
+        totalMemory: +(totalMemory.toFixed(1)),
         processes
       };
     } catch (err) {
       console.error('Failed to get processes:', err);
-      return { totalCpu: 0, processes: [] };
+      return { totalCpu: 0, totalMemory: 0, processes: [] };
     }
   }
 };

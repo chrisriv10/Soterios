@@ -31,12 +31,16 @@ window.I18n = {
     let value = this.catalog[key];
     if (value == null) value = this.fallbackCatalog[key];
     if (value == null) return key;
-    if (vars && typeof vars === 'object') {
-      value = String(value).replace(/\{(\w+)\}/g, (_match, name) => (
-        Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : `{${name}}`
-      ));
+    
+    // If no variables, return the value directly
+    if (!vars || typeof vars !== 'object' || Object.keys(vars).length === 0) {
+      return value;
     }
-    return value;
+
+    // Handle simple variable substitution
+    return String(value).replace(/\{(\w+)\}/g, (match, name) => (
+      Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : `{${name}}`
+    ));
   },
 
   translateUI() {

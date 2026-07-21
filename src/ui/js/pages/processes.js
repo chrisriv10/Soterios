@@ -50,8 +50,8 @@ window.Pages.processes = {
             <option value="name-asc">${escapeHtml(this.t('processes.sortName'))}</option>
           </select>
           <div id="liveStats" style="display:flex; gap:16px; font-size:0.85rem; font-weight:500; white-space:nowrap;">
-            <span>${escapeHtml(this.t('processes.liveCpu', { cpu: '--' }))}</span>
-            <span>${escapeHtml(this.t('processes.liveMemory', { mem: '--' }))}</span>
+            <span id="liveCpu">${escapeHtml(this.t('processes.liveCpu', { cpu: '--' }))}</span>
+            <span id="liveMemory">${escapeHtml(this.t('processes.liveMemory', { mem: '--' }))}</span>
           </div>
           <span class="page-subtitle" id="processCount" style="font-size:0.85rem; white-space:nowrap; margin-left:auto;"></span>
         </div>
@@ -114,7 +114,7 @@ window.Pages.processes = {
       const data = await Api.runTool('process-viewer', {});
       if (!document.body.contains(container)) return;
       this._all = data.processes || [];
-      this.updateLiveStats(container, data.totalCpu, this._all);
+      this.updateLiveStats(container, data.totalCpu, data.totalMemory);
       this.buildRows(container);
       this.sortRows(container);
       this.applyFilter(container);
@@ -127,7 +127,7 @@ window.Pages.processes = {
 
   _cpuHistory: [],
 
-  updateLiveStats(container, totalCpuReading, processes) {
+  updateLiveStats(container, totalCpuReading, totalMemoryReading) {
     const cpuEl = container.querySelector('#liveCpu');
     const memEl = container.querySelector('#liveMemory');
     if (!cpuEl || !memEl) return;
@@ -139,13 +139,15 @@ window.Pages.processes = {
     if (this._cpuHistory.length > 3) this._cpuHistory.shift();
     const totalCpu = this._cpuHistory.reduce((a, b) => a + b, 0) / this._cpuHistory.length;
 
-    const totalMemory = Math.min(100, processes.reduce((sum, p) => sum + (typeof p.memory === 'number' ? p.memory : 0), 0));
+    const totalMemory = typeof totalMemoryReading === 'number' && !Number.isNaN(totalMemoryReading)
+      ? Math.min(100, Math.max(0, totalMemoryReading))
+      : 0;
 
     const colorFor = (pct) => pct >= 80 ? 'var(--accent-danger)' : pct >= 50 ? 'var(--accent-warning)' : 'var(--accent-success)';
 
-    cpuEl.textContent = `${totalCpu.toFixed(1)}%`;
+    cpuEl.textContent = this.t('processes.liveCpu', { cpu: totalCpu.toFixed(1) + '%' });
     cpuEl.style.color = colorFor(totalCpu);
-    memEl.textContent = `${totalMemory.toFixed(1)}%`;
+    memEl.textContent = this.t('processes.liveMemory', { mem: totalMemory.toFixed(1) + '%' });
     memEl.style.color = colorFor(totalMemory);
   },
 

@@ -7,7 +7,7 @@ window.Pages.passwords = {
         <div class="page-subtitle">${escapeHtml(t('passwords.subtitle'))}</div></div>
       <div class="grid grid-2">
         <div class="panel"><div class="panel-title">${escapeHtml(t('passwords.generator'))}</div>
-          <div class="field"><label class="field-label">${escapeHtml(t('passwords.length', { value: 16 }))}</label>
+          <div class="field"><label class="field-label" id="lengthLabel">${escapeHtml(t('passwords.length', { value: 16 }))}</label>
             <input type="range" id="lengthSlider" min="4" max="64" value="16" style="width:100%;" /></div>
           <label class="checkbox-row"><input type="checkbox" id="optLower" checked />${escapeHtml(t('passwords.lowercase'))}</label>
           <label class="checkbox-row"><input type="checkbox" id="optUpper" checked />${escapeHtml(t('passwords.uppercase'))}</label>
@@ -79,7 +79,10 @@ window.Pages.passwords = {
   wireGenerator(container) {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const slider = container.querySelector('#lengthSlider');
-    slider.addEventListener('input', () => { container.querySelector('#lengthValue').textContent = slider.value; });
+    const lengthLabel = container.querySelector('#lengthLabel');
+    slider.addEventListener('input', () => { 
+      lengthLabel.textContent = t('passwords.length', { value: slider.value });
+    });
     container.querySelector('#generateBtn').addEventListener('click', async () => {
       try {
         const result = await Api.runTool('password-generator', {
@@ -197,12 +200,8 @@ function renderStrengthMeter(el, strength, showIssues) {
       'Instantly': 'passwords.crackTimeInstant',
       'Instant': 'passwords.crackTimeInstant'
     };
-    let timeKey = crackTimeMap[strength.crackTimeEstimate] || 'passwords.crackTime';
-    let timeVars = { time: strength.crackTimeEstimate };
-    if (crackTimeMap[strength.crackTimeEstimate]) {
-      timeVars = {};
-    }
-    const translatedTime = t(timeKey, timeVars);
+    const timeKey = crackTimeMap[strength.crackTimeEstimate];
+    const translatedTime = timeKey ? t(timeKey) : strength.crackTimeEstimate;
     crackTimeHtml = `<div style="font-size:11px; color:var(--text-dim); margin-top:6px;">${escapeHtml(t('passwords.crackTime', { time: translatedTime }))}</div>`;
   }
   

@@ -138,7 +138,7 @@ window.Pages.tools = {
   },
 
   renderToolRow(s) {
-    const hasInput = s.id === 'clear-temp-files' || s.id === 'file-shredder';
+    const hasInput = s.id === 'clear-temp-files' || s.id === 'file-shredder' || s.id === 'large-files-report';
     const inputHtml = s.id === 'clear-temp-files' ? `
       <div class="tool-input-inline">
         <label style="display:flex; align-items:center; gap:8px; font-size:0.8rem; color:var(--text-muted); cursor:pointer;">
@@ -150,7 +150,14 @@ window.Pages.tools = {
       <div class="tool-input-inline">
         <button class="btn btn-sm" id="selectFilesToShredBtn" style="flex:1;">${escapeHtml(this.t('tools.selectFilesToShred'))}</button>
       </div>
-      <div id="selectedFilesList" style="font-size:0.75rem; color:var(--text-muted); min-height:20px;"></div>` : '';
+      <div id="selectedFilesList" style="font-size:0.75rem; color:var(--text-muted); min-height:20px;"></div>` : s.id === 'large-files-report' ? `
+      <div class="tool-input-inline">
+        <label style="display:flex; align-items:center; gap:8px; font-size:0.8rem; color:var(--text-muted); cursor:pointer;">
+          ${escapeHtml(this.t('tools.filesLargerThan'))}
+          <input type="number" min="1" max="10000" value="100" id="minSizeMBInput" class="min-size-input" style="width:56px;" />
+          ${escapeHtml(this.t('tools.megabytes'))}
+        </label>
+      </div>` : '';
 
     // Translate tool names and descriptions
     const toolTranslations = {
@@ -205,6 +212,14 @@ window.Pages.tools = {
     return val;
   },
 
+  getMinSizeMB(container) {
+    const input = container.querySelector('#minSizeMBInput');
+    let val = input ? Number(input.value) : 100;
+    if (!Number.isFinite(val) || val < 1) val = 1;
+    if (val > 10000) val = 10000;
+    return val;
+  },
+
 async runScript(container, btn) {
     const scriptId = btn.dataset.scriptId;
     const output = container.querySelector('#toolOutput');
@@ -213,6 +228,8 @@ async runScript(container, btn) {
     const exportBtn = container.querySelector('#exportLogBtn');
     let scriptArgs = scriptId === 'clear-temp-files'
       ? { dryRun: false, maxAgeDays: this.getTempAgeDays(container) }
+      : scriptId === 'large-files-report'
+      ? { minSizeMB: this.getMinSizeMB(container) }
       : {};
 
     if (scriptId === 'file-shredder') {
@@ -379,7 +396,7 @@ async runScript(container, btn) {
                 ${fIdx === 0
                   ? `<span class="log-tag clean">${this.t('tools.original')}</span>`
                   : `<input type="checkbox" class="duplicate-checkbox" data-file-path="${escapeHtml(f.path)}" />`}
-                <span class="log-path" style="flex:1;">${escapeHtml(f.path)}</span>
+                <span class="log-path" style="flex:1; cursor:pointer;" title="${escapeHtml(f.path)}">${escapeHtml(truncate(f.path, 60))}</span>
               </div>`).join('')}
           </div>`).join('');
       }
@@ -434,7 +451,7 @@ async runScript(container, btn) {
         const result = await Api.runTool('run-script', { scriptId: 'delete-files', scriptArgs: { paths } });
         alert(`${this.t('tools.deleted', { count: result.deletedCount })} ${this.t('tools.freed', { mb: result.freedMB })}${result.skippedCount ? ` ${this.t('tools.skipped', { count: result.skippedCount })}` : ''}`);
 
-        const refreshed = await Api.runTool('run-script', { scriptId: 'large-files-report', scriptArgs: {} });
+        const refreshed = await Api.runTool('run-script', { scriptId: 'large-files-report', scriptArgs: { minSizeMB: this.getMinSizeMB(container) } });
         output.innerHTML = this.renderOutput('large-files-report', refreshed, new Date().toLocaleString());
         this.wireLargeFilesActions(container);
       } catch (err) {

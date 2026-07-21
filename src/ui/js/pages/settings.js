@@ -17,14 +17,27 @@ window.Pages.settings = {
     const activeTheme = (window.AppState && window.AppState.currentTheme) || savedTheme;
     Api.applyTheme(activeTheme);
     let localeOptions = '';
+    let languageInDevMap = {};
     try {
       const locales = await window.api.invoke('i18n:listLocales');
       const currentLanguage = (window.I18n && window.I18n.locale)
         || settings.ui?.language
         || 'en';
-      localeOptions = locales.map(({ code, label }) => (
-        `<option value="${escapeHtml(code)}" ${currentLanguage === code ? 'selected' : ''}>${escapeHtml(label)}</option>`
-      )).join('');
+      // Pre-fetch "language in development" translation for each locale
+      await Promise.all(locales.map(async ({ code, label }) => {
+        if (code !== 'en') {
+          try {
+            const catalog = await window.api.invoke('i18n:getCatalog', code);
+            if (catalog && catalog['settings.languageInDevelopment']) {
+              languageInDevMap[code] = catalog['settings.languageInDevelopment'];
+            }
+          } catch (_) {}
+        }
+      }));
+      localeOptions = locales.map(({ code, label }) => {
+        const warning = languageInDevMap[code] ? ` data-warning="${escapeHtml(languageInDevMap[code])}"` : '';
+        return `<option value="${escapeHtml(code)}"${warning} ${currentLanguage === code ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+      }).join('');
     } catch (_) {
       localeOptions = '<option value="en" selected>English</option>';
     }
@@ -138,7 +151,8 @@ window.Pages.settings = {
               ${localeOptions}
             </select>
           </div>
-          <div class="toggle-desc" style="margin-bottom:12px;">${escapeHtml(t('settings.languageHint'))}</div>
+          <div class="toggle-desc" style="margin-bottom:12px;" id="languageHint">${escapeHtml(t('settings.languageHint'))}</div>
+          <div id="languageWarning" style="display:none; margin-bottom:12px; padding:12px; background:var(--warning-bg, #fff3cd); border:1px solid var(--warning-border, #ffc107); border-radius:4px; color:var(--warning-text, #856404); font-size:0.85rem;"></div>
           <button class="btn btn-primary" id="saveLanguage" style="margin-top:4px;">${escapeHtml(t('settings.applyLanguage'))}</button>
           <div id="languageStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
         </div>
@@ -274,6 +288,43 @@ window.Pages.settings = {
       const status = container.querySelector('#themeStatus');
       status.textContent = t('settings.themePreview');
     });
+
+    // Show/hide language in development warning
+    const languageSelect = container.querySelector('#languageSelect');
+    const languageWarning = container.querySelector('#languageWarning');
+    const languageHint = container.querySelector('#languageHint');
+    function updateLanguageWarning(lang) {
+      const selectedLang = lang || languageSelect.value;
+      if (selectedLang && selectedLang !== 'en') {
+        // Read warning from the option's data-warning attribute
+        const selectedOpt = languageSelect.querySelector(`option[value="${selectedLang}"]`);
+        const msg = (selectedOpt && selectedOpt.dataset.warning) || languageInDevMap[selectedLang] || t('settings.languageInDevelopment');
+        languageWarning.textContent = msg;
+        languageWarning.style.display = 'block';
+        languageHint.style.display = 'none';
+      } else {
+        languageWarning.style.display = 'none';
+        languageHint.style.display = 'block';
+      }
+    }
+    // Show warning for hovered option in dropdown (using mousemove on select)
+    let lastHoveredValue = null;
+    languageSelect.addEventListener('mousemove', (e) => {
+      const opt = e.target.closest('option');
+      if (opt && opt.value && opt.value !== 'en' && opt.value !== lastHoveredValue) {
+        lastHoveredValue = opt.value;
+        updateLanguageWarning(opt.value);
+      }
+    });
+    // Show warning on interaction (click/focus) before change is committed
+    languageSelect.addEventListener('mousedown', () => updateLanguageWarning(languageSelect.value));
+    languageSelect.addEventListener('focus', () => updateLanguageWarning(languageSelect.value));
+    languageSelect.addEventListener('change', () => { lastHoveredValue = null; updateLanguageWarning(languageSelect.value); });
+    // Reset to current selection when mouse leaves dropdown
+    languageSelect.addEventListener('mouseleave', () => { lastHoveredValue = null; updateLanguageWarning(languageSelect.value); });
+    languageSelect.addEventListener('blur', () => { lastHoveredValue = null; updateLanguageWarning(languageSelect.value); });
+    // Initial check
+    updateLanguageWarning();
 
     container.querySelector('#saveLanguage').addEventListener('click', async () => {
       const language = container.querySelector('#languageSelect').value;

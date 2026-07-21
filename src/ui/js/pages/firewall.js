@@ -631,7 +631,8 @@ window.Pages['firewall'] = {
       const unknownCount = allItems.filter((i) => i.risk === 'UNKNOWN').length;
       const totalConnections = connections.length;
       const filteredCount = withMeta.length;
-      let countText = t('firewall.perimeterSummaryText', { total: totalConnections, filtered: filteredCount, shown: allItems.length });
+      const pluralS = totalConnections === 1 ? '' : 's';
+      let countText = t('firewall.perimeterSummaryText', { total: totalConnections, s: pluralS, filtered: filteredCount, shown: allItems.length });
       if (hiddenCount > 0) {
         countText += t('firewall.perimeterSummaryHidden', { hidden: hiddenCount });
       }
@@ -649,10 +650,11 @@ window.Pages['firewall'] = {
     g.setAttribute('class', `perim-node ${entering ? 'entering' : ''} ${selected}`.trim());
     g.setAttribute('data-key', item.key);
     g.setAttribute('transform-origin', `${item.x}px ${item.y}px`);
+    g.style.pointerEvents = 'all';
 
     let inner = `<title>${label}</title>`;
     if (item.blocked) {
-      inner += `<circle class="perim-blocked-ring" cx="${item.x}" cy="${item.y}" r="7" fill="none" stroke="${color}" stroke-width="2"/>`;
+      inner += `<circle class="perim-blocked-ring" cx="${item.x}" cy="${item.y}" r="7" fill="none" stroke="${color}" stroke-width="2" pointer-events="all"/>`;
     } else {
       const hubR = 32;
       const lineStartX = cx + Math.cos(item.angle) * hubR;
@@ -660,16 +662,18 @@ window.Pages['firewall'] = {
       inner += `<line class="perim-line" x1="${lineStartX}" y1="${lineStartY}" x2="${item.x}" y2="${item.y}" stroke="${color}" stroke-width="1" opacity="0.25"/>`;
       inner += `<circle class="perim-particle" data-key="${escapeHtml(item.key)}" cx="${item.x}" cy="${item.y}" r="2.2" fill="${color}" opacity="0.9"/>`;
     }
-    inner += `<circle class="perim-hit" r="11" cx="${item.x}" cy="${item.y}" fill="transparent"/>`;
-    inner += `<circle class="perim-dot" cx="${item.x}" cy="${item.y}" r="6" fill="${color}"/>`;
+    inner += `<circle class="perim-hit" r="11" cx="${item.x}" cy="${item.y}" fill="rgba(0,0,0,0)" pointer-events="all"/>`;
+    inner += `<circle class="perim-dot" cx="${item.x}" cy="${item.y}" r="6" fill="${color}" pointer-events="all"/>`;
     g.innerHTML = inner;
 
-    g.addEventListener('click', () => {
+    const handleNodeClick = () => {
       this._selectedKey = item.key;
       svg.querySelectorAll('.perim-node').forEach((n) => n.classList.remove('selected'));
       g.classList.add('selected');
       this._renderDetailPanel(container, this._perimeterNodes.get(item.key));
-    });
+    };
+    g.querySelector('.perim-hit').addEventListener('click', handleNodeClick);
+    g.querySelector('.perim-dot').addEventListener('click', handleNodeClick);
 
     return {
       g,
@@ -771,7 +775,7 @@ window.Pages['firewall'] = {
           <div style="font-weight:600; font-size:0.85rem;">${escapeHtml(t('firewall.perimeterDetail'))}</div>
           <div style="font-size:0.78rem; color:var(--text-dim); display:flex; flex-direction:column; gap:6px;">
             <div>${escapeHtml(t('firewall.perimeterDesc1'))}</div>
-            <div style="margin-top:6px;"><span class="glossary-term" title="${escapeHtml(this._glossary('unverified'))}">${escapeHtml(t('common.unverified'))}</span> ${escapeHtml(t('firewall.perimeterDesc2', { unverified: t('common.unverified') }))}</div>
+            <div style="margin-top:6px;">${escapeHtml(t('firewall.perimeterDesc2', { unverified: `<span class="glossary-term" title="${escapeHtml(this._glossary('unverified'))}">${escapeHtml(t('common.unverified'))}</span>` }))}</div>
             <div><span class="glossary-term" title="${escapeHtml(this._glossary('inbound'))}">${escapeHtml(t('firewall.inbound'))}</span> / <span class="glossary-term" title="${escapeHtml(this._glossary('outbound'))}">${escapeHtml(t('firewall.outbound'))}</span> ${escapeHtml(t('firewall.perimeterDesc3'))}</div>
             <div><span class="glossary-term" title="${escapeHtml(this._glossary('established'))}">${escapeHtml(t('firewall.established'))}</span>, <span class="glossary-term" title="${escapeHtml(this._glossary('listen'))}">${escapeHtml(t('firewall.listen'))}</span>, <span class="glossary-term" title="${escapeHtml(this._glossary('time_wait'))}">${escapeHtml(t('firewall.time_wait'))}</span> ${escapeHtml(t('firewall.perimeterDesc4'))}</div>
           </div>
@@ -799,7 +803,7 @@ window.Pages['firewall'] = {
       <div class="card compact" style="display:flex; flex-direction:column; gap:10px;">
         <div style="display:flex; align-items:center; justify-content:space-between;">
           <span style="font-weight:600;">${escapeHtml(processName)}</span>
-          <span class="glossary-term" title="${escapeHtml(risk === 'UNKNOWN' ? g.unverified : '')}" style="font-size:0.7rem; font-weight:600; color:${color}; background:${color}15; padding:3px 8px; border-radius:4px;">${riskLabel.toUpperCase()}${item.blocked ? ' · BLOCKED' : ''}</span>
+          <span class="glossary-term" title="${escapeHtml(risk === 'UNKNOWN' ? this._glossary('unverified') : '')}" style="font-size:0.7rem; font-weight:600; color:${color}; background:${color}15; padding:3px 8px; border-radius:4px;">${riskLabel.toUpperCase()}${item.blocked ? ' · BLOCKED' : ''}</span>
         </div>
         <div style="font-size:0.8rem; color:var(--text-dim); display:flex; flex-direction:column; gap:4px;">
           <div>${escapeHtml(t('firewall.detailRemote', { ip: remoteAddress, port: remotePort }))}${hostname ? ` (${escapeHtml(hostname)})` : ''}</div>
@@ -826,7 +830,7 @@ window.Pages['firewall'] = {
           <button class="btn btn-sm" data-action="block-ip">${escapeHtml(t('firewall.blockIp'))}</button>
           <button class="btn btn-sm" data-action="block-app" ${pid ? '' : 'disabled'}>${escapeHtml(t('firewall.blockApp'))}</button>
           <button class="btn btn-sm" data-action="trust">${escapeHtml(isTrusted ? t('firewall.untrust') : t('firewall.trust'))}</button>
-          <button class="btn btn-sm" data-action="whois" title="${escapeHtml(g.whois)}">${escapeHtml(t('firewall.whois'))}</button>
+          <button class="btn btn-sm" data-action="whois" title="${escapeHtml(this._glossary('whois'))}">${escapeHtml(t('firewall.whois'))}</button>
           <button class="btn btn-sm" data-action="process" ${pid ? '' : 'disabled'}>${escapeHtml(t('firewall.viewProcess'))}</button>
         </div>
       </div>
