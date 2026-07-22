@@ -51,9 +51,9 @@ Page directory
 Page instfiles
 Page custom onFinishPageCreate onFinishPageLeave
 
-UninstPage welcome
+UninstPage custom un.onWelcomeCreate un.onWelcomeLeave
 UninstPage instfiles
-UninstPage finish
+UninstPage custom un.onFinishCreate un.onFinishLeave
 
 ; ============================================================
 ; Variables
@@ -237,3 +237,55 @@ Section Uninstall
 
   DeleteRegKey /ifempty HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Soterios"
 SectionEnd
+
+; ============================================================
+; Custom Uninstaller Pages
+; ============================================================
+Var UnWelcomePageHwnd
+Var UnFinishPageHwnd
+
+Function un.onWelcomeCreate
+  nsDialogs::Create 1018
+  Pop $UnWelcomePageHwnd
+
+  ${NSD_CreateBitmap} 0 0 100% 120 ""
+  Pop $0
+  ${NSD_SetImage} $0 "$INSTDIR\build\welcome-banner.bmp"
+
+  ${NSD_CreateLabel} 24 140 100% 24 "Uninstall Soterios"
+  Pop $0
+  SetCtlColors $0 0xFFFFFF 0x15202B
+  SendMessage $0 ${WM_SETFONT} ${__FONT__16_BOLD} 1
+
+  ${NSD_CreateLabel} 24 170 100% 60 "This will remove Soterios from your computer."
+  Pop $0
+  SetCtlColors $0 ${SOTERIOS_MUTED} 0x15202B
+
+  nsDialogs::Show
+FunctionEnd
+
+Function un.onWelcomeLeave
+FunctionEnd
+
+Function un.onFinishCreate
+  nsDialogs::Create 1018
+  Pop $UnFinishPageHwnd
+
+  ${NSD_CreateBitmap} 0 0 100% 120 ""
+  Pop $0
+  ${NSD_SetImage} $0 "$INSTDIR\build\finish-banner.bmp"
+
+  ${NSD_CreateLabel} 24 140 100% 24 "Soterios Uninstalled"
+  Pop $0
+  SetCtlColors $0 0xFFFFFF 0x15202B
+  SendMessage $0 ${WM_SETFONT} ${__FONT__16_BOLD} 1
+
+  ${NSD_CreateLabel} 24 170 100% 60 "Soterios has been removed from your computer."
+  Pop $0
+  SetCtlColors $0 ${SOTERIOS_MUTED} 0x15202B
+
+  nsDialogs::Show
+FunctionEnd
+
+Function un.onFinishLeave
+FunctionEnd
