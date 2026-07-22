@@ -19,32 +19,12 @@ ShowUninstDetails show
 
 !define PRODUCT_NAME "Soterios"
 !define PRODUCT_VERSION "1.2.1"
-!define PRODUCT_PUBLISHER "Christopher Rivera"
+!define PRODUCT_PUBLISHER "Chris Rivera"
 
 ; ============================================================
-; Modern UI Configuration
+; Include Custom Branding (only non-conflicting definitions)
 ; ============================================================
-!define MUI_ICON "${NSISDIR}\Contrib\Graphics\Icons\modern-install.ico"
-!define MUI_UNICON "${NSISDIR}\Contrib\Graphics\Icons\modern-uninst.ico"
-
-!define MUI_WELCOMEPAGE_TITLE "Welcome to Soterios Setup"
-!define MUI_WELCOMEPAGE_TITLE_3LINES
-!define MUI_WELCOMEPAGE_TEXT "This will install Soterios ${PRODUCT_VERSION} on your computer.\n\nSoterios is a local-first desktop suite for system maintenance, monitoring, and basic security checks.\n\nClick Next to continue."
-
-!define MUI_FINISHPAGE_TITLE "Installation Complete"
-!define MUI_FINISHPAGE_TITLE_3LINES
-!define MUI_FINISHPAGE_TEXT "Soterios has been successfully installed.\n\nClick Finish to launch Soterios."
-!define MUI_FINISHPAGE_RUN "Launch Soterios"
-!define MUI_FINISHPAGE_RUN_NOTCHECKED "Don't launch Soterios"
-
-!define MUI_UNFINISHPAGE_TITLE "Uninstallation Complete"
-!define MUI_UNFINISHPAGE_TITLE_3LINES
-!define MUI_UNFINISHPAGE_TEXT "Soterios has been removed from your computer."
-
-!define MUI_WELCOMEPAGE_SHOW_LICENSE "build/LICENSE.txt"
-
-!define MUI_CUSTOMFUNCTION_GUIINIT onGuiInit
-!define MUI_CUSTOMFUNCTION_UNGUIINIT un.onGuiInit
+!include "build/installer.nsh"
 
 ; ============================================================
 ; Installer Pages
@@ -72,6 +52,7 @@ Var IsUpgrade
 ; GUI Initialization - Modern Styling
 ; ============================================================
 Function onGuiInit
+  ; Set modern fonts
   !insertmacro MUI_SETFONT "Segoe UI" 9
 FunctionEnd
 
@@ -151,10 +132,13 @@ Section "Desktop Shortcut" SecDesktop
   CreateShortCut "$DESKTOP\Soterios.lnk" "$INSTDIR\soterios.exe" "" "$INSTDIR\soterios.exe" 0
 SectionEnd
 
-Section "Auto Launch at Startup" SecAutoLaunch
+Section "Auto Launch" SecAutoLaunch
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Soterios" "\"$INSTDIR\soterios.exe\" --minimized"
 SectionEnd
 
+; ============================================================
+; Uninstaller
+; ============================================================
 Section Uninstall
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Soterios"
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\App Paths\soterios.exe"
