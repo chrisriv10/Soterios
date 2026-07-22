@@ -4,7 +4,7 @@
  */
 
 let soteriosIcon = null;
-let passwordFields = new WeakMap();
+let passwordFields = new Map();
 let observer = null;
 
 function createIcon() {

@@ -6,6 +6,8 @@
 
 const { spawn } = require('child_process');
 const readline = require('readline');
+const fs = require('fs');
+const path = require('path');
 
 const DESKTOP_APP = process.env.SOTERIOS_APP_PATH || 'soterios://';
 
@@ -58,13 +60,23 @@ function launchDesktopApp() {
   if (desktopProc) return Promise.resolve();
 
   return new Promise((resolve, reject) => {
-    const url = process.platform === 'win32'
-      ? `cmd /c start "" "${DESKTOP_APP}"`
-      : process.platform === 'darwin'
-        ? `open -a "Soterios"`
-        : `xdg-open "${DESKTOP_APP}"`;
+    const appPath = process.env.DESKTOP_APP;
+    if (!appPath) {
+      return reject(new Error('DESKTOP_APP environment variable not set'));
+    }
 
-    desktopProc = spawn(url, { shell: true, detached: true });
+    // Resolve and validate path - prevent command injection
+    const resolvedPath = path.resolve(appPath);
+    if (!fs.existsSync(resolvedPath)) {
+      return reject(new Error('Desktop app not found at: ' + resolvedPath));
+    }
+
+    const isWin = process.platform === 'win32';
+    const args = isWin ? ['/c', 'start', '""', resolvedPath] : [resolvedPath];
+    const cmd = isWin ? 'cmd' : resolvedPath;
+    const options = { shell: false, detached: true };
+
+    desktopProc = spawn(cmd, args, options);
     desktopProc.unref();
 
     desktopProc.on('error', e => {

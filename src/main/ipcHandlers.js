@@ -937,6 +937,8 @@ function registerIpcHandlers(mainWindow, services) {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
     const extId = process.env.SOTERIOS_EXT_ID || 'YOUR_EXTENSION_ID_HERE';
     manifest.allowed_origins = [manifest.allowed_origins[0].replace('<EXTENSION_ID>', extId)];
+    // Write updated manifest back to disk so Chrome/Edge reads the correct ID
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
     const regPath = `HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${manifest.name}`;
     const regCmd = `reg add "${regPath}" /ve /t REG_SZ /d "${manifestPath.replace(/\\/g, '\\\\')}" /f`;
     try {

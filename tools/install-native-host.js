@@ -24,6 +24,9 @@ function main() {
 
   let manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   manifest.allowed_origins = [manifest.allowed_origins[0].replace('<EXTENSION_ID>', EXTENSION_ID)];
+  
+  // Write updated manifest back to disk so registry points to correct file
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 
   if (IS_WIN) {
     const regPath = `HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${manifest.name}`;

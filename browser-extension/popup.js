@@ -40,7 +40,10 @@ function showResult(count) {
 
 async function checkConnection() {
   try {
-    const resp = await fetch('http://localhost:17234/api/health', { method: 'GET', timeout: 1000 });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1000);
+    const resp = await fetch('http://localhost:17234/api/health', { method: 'GET', signal: controller.signal });
+    clearTimeout(timeout);
     if (resp.ok) {
       document.getElementById('statusDot').classList.remove('offline');
       document.getElementById('statusText').textContent = 'Soterios app connected';

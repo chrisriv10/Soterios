@@ -119,13 +119,6 @@ window.Pages.settings = {
             </div>
             <label class="toggle"><input type="checkbox" id="networkPerimeterMapToggle" ${settings.features.networkPerimeterMap !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
-<div class="toggle-row">
-            <div>
-              <div class="toggle-label">${escapeHtml(t('settings.networkPerimeterMap.label'))}</div>
-              <div class="toggle-desc">${escapeHtml(t('settings.networkPerimeterMap.desc'))}</div>
-            </div>
-            <label class="toggle"><input type="checkbox" id="networkPerimeterMapToggle" ${settings.features.networkPerimeterMap !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
-          </div>
 
           <div class="toggle-row">
             <div>
