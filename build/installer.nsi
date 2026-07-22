@@ -19,7 +19,7 @@ ShowUninstDetails show
 
 !define PRODUCT_NAME "Soterios"
 !define PRODUCT_VERSION "1.2.1"
-!define PRODUCT_PUBLISHER "Chris Rivera"
+!define PRODUCT_PUBLISHER "Christopher Rivera"
 
 ; ============================================================
 ; Modern UI Configuration

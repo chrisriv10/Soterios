@@ -22,9 +22,6 @@
 ; ============================================================
 ; Modern UI Configuration
 ; ============================================================
-!define MUI_ICON "${NSISDIR}\Contrib\Graphics\Icons\modern-install.ico"
-!define MUI_UNICON "${NSISDIR}\Contrib\Graphics\Icons\modern-uninst.ico"
-
 !define MUI_WELCOMEFINISHPAGE_BITMAP "build\welcome.bmp"
 !define MUI_UNWELCOMEFINISHPAGE_BITMAP "build\welcome.bmp"
 
