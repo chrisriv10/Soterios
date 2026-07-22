@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Soterios Options</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font: 14px/1.5 system-ui; max-width: 500px; margin: 40px auto; padding: 0 20px; color: #1f2328; }
+    h1 { font-size: 24px; margin-bottom: 8px; }
+    .subtitle { color: #656d76; margin-bottom: 24px; }
+    .section { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; padding: 20px; margin-bottom: 20px; }
+    .section h2 { font-size: 16px; margin: 0 0 16px; }
+    .setting { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid #d0d7de; }
+    .setting:last-child { border-bottom: none; }
+    .setting-info { flex: 1; }
+    .setting-title { font-weight: 600; margin-bottom: 4px; }
+    .setting-desc { font-size: 12px; color: #656d76; }
+    .toggle { position: relative; width: 44px; height: 24px; background: #d0d7de; border-radius: 12px; border: none; cursor: pointer; transition: background 0.2s; }
+    .toggle[aria-checked="true"] { background: #238636; }
+    .toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background: white; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.3); transition: transform 0.2s; }
+    .toggle[aria-checked="true"]::after { transform: translateX(20px); }
+    .saved { color: #238636; font-size: 12px; margin-top: 12px; display: none; }
+    .saved.show { display: block; }
+    .warning { background: #fff8c5; border: 1px solid #d29922; border-radius: 6px; padding: 12px; margin-top: 24px; font-size: 13px; color: #9a6700; }
+  </style>
+</head>
+<body>
+  <h1>Soterios Credential Safety</h1>
+  <p class="subtitle">Configure breach monitoring and desktop integration</p>
+
+  <div class="section">
+    <h2>Breach Monitoring</h2>
+    <div class="setting">
+      <div class="setting-info">
+        <div class="setting-title">Check passwords against Have I Been Pwned</div>
+        <div class="setting-desc">Uses k-anonymity (only first 5 hash chars sent). Never sends full password.</div>
+      </div>
+      <button class="toggle" id="hibpEnabled" aria-checked="true" aria-label="Enable HIBP checks"></button>
+    </div>
+    <div class="setting">
+      <div class="setting-info">
+        <div class="setting-title">Auto-check on password fields</div>
+        <div class="setting-desc">Show breach indicator automatically when you enter a password</div>
+      </div>
+      <button class="toggle" id="autoCheck" aria-checked="true" aria-label="Auto-check"></button>
+    </div>
+    <div class="setting">
+      <div class="setting-info">
+        <div class="setting-title">Show Soterios icon in password fields</div>
+        <div class="setting-desc">Click to manually check any password</div>
+      </div>
+      <button class="toggle" id="showIcon" aria-checked="true" aria-label="Show icon"></button>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Desktop App Integration</h2>
+    <div class="setting">
+      <div class="setting-info">
+        <div class="setting-title">Notify Soterios desktop app of leaks</div>
+        <div class="setting-desc">Sends breach alerts to the desktop app via native messaging</div>
+      </div>
+      <button class="toggle" id="notifyDesktop" aria-checked="true" aria-label="Desktop notifications"></button>
+    </div>
+  </div>
+
+  <div class="saved" id="savedMsg">Settings saved</div>
+
+  <div class="warning">
+    <strong>Note:</strong> Desktop integration requires the Soterios native messaging host installed. The installer sets this up automatically. If desktop notifications don't work, reinstall Soterios or run <code>node tools/install-native-host.js</code> as admin.
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>

@@ -580,7 +580,27 @@ function buildAppMenu() {
 
 app.setAppUserModelId('com.soterios.app');
 
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+  process.exit(0);
+}
+
+app.on('second-instance', (_event, commandLine) => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+    const url = commandLine.find(arg => arg.startsWith('soterios://'));
+    if (url) mainWindow.webContents.send('protocol-url', url);
+  }
+});
+
 app.whenReady().then(async () => {
+  // Register custom protocol for browser extension communication
+  if (process.platform === 'win32') {
+    app.setAsDefaultProtocolClient('soterios');
+  }
+
   const dbPath = path.join(app.getPath('userData'), 'soterios.db');
   // File logging is opt-in via SOTERIOS_LOG_FILE (path or "1" for the default log file).
   const logConfig = { level: process.env.SOTERIOS_LOG_LEVEL || 'info' };
