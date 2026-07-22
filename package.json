@@ -78,6 +78,7 @@
       }
     },
     "nsis": {
+      "script": "build/installer.nsi",
       "oneClick": false,
       "perMachine": true,
       "allowToChangeInstallationDirectory": true,
