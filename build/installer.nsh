@@ -69,11 +69,11 @@ Var IsUpgrade
 ; GUI Initialization - Modern Styling
 ; ============================================================
 Function onGuiInit
-  !insertmacro MUI_SETFONT "Segoe UI" 9
+  SetFont "Segoe UI" 9
 FunctionEnd
 
 Function un.onGuiInit
-  !insertmacro MUI_SETFONT "Segoe UI" 9
+  SetFont "Segoe UI" 9
 FunctionEnd
 
 ; ============================================================
