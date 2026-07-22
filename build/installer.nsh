@@ -69,11 +69,9 @@ Var IsUpgrade
 ; GUI Initialization - Modern Styling
 ; ============================================================
 Function onGuiInit
-  SetFont "Segoe UI" 9
 FunctionEnd
 
 Function un.onGuiInit
-  SetFont "Segoe UI" 9
 FunctionEnd
 
 ; ============================================================
