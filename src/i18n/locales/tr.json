@@ -896,5 +896,24 @@
   "scanIndicator.failed": "Scan failed",
   "scanIndicator.threatsFound": "{count} threat(s) found",
   "dashboard.rtpTitle": "Gerçek zamanlı koruma",
-  "firewall.detailDirection": "{direction} {est}"
+  "firewall.detailDirection": "{direction} {est}",
+  "health.reason.noScan": "Henüz hiç tarama çalıştırılmadı.",
+  "health.reason.noThreats": "En son tarama da hiçbir tehdit bulunamadı.",
+  "health.reason.threatsFound": "En son taramada {count} tehdit eşleşmesi bulundu.",
+  "health.reason.scanToday": "Son tarama son bir gün içinde çalıştırıldı.",
+  "health.reason.scanDaysAgo": "Son tarama {days} gün önce çalıştırıldı.",
+  "health.reason.diskLowSpace": "Az yer: {volumes} ({usage}% kullanılıyor).",
+  "health.reason.diskNoVolumes": "Disk puanlaması için kullanıcı odaklı birim bulunamadı.",
+  "health.reason.diskHealthy": "Tüm birimler sağlıklı (en yüksek kullanım {usage}%).",
+  "health.reason.memoryUsage": "%{pct} bellek kullanımda.",
+  "health.reason.cpuLoad": "CPU yükü %{pct}%.",
+  "health.reason.uptimeToday": "Son bir gün içinde yeniden başlatıldı.",
+  "health.reason.uptimeDays": "{days} gün önce yeniden başlatıldı — normal aralıkta.",
+  "health.reason.uptimeWeeks": "{days} gündür yeniden başlatılmadan çalışıyor — bekleyen güncellemeler için yakında yeniden başlatmayı düşünün.",
+  "health.reason.uptimeLong": "{days} gündür yeniden başlatılmadan çalışıyor — bekleyen güncellemeleri uygulamak için yeniden başlatma önerilir.",
+  "health.reason.rtpActive": "Gerçek zamanlı koruma aktif.",
+  "health.reason.rtpDisabled": "Gerçek zamanlı koruma devre dışı.",
+  "health.reason.firewallActive": "Windows Güvenlik Duvarı aktif.",
+  "health.reason.firewallDisabled": "Windows Güvenlik Duvarı devre dışı."
+}
 }

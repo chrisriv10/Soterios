@@ -883,5 +883,22 @@
   "scanIndicator.failed": "Scan failed",
   "scanIndicator.threatsFound": "{count} threat(s) found",
   "dashboard.rtpTitle": "Protezione in tempo reale",
-  "firewall.detailDirection": "{direction} {est}"
+  "health.reason.noScan": "Nessun scan è stato eseguito.",
+  "health.reason.noThreats": "Nessuna minaccia trovata nell'ultimo scan.",
+  "health.reason.threatsFound": "Trovate {count} corrispondenza/e di minaccia nell'ultimo scan.",
+  "health.reason.scanToday": "L'ultimo scan è stato eseguito nell'ultimo giorno.",
+  "health.reason.scanDaysAgo": "L'ultimo scan è stato eseguito {days} giorno fa.",
+  "health.reason.diskLowSpace": "Poco spazio su: {volumes} ({pct}% usato).",
+  "health.reason.diskNoVolumes": "Nessun volume utente trovato per la valutazione disco.",
+  "health.reason.diskHealthy": "Tutti i volumi sani (uso massimo {pct}%).",
+  "health.reason.memoryUsage": "{pct}% di memoria in uso.",
+  "health.reason.cpuLoad": "Carico CPU al {pct}%.",
+  "health.reason.uptimeToday": "Riavviato nell'ultimo giorno.",
+  "health.reason.uptimeDays": "Riavviato {days} giorno fa — nella norma.",
+  "health.reason.uptimeWeeks": "In esecuzione da {days} giorni senza riavvio — considerare riavvio per aggiornamenti.",
+  "health.reason.uptimeLong": "In esecuzione da {days} giorni senza riavvio — riavvio consigliato per aggiornamenti.",
+  "health.reason.rtpActive": "Protezione in tempo reale attiva.",
+  "health.reason.rtpDisabled": "Protezione in tempo reale disabilitata.",
+  "health.reason.firewallActive": "Firewall Windows attivo.",
+  "health.reason.firewallDisabled": "Firewall Windows disabilitato."
 }
