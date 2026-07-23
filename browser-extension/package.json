@@ -4,9 +4,9 @@
   "description": "Soterios Credential Safety Browser Extension",
   "private": true,
   "scripts": {
-    "build:icons": "node tools/build-icons.js",
-    "package": "npm run build:icons && cd browser-extension && zip -r ../soterios-extension.zip . -x '*.DS_Store' 'icons/*.svg' 'tools/*'",
-    "install:host": "node tools/install-native-host.js"
+    "build:icons": "node ../tools/build-icons.js",
+    "package": "npm run build:icons && node ../tools/package-extension.js",
+    "install:host": "node ../tools/install-native-host.js"
   },
   "devDependencies": {
     "svgexport": "^0.4.2"

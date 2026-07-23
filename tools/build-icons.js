@@ -18,5 +18,6 @@ for (const size of sizes) {
     console.log(`Generated ${outPath}`);
   } catch (e) {
     console.error(`Failed to generate ${size}px icon:`, e.message);
+    process.exit(1);
   }
 }
