@@ -96,13 +96,6 @@ window.Pages['lockdown'] = {
     const errorSection = document.getElementById('errorSection');
     const errorList = document.getElementById('errorList');
 
-    // Add click handler for popup alert
-    document.addEventListener('click', (e) => {
-      // Don't trigger on button clicks
-      if (e.target.closest('button') || e.target.closest('a')) return;
-      this._showClickAlert(e);
-    });
-
     // Load initial status
     this._updateLockdownStatus();
 
@@ -226,42 +219,7 @@ window.Pages['lockdown'] = {
 
   destroy() {
     // Cleanup if needed
-  },
-
-  _showClickAlert(e) {
-    const rect = e.target.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    const alert = document.createElement('div');
-    alert.style.cssText = `
-      position: fixed;
-      left: ${e.clientX + 10}px;
-      top: ${e.clientY + 10}px;
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 12px 16px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-      z-index: 10000;
-      font-size: 13px;
-      color: var(--text-main);
-      max-width: 280px;
-      animation: fadeIn 0.15s ease-out;
-    `;
-    alert.innerHTML = `
-      <div style="font-weight:600;margin-bottom:4px;">Click detected</div>
-      <div style="font-size:12px;color:var(--text-dim);">Page clicked at (${x}, ${y})</div>
-    `;
-    document.body.appendChild(alert);
-
-    setTimeout(() => {
-      alert.style.opacity = '0';
-      alert.style.transform = 'translateY(-4px)';
-      alert.style.transition = 'opacity 0.2s, transform 0.2s';
-      setTimeout(() => alert.remove(), 200);
-    }, 2000);
-  },
+  }
 };
 
 function escapeHtml(text) {
