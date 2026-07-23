@@ -951,6 +951,43 @@ function registerIpcHandlers(mainWindow, services) {
       return { ok: false, error: e.message || String(e) };
     }
   });
+
+  // -- Emergency Lockdown --
+  ipcMain.handle('lockdown:getStatus', async () => {
+    if (!services.emergencyLockdown) {
+      return { ok: false, error: 'Emergency lockdown service unavailable' };
+    }
+    try {
+      const status = services.emergencyLockdown.getStatus();
+      return { ok: true, data: status };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('lockdown:activate', async () => {
+    if (!services.emergencyLockdown) {
+      return { ok: false, error: 'Emergency lockdown service unavailable' };
+    }
+    try {
+      const result = await services.emergencyLockdown.lockdown();
+      return { ok: true, data: result };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('lockdown:restore', async () => {
+    if (!services.emergencyLockdown) {
+      return { ok: false, error: 'Emergency lockdown service unavailable' };
+    }
+    try {
+      const result = await services.emergencyLockdown.restore();
+      return { ok: true, data: result };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
 }
 
 module.exports = { registerIpcHandlers };
