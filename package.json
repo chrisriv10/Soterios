@@ -57,6 +57,7 @@
       "preload.js",
       "src/**/*",
       "assets/**/*",
+      "browser-extension/**/*",
       "package.json"
     ],
     "extraResources": [],

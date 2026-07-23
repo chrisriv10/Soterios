@@ -920,13 +920,20 @@ function registerIpcHandlers(mainWindow, services) {
   ipcMain.handle('tray:quit', () => app.quit());
 
   // -- Browser Extension Native Host --
-  ipcMain.handle('browserExtension:installNativeHost', async () => {
+  ipcMain.handle('browserExtension:installNativeHost', async (_event, extensionId) => {
     if (process.platform !== 'win32') {
       return { ok: false, error: 'Native host install only supported on Windows' };
     }
     const { execSync } = require('child_process');
     const fs = require('fs');
     const path = require('path');
+    
+    // Validate extension ID
+    const extId = extensionId || process.env.SOTERIOS_EXT_ID;
+    if (!extId || extId === 'YOUR_EXTENSION_ID_HERE' || !/^[a-z]{32}$/.test(extId)) {
+      return { ok: false, error: 'Invalid extension ID. Provide a valid 32-character Chrome extension ID.' };
+    }
+    
     const extDir = path.join(__dirname, '..', '..', 'browser-extension');
     const manifestPath = path.join(extDir, 'native-host-manifest.json');
     const batPath = path.join(extDir, 'native-host.bat');
@@ -934,17 +941,31 @@ function registerIpcHandlers(mainWindow, services) {
     if (!fs.existsSync(manifestPath) || !fs.existsSync(batPath) || !fs.existsSync(jsPath)) {
       return { ok: false, error: 'Extension files not found. Reinstall Soterios.' };
     }
+    
+    // Read template manifest and generate a new one in app data directory
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-    const extId = process.env.SOTERIOS_EXT_ID || 'YOUR_EXTENSION_ID_HERE';
     manifest.allowed_origins = [manifest.allowed_origins[0].replace('<EXTENSION_ID>', extId)];
-    // Write updated manifest back to disk so Chrome/Edge reads the correct ID
-    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    
+    // Write generated manifest to app data directory instead of mutating the shipped file
+    const userDataDir = app.getPath('userData');
+    const generatedManifestPath = path.join(userDataDir, 'native-host-manifest.json');
+    fs.writeFileSync(generatedManifestPath, JSON.stringify(manifest, null, 2));
+    
+    // Update bat file to reference the correct js path
+    const batContent = fs.readFileSync(batPath, 'utf8');
+    const updatedBatContent = batContent.replace(
+      /node\s+"[^"]*native-host\.js"/,
+      `node "${jsPath}"`
+    );
+    const generatedBatPath = path.join(userDataDir, 'native-host.bat');
+    fs.writeFileSync(generatedBatPath, updatedBatContent);
+    
     const regPath = `HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${manifest.name}`;
-    const regCmd = `reg add "${regPath}" /ve /t REG_SZ /d "${manifestPath.replace(/\\/g, '\\\\')}" /f`;
+    const regCmd = `reg add "${regPath}" /ve /t REG_SZ /d "${generatedManifestPath.replace(/\\/g, '\\\\')}" /f`;
     try {
       execSync(regCmd, { stdio: 'ignore' });
       const regPathEdge = `HKCU\\Software\\Microsoft\\Edge\\NativeMessagingHosts\\${manifest.name}`;
-      const regCmdEdge = `reg add "${regPathEdge}" /ve /t REG_SZ /d "${manifestPath.replace(/\\/g, '\\\\')}" /f`;
+      const regCmdEdge = `reg add "${regPathEdge}" /ve /t REG_SZ /d "${generatedManifestPath.replace(/\\/g, '\\\\')}" /f`;
       try { execSync(regCmdEdge, { stdio: 'ignore' }); } catch (_) {}
       return { ok: true };
     } catch (e) {

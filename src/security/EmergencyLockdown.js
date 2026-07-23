@@ -221,6 +221,9 @@ class EmergencyLockdown {
         errors: []
       };
 
+      const totalInterfacesToRestore = this.savedNetworkState ? this.savedNetworkState.filter(i => i.state === 'connected').length : 0;
+      const totalServicesToRestore = this.savedServicesState ? this.savedServicesState.filter(s => s.state === 'RUNNING').length : 0;
+
       // Restore network interfaces
       if (this.savedNetworkState) {
         for (const iface of this.savedNetworkState) {
@@ -249,19 +252,43 @@ class EmergencyLockdown {
         }
       }
 
-      this.isLockedDown = false;
-      this.savedNetworkState = null;
-      this.savedServicesState = null;
-      
-      this.eventBus.emit('lockdown:changed', { locked: false, results });
-      
-      this.notify(
-        'Emergency Lockdown Released',
-        `Restored ${results.enabledInterfaces.length} network interfaces and restarted ${results.startedServices.length} services.`,
-        'success'
-      );
+      // Determine overall restore status
+      const allInterfacesRestored = results.enabledInterfaces.length === totalInterfacesToRestore;
+      const allServicesRestored = results.startedServices.length === totalServicesToRestore;
+      const hasErrors = results.errors.length > 0;
 
-      return { success: true, results };
+      let status = 'success';
+      if (hasErrors && (allInterfacesRestored || allServicesRestored)) {
+        status = 'partial';
+      } else if (hasErrors || (!allInterfacesRestored && totalInterfacesToRestore > 0) || (!allServicesRestored && totalServicesToRestore > 0)) {
+        status = 'failed';
+      }
+
+      // Only clear state if restore was fully successful
+      if (status === 'success') {
+        this.isLockedDown = false;
+        this.savedNetworkState = null;
+        this.savedServicesState = null;
+        
+        this.eventBus.emit('lockdown:changed', { locked: false, results, status });
+        
+        this.notify(
+          'Emergency Lockdown Released',
+          `Restored ${results.enabledInterfaces.length} network interfaces and restarted ${results.startedServices.length} services.`,
+          'success'
+        );
+      } else {
+        // Keep lockdown state active if restore failed/partial
+        this.eventBus.emit('lockdown:changed', { locked: true, results, status });
+        
+        this.notify(
+          'Emergency Lockdown Restore Incomplete',
+          `Partial restore: ${results.enabledInterfaces.length}/${totalInterfacesToRestore} interfaces, ${results.startedServices.length}/${totalServicesToRestore} services. ${results.errors.length} errors occurred.`,
+          'warn'
+        );
+      }
+
+      return { success: status === 'success', results, status };
     } catch (err) {
       throw new Error(`Restore failed: ${err.message}`);
     }

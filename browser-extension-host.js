@@ -8,35 +8,60 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
+// Persistent stream parser to avoid listener accumulation
+let messageBuffer = Buffer.alloc(0);
+let messageResolver = null;
+
 function readMessage() {
   return new Promise((resolve, reject) => {
-    const lenBuf = Buffer.alloc(4);
-    let read = 0;
-    process.stdin.on('readable', () => {
-      const chunk = process.stdin.read(4 - read);
-      if (chunk) {
-        chunk.copy(lenBuf, read);
-        read += chunk.length;
-        if (read === 4) {
-          const len = lenBuf.readUInt32LE(0);
-          const msgBuf = Buffer.alloc(len);
-          let msgRead = 0;
-          process.stdin.on('readable', () => {
-            const chunk = process.stdin.read(len - msgRead);
-            if (chunk) {
-              chunk.copy(msgBuf, msgRead);
-              msgRead += chunk.length;
-              if (msgRead === len) {
-                resolve(JSON.parse(msgBuf.toString('utf8')));
-              }
-            }
-          });
-        }
-      }
-    });
-    process.stdin.on('error', reject);
+    messageResolver = { resolve, reject };
+    // Try to parse any buffered data first
+    tryParseBuffer();
   });
 }
+
+function tryParseBuffer() {
+  if (!messageResolver) return;
+
+  while (messageBuffer.length >= 4) {
+    const len = messageBuffer.readUInt32LE(0);
+    if (messageBuffer.length < 4 + len) break;
+
+    const msgBuf = messageBuffer.subarray(4, 4 + len);
+    messageBuffer = messageBuffer.subarray(4 + len);
+
+    try {
+      const msg = JSON.parse(msgBuf.toString('utf8'));
+      messageResolver.resolve(msg);
+      messageResolver = null;
+      return;
+    } catch (e) {
+      messageResolver.reject(new Error(`Failed to parse message: ${e.message}`));
+      messageResolver = null;
+      return;
+    }
+  }
+}
+
+// Set up persistent stdin listener once
+process.stdin.on('data', (chunk) => {
+  messageBuffer = Buffer.concat([messageBuffer, chunk]);
+  tryParseBuffer();
+});
+
+process.stdin.on('error', (err) => {
+  if (messageResolver) {
+    messageResolver.reject(err);
+    messageResolver = null;
+  }
+});
+
+process.stdin.on('end', () => {
+  if (messageResolver) {
+    messageResolver.reject(new Error('Stream ended'));
+    messageResolver = null;
+  }
+});
 
 function sendMessage(msg) {
   const buf = Buffer.from(JSON.stringify(msg), 'utf8');

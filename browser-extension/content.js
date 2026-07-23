@@ -94,7 +94,25 @@ function addIconToField(input) {
   const updatePos = () => positionIcon(icon, input);
   window.addEventListener('scroll', updatePos, true);
   window.addEventListener('resize', updatePos);
-  input.addEventListener('blur', () => setTimeout(() => icon.remove(), 200), { once: true });
+
+  // Store handler references for cleanup
+  icon._soteriosHandlers = { updatePos, scroll: true, resize: true };
+
+  const cleanup = () => {
+    if (icon._soteriosHandlers) {
+      if (icon._soteriosHandlers.scroll) {
+        window.removeEventListener('scroll', icon._soteriosHandlers.updatePos, true);
+      }
+      if (icon._soteriosHandlers.resize) {
+        window.removeEventListener('resize', icon._soteriosHandlers.updatePos);
+      }
+    }
+    icon.remove();
+    passwordFields.delete(input);
+    delete input.dataset.soteriosId;
+  };
+
+  input.addEventListener('blur', () => setTimeout(cleanup, 200), { once: true });
 
   passwordFields.set(input, icon);
 }
@@ -133,7 +151,19 @@ if (typeof window !== 'undefined') {
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'SETTINGS_UPDATED') {
     if (!msg.settings.showIcon) {
-      passwordFields.forEach((icon, input) => icon.remove());
+      // Properly clean up all icons and their listeners
+      passwordFields.forEach((icon, input) => {
+        if (icon._soteriosHandlers) {
+          if (icon._soteriosHandlers.scroll) {
+            window.removeEventListener('scroll', icon._soteriosHandlers.updatePos, true);
+          }
+          if (icon._soteriosHandlers.resize) {
+            window.removeEventListener('resize', icon._soteriosHandlers.updatePos);
+          }
+        }
+        icon.remove();
+        delete input.dataset.soteriosId;
+      });
       passwordFields.clear();
     } else {
       scanForPasswordFields();

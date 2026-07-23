@@ -8,6 +8,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     checkPassword(msg.password).then(sendResponse);
     return true; // async response
   }
+  if (msg.type === 'CHECK_NATIVE_HOST') {
+    // Check if native host is connected
+    const connected = nativePort !== null;
+    sendResponse({ 
+      connected, 
+      error: connected ? null : 'Native host not installed or desktop app not running' 
+    });
+  }
 });
 
 // Native messaging port for desktop app communication

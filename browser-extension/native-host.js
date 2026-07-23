@@ -9,8 +9,6 @@ const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
 
-const DESKTOP_APP = process.env.SOTERIOS_APP_PATH || 'soterios://';
-
 function log(...args) {
   console.error('[Soterios Native Host]', new Date().toISOString(), ...args);
 }
@@ -60,31 +58,49 @@ function launchDesktopApp() {
   if (desktopProc) return Promise.resolve();
 
   return new Promise((resolve, reject) => {
-    const appPath = process.env.DESKTOP_APP;
-    if (!appPath) {
-      return reject(new Error('DESKTOP_APP environment variable not set'));
+    const appPath = process.env.SOTERIOS_APP_PATH || 'soterios://';
+    
+    // Check if it's a protocol URL or an executable path
+    const isProtocolUrl = appPath.startsWith('soterios://') || appPath.startsWith('http://') || appPath.startsWith('https://');
+
+    if (isProtocolUrl) {
+      // Launch using OS-appropriate protocol handler
+      const isWin = process.platform === 'win32';
+      const args = isWin ? ['/c', 'start', '', appPath] : ['open', appPath];
+      const cmd = isWin ? 'cmd' : (process.platform === 'darwin' ? 'open' : 'xdg-open');
+      const options = { shell: false, detached: true };
+
+      desktopProc = spawn(cmd, args, options);
+      desktopProc.unref();
+
+      desktopProc.on('error', e => {
+        log('Desktop app launch error:', e.message);
+        desktopProc = null;
+      });
+
+      setTimeout(resolve, 1500);
+    } else {
+      // Launch as executable path
+      const resolvedPath = path.resolve(appPath);
+      if (!fs.existsSync(resolvedPath)) {
+        return reject(new Error('Desktop app not found at: ' + resolvedPath));
+      }
+
+      const isWin = process.platform === 'win32';
+      const args = isWin ? ['/c', 'start', '""', resolvedPath] : [resolvedPath];
+      const cmd = isWin ? 'cmd' : resolvedPath;
+      const options = { shell: false, detached: true };
+
+      desktopProc = spawn(cmd, args, options);
+      desktopProc.unref();
+
+      desktopProc.on('error', e => {
+        log('Desktop app launch error:', e.message);
+        desktopProc = null;
+      });
+
+      setTimeout(resolve, 1500);
     }
-
-    // Resolve and validate path - prevent command injection
-    const resolvedPath = path.resolve(appPath);
-    if (!fs.existsSync(resolvedPath)) {
-      return reject(new Error('Desktop app not found at: ' + resolvedPath));
-    }
-
-    const isWin = process.platform === 'win32';
-    const args = isWin ? ['/c', 'start', '""', resolvedPath] : [resolvedPath];
-    const cmd = isWin ? 'cmd' : resolvedPath;
-    const options = { shell: false, detached: true };
-
-    desktopProc = spawn(cmd, args, options);
-    desktopProc.unref();
-
-    desktopProc.on('error', e => {
-      log('Desktop app launch error:', e.message);
-      desktopProc = null;
-    });
-
-    setTimeout(resolve, 1500);
   });
 }
 

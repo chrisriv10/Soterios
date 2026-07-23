@@ -8,10 +8,17 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const EXTENSION_ID = process.env.EXTENSION_ID || 'YOUR_EXTENSION_ID_HERE';
+const EXTENSION_ID = process.env.EXTENSION_ID;
 const IS_WIN = process.platform === 'win32';
 
 function main() {
+  // Validate extension ID
+  if (!EXTENSION_ID || EXTENSION_ID === 'YOUR_EXTENSION_ID_HERE' || !/^[a-z]{32}$/.test(EXTENSION_ID)) {
+    console.error('Error: Invalid extension ID. Set EXTENSION_ID environment variable to a valid 32-character Chrome extension ID.');
+    console.error('Example: EXTENSION_ID=abcdefghijklmnopqrstuvwxyz123456 node tools/install-native-host.js');
+    process.exit(1);
+  }
+
   const extDir = path.resolve(__dirname, '..', 'browser-extension');
   const manifestPath = path.join(extDir, 'native-host-manifest.json');
   const batPath = path.join(extDir, 'native-host.bat');
