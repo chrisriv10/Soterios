@@ -155,6 +155,9 @@ class EmergencyLockdown {
       return { success: false, message: 'Already in lockdown mode' };
     }
 
+    // Claim lockdown state immediately to prevent concurrent invocations
+    this.isLockedDown = true;
+
     try {
       // Save current state
       const interfaces = await this.getNetworkInterfaces();
@@ -191,7 +194,6 @@ class EmergencyLockdown {
         }
       }
 
-      this.isLockedDown = true;
       this.eventBus.emit('lockdown:changed', { locked: true, results });
       
       this.notify(
@@ -202,6 +204,10 @@ class EmergencyLockdown {
 
       return { success: true, results };
     } catch (err) {
+      // Reset guard on failure so restore() doesn't receive corrupted state
+      this.isLockedDown = false;
+      this.savedNetworkState = null;
+      this.savedServicesState = null;
       throw new Error(`Lockdown failed: ${err.message}`);
     }
   }

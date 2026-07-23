@@ -1,5 +1,7 @@
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.sync.set({ externalLookupsEnabled: true });
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === 'install') {
+    chrome.storage.sync.set({ externalLookupsEnabled: true });
+  }
 });
 
 // Handle CHECK_PASSWORD from content script

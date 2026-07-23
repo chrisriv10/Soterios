@@ -58,7 +58,7 @@ function launchDesktopApp() {
   if (desktopProc) return Promise.resolve();
 
   return new Promise((resolve, reject) => {
-    const appPath = process.env.SOTERIOS_APP_PATH || 'soterios://';
+    const appPath = process.env.DESKTOP_APP || 'soterios://';
     
     // Check if it's a protocol URL or an executable path
     const isProtocolUrl = appPath.startsWith('soterios://') || appPath.startsWith('http://') || appPath.startsWith('https://');

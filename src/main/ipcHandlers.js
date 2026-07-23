@@ -951,12 +951,27 @@ function registerIpcHandlers(mainWindow, services) {
     const generatedManifestPath = path.join(userDataDir, 'native-host-manifest.json');
     fs.writeFileSync(generatedManifestPath, JSON.stringify(manifest, null, 2));
     
-    // Update bat file to reference the correct js path
+    // Update bat file to reference the correct js path and set DESKTOP_APP
     const batContent = fs.readFileSync(batPath, 'utf8');
-    const updatedBatContent = batContent.replace(
-      /node\s+"[^"]*native-host\.js"/,
-      `node "${jsPath}"`
-    );
+    const appExePath = process.execPath;
+    const appDir = path.dirname(appExePath);
+    // Use Electron's bundled Node runtime
+    const nodeExePath = process.platform === 'win32' 
+      ? path.join(appDir, 'resources', 'app.asar.unpacked', 'node.exe')
+      : path.join(appDir, 'Contents', 'MacOS', 'Soterios'); // macOS
+    
+    // For Windows packaged builds, Node is typically in the app directory
+    const nodeRuntime = process.platform === 'win32'
+      ? (fs.existsSync(path.join(appDir, 'node.exe')) ? path.join(appDir, 'node.exe') : 'node')
+      : 'node';
+    
+    const updatedBatContent = `@echo off
+REM Soterios Native Messaging Host
+REM This batch file launches the Node.js native host that communicates with the desktop app
+
+set DESKTOP_APP=${appExePath}
+set NODE_PATH=${path.join(path.dirname(appExePath), 'resources', 'node_modules')}
+"${nodeRuntime}" "${jsPath}" %*`;
     const generatedBatPath = path.join(userDataDir, 'native-host.bat');
     fs.writeFileSync(generatedBatPath, updatedBatContent);
     

@@ -782,7 +782,6 @@
   "passwords.crackTimeDays": "{count} days",
   "passwords.crackTimeYears": "{count} years",
   "passwords.crackTimeCenturies": "{count} centuries",
-  "health.malware.high": "最新のスキャンで {count} 件の脅威マッチが検出されました。",
   "health.label.malware": "マルウェア スキャン結果",
   "health.label.scanRecency": "スキャン時効性",
   "health.label.disk": "ディスク容量",
