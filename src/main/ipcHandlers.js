@@ -766,6 +766,23 @@ function registerIpcHandlers(mainWindow, services) {
     return { found: count > 0, count };
   });
 
+  ipcMain.handle('credential-leak:notify', async (_event, payload) => {
+    if (!payload?.password) return { ok: false, error: 'Missing password' };
+    const sha = crypto.createHash('sha1').update(payload.password).digest('hex').toUpperCase();
+    const alert = {
+      level: 'danger',
+      source: 'Browser Extension',
+      title: 'Credential Leak Detected',
+      message: `Password found in ${payload.count} breach${payload.count > 1 ? 'es' : ''} via browser extension`,
+      detail: `SHA-1 prefix: ${sha.slice(0, 5)}... | Breaches: ${payload.count}`,
+      timestamp: new Date().toISOString(),
+      metadata: { source: 'browser-extension', hashPrefix: sha.slice(0, 5), count: payload.count }
+    };
+    db.addAlert(alert);
+    if (services.eventBus) services.eventBus.emit('alert:new', alert);
+    return { ok: true };
+  });
+
   ipcMain.handle('xon:email', async (_event, email) => {
     if (!email) return { found: false, breaches: [] };
     if (!db.getSetting('feature.externalLookups', true)) throw new Error('External lookups are disabled in Settings.');
@@ -901,6 +918,112 @@ function registerIpcHandlers(mainWindow, services) {
   });
 
   ipcMain.handle('tray:quit', () => app.quit());
+
+  // -- Browser Extension Native Host --
+  ipcMain.handle('browserExtension:installNativeHost', async (_event, extensionId) => {
+    if (process.platform !== 'win32') {
+      return { ok: false, error: 'Native host install only supported on Windows' };
+    }
+    const { execSync } = require('child_process');
+    const fs = require('fs');
+    const path = require('path');
+    
+    // Validate extension ID
+    const extId = extensionId || process.env.SOTERIOS_EXT_ID;
+    if (!extId || extId === 'YOUR_EXTENSION_ID_HERE' || !/^[a-z]{32}$/.test(extId)) {
+      return { ok: false, error: 'Invalid extension ID. Provide a valid 32-character Chrome extension ID.' };
+    }
+    
+    const extDir = path.join(__dirname, '..', '..', 'browser-extension');
+    const manifestPath = path.join(extDir, 'native-host-manifest.json');
+    const batPath = path.join(extDir, 'native-host.bat');
+    const jsPath = path.join(extDir, 'native-host.js');
+    if (!fs.existsSync(manifestPath) || !fs.existsSync(batPath) || !fs.existsSync(jsPath)) {
+      return { ok: false, error: 'Extension files not found. Reinstall Soterios.' };
+    }
+    
+    // Read template manifest and generate a new one in app data directory
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    manifest.allowed_origins = [manifest.allowed_origins[0].replace('<EXTENSION_ID>', extId)];
+    
+    // Write generated manifest to app data directory instead of mutating the shipped file
+    const userDataDir = app.getPath('userData');
+    const generatedManifestPath = path.join(userDataDir, 'native-host-manifest.json');
+    fs.writeFileSync(generatedManifestPath, JSON.stringify(manifest, null, 2));
+    
+    // Update bat file to reference the correct js path and set DESKTOP_APP
+    const batContent = fs.readFileSync(batPath, 'utf8');
+    const appExePath = process.execPath;
+    const appDir = path.dirname(appExePath);
+    // Use Electron's bundled Node runtime
+    const nodeExePath = process.platform === 'win32' 
+      ? path.join(appDir, 'resources', 'app.asar.unpacked', 'node.exe')
+      : path.join(appDir, 'Contents', 'MacOS', 'Soterios'); // macOS
+    
+    // For Windows packaged builds, Node is typically in the app directory
+    const nodeRuntime = process.platform === 'win32'
+      ? (fs.existsSync(path.join(appDir, 'node.exe')) ? path.join(appDir, 'node.exe') : 'node')
+      : 'node';
+    
+    const updatedBatContent = `@echo off
+REM Soterios Native Messaging Host
+REM This batch file launches the Node.js native host that communicates with the desktop app
+
+set DESKTOP_APP=${appExePath}
+set NODE_PATH=${path.join(path.dirname(appExePath), 'resources', 'node_modules')}
+"${nodeRuntime}" "${jsPath}" %*`;
+    const generatedBatPath = path.join(userDataDir, 'native-host.bat');
+    fs.writeFileSync(generatedBatPath, updatedBatContent);
+    
+    const regPath = `HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${manifest.name}`;
+    const regCmd = `reg add "${regPath}" /ve /t REG_SZ /d "${generatedManifestPath.replace(/\\/g, '\\\\')}" /f`;
+    try {
+      execSync(regCmd, { stdio: 'ignore' });
+      const regPathEdge = `HKCU\\Software\\Microsoft\\Edge\\NativeMessagingHosts\\${manifest.name}`;
+      const regCmdEdge = `reg add "${regPathEdge}" /ve /t REG_SZ /d "${generatedManifestPath.replace(/\\/g, '\\\\')}" /f`;
+      try { execSync(regCmdEdge, { stdio: 'ignore' }); } catch (_) {}
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e.message || String(e) };
+    }
+  });
+
+  // -- Emergency Lockdown --
+  ipcMain.handle('lockdown:getStatus', async () => {
+    if (!services.emergencyLockdown) {
+      return { ok: false, error: 'Emergency lockdown service unavailable' };
+    }
+    try {
+      const status = services.emergencyLockdown.getStatus();
+      return { ok: true, data: status };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('lockdown:activate', async () => {
+    if (!services.emergencyLockdown) {
+      return { ok: false, error: 'Emergency lockdown service unavailable' };
+    }
+    try {
+      const result = await services.emergencyLockdown.lockdown();
+      return { ok: true, data: result };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('lockdown:restore', async () => {
+    if (!services.emergencyLockdown) {
+      return { ok: false, error: 'Emergency lockdown service unavailable' };
+    }
+    try {
+      const result = await services.emergencyLockdown.restore();
+      return { ok: true, data: result };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
 }
 
 module.exports = { registerIpcHandlers };

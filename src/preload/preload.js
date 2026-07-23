@@ -38,5 +38,10 @@ contextBridge.exposeInMainWorld('soterios', {
   },
   process: {
     getIcons: (exePaths) => ipcRenderer.invoke('process:getIcons', exePaths)
+  },
+  lockdown: {
+    getStatus: () => ipcRenderer.invoke('lockdown:getStatus'),
+    activate: () => ipcRenderer.invoke('lockdown:activate'),
+    restore: () => ipcRenderer.invoke('lockdown:restore')
   }
 });
