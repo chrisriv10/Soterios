@@ -123,6 +123,8 @@
   "settings.browserExtension.installed": "Native messaging host installed. Install the extension from Chrome Web Store.",
   "settings.browserExtension.installFailed": "Failed to install native host: {error}",
   "settings.browserExtension.disabled": "Browser extension integration disabled",
+  "settings.emergencyLockdown.label": "Emergency Lockdown",
+  "settings.emergencyLockdown.desc": "Enable emergency lockdown mode to quickly isolate the system from network threats",
   "settings.colorScheme": "Color Scheme",
   "tray.systemHealth": "System Health",
   "tray.rtpActive": "RTP Active",

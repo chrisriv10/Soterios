@@ -127,6 +127,14 @@ window.Pages.settings = {
             </div>
             <label class="toggle"><input type="checkbox" id="browserExtensionToggle" ${settings.features.browserExtension ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
+
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">${escapeHtml(t('settings.emergencyLockdown.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.emergencyLockdown.desc'))}</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="emergencyLockdownToggle" ${settings.features.emergencyLockdown ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+          </div>
           <div id="featureToggleStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
         </div>
 
@@ -412,6 +420,21 @@ window.Pages.settings = {
         } else {
           statusEl.textContent = t('settings.featureSaved');
         }
+      } catch (err) {
+        event.target.checked = !checked;
+        statusEl.textContent = err.message || String(err);
+      } finally {
+        event.target.disabled = false;
+      }
+    });
+    container.querySelector('#emergencyLockdownToggle').addEventListener('change', async (event) => {
+      const checked = event.target.checked;
+      const statusEl = container.querySelector('#featureToggleStatus');
+      statusEl.textContent = '';
+      event.target.disabled = true;
+      try {
+        await Api.updateSettings({ features: { emergencyLockdown: checked } });
+        statusEl.textContent = t('settings.featureSaved');
       } catch (err) {
         event.target.checked = !checked;
         statusEl.textContent = err.message || String(err);
