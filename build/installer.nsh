@@ -187,7 +187,7 @@ Section "Main Application" SecMain
 
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Soterios" "DisplayName" "Soterios ${PRODUCT_VERSION}"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Soterios" "DisplayVersion" "${PRODUCT_VERSION}"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Soterios" "Publisher" "Chris Rivera"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Soterios" "Publisher" "Christopher Rivera"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Soterios" "URLInfoAbout" "https://github.com/chrisriv10/Soterios"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Soterios" "UninstallString" "\"$INSTDIR\uninstall.exe\""
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Soterios" "NoModify" 1

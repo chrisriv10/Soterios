@@ -43,7 +43,7 @@
   "build": {
     "appId": "com.soterios.app",
     "productName": "Soterios",
-    "copyright": "Copyright (c) 2026 Chris Rivera",
+    "copyright": "Copyright (c) 2026 Christopher Rivera",
     "icon": "assets/icon.ico",
     "directories": {
       "output": "dist",
@@ -74,7 +74,7 @@
       "signAndEditExecutable": true,
       "requestedExecutionLevel": "requireAdministrator",
       "signtoolOptions": {
-        "publisherName": "Chris Rivera"
+        "publisherName": "Christopher Rivera"
       }
     },
     "nsis": {
