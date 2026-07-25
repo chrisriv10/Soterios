@@ -42,6 +42,10 @@ contextBridge.exposeInMainWorld('soterios', {
   lockdown: {
     getStatus: () => ipcRenderer.invoke('lockdown:getStatus'),
     activate: () => ipcRenderer.invoke('lockdown:activate'),
-    restore: () => ipcRenderer.invoke('lockdown:restore')
+    restore: () => ipcRenderer.invoke('lockdown:restore'),
+    getAllowlist: () => ipcRenderer.invoke('lockdown:getAllowlist'),
+    setAllowlist: (allowlist) => ipcRenderer.invoke('lockdown:setAllowlist', allowlist),
+    addToAllowlist: (type, value) => ipcRenderer.invoke('lockdown:addToAllowlist', type, value),
+    removeFromAllowlist: (type, value) => ipcRenderer.invoke('lockdown:removeFromAllowlist', type, value)
   }
 });

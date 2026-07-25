@@ -55,6 +55,14 @@ window.Pages['lockdown'] = {
               <label class="field-label">${escapeHtml(t('lockdown.services'))}</label>
               <div class="lockdown-list" id="serviceList"></div>
             </div>
+            <div class="field" id="skippedInterfacesSection" style="display:none;">
+              <label class="field-label">${escapeHtml(t('lockdown.skippedInterfaces'))}</label>
+              <div class="lockdown-list" id="skippedInterfacesList"></div>
+            </div>
+            <div class="field" id="skippedServicesSection" style="display:none;">
+              <label class="field-label">${escapeHtml(t('lockdown.skippedServices'))}</label>
+              <div class="lockdown-list" id="skippedServicesList"></div>
+            </div>
             <div class="field" id="errorSection" style="display:none;">
               <label class="field-label">${escapeHtml(t('lockdown.errors'))}</label>
               <div class="lockdown-list lockdown-errors" id="errorList"></div>
@@ -67,14 +75,44 @@ window.Pages['lockdown'] = {
       </div>
 
       <div class="panel" style="margin-top:16px;">
-        <div class="panel-title" style="color:var(--warning);">${escapeHtml(t('lockdown.warning'))}</div>
-        <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--warning-bg);border-radius:6px;">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2">
-            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-            <line x1="12" y1="9" x2="12" y2="13" />
-            <line x1="12" y1="17" x2="12.01" y2="17" />
-          </svg>
-          <span style="font-size:13px;color:var(--warning-text);">${escapeHtml(t('lockdown.warning'))}</span>
+        <div class="panel-title" style="color:var(--warning);font-size:16px;text-transform:uppercase;">${escapeHtml(t('lockdown.warning'))}</div>
+      </div>
+
+      <!-- Allowlist Panel -->
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-title">${escapeHtml(t('lockdown.allowlist.title'))}</div>
+        <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">${escapeHtml(t('lockdown.allowlist.description'))}</div>
+        
+        <div class="grid grid-3" style="gap:16px;">
+          <!-- Interfaces Allowlist -->
+          <div class="panel" style="margin:0;">
+            <div class="panel-title" style="font-size:13px;">${escapeHtml(t('lockdown.allowlist.interfaces'))}</div>
+            <div style="display:flex;gap:8px;margin-bottom:8px;">
+              <input type="text" id="allowlistInterfaceInput" placeholder="${escapeHtml(t('lockdown.allowlist.addPlaceholder'))}" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);color:var(--text);font-size:13px;">
+              <button class="btn btn-primary" id="addAllowlistInterfaceBtn" style="padding:6px 12px;font-size:12px;">${escapeHtml(t('lockdown.allowlist.add'))}</button>
+            </div>
+            <div class="lockdown-list" id="allowlistInterfacesList" style="max-height:150px;overflow-y:auto;"></div>
+          </div>
+
+          <!-- Services Allowlist -->
+          <div class="panel" style="margin:0;">
+            <div class="panel-title" style="font-size:13px;">${escapeHtml(t('lockdown.allowlist.services'))}</div>
+            <div style="display:flex;gap:8px;margin-bottom:8px;">
+              <input type="text" id="allowlistServiceInput" placeholder="${escapeHtml(t('lockdown.allowlist.addPlaceholder'))}" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);color:var(--text);font-size:13px;">
+              <button class="btn btn-primary" id="addAllowlistServiceBtn" style="padding:6px 12px;font-size:12px;">${escapeHtml(t('lockdown.allowlist.add'))}</button>
+            </div>
+            <div class="lockdown-list" id="allowlistServicesList" style="max-height:150px;overflow-y:auto;"></div>
+          </div>
+
+          <!-- IPs Allowlist -->
+          <div class="panel" style="margin:0;">
+            <div class="panel-title" style="font-size:13px;">${escapeHtml(t('lockdown.allowlist.ips'))}</div>
+            <div style="display:flex;gap:8px;margin-bottom:8px;">
+              <input type="text" id="allowlistIpInput" placeholder="${escapeHtml(t('lockdown.allowlist.ipPlaceholder'))}" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);color:var(--text);font-size:13px;">
+              <button class="btn btn-primary" id="addAllowlistIpBtn" style="padding:6px 12px;font-size:12px;">${escapeHtml(t('lockdown.allowlist.add'))}</button>
+            </div>
+            <div class="lockdown-list" id="allowlistIpsList" style="max-height:150px;overflow-y:auto;"></div>
+          </div>
         </div>
       </div>
     `;
@@ -96,8 +134,30 @@ window.Pages['lockdown'] = {
     const errorSection = document.getElementById('errorSection');
     const errorList = document.getElementById('errorList');
 
+    // Allowlist elements
+    const allowlistInterfaceInput = document.getElementById('allowlistInterfaceInput');
+    const addAllowlistInterfaceBtn = document.getElementById('addAllowlistInterfaceBtn');
+    const allowlistInterfacesList = document.getElementById('allowlistInterfacesList');
+    const allowlistServiceInput = document.getElementById('allowlistServiceInput');
+    const addAllowlistServiceBtn = document.getElementById('addAllowlistServiceBtn');
+    const allowlistServicesList = document.getElementById('allowlistServicesList');
+    const allowlistIpInput = document.getElementById('allowlistIpInput');
+    const addAllowlistIpBtn = document.getElementById('addAllowlistIpBtn');
+    const allowlistIpsList = document.getElementById('allowlistIpsList');
+
     // Load initial status
     this._updateLockdownStatus();
+    this._loadAllowlist();
+
+    // Allowlist event listeners
+    addAllowlistInterfaceBtn.addEventListener('click', () => this._addToAllowlist('interfaces', allowlistInterfaceInput.value.trim()));
+    allowlistInterfaceInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this._addToAllowlist('interfaces', allowlistInterfaceInput.value.trim()); });
+
+    addAllowlistServiceBtn.addEventListener('click', () => this._addToAllowlist('services', allowlistServiceInput.value.trim()));
+    allowlistServiceInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this._addToAllowlist('services', allowlistServiceInput.value.trim()); });
+
+    addAllowlistIpBtn.addEventListener('click', () => this._addToAllowlist('ips', allowlistIpInput.value.trim()));
+    allowlistIpInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this._addToAllowlist('ips', allowlistIpInput.value.trim()); });
 
     lockdownBtn.addEventListener('click', async () => {
       if (!confirm(window.I18n.t('lockdown.confirmActivate'))) return;
@@ -151,6 +211,100 @@ window.Pages['lockdown'] = {
     });
   },
 
+  async _loadAllowlist() {
+    try {
+      const result = await window.soterios.lockdown.getAllowlist();
+      if (result.ok) {
+        this._renderAllowlist(result.data);
+      }
+    } catch (err) {
+      console.error('Failed to load allowlist:', err);
+    }
+  },
+
+  _renderAllowlist(allowlist) {
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+    
+    // Render interfaces
+    const interfacesList = document.getElementById('allowlistInterfacesList');
+    if (interfacesList) {
+      interfacesList.innerHTML = (allowlist.interfaces || []).map(iface => 
+        `<div class="tag tag-info" style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <span>${escapeHtml(iface)}</span>
+          <button class="btn btn-sm btn-ghost" style="padding:2px 6px;font-size:11px;" data-type="interfaces" data-value="${escapeHtml(iface)}">${t('lockdown.allowlist.remove')}</button>
+        </div>`
+      ).join('') || '<div style="color:var(--text-dim);font-size:12px;">' + t('lockdown.allowlist.empty') + '</div>';
+      
+      // Add remove listeners
+      interfacesList.querySelectorAll('button[data-type]').forEach(btn => {
+        btn.addEventListener('click', () => this._removeFromAllowlist(btn.dataset.type, btn.dataset.value));
+      });
+    }
+
+    // Render services
+    const servicesList = document.getElementById('allowlistServicesList');
+    if (servicesList) {
+      servicesList.innerHTML = (allowlist.services || []).map(svc => 
+        `<div class="tag tag-info" style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <span>${escapeHtml(svc)}</span>
+          <button class="btn btn-sm btn-ghost" style="padding:2px 6px;font-size:11px;" data-type="services" data-value="${escapeHtml(svc)}">${t('lockdown.allowlist.remove')}</button>
+        </div>`
+      ).join('') || '<div style="color:var(--text-dim);font-size:12px;">' + t('lockdown.allowlist.empty') + '</div>';
+      
+      servicesList.querySelectorAll('button[data-type]').forEach(btn => {
+        btn.addEventListener('click', () => this._removeFromAllowlist(btn.dataset.type, btn.dataset.value));
+      });
+    }
+
+    // Render IPs
+    const ipsList = document.getElementById('allowlistIpsList');
+    if (ipsList) {
+      ipsList.innerHTML = (allowlist.ips || []).map(ip => 
+        `<div class="tag tag-info" style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <span>${escapeHtml(ip)}</span>
+          <button class="btn btn-sm btn-ghost" style="padding:2px 6px;font-size:11px;" data-type="ips" data-value="${escapeHtml(ip)}">${t('lockdown.allowlist.remove')}</button>
+        </div>`
+      ).join('') || '<div style="color:var(--text-dim);font-size:12px;">' + t('lockdown.allowlist.empty') + '</div>';
+      
+      ipsList.querySelectorAll('button[data-type]').forEach(btn => {
+        btn.addEventListener('click', () => this._removeFromAllowlist(btn.dataset.type, btn.dataset.value));
+      });
+    }
+  },
+
+  async _addToAllowlist(type, value) {
+    if (!value) return;
+    const inputMap = {
+      interfaces: document.getElementById('allowlistInterfaceInput'),
+      services: document.getElementById('allowlistServiceInput'),
+      ips: document.getElementById('allowlistIpInput')
+    };
+    try {
+      const result = await window.soterios.lockdown.addToAllowlist(type, value);
+      if (result.ok) {
+        inputMap[type].value = '';
+        this._renderAllowlist(result.data);
+      } else {
+        alert(result.error || 'Failed to add to allowlist');
+      }
+    } catch (err) {
+      alert(err.message);
+    }
+  },
+
+  async _removeFromAllowlist(type, value) {
+    try {
+      const result = await window.soterios.lockdown.removeFromAllowlist(type, value);
+      if (result.ok) {
+        this._renderAllowlist(result.data);
+      } else {
+        alert(result.error || 'Failed to remove from allowlist');
+      }
+    } catch (err) {
+      alert(err.message);
+    }
+  },
+
   async _updateLockdownStatus() {
     const lockdownIndicator = document.getElementById('lockdownIndicator');
     const lockdownIcon = document.getElementById('lockdownIcon');
@@ -199,13 +353,19 @@ window.Pages['lockdown'] = {
     }
   },
 
-  _showLockdownDetails(data) {
+_showLockdownDetails(data) {
     const lockdownDetails = document.getElementById('lockdownDetails');
     const noDetailsMessage = document.getElementById('noDetailsMessage');
     const networkList = document.getElementById('networkList');
     const serviceList = document.getElementById('serviceList');
+    const skippedInterfacesSection = document.getElementById('skippedInterfacesSection');
+    const skippedInterfacesList = document.getElementById('skippedInterfacesList');
+    const skippedServicesSection = document.getElementById('skippedServicesSection');
+    const skippedServicesList = document.getElementById('skippedServicesList');
     const errorSection = document.getElementById('errorSection');
     const errorList = document.getElementById('errorList');
+    
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     
     lockdownDetails.style.display = 'block';
     noDetailsMessage.style.display = 'none';
@@ -213,19 +373,39 @@ window.Pages['lockdown'] = {
     // Network interfaces
     networkList.innerHTML = data.results.disabledInterfaces.map(iface => 
       `<div class="tag tag-danger">${escapeHtml(iface)}</div>`
-    ).join('') || '<div style="color:var(--text-dim);font-size:12px;">None</div>';
+    ).join('') || `<div style="color:var(--text-dim);font-size:12px;">${t('lockdown.none')}</div>`;
     
     // Services
     serviceList.innerHTML = data.results.stoppedServices.map(svc => 
       `<div class="tag tag-danger">${escapeHtml(svc)}</div>`
-    ).join('') || '<div style="color:var(--text-dim);font-size:12px;">None</div>';
+    ).join('') || `<div style="color:var(--text-dim);font-size:12px;">${t('lockdown.none')}</div>`;
+    
+    // Skipped interfaces (allowlisted)
+    if (data.results.skippedInterfaces && data.results.skippedInterfaces.length > 0) {
+      skippedInterfacesSection.style.display = 'block';
+      skippedInterfacesList.innerHTML = data.results.skippedInterfaces.map(iface => 
+        `<div class="tag tag-info">${escapeHtml(iface)}</div>`
+      ).join('');
+    } else {
+      skippedInterfacesSection.style.display = 'none';
+    }
+    
+    // Skipped services (allowlisted)
+    if (data.results.skippedServices && data.results.skippedServices.length > 0) {
+      skippedServicesSection.style.display = 'block';
+      skippedServicesList.innerHTML = data.results.skippedServices.map(svc => 
+        `<div class="tag tag-info">${escapeHtml(svc)}</div>`
+      ).join('');
+    } else {
+      skippedServicesSection.style.display = 'none';
+    }
     
     // Errors
     if (data.results.errors && data.results.errors.length > 0) {
       errorSection.style.display = 'block';
       errorList.innerHTML = data.results.errors.map(err => 
         `<div class="tag tag-warning">${escapeHtml(err)}</div>`
-    ).join('');
+      ).join('');
     } else {
       errorSection.style.display = 'none';
     }

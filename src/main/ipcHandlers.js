@@ -1024,6 +1024,55 @@ set NODE_PATH=${path.join(path.dirname(appExePath), 'resources', 'node_modules')
       return { ok: false, error: err.message };
     }
   });
+
+  // -- Emergency Lockdown Allowlist --
+  ipcMain.handle('lockdown:getAllowlist', async () => {
+    if (!services.emergencyLockdown) {
+      return { ok: false, error: 'Emergency lockdown service unavailable' };
+    }
+    try {
+      const allowlist = services.emergencyLockdown.getAllowlist();
+      return { ok: true, data: allowlist };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('lockdown:setAllowlist', async (event, allowlist) => {
+    if (!services.emergencyLockdown) {
+      return { ok: false, error: 'Emergency lockdown service unavailable' };
+    }
+    try {
+      const result = services.emergencyLockdown.setAllowlist(allowlist);
+      return { ok: true, data: result };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('lockdown:addToAllowlist', async (event, type, value) => {
+    if (!services.emergencyLockdown) {
+      return { ok: false, error: 'Emergency lockdown service unavailable' };
+    }
+    try {
+      const result = services.emergencyLockdown.addToAllowlist(type, value);
+      return { ok: true, data: result };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('lockdown:removeFromAllowlist', async (event, type, value) => {
+    if (!services.emergencyLockdown) {
+      return { ok: false, error: 'Emergency lockdown service unavailable' };
+    }
+    try {
+      const result = services.emergencyLockdown.removeFromAllowlist(type, value);
+      return { ok: true, data: result };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
 }
 
 module.exports = { registerIpcHandlers };

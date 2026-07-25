@@ -16,6 +16,65 @@ class EmergencyLockdown {
     this.isLockedDown = false;
     this.savedNetworkState = null;
     this.savedServicesState = null;
+    this.allowlist = {
+      interfaces: [],
+      services: [],
+      ips: []
+    };
+    this._loadAllowlist();
+  }
+
+  _loadAllowlist() {
+    try {
+      const stored = this.db.get('lockdown_allowlist');
+      if (stored) {
+        this.allowlist = { ...this.allowlist, ...stored };
+      }
+    } catch (err) {
+      // Ignore, use defaults
+    }
+  }
+
+  _saveAllowlist() {
+    try {
+      this.db.set('lockdown_allowlist', this.allowlist);
+    } catch (err) {
+      console.error('Failed to save lockdown allowlist:', err);
+    }
+  }
+
+  getAllowlist() {
+    return { ...this.allowlist };
+  }
+
+  setAllowlist(allowlist) {
+    this.allowlist = {
+      interfaces: allowlist.interfaces || [],
+      services: allowlist.services || [],
+      ips: allowlist.ips || []
+    };
+    this._saveAllowlist();
+    return this.allowlist;
+  }
+
+  addToAllowlist(type, value) {
+    if (!this.allowlist[type]) {
+      this.allowlist[type] = [];
+    }
+    const normalized = type === 'ips' ? value.trim() : value.trim().toLowerCase();
+    if (!this.allowlist[type].includes(normalized)) {
+      this.allowlist[type].push(normalized);
+      this._saveAllowlist();
+    }
+    return this.allowlist;
+  }
+
+  removeFromAllowlist(type, value) {
+    if (!this.allowlist[type]) return this.allowlist;
+    const normalized = type === 'ips' ? value.trim() : value.trim().toLowerCase();
+    this.allowlist[type] = this.allowlist[type].filter(v => v !== normalized);
+    this._saveAllowlist();
+    return this.allowlist;
   }
 
   /**
@@ -169,12 +228,25 @@ class EmergencyLockdown {
       const results = {
         disabledInterfaces: [],
         stoppedServices: [],
+        skippedInterfaces: [],
+        skippedServices: [],
         errors: []
       };
 
-      // Disable all connected network interfaces
+      // Disable all connected network interfaces (respecting allowlist)
+      const allowedInterfaces = new Set(this.allowlist.interfaces?.map(i => i.toLowerCase()) || []);
+      const allowedIPs = new Set(this.allowlist.ips || []);
+      
       for (const iface of interfaces) {
         if (iface.state === 'connected') {
+          // Check if interface is allowlisted
+          if (allowedInterfaces.has(iface.name.toLowerCase())) {
+            results.skippedInterfaces.push(`${iface.name} (allowlisted)`);
+            continue;
+          }
+          
+          // Check if any IP on this interface is allowlisted
+          // For simplicity, we'll skip the interface if user explicitly allowlisted it
           try {
             await this.disableInterface(iface.name);
             results.disabledInterfaces.push(iface.name);
@@ -184,8 +256,16 @@ class EmergencyLockdown {
         }
       }
 
-      // Stop non-essential services
+      // Stop non-essential services (respecting allowlist)
+      const allowedServices = new Set(this.allowlist.services?.map(s => s.toLowerCase()) || []);
+      
       for (const svc of services) {
+        // Check if service is allowlisted
+        if (allowedServices.has(svc.name.toLowerCase())) {
+          results.skippedServices.push(`${svc.name} (allowlisted)`);
+          continue;
+        }
+        
         try {
           await this.stopService(svc.name);
           results.stoppedServices.push(svc.name);
@@ -198,7 +278,7 @@ class EmergencyLockdown {
       
       this.notify(
         'Emergency Lockdown Activated',
-        `Disabled ${results.disabledInterfaces.length} network interfaces and stopped ${results.stoppedServices.length} services.`,
+        `Disabled ${results.disabledInterfaces.length} network interfaces and stopped ${results.stoppedServices.length} services. ${results.skippedInterfaces.length} interfaces and ${results.skippedServices.length} services skipped (allowlisted).`,
         'warn'
       );
 
