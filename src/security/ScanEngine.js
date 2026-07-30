@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+const { clampProgress } = require('../core/scanProgress');
 
 function esc(v) {
   return String(v ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
@@ -150,7 +151,7 @@ class ScanEngine {
     let maxEmittedPct = 0;
     let cumulativeFiles = 0;
     const emitProgress = (pctCandidate, message, extra) => {
-      const pct = Math.max(maxEmittedPct, Math.min(100, pctCandidate));
+      const pct = Math.max(maxEmittedPct, clampProgress(pctCandidate));
       maxEmittedPct = pct;
       scanState.progress = pct;
       if (extra && extra.filesScanned) {

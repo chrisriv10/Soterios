@@ -1,0 +1,14 @@
+// src/core/scanProgress.js
+// Centralised progress normalisation used by the scan engine and IPC
+// handlers. Guarantees finite integers in the 0-100 range so every
+// caller does not have to re-implement the same guards.
+
+function clampProgress(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+module.exports = {
+  clampProgress,
+};
