@@ -17,8 +17,8 @@
     "dist:win": "electron-builder --win --publish never",
     "dist:mac": "electron-builder --mac --publish never",
     "dist:linux": "electron-builder --linux --publish never",
-    "postinstall": "node tools/download-clamav.js",
-    "prepack": "node tools/download-clamav.js",
+    "postinstall": "node tools/download-clamav.js && electron-rebuild -f -w better-sqlite3",
+    "prepack": "node tools/download-clamav.js && electron-rebuild -f -w better-sqlite3",
     "test": "node tests/node-test-runner.js && jest tests/passwordTools.test.js tests/reportExport.test.js",
     "smoke:integration": "node tests/smoke/integration-smoke.js",
     "capture:screenshots": "node tests/smoke/capture-pr-screenshots.js"
