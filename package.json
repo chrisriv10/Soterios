@@ -10,7 +10,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "start": "electronmon . --disable-logging --disable-gpu --disable-gpu-compositing --disable-gpu-shader-disk-cache --disable-software-rasterizer --disable-background-networking --disable-features=NetworkService,AutofillServerCommunication,AutofillAcrossForms,Autofill --disk-cache-dir=.cache/soterios",
+    "start": "electron .",
     "dev": "electronmon . --dev --disable-logging --disable-gpu --disable-gpu-compositing --disable-gpu-shader-disk-cache --disable-software-rasterizer --disable-background-networking --disable-features=NetworkService,AutofillServerCommunication,AutofillAcrossForms,Autofill --disk-cache-dir=.cache/soterios",
     "pack": "electron-builder --dir",
     "dist": "electron-builder --publish never",
@@ -43,7 +43,7 @@
   "build": {
     "appId": "com.soterios.app",
     "productName": "Soterios",
-    "copyright": "Copyright (c) 2026 Chris Rivera",
+    "copyright": "Copyright (c) 2026 Christopher Rivera",
     "icon": "assets/icon.ico",
     "directories": {
       "output": "dist",
@@ -57,6 +57,7 @@
       "preload.js",
       "src/**/*",
       "assets/**/*",
+      "browser-extension/**/*",
       "package.json"
     ],
     "extraResources": [],
@@ -74,10 +75,11 @@
       "signAndEditExecutable": true,
       "requestedExecutionLevel": "requireAdministrator",
       "signtoolOptions": {
-        "publisherName": "Chris Rivera"
+        "publisherName": "Christopher Rivera"
       }
     },
     "nsis": {
+      "script": "build/installer.nsi",
       "oneClick": false,
       "perMachine": true,
       "allowToChangeInstallationDirectory": true,

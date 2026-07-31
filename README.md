@@ -224,4 +224,4 @@ Even small improvements, bug reports, or suggestions are appreciated.
 
 Soterios is released under the [MIT License](build/LICENSE.txt).
 
-**Copyright © 2026 Chris Rivera**
+**Copyright © 2026 Christopher Rivera**

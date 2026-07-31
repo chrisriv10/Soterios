@@ -11,6 +11,13 @@
       --text: #f2f5f8;
       --muted: #aab4bf;
       --accent: #58a6ff;
+      --accent-bg: rgba(88,166,255,0.15);
+      --danger: #f85149;
+      --danger-bg: rgba(248,81,73,0.15);
+      --ok: #3fb950;
+      --ok-bg: rgba(63,185,80,0.15);
+      --spark-rx: #58a6ff;
+      --spark-tx: #f85149;
     }
     html, body {
       margin: 0;
@@ -27,15 +34,46 @@
       box-shadow: 0 12px 32px rgba(0,0,0,0.35);
       color: var(--text);
     }
-    .title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .title { font-size: 14px; font-weight: 700; }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .status-badge.active { background: var(--ok-bg); color: #3fb950; }
+    .status-badge.inactive { background: var(--danger-bg); color: #f85149; }
+    .status-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: currentColor;
+    }
+    .score-row { display: flex; align-items: baseline; gap: 12px; margin: 8px 0 4px; }
     .score {
       font-size: 42px;
       font-weight: 700;
       color: var(--accent);
       line-height: 1;
-      margin: 8px 0;
     }
-    .meta { font-size: 12px; color: var(--muted); line-height: 1.5; }
+    .score-detail { font-size: 12px; color: var(--muted); line-height: 1.5; }
+    .rtp-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--border); }
+    .rtp-label { font-size: 12px; color: var(--muted); flex: 1; }
+    .sparkline {
+      height: 40px;
+      margin: 8px 0;
+      position: relative;
+    }
+    .sparkline canvas { width: 100%; height: 100%; }
+    .sparkline-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 9px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
     .actions { display: flex; gap: 8px; margin-top: 14px; }
     button {
       flex: 1;
@@ -46,40 +84,178 @@
       padding: 8px 10px;
       font-size: 12px;
       cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
     }
+    button:hover { background: rgba(255,255,255,0.08); }
     button.primary {
       background: var(--accent);
       border-color: transparent;
       color: #0b0e14;
       font-weight: 600;
     }
+    button.primary:hover { background: #4a9eff; }
+    button.secondary:hover { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); }
   </style>
 </head>
 <body>
   <div class="panel">
-    <div class="title">System Health</div>
-    <div class="score" id="healthScore">--</div>
-    <div class="meta" id="healthDetail">Loading summary...</div>
+    <div class="header">
+      <div class="title">System Health</div>
+      <span class="status-badge" id="rtpBadge">
+        <span class="status-dot" id="rtpDot"></span>
+        <span id="rtpText">RTP</span>
+      </span>
+    </div>
+
+    <div class="score-row">
+      <div class="score" id="healthScore">--</div>
+    </div>
+    <div class="score-detail" id="healthDetail">Loading summary...</div>
+
+    <div class="rtp-row">
+      <span class="rtp-label">Network</span>
+      <div class="sparkline" id="sparkline">
+        <canvas id="sparkCanvas" width="280" height="40"></canvas>
+        <div class="sparkline-labels">
+          <span id="sparkMin">0 KB/s</span>
+          <span id="sparkMax">0 KB/s</span>
+        </div>
+      </div>
+    </div>
+
     <div class="actions">
-      <button class="primary" id="openApp">Open Soterios</button>
-      <button id="quitApp">Quit</button>
+      <button class="primary" id="quickScan">Quick Scan</button>
+      <button id="openApp">Open Soterios</button>
+      <button class="secondary" id="quitApp">Quit</button>
     </div>
   </div>
+
   <script>
     const scoreEl = document.getElementById('healthScore');
     const detailEl = document.getElementById('healthDetail');
-    window.api.on('tray:summary', (summary) => {
-      scoreEl.textContent = summary && summary.score != null ? String(summary.score) : 'N/A';
-      detailEl.textContent = summary && summary.detail ? summary.detail : 'Health summary unavailable.';
-    });
-    window.api.invoke('tray:getSummary').then((summary) => {
-      scoreEl.textContent = summary && summary.score != null ? String(summary.score) : 'N/A';
-      detailEl.textContent = summary && summary.detail ? summary.detail : 'Health summary unavailable.';
-    }).catch(() => {
+    const rtpBadge = document.getElementById('rtpBadge');
+    const rtpDot = document.getElementById('rtpDot');
+    const rtpText = document.getElementById('rtpText');
+    const canvas = document.getElementById('sparkCanvas');
+    const sparkMin = document.getElementById('sparkMin');
+    const sparkMax = document.getElementById('sparkMax');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = canvas.clientWidth * dpr;
+    canvas.height = canvas.clientHeight * dpr;
+    ctx.scale(dpr, dpr);
+
+    function drawSparkline(rx, tx) {
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      ctx.clearRect(0, 0, w, h);
+
+      const maxVal = Math.max(1, ...rx, ...tx);
+      const minVal = 0;
+      const range = maxVal - minVal;
+
+      // Draw RX (download) - blue
+      ctx.beginPath();
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--spark-rx').trim() || '#58a6ff';
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      rx.forEach((v, i) => {
+        const x = (i / Math.max(1, rx.length - 1)) * w;
+        const y = h - (v / maxVal) * (h - 4) - 2;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      // Draw TX (upload) - red
+      ctx.beginPath();
+      ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--spark-tx').trim() || '#f85149';
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      tx.forEach((v, i) => {
+        const x = (i / Math.max(1, tx.length - 1)) * w;
+        const y = h - (v / maxVal) * (h - 4) - 2;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      // Labels
+      const format = (bps) => {
+        if (bps >= 1024 * 1024) return (bps / 1024 / 1024).toFixed(1) + ' MB/s';
+        if (bps >= 1024) return (bps / 1024).toFixed(1) + ' KB/s';
+        return bps.toFixed(0) + ' B/s';
+      };
+      document.getElementById('sparkMax').textContent = format(maxVal);
+      document.getElementById('sparkMin').textContent = '0 B/s';
+    }
+
+    function update(summary) {
+      if (!summary) return;
+
+      // Health score
+      scoreEl.textContent = summary.score != null ? String(summary.score) : 'N/A';
+
+      // Detail text
+      if (summary.detail) {
+        detailEl.textContent = summary.detail;
+      } else if (summary.breakdown?.disk?.reason) {
+        detailEl.textContent = summary.breakdown.disk.reason;
+      } else {
+        detailEl.textContent = 'Protection and resource summary ready.';
+      }
+
+      // RTP badge
+      if (summary.rtp) {
+        const active = summary.rtp.enabled;
+        rtpBadge.className = 'status-badge ' + (active ? 'active' : 'inactive');
+        rtpText.textContent = active ? 'RTP Active' : 'RTP Off';
+      }
+
+      // Network sparkline
+      if (summary.network?.rx?.length || summary.network?.tx?.length) {
+        drawSparkline(summary.network.rx, summary.network.tx);
+      }
+
+      // Last scan
+      if (summary.lastScan) {
+        const ago = Math.round((Date.now() - new Date(summary.lastScan.timestamp).getTime()) / 60000);
+        if (ago < 60) detailEl.textContent += ` • Last scan ${ago}m ago`;
+        else if (ago < 1440) detailEl.textContent += ` • Last scan ${Math.round(ago/60)}h ago`;
+        else detailEl.textContent += ` • Last scan ${Math.round(ago/1440)}d ago`;
+      }
+    }
+
+    window.api.on('tray:summary', (summary) => update(summary));
+    window.api.invoke('tray:getSummary').then(update).catch(() => {
       detailEl.textContent = 'Unable to load health summary.';
     });
+
+    document.getElementById('quickScan').addEventListener('click', async () => {
+      const btn = document.getElementById('quickScan');
+      btn.textContent = 'Starting...';
+      btn.disabled = true;
+      try {
+        await window.api.invoke('scan:quick');
+        btn.textContent = 'Quick Scan';
+      } catch (e) {
+        btn.textContent = 'Quick Scan';
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
     document.getElementById('openApp').addEventListener('click', () => window.api.invoke('tray:openMain'));
     document.getElementById('quitApp').addEventListener('click', () => window.api.invoke('tray:quit'));
+
+    // Handle resize
+    window.addEventListener('resize', () => {
+      canvas.width = canvas.clientWidth * dpr;
+      canvas.height = canvas.clientHeight * dpr;
+      ctx.scale(dpr, dpr);
+    });
   </script>
 </body>
 </html>

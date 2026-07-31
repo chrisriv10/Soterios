@@ -41,6 +41,7 @@ function register(mainWindow, {
   realtimeWatcher,
   startNetworkStatsTimer,
   stopNetworkStatsTimer,
+  emergencyLockdown,
 }) {
   // -- System --
   ipcMain.handle('app:info', () => ({
@@ -381,6 +382,92 @@ function register(mainWindow, {
     }
     const errorMessage = await shell.openPath(resolved);
     return errorMessage ? { success: false, error: errorMessage } : { success: true };
+  });
+
+  // -- Emergency Lockdown --
+  ipcMain.handle('lockdown:getStatus', async () => {
+    if (!emergencyLockdown) {
+      return { ok: false, error: 'Emergency lockdown service unavailable' };
+    }
+    try {
+      const status = emergencyLockdown.getStatus();
+      return { ok: true, data: status };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('lockdown:activate', async () => {
+    if (!emergencyLockdown) {
+      return { ok: false, error: 'Emergency lockdown service unavailable' };
+    }
+    try {
+      const result = await emergencyLockdown.lockdown();
+      return { ok: true, data: result };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('lockdown:restore', async () => {
+    if (!emergencyLockdown) {
+      return { ok: false, error: 'Emergency lockdown service unavailable' };
+    }
+    try {
+      const result = await emergencyLockdown.restore();
+      return { ok: true, data: result };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // -- Emergency Lockdown Allowlist --
+  ipcMain.handle('lockdown:getAllowlist', async () => {
+    if (!emergencyLockdown) {
+      return { ok: false, error: 'Emergency lockdown service unavailable' };
+    }
+    try {
+      const allowlist = emergencyLockdown.getAllowlist();
+      return { ok: true, data: allowlist };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('lockdown:setAllowlist', async (event, allowlist) => {
+    if (!emergencyLockdown) {
+      return { ok: false, error: 'Emergency lockdown service unavailable' };
+    }
+    try {
+      const result = emergencyLockdown.setAllowlist(allowlist);
+      return { ok: true, data: result };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('lockdown:addToAllowlist', async (event, type, value) => {
+    if (!emergencyLockdown) {
+      return { ok: false, error: 'Emergency lockdown service unavailable' };
+    }
+    try {
+      const result = emergencyLockdown.addToAllowlist(type, value);
+      return { ok: true, data: result };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('lockdown:removeFromAllowlist', async (event, type, value) => {
+    if (!emergencyLockdown) {
+      return { ok: false, error: 'Emergency lockdown service unavailable' };
+    }
+    try {
+      const result = emergencyLockdown.removeFromAllowlist(type, value);
+      return { ok: true, data: result };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
   });
 }
 
