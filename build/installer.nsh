@@ -79,6 +79,7 @@ FunctionEnd
 ; ============================================================
 Var WelcomePageHwnd
 Var WelcomeBanner
+Var WelcomeBannerImage
 Var WelcomeTitle
 Var WelcomeText
 Var WelcomeVersion
@@ -90,7 +91,7 @@ Function onWelcomePageCreate
   ; Banner area with gradient
   ${NSD_CreateBitmap} 0 0 100% 120 ""
   Pop $WelcomeBanner
-  ${NSD_SetImage} $WelcomeBanner "$INSTDIR\build\welcome-banner.bmp"
+  ${NSD_SetImage} $WelcomeBanner "$INSTDIR\build\welcome-banner.bmp" $WelcomeBannerImage
 
   ; Title
   ${NSD_CreateLabel} 24 140 100% 24 "Soterios"
@@ -141,6 +142,7 @@ FunctionEnd
 ; ============================================================
 Var FinishPageHwnd
 Var FinishBanner
+Var FinishBannerImage
 Var FinishTitle
 Var FinishText
 Var LaunchCheckbox
@@ -151,7 +153,7 @@ Function onFinishPageCreate
 
   ${NSD_CreateBitmap} 0 0 100% 120 ""
   Pop $FinishBanner
-  ${NSD_SetImage} $FinishBanner "$INSTDIR\build\finish-banner.bmp"
+  ${NSD_SetImage} $FinishBanner "$INSTDIR\build\finish-banner.bmp" $FinishBannerImage
 
   ${NSD_CreateLabel} 24 140 100% 24 "Soterios Installed Successfully"
   Pop $FinishTitle
@@ -241,6 +243,8 @@ SectionEnd
 ; ============================================================
 Var UnWelcomePageHwnd
 Var UnFinishPageHwnd
+Var UnWelcomeBannerImage
+Var UnFinishBannerImage
 
 Function un.onWelcomeCreate
   nsDialogs::Create 1018
@@ -248,7 +252,7 @@ Function un.onWelcomeCreate
 
   ${NSD_CreateBitmap} 0 0 100% 120 ""
   Pop $0
-  ${NSD_SetImage} $0 "$INSTDIR\build\welcome-banner.bmp"
+  ${NSD_SetImage} $0 "$INSTDIR\build\welcome-banner.bmp" $UnWelcomeBannerImage
 
   ${NSD_CreateLabel} 24 140 100% 24 "Uninstall Soterios"
   Pop $0
@@ -271,7 +275,7 @@ Function un.onFinishCreate
 
   ${NSD_CreateBitmap} 0 0 100% 120 ""
   Pop $0
-  ${NSD_SetImage} $0 "$INSTDIR\build\finish-banner.bmp"
+  ${NSD_SetImage} $0 "$INSTDIR\build\finish-banner.bmp" $UnFinishBannerImage
 
   ${NSD_CreateLabel} 24 140 100% 24 "Soterios Uninstalled"
   Pop $0
