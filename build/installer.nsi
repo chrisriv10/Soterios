@@ -47,16 +47,19 @@ Var AutoLaunch
 Var InstallMode
 Var PreviousVersion
 Var IsUpgrade
+Var TitleFont
 
 ; ============================================================
 ; GUI Initialization - Modern Styling
 ; ============================================================
 Function onGuiInit
   SetFont "Segoe UI" 9
+  CreateFont $TitleFont "MS Shell Dlg" 12 700
 FunctionEnd
 
 Function un.onGuiInit
   SetFont "Segoe UI" 9
+  CreateFont $TitleFont "MS Shell Dlg" 12 700
 FunctionEnd
 
 ; ============================================================
@@ -64,6 +67,7 @@ FunctionEnd
 ; ============================================================
 Var FinishPageHwnd
 Var FinishBanner
+Var FinishBannerImage
 Var FinishTitle
 Var FinishText
 Var LaunchCheckbox
@@ -74,12 +78,12 @@ Function onFinishPageCreate
 
   ${NSD_CreateBitmap} 0 0 100% 120 ""
   Pop $FinishBanner
-  ${NSD_SetImage} $FinishBanner "$INSTDIR\build\finish-banner.bmp"
+  ${NSD_SetImage} $FinishBanner "$INSTDIR\build\finish-banner.bmp" $FinishBannerImage
 
   ${NSD_CreateLabel} 24 140 100% 24 "Soterios Installed Successfully"
   Pop $FinishTitle
   SetCtlColors $FinishTitle 0xFFFFFF 0x15202B
-  SendMessage $FinishTitle ${WM_SETFONT} ${__FONT__16_BOLD} 1
+  SendMessage $FinishTitle ${WM_SETFONT} $TitleFont 1
 
   ${NSD_CreateLabel} 24 170 100% 60 "Soterios has been installed on your computer.\nYou can now manage system maintenance, monitor security, and run scans."
   Pop $FinishText
