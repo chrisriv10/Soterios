@@ -1,0 +1,1067 @@
+ÔûÂ BlocklistService.ipToInt
+  Ô£ö converts 0.0.0.0 to 0 (1.4957ms)
+  Ô£ö converts 255.255.255.255 to 4294967295 (0.2763ms)
+  Ô£ö converts 192.168.1.1 correctly (0.2614ms)
+  Ô£ö returns null for invalid input (0.2588ms)
+Ô£ö BlocklistService.ipToInt (4.4468ms)
+ÔûÂ BlocklistService.isListed
+  Ô£ö /24 range matches addresses inside the subnet (1.4004ms)
+  Ô£ö /24 range does not match addresses outside the subnet (0.5367ms)
+  Ô£ö /32 matches only the exact host (0.7091ms)
+  Ô£ö /0 matches every IPv4 address (0.434ms)
+  Ô£ö IPv6 input returns false without throwing (6.1631ms)
+Ô£ö BlocklistService.isListed (10.0221ms)
+ÔûÂ BlocklistService.ipv6ToBytes
+  Ô£ö parses loopback and compressed notation (0.5541ms)
+  Ô£ö handles IPv4-mapped addresses (0.1873ms)
+Ô£ö BlocklistService.ipv6ToBytes (1.0113ms)
+ÔûÂ BlocklistService IPv6 CIDR matching
+  Ô£ö matches IPv6 addresses inside a /48 range (0.7315ms)
+  Ô£ö delegates IPv4-mapped addresses to IPv4 matching (0.3921ms)
+  Ô£û init sets isReady false when clamscan not found (26.5552ms)
+[2026-07-31T13:07:26.197Z] INFO ClamAV engine initialized at C:\Users\Noobyx\AppData\Local\Temp\soterios-clamav-rrkKJn\clamav
+  Ô£ö getStatus returns current engine state (30.5911ms)
+  Ô£ö hasVirusDatabase returns false when no db files exist (10.1097ms)
+  Ô£ö hasVirusDatabase returns true when cvd files exist (10.8098ms)
+  Ô£ö hasVirusDatabase returns true when cld files exist (12.9435ms)
+  Ô£ö hasVirusDatabase returns true when hdb files exist (12.6798ms)
+  Ô£ö toClamPath converts Windows paths to forward slashes (7.9541ms)
+  Ô£ö ensureFreshclamConfig creates config file (10.0457ms)
+  Ô£ö ensureFreshclamConfig includes certs dir when exists (11.6808ms)
+  Ô£ö updateDefinitions returns success when freshclam succeeds (34.2132ms)
+[2026-07-31T13:07:26.366Z] INFO ClamAV engine initialized at C:\Users\Noobyx\AppData\Local\Temp\soterios-clamav-zwMWwi\clamav
+  Ô£û updateDefinitions returns error when freshclam not found (32.9624ms)
+  Ô£ö scanFile returns error when not ready (9.0525ms)
+[2026-07-31T13:07:26.399Z] INFO ClamAV engine initialized at C:\Users\Noobyx\AppData\Local\Temp\soterios-clamav-kmwWqs\clamav
+[2026-07-31T13:07:26.408Z] INFO ClamAV engine initialized at C:\Users\Noobyx\AppData\Local\Temp\soterios-clamav-kK4Xge\clamav
+  Ô£ö scanFile scans file successfully when ready (35.2118ms)
+  Ô£ö scanFile returns error for non-existent file (11.9005ms)
+[2026-07-31T13:07:26.440Z] INFO ClamAV engine initialized at C:\Users\Noobyx\AppData\Local\Temp\soterios-clamav-Bnm5FO\clamav
+[2026-07-31T13:07:26.466Z] WARN ClamAV virus definitions not found in C:\Users\Noobyx\AppData\Local\Temp\soterios-clamav-ofYdIH\clamav\database; downloading with freshclam.
+  Ô£ö scanFile scans directory recursively (33.4683ms)
+  Ô£ö abortCurrentScan kills active scan process (11.4717ms)
+  Ô£ö abortCurrentScan returns false when no active process (8.0884ms)
+[2026-07-31T13:07:26.481Z] INFO ClamAV engine initialized at C:\Users\Noobyx\AppData\Local\Temp\soterios-clamav-ofYdIH\clamav
+  Ô£ö init attempts update when no database exists (28.0761ms)
+Ô£û ClamAVEngine (450.4436ms)
+ÔûÂ DatabaseService quarantine_path migration
+  Ô£ö adds quarantine_path when migrating a legacy schema (114.9811ms)
+  Ô£ö keeps existing quarantine_path schema intact on re-init (46.8032ms)
+  Ô£ö creates missing quarantine table on a blank database file (40.7778ms)
+  Ô£ö throws when opening a corrupted database file (9.7488ms)
+  Ô£ö throws when quarantine exists but is not a usable table (44.0364ms)
+Ô£ö DatabaseService quarantine_path migration (258.8664ms)
+ÔûÂ DatabaseService maintenance_runs
+  Ô£ö pruneMaintenanceRuns keeps the most recent rows (40.8573ms)
+  Ô£ö getMaintenanceHistory omits raw results_json from returned rows (27.1834ms)
+Ô£ö DatabaseService maintenance_runs (68.4703ms)
+ÔûÂ duplicateFileFinder
+  Ô£ö groups identical files by hash and reports recoverable space (28.5549ms)
+  Ô£ö filters by extension (27.1094ms)
+  Ô£ö deletes selected copies while keeping original (12.8269ms)
+  Ô£ö requires confirm before delete (12.1807ms)
+Ô£ö duplicateFileFinder (83.5657ms)
+ÔûÂ EmergencyLockdown
+  ÔûÂ Allowlist management
+    Ô£ö should return default empty allowlist (7.2987ms)
+    Ô£ö should set allowlist (0.7646ms)
+    Ô£ö should add to allowlist (0.7334ms)
+    Ô£ö should not add duplicate entries to allowlist (0.5487ms)
+    Ô£ö should remove from allowlist (0.6328ms)
+    Ô£ö should load allowlist from database on initialization (0.5625ms)
+  Ô£ö Allowlist management (12.7759ms)
+  ÔûÂ Network interface operations
+    Ô£ö should get network interfaces (436.7042ms)
+    Ô£ö should throw error when disabling interface fails (516.5147ms)
+    Ô£ö should throw error when enabling interface fails (471.6485ms)
+  Ô£ö Network interface operations (1425.6065ms)
+  ÔûÂ Service operations
+    Ô£ö should get non-essential services (114.0365ms)
+    Ô£ö should throw error when stopping service fails (40.2348ms)
+    Ô£ö should throw error when starting service fails (38.8338ms)
+  Ô£ö Service operations (193.4975ms)
+  ÔûÂ Lockdown status
+    Ô£ö should return initial status as not locked down (0.4705ms)
+    Ô£ö should prevent double lockdown (0.8201ms)
+    Ô£ö should prevent restore when not locked down (0.991ms)
+  Ô£ö Lockdown status (2.7626ms)
+  ÔûÂ Lockdown and restore flow
+    Ô£ö should handle lockdown errors gracefully (0.5423ms)
+    Ô£ö should handle restore when not locked down (0.2811ms)
+  Ô£ö Lockdown and restore flow (1.0077ms)
+Ô£ö EmergencyLockdown (1637.094ms)
+ÔûÂ fileShredder
+  Ô£ö dry-run lists files without deleting (6.8623ms)
+  Ô£ö refuses to shred without confirm (9.7715ms)
+  Ô£ö overwrites and deletes with confirm (33.7432ms)
+  Ô£ö rejects unknown methods (3.3499ms)
+Ô£ö fileShredder (57.464ms)
+ÔûÂ FirewallManager import/export validation
+  Ô£ö rejects malformed payloads and unsupported versions (6.7698ms)
+  Ô£ö validates rule fields before creating anything (1.446ms)
+  Ô£ö rejects invalid ports and protocols (0.9501ms)
+  Ô£ö skips existing rules when onConflict=skip (0.8438ms)
+  Ô£ö renames on conflict without double-counting created (2.1649ms)
+  Ô£ö overwrites only after a successful recreate (2.2699ms)
+  Ô£ö reports recreate failure clearly when overwrite create fails (0.8427ms)
+  Ô£ö exportRules only includes managed rules (2.1407ms)
+Ô£ö FirewallManager import/export validation (20.9121ms)
+ÔûÂ FolderWatcher
+  Ô£ö starts and stops without throwing on missing dirs (6.1091ms)
+  Ô£ö debounces and queues a folderwatch scan for new files (224.6286ms)
+  Ô£ö skips duplicate scans within the cooldown window (273.3041ms)
+  Ô£ö does not scan when ClamAV is unavailable (147.2435ms)
+Ô£ö FolderWatcher (658.1067ms)
+ÔûÂ healthScore volume filtering
+  Ô£ö ignores volumes smaller than 1 GB (1.9516ms)
+  Ô£ö ignores Windows recovery-style mounts without drive letters (0.3088ms)
+  Ô£ö returns zero usage when no relevant volumes exist (0.1406ms)
+  Ô£ö uses empty-volume fallback when no relevant volumes are present (0.2822ms)
+Ô£ö healthScore volume filtering (4.5255ms)
+ÔûÂ getTrayHealthSummary
+  ÔûÂ Basic functionality
+    Ô£ö should return health summary with score (441.6413ms)
+    Ô£ö should handle tool registry error (0.8571ms)
+    Ô£ö should handle missing tool result (134.3059ms)
+  Ô£ö Basic functionality (580.484ms)
+  ÔûÂ Last scan info
+    Ô£ö should include last scan info when available (170.1501ms)
+    Ô£ö should handle missing last scan report (147.5573ms)
+  Ô£ö Last scan info (318.6567ms)
+  ÔûÂ Password score
+    Ô£ö should handle password score setting (134.3661ms)
+    Ô£ö should handle null password score (124.1013ms)
+    Ô£ö should handle missing password score setting (137.1078ms)
+  Ô£ö Password score (396.4405ms)
+  ÔûÂ RTP status
+    Ô£ö should show RTP as disabled when setting is false (156.3274ms)
+    Ô£ö should show RTP as enabled when setting is true (116.0513ms)
+    Ô£ö should handle missing RTP setting (76.7704ms)
+  Ô£ö RTP status (349.6452ms)
+  ÔûÂ Network history
+    Ô£ö should include network stats when history is available (63.5653ms)
+    Ô£ö should handle empty network history (65.9099ms)
+    Ô£ö should handle missing network history method (61.2155ms)
+    Ô£ö should limit sparkline to last 60 samples (56.4448ms)
+    Ô£ö should handle network history errors gracefully (59.3761ms)
+  Ô£ö Network history (306.9535ms)
+  ÔûÂ Integration scenarios
+    Ô£ö should provide complete summary with all data (59.507ms)
+    Ô£ö should handle all errors gracefully and return partial data (0.2552ms)
+  Ô£ö Integration scenarios (59.898ms)
+Ô£ö getTrayHealthSummary (2013.8781ms)
+ÔûÂ HeuristicEngine.analyze
+  Ô£ö returns score 0 for files larger than 50 MB (4.6848ms)
+  Ô£ö flags high-entropy content (11.2031ms)
+  Ô£ö flags PE header in non-executable extension (3.6201ms)
+Ô£ö HeuristicEngine.analyze (21.7201ms)
+ÔûÂ i18n
+  Ô£ö loads the English catalog by default (34.6349ms)
+  Ô£ö falls back to English for missing keys (1.5811ms)
+  Ô£ö normalizes regional locale codes (0.4842ms)
+  Ô£ö falls back to English for unsupported locales (0.3266ms)
+  Ô£ö returns translated strings for all initial target languages (36.4941ms)
+  Ô£ö lists all initial target locale files (0.5269ms)
+  Ô£ö replaces placeholders in translated strings (0.4132ms)
+  Ô£ö detects RTL locales (0.5179ms)
+  Ô£ö returns locale metadata for the settings picker (0.7996ms)
+Ô£ö i18n (80.6623ms)
+[2026-07-31T13:07:26.648Z] INFO hello {"a":1}
+[2026-07-31T13:07:26.656Z] ERROR should-appear
+[2026-07-31T13:07:26.663Z] ERROR failed {"name":"Error","error":"boom","stack":"Error: boom\n    at TestContext.<anonymous> (D:\\Soterios\\tests\\logger.test.js:39:17)\n    at Test.runInAsyncScope (node:async_hooks:226:14)\n    at Test.run (node:internal/test_runner/test:1382:25)\n    at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)"}
+ÔûÂ logger
+  Ô£ö writes structured lines to an optional log file (9.7268ms)
+  Ô£ö respects configured minimum level (4.2283ms)
+  Ô£ö serializes Error objects with message and stack (10.4729ms)
+Ô£ö logger (27.2582ms)
+ÔûÂ suspiciousPathSignals
+  Ô£ö flags AppData, Temp, and Recycle Bin paths (1.1727ms)
+Ô£ö suspiciousPathSignals (1.5684ms)
+ÔûÂ MaintenanceScheduler
+  Ô£ö skips run when disabled (2.4531ms)
+  Ô£ö runs configured scripts via run-script and records lastRun (12.3196ms)
+  Ô£ö uses dry-run cleanup for scheduled runs (0.757ms)
+  Ô£ö does not run again before interval elapses (0.7335ms)
+  Ô£ö does not update lastRun when every script fails (0.4513ms)
+  Ô£ö throttles failed runs using lastAttempt (0.6685ms)
+  Ô£ö skips idle preset runs while user is active (0.5339ms)
+  Ô£ö records maintenance runs for System Audit history (0.5523ms)
+Ô£ö MaintenanceScheduler (39.4383ms)
+ÔûÂ scriptArgsFor
+  Ô£ö returns dry-run args for clear-temp-files when requested (1.4873ms)
+Ô£ö scriptArgsFor (2.0563ms)
+ÔûÂ NetworkAlertMonitor
+  Ô£ö alerts once for a blocklisted remote IP (5.8503ms)
+  Ô£ö honors ignore keys (3.0796ms)
+  Ô£ö kill delegates to ProcessInspector (1.7948ms)
+Ô£ö NetworkAlertMonitor (13.6538ms)
+ÔûÂ DatabaseService network_stats
+  Ô£ö creates network_stats table and stores samples (46.3032ms)
+  Ô£ö prunes samples older than retention window (30.7765ms)
+Ô£ö DatabaseService network_stats (83.1097ms)
+D:\Soterios\tests\passwordTools.test.js:6
+test('uses adjacent keyboard substrings',() => {
+^
+
+ReferenceError: test is not defined
+    at Object.<anonymous> (D:\Soterios\tests\passwordTools.test.js:6:1)
+    at Module._compile (node:internal/modules/cjs/loader:1944:14)
+    at Object..js (node:internal/modules/cjs/loader:2084:10)
+    at Module.load (node:internal/modules/cjs/loader:1666:32)
+    at Module._load (node:internal/modules/cjs/loader:1447:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:260:19)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+    at node:internal/main/run_main_module:33:47
+
+Node.js v26.4.0
+Ô£û tests\passwordTools.test.js (197.7066ms)
+ÔûÂ platform abstraction
+  Ô£ö returns a provider for the current platform (2.0906ms)
+  Ô£ö reports Windows-only features as unsupported elsewhere (0.4245ms)
+  Ô£ö returns unavailable messages for unsupported features (2.2341ms)
+  Ô£ö uses the base provider for unknown platforms (0.3714ms)
+Ô£ö platform abstraction (9.6636ms)
+ÔûÂ ProcessInspector suspicious assessment
+  Ô£ö flags unsigned executables under system directories (2.6255ms)
+  Ô£ö does not treat Valid signatures in system dirs as suspicious (4.0222ms)
+  Ô£ö marks location-based AppData paths as suspicious for UI badges (0.5019ms)
+Ô£ö ProcessInspector suspicious assessment (9.657ms)
+[2026-07-31T13:07:27.327Z] ERROR Failed to quarantine {"error":"ENOENT: no such file or directory, open 'C:\\Users\\Noobyx\\AppData\\Local\\Temp\\soterios-quarantine-U7SyTK\\missing.bin'"}
+ÔûÂ QuarantineManager workflow
+  Ô£ö quarantines a file with XOR obfuscation and removes the original (48.6425ms)
+  Ô£ö restores quarantined file contents byte-for-byte (39.2115ms)
+  Ô£ö deletes a quarantined file permanently (34.268ms)
+  Ô£ö returns an error when the original file does not exist (41.7807ms)
+  Ô£ö rejects restore for an already-processed record (35.2348ms)
+  Ô£û returns an error when the source file cannot be read due to permissions (34.0751ms)
+Ô£û QuarantineManager workflow (237.6676ms)
+Ô£ö start() returns a tamper protection error when Defender does not actually enable real-time protection (2.9118ms)
+Ô£ö stop() returns a tamper protection error when Defender does not actually disable real-time protection (0.4113ms)
+D:\Soterios\tests\reportExport.test.js:5
+const mockPrintToPDF = jest.fn();
+                       ^
+
+ReferenceError: jest is not defined
+    at Object.<anonymous> (D:\Soterios\tests\reportExport.test.js:5:24)
+    at Module._compile (node:internal/modules/cjs/loader:1944:14)
+    at Object..js (node:internal/modules/cjs/loader:2084:10)
+    at Module.load (node:internal/modules/cjs/loader:1666:32)
+    at Module._load (node:internal/modules/cjs/loader:1447:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:260:19)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+    at node:internal/main/run_main_module:33:47
+
+Node.js v26.4.0
+Ô£û tests\reportExport.test.js (161.8402ms)
+ÔûÂ ReputationEngine
+  Ô£ö returns null for unknown hashes (11.9349ms)
+  Ô£ö stores and returns safe verdicts (3.2064ms)
+  Ô£ö stores and returns malicious verdicts (2.7977ms)
+  Ô£ö rejects invalid hash input (2.7398ms)
+  Ô£ö removes stored hashes (6.0521ms)
+  Ô£ö lists stored hashes (3.1905ms)
+Ô£ö ReputationEngine (32.7742ms)
+ÔûÂ Scan cancellation cleanup
+  Ô£ö resets scanning state and emits scan:canceled (5.1547ms)
+  Ô£ö ignores abort requests when no scan is running (2.0954ms)
+  Ô£ö does not abort background folderwatch scans via abortScan guard pattern (24.8315ms)
+  Ô£ö does not persist reports for canceled or folderwatch scans (1.503ms)
+Ô£ö Scan cancellation cleanup (36.3631ms)
+ÔûÂ ClamAVEngine.abortCurrentScan
+  Ô£ö sets cancel flag only when an active scan process exists (0.6159ms)
+  Ô£ö does not leave cancel flags when no subprocess is active (0.3596ms)
+Ô£ö ClamAVEngine.abortCurrentScan (1.3141ms)
+ÔûÂ ScanEngine
+  Ô£ö constructor initializes with dependencies (23.6439ms)
+  Ô£ö getStatus returns current scan state (3.2854ms)
+  Ô£ö runQuickScan returns error when scan already in progress (11.4183ms)
+  Ô£ö runFullScan returns error when scan already in progress (3.1094ms)
+  Ô£ö runCustomScan returns error when scan already in progress (2.7041ms)
+  Ô£ö runScan sets isScanning flag for user scans (55.3857ms)
+  Ô£ö runScan sets isFolderWatchScanning flag for folderwatch scans (8.0569ms)
+  Ô£ö runScan returns error when user scan already in progress (7.7796ms)
+  Ô£ö runScan allows folderwatch scan during user scan (8.0912ms)
+  Ô£ö runScan completes successfully with no threats (6.1495ms)
+  Ô£ö runScan handles threats and quarantines them (13.8059ms)
+  Ô£ö runScan handles scan errors (5.2719ms)
+  Ô£ö abortScan cancels active user scan (5.2604ms)
+  Ô£ö abortScan returns error when no scan in progress (2.5288ms)
+  Ô£ö abortScan returns error when only folderwatch scan is active (2.451ms)
+  Ô£ö abortScan calls clamEngine.abortCurrentScan (2.319ms)
+  Ô£ö saveScanReport creates JSON and HTML files (11.5813ms)
+  Ô£ö saveScanReport does not save when scanHistory disabled (5.2717ms)
+  Ô£ö runScan emits progress events (8.1627ms)
+  Ô£ö runScan emits complete event with results (17.6269ms)
+  Ô£ö runScan handles quarantine errors gracefully (7.8926ms)
+Ô£ö ScanEngine (217.1328ms)
+ÔûÂ ScoringEngine.classify
+  Ô£ö private IPv4 ranges are SAFE (2.7549ms)
+  Ô£ö loopback addresses are SAFE (0.4122ms)
+  Ô£ö blocklisted IPs are MALICIOUS regardless of port (0.2547ms)
+  Ô£ö public HTTPS with hostname is SAFE (0.3964ms)
+  Ô£ö public HTTPS without hostname is UNKNOWN (0.7133ms)
+  Ô£ö public IP on uncommon port is UNKNOWN (0.2986ms)
+Ô£ö ScoringEngine.classify (8.2922ms)
+ÔûÂ ScoringEngine helper edge cases
+  Ô£ö isPrivateIp handles null and empty input (2.898ms)
+  Ô£ö isLoopback handles null and empty input (0.4158ms)
+Ô£ö ScoringEngine helper edge cases (3.8629ms)
+ÔûÂ SystemAudit
+  Ô£û runPowerShell executes PowerShell command successfully (3.9533ms)
+  Ô£û runPowerShell handles command errors (0.6343ms)
+  Ô£û runPowerShell handles timeout (0.6098ms)
+  Ô£û checkDefender returns pass when Defender is enabled (2.0083ms)
+  Ô£û checkDefender returns fail when Defender is disabled (0.7062ms)
+  Ô£û checkDefender handles parse errors (0.5108ms)
+  Ô£û checkDefender handles query failures (0.3982ms)
+  Ô£û checkUac returns pass when UAC is enabled (0.7448ms)
+  Ô£û checkUac returns fail when UAC is disabled (2.0892ms)
+  Ô£û checkUac handles query failures (0.5614ms)
+  Ô£û checkWindowsUpdate returns pass when no updates pending (0.4497ms)
+  Ô£û checkWindowsUpdate returns warn when updates pending (0.4119ms)
+  Ô£û checkWindowsUpdate handles parse errors (0.256ms)
+  Ô£û checkWindowsUpdate handles query failures (0.3255ms)
+  Ô£û checkBitLocker returns pass when drive is encrypted (0.3487ms)
+  Ô£û checkBitLocker returns warn when drive not encrypted (0.3647ms)
+  Ô£û checkBitLocker handles unsupported systems (0.4027ms)
+  Ô£û checkExecutionPolicy returns pass for secure policies (0.3786ms)
+  Ô£û checkExecutionPolicy returns warn for insecure policies (0.4448ms)
+  Ô£û checkExecutionPolicy handles query failures (0.4226ms)
+  Ô£û checkSecureBoot returns pass when enabled (0.4114ms)
+  Ô£û checkSecureBoot returns fail when disabled (0.6186ms)
+  Ô£û checkSecureBoot handles unsupported systems (0.3584ms)
+  Ô£û runAudit executes all checks concurrently (0.7022ms)
+  Ô£û runAudit returns results in expected order (0.5389ms)
+  Ô£û runAudit works without progress callback (0.4836ms)
+  Ô£û runAudit handles individual check failures gracefully (0.3564ms)
+Ô£û SystemAudit (26.6855ms)
+ÔûÂ uninstallLaunchUtils
+  Ô£ö parses quoted uninstall commands (3.7409ms)
+  Ô£ö parses unquoted uninstall commands with spaces in the path (0.5102ms)
+  Ô£ö strips embedded newlines from uninstall strings (0.2874ms)
+  Ô£ö accepts bare msiexec uninstall commands (1.4467ms)
+  Ô£ö rejects msiexec install flags (0.4527ms)
+  Ô£ö rejects shell-based uninstall launchers (0.2915ms)
+  Ô£ö rejects other System32 living-off-the-land hosts (0.5421ms)
+  Ô£ö rejects executables outside trusted install roots (0.6744ms)
+  Ô£ö rejects executables under LocalAppData outside Programs (0.6208ms)
+  Ô£ö accepts rundll32 commands with comma-separated entry points (0.8178ms)
+  Ô£ö allows per-user install roots under LocalAppData (0.7078ms)
+Ô£ö uninstallLaunchUtils (16.7866ms)
+ÔûÂ uninstallUtils
+  Ô£ö normalizes registry rows into app objects (1.519ms)
+  Ô£ö tokenizes app names for fuzzy matching (2.7327ms)
+  Ô£ö refuses protected paths during leftover removal checks (2.6046ms)
+Ô£ö uninstallUtils (10.5604ms)
+ÔûÂ findLeftoverCandidates
+  Ô£ö returns an array without throwing when no matches exist (4.5358ms)
+Ô£ö findLeftoverCandidates (4.8841ms)
+ÔûÂ uninstallerReport platform guard
+  Ô£ö returns supported:false on non-Windows platforms (2.1895ms)
+Ô£ö uninstallerReport platform guard (4.0337ms)
+ÔûÂ windowsChecks
+  Ô£ö asArray returns empty array for null/undefined (8.7871ms)
+  Ô£ö asArray returns array for single value (3.0773ms)
+  Ô£ö asArray returns array as-is for arrays (1.2014ms)
+  Ô£ö runPowerShell returns error on non-Windows (1.7003ms)
+  Ô£û runPowerShell executes successfully on Windows (2.6887ms)
+  Ô£ö runPowerShell handles errors (1.3668ms)
+  Ô£û runJsonPowerShell parses JSON output successfully (1.3267ms)
+  Ô£ö runJsonPowerShell handles parse errors (2.5935ms)
+  Ô£û runJsonPowerShell returns fallback on empty output (2.235ms)
+  Ô£ö runJsonPowerShell returns fallback on PowerShell error (1.7027ms)
+  Ô£ö getDefenderStatus returns available status on Windows (1.2826ms)
+  Ô£ö getDefenderStatus returns unavailable on non-Windows (0.8397ms)
+  Ô£û getDefenderStatus handles all strategy failures (1.1151ms)
+  Ô£ö getFirewallStatus returns firewall profiles (1.3253ms)
+  Ô£û getFirewallStatus handles empty results (1.1312ms)
+  Ô£ö getUpdateStatus returns update information (0.9665ms)
+  Ô£ö getUpdateStatus returns unavailable on non-Windows (1.0451ms)
+  Ô£û getUpdateStatus handles all strategy failures (1.114ms)
+  Ô£ö getSignatureInfo returns signature status (4.6222ms)
+  Ô£ö getSignatureInfo returns unknown for non-existent file (1.0865ms)
+  Ô£ö getSignatureInfo returns unknown on non-Windows (0.9204ms)
+  Ô£ö isExecutablePath returns true for executable extensions (0.9424ms)
+  Ô£ö isExecutablePath returns false for non-executable extensions (1.0928ms)
+  Ô£ö isExecutablePath is case-insensitive (2.5832ms)
+  Ô£ö suspiciousPathSignals detects AppData locations (1.3564ms)
+  Ô£ö suspiciousPathSignals detects temp locations (1.1037ms)
+  Ô£ö suspiciousPathSignals detects Windows temp (1.1187ms)
+  Ô£ö suspiciousPathSignals detects recycle bin (0.8457ms)
+  Ô£ö suspiciousPathSignals detects double extensions (1.2168ms)
+  Ô£ö suspiciousPathSignals returns empty for safe paths (0.8722ms)
+  Ô£ö suspiciousPathSignals handles empty/null paths (0.8931ms)
+  Ô£ö getStartupFolders returns startup items (5.2007ms)
+  Ô£ö getStartupFolders handles non-existent folders (2.2895ms)
+  Ô£ö getRegistryRunItems returns registry run items (0.9616ms)
+  Ô£û getRegistryRunItems handles empty results (1.1287ms)
+  Ô£û getScheduledTasks returns scheduled tasks (1.9088ms)
+  Ô£û getScheduledTasks handles empty results (2.0148ms)
+  Ô£ö getServices returns Windows services (1.1066ms)
+  Ô£û getServices handles empty results (1.381ms)
+  Ô£ö extractExecutablePath extracts from quoted paths (1.1346ms)
+  Ô£ö extractExecutablePath extracts from unquoted paths (1.5482ms)
+  Ô£ö extractExecutablePath handles null/empty (1.5439ms)
+  Ô£ö extractExecutablePath handles complex paths (0.7692ms)
+  Ô£ö extractExecutablePath handles paths with spaces (0.6241ms)
+Ô£û windowsChecks (83.4949ms)
+ÔûÂ workerManager
+  Ô£ö runs a script in a worker thread and returns the result (76.81ms)
+  Ô£ö rejects canceled tasks (2.3714ms)
+  Ô£ö exposes cancel() on the returned task handle (15.9956ms)
+Ô£ö workerManager (98.2046ms)
+Ôä¦ tests 278
+Ôä¦ suites 49
+Ôä¦ pass 236
+Ôä¦ fail 42
+Ôä¦ cancelled 0
+Ôä¦ skipped 0
+Ôä¦ todo 0
+Ôä¦ duration_ms 2590.5781
+
+Ô£û failing tests:
+
+test at tests\clamavEngine.test.js:105:3
+Ô£û init sets isReady false when clamscan not found (26.5552ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (D:\Soterios\tests\clamavEngine.test.js:110:12)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\clamavEngine.test.js:174:3
+Ô£û updateDefinitions returns error when freshclam not found (32.9624ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (D:\Soterios\tests\clamavEngine.test.js:179:12)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\passwordTools.test.js:1:1
+Ô£û tests\passwordTools.test.js (197.7066ms)
+  'test failed'
+
+test at tests\quarantineManager.test.js:86:3
+Ô£û returns an error when the source file cannot be read due to permissions (34.0751ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (D:\Soterios\tests\quarantineManager.test.js:90:14)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\reportExport.test.js:1:1
+Ô£û tests\reportExport.test.js (161.8402ms)
+  'test failed'
+
+test at tests\systemAudit.test.js:77:3
+Ô£û runPowerShell executes PowerShell command successfully (3.9533ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Test.start (node:internal/test_runner/test:1242:17)
+      at node:internal/test_runner/test:1867:71
+      at node:internal/per_context/primordials:504:82
+      at new Promise (<anonymous>)
+
+test at tests\systemAudit.test.js:84:3
+Ô£û runPowerShell handles command errors (0.6343ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Promise.all (index 0)
+
+test at tests\systemAudit.test.js:92:3
+Ô£û runPowerShell handles timeout (0.6098ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:107:3
+Ô£û checkDefender returns pass when Defender is enabled (2.0083ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:115:3
+Ô£û checkDefender returns fail when Defender is disabled (0.7062ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:136:3
+Ô£û checkDefender handles parse errors (0.5108ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:147:3
+Ô£û checkDefender handles query failures (0.3982ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:158:3
+Ô£û checkUac returns pass when UAC is enabled (0.7448ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:165:3
+Ô£û checkUac returns fail when UAC is disabled (2.0892ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:176:3
+Ô£û checkUac handles query failures (0.5614ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:187:3
+Ô£û checkWindowsUpdate returns pass when no updates pending (0.4497ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:194:3
+Ô£û checkWindowsUpdate returns warn when updates pending (0.4119ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:205:3
+Ô£û checkWindowsUpdate handles parse errors (0.256ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:216:3
+Ô£û checkWindowsUpdate handles query failures (0.3255ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:227:3
+Ô£û checkBitLocker returns pass when drive is encrypted (0.3487ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:234:3
+Ô£û checkBitLocker returns warn when drive not encrypted (0.3647ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:248:3
+Ô£û checkBitLocker handles unsupported systems (0.4027ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:259:3
+Ô£û checkExecutionPolicy returns pass for secure policies (0.3786ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:266:3
+Ô£û checkExecutionPolicy returns warn for insecure policies (0.4448ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:277:3
+Ô£û checkExecutionPolicy handles query failures (0.4226ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:288:3
+Ô£û checkSecureBoot returns pass when enabled (0.4114ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:295:3
+Ô£û checkSecureBoot returns fail when disabled (0.6186ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:306:3
+Ô£û checkSecureBoot handles unsupported systems (0.3584ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:317:3
+Ô£û runAudit executes all checks concurrently (0.7022ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:336:3
+Ô£û runAudit returns results in expected order (0.5389ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:350:3
+Ô£û runAudit works without progress callback (0.4836ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\systemAudit.test.js:356:3
+Ô£û runAudit handles individual check failures gracefully (0.3564ms)
+  TypeError: Cannot assign to read only property 'Symbol(nodejs.util.promisify.custom)' of function 'function exec(command, options, callback) {
+    const opts = normalizeExecArgs(command, options, callback);
+    r...<omitted>...
+  }'
+      at TestContext.<anonymous> (D:\Soterios\tests\systemAudit.test.js:18:46)
+      at TestHook.runInAsyncScope (node:async_hooks:226:14)
+      at TestHook.run (node:internal/test_runner/test:1382:25)
+      at TestHook.run (node:internal/test_runner/test:1726:18)
+      at Suite.runHook (node:internal/test_runner/test:1269:20)
+      at Test.run (node:internal/test_runner/test:1342:27)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\windowsChecks.test.js:125:3
+Ô£û runPowerShell executes successfully on Windows (2.6887ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.<anonymous> (D:\Soterios\tests\windowsChecks.test.js:131:14)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\windowsChecks.test.js:155:3
+Ô£û runJsonPowerShell parses JSON output successfully (1.3267ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.<anonymous> (D:\Soterios\tests\windowsChecks.test.js:161:14)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\windowsChecks.test.js:185:3
+Ô£û runJsonPowerShell returns fallback on empty output (2.235ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.<anonymous> (D:\Soterios\tests\windowsChecks.test.js:196:14)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\windowsChecks.test.js:246:3
+Ô£û getDefenderStatus handles all strategy failures (1.1151ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (D:\Soterios\tests\windowsChecks.test.js:256:14)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\windowsChecks.test.js:271:3
+Ô£û getFirewallStatus handles empty results (1.1312ms)
+  ReferenceError: execFile is not defined
+      at TestContext.<anonymous> (D:\Soterios\tests\windowsChecks.test.js:272:14)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\windowsChecks.test.js:297:3
+Ô£û getUpdateStatus handles all strategy failures (1.114ms)
+  ReferenceError: execFile is not defined
+      at TestContext.<anonymous> (D:\Soterios\tests\windowsChecks.test.js:298:14)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\windowsChecks.test.js:431:3
+Ô£û getRegistryRunItems handles empty results (1.1287ms)
+  ReferenceError: execFile is not defined
+      at TestContext.<anonymous> (D:\Soterios\tests\windowsChecks.test.js:432:14)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\windowsChecks.test.js:440:3
+Ô£û getScheduledTasks returns scheduled tasks (1.9088ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - 'Scheduled Task'
+  
+      at TestContext.<anonymous> (D:\Soterios\tests\windowsChecks.test.js:444:14)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'Scheduled Task',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\windowsChecks.test.js:449:3
+Ô£û getScheduledTasks handles empty results (2.0148ms)
+  ReferenceError: execFile is not defined
+      at TestContext.<anonymous> (D:\Soterios\tests\windowsChecks.test.js:450:14)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests\windowsChecks.test.js:467:3
+Ô£û getServices handles empty results (1.381ms)
+  ReferenceError: execFile is not defined
+      at TestContext.<anonymous> (D:\Soterios\tests\windowsChecks.test.js:468:14)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)

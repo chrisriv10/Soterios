@@ -1,0 +1,481 @@
+ÔûÂ BlocklistService.ipToInt
+  Ô£ö converts 0.0.0.0 to 0 (1.3837ms)
+  Ô£ö converts 255.255.255.255 to 4294967295 (0.2686ms)
+  Ô£ö converts 192.168.1.1 correctly (0.2594ms)
+  Ô£ö returns null for invalid input (0.2576ms)
+Ô£ö BlocklistService.ipToInt (4.2997ms)
+ÔûÂ BlocklistService.isListed
+  Ô£ö /24 range matches addresses inside the subnet (1.6203ms)
+  Ô£ö /24 range does not match addresses outside the subnet (1.1081ms)
+  Ô£ö /32 matches only the exact host (0.5263ms)
+  Ô£ö /0 matches every IPv4 address (0.5083ms)
+  Ô£ö IPv6 input returns false without throwing (1.0226ms)
+Ô£ö BlocklistService.isListed (5.6163ms)
+ÔûÂ BlocklistService.ipv6ToBytes
+  Ô£ö parses loopback and compressed notation (0.6034ms)
+  Ô£ö handles IPv4-mapped addresses (0.2318ms)
+Ô£ö BlocklistService.ipv6ToBytes (1.124ms)
+ÔûÂ BlocklistService IPv6 CIDR matching
+  Ô£ö matches IPv6 addresses inside a /48 range (0.7527ms)
+  Ô£ö delegates IPv4-mapped addresses to IPv4 matching (0.3442ms)
+  Ô£û init sets isReady false when clamscan not found (29.1025ms)
+[2026-07-31T13:44:31.674Z] INFO ClamAV engine initialized at C:\Users\Noobyx\AppData\Local\Temp\soterios-clamav-QGEucB\clamav
+  Ô£ö getStatus returns current engine state (33.0198ms)
+  Ô£ö hasVirusDatabase returns false when no db files exist (6.8794ms)
+  Ô£ö hasVirusDatabase returns true when cvd files exist (9.0216ms)
+  Ô£ö hasVirusDatabase returns true when cld files exist (7.4397ms)
+  Ô£ö hasVirusDatabase returns true when hdb files exist (9.6776ms)
+  Ô£ö toClamPath converts Windows paths to forward slashes (10.9437ms)
+  Ô£ö ensureFreshclamConfig creates config file (8.7091ms)
+  Ô£ö ensureFreshclamConfig includes certs dir when exists (9.7563ms)
+  Ô£ö updateDefinitions returns success when freshclam succeeds (24.6339ms)
+[2026-07-31T13:44:31.809Z] INFO ClamAV engine initialized at C:\Users\Noobyx\AppData\Local\Temp\soterios-clamav-P8U9Al\clamav
+  Ô£û updateDefinitions returns error when freshclam not found (30.7323ms)
+  Ô£ö scanFile returns error when not ready (6.2154ms)
+[2026-07-31T13:44:31.834Z] INFO ClamAV engine initialized at C:\Users\Noobyx\AppData\Local\Temp\soterios-clamav-djH0bT\clamav
+[2026-07-31T13:44:31.846Z] INFO ClamAV engine initialized at C:\Users\Noobyx\AppData\Local\Temp\soterios-clamav-KIaRqp\clamav
+  Ô£ö scanFile scans file successfully when ready (25.0816ms)
+  Ô£ö scanFile returns error for non-existent file (9.171ms)
+[2026-07-31T13:44:31.881Z] INFO ClamAV engine initialized at C:\Users\Noobyx\AppData\Local\Temp\soterios-clamav-LOWbsk\clamav
+[2026-07-31T13:44:31.897Z] WARN ClamAV virus definitions not found in C:\Users\Noobyx\AppData\Local\Temp\soterios-clamav-bvrGvH\clamav\database; downloading with freshclam.
+  Ô£ö scanFile scans directory recursively (38.6781ms)
+  Ô£ö abortCurrentScan kills active scan process (9.6448ms)
+  Ô£ö abortCurrentScan returns false when no active process (6.9247ms)
+[2026-07-31T13:44:31.919Z] INFO ClamAV engine initialized at C:\Users\Noobyx\AppData\Local\Temp\soterios-clamav-bvrGvH\clamav
+  Ô£ö init attempts update when no database exists (30.7195ms)
+Ô£û ClamAVEngine (367.5342ms)
+ÔûÂ DatabaseService quarantine_path migration
+  Ô£ö adds quarantine_path when migrating a legacy schema (88.8134ms)
+  Ô£ö keeps existing quarantine_path schema intact on re-init (30.813ms)
+  Ô£ö creates missing quarantine table on a blank database file (26.518ms)
+  Ô£ö throws when opening a corrupted database file (4.0707ms)
+  Ô£ö throws when quarantine exists but is not a usable table (30.7275ms)
+Ô£ö DatabaseService quarantine_path migration (184.7243ms)
+ÔûÂ DatabaseService maintenance_runs
+  Ô£ö pruneMaintenanceRuns keeps the most recent rows (25.8106ms)
+  Ô£ö getMaintenanceHistory omits raw results_json from returned rows (23.8926ms)
+Ô£ö DatabaseService maintenance_runs (50.0965ms)
+ÔûÂ duplicateFileFinder
+  Ô£ö groups identical files by hash and reports recoverable space (24.2149ms)
+  Ô£ö filters by extension (14.085ms)
+  Ô£ö deletes selected copies while keeping original (16.0523ms)
+  Ô£ö requires confirm before delete (6.566ms)
+Ô£ö duplicateFileFinder (64.3197ms)
+ÔûÂ EmergencyLockdown
+  ÔûÂ Allowlist management
+    Ô£ö should return default empty allowlist (3.3305ms)
+    Ô£ö should set allowlist (0.604ms)
+    Ô£ö should add to allowlist (0.577ms)
+    Ô£ö should not add duplicate entries to allowlist (0.5382ms)
+    Ô£ö should remove from allowlist (0.6727ms)
+    Ô£ö should load allowlist from database on initialization (0.4203ms)
+  Ô£ö Allowlist management (8.2964ms)
+  ÔûÂ Network interface operations
+    Ô£ö should get network interfaces (297.1036ms)
+    Ô£ö should throw error when disabling interface fails (419.6535ms)
+    Ô£ö should throw error when enabling interface fails (344.773ms)
+  Ô£ö Network interface operations (1062.223ms)
+  ÔûÂ Service operations
+    Ô£ö should get non-essential services (81.2151ms)
+    Ô£ö should throw error when stopping service fails (20.4847ms)
+    Ô£ö should throw error when starting service fails (25.861ms)
+  Ô£ö Service operations (128.9093ms)
+  ÔûÂ Lockdown status
+    Ô£ö should return initial status as not locked down (0.4211ms)
+    Ô£ö should prevent double lockdown (0.5912ms)
+    Ô£ö should prevent restore when not locked down (0.563ms)
+  Ô£ö Lockdown status (1.877ms)
+  ÔûÂ Lockdown and restore flow
+    Ô£ö should handle lockdown errors gracefully (0.5697ms)
+    Ô£ö should handle restore when not locked down (0.2774ms)
+  Ô£ö Lockdown and restore flow (1.0495ms)
+Ô£ö EmergencyLockdown (1203.6512ms)
+ÔûÂ fileShredder
+  Ô£ö dry-run lists files without deleting (6.9627ms)
+  Ô£ö refuses to shred without confirm (3.0013ms)
+  Ô£ö overwrites and deletes with confirm (18.0869ms)
+  Ô£ö rejects unknown methods (3.9356ms)
+Ô£ö fileShredder (34.4632ms)
+ÔûÂ FirewallManager import/export validation
+  Ô£ö rejects malformed payloads and unsupported versions (6.444ms)
+  Ô£ö validates rule fields before creating anything (1.1531ms)
+  Ô£ö rejects invalid ports and protocols (1.1873ms)
+  Ô£ö skips existing rules when onConflict=skip (0.699ms)
+  Ô£ö renames on conflict without double-counting created (1.6188ms)
+  Ô£ö overwrites only after a successful recreate (3.5796ms)
+  Ô£ö reports recreate failure clearly when overwrite create fails (1.2996ms)
+  Ô£ö exportRules only includes managed rules (2.8423ms)
+Ô£ö FirewallManager import/export validation (22.7005ms)
+ÔûÂ FolderWatcher
+  Ô£ö starts and stops without throwing on missing dirs (6.6519ms)
+  Ô£ö debounces and queues a folderwatch scan for new files (219.5793ms)
+  Ô£ö skips duplicate scans within the cooldown window (262.3545ms)
+  Ô£ö does not scan when ClamAV is unavailable (138.3842ms)
+Ô£ö FolderWatcher (629.9394ms)
+ÔûÂ healthScore volume filtering
+  Ô£ö ignores volumes smaller than 1 GB (1.7487ms)
+  Ô£ö ignores Windows recovery-style mounts without drive letters (0.3295ms)
+  Ô£ö returns zero usage when no relevant volumes exist (0.2233ms)
+  Ô£ö uses empty-volume fallback when no relevant volumes are present (0.482ms)
+Ô£ö healthScore volume filtering (4.9799ms)
+ÔûÂ getTrayHealthSummary
+  ÔûÂ Basic functionality
+    Ô£ö should return health summary with score (267.2278ms)
+    Ô£ö should handle tool registry error (0.6631ms)
+    Ô£ö should handle missing tool result (115.1197ms)
+  Ô£ö Basic functionality (384.9118ms)
+  ÔûÂ Last scan info
+    Ô£ö should include last scan info when available (101.6737ms)
+    Ô£ö should handle missing last scan report (102.8918ms)
+  Ô£ö Last scan info (205.2718ms)
+  ÔûÂ Password score
+    Ô£ö should handle password score setting (96.6075ms)
+    Ô£ö should handle null password score (105.9038ms)
+    Ô£ö should handle missing password score setting (86.5279ms)
+  Ô£ö Password score (289.8802ms)
+  ÔûÂ RTP status
+    Ô£ö should show RTP as disabled when setting is false (109.4994ms)
+    Ô£ö should show RTP as enabled when setting is true (111.9358ms)
+    Ô£ö should handle missing RTP setting (106.8525ms)
+  Ô£ö RTP status (328.8248ms)
+  ÔûÂ Network history
+    Ô£ö should include network stats when history is available (76.2477ms)
+    Ô£ö should handle empty network history (67.033ms)
+    Ô£ö should handle missing network history method (71.959ms)
+    Ô£ö should limit sparkline to last 60 samples (66.784ms)
+    Ô£ö should handle network history errors gracefully (60.7142ms)
+  Ô£ö Network history (343.2589ms)
+  ÔûÂ Integration scenarios
+    Ô£ö should provide complete summary with all data (59.7736ms)
+    Ô£ö should handle all errors gracefully and return partial data (0.3121ms)
+  Ô£ö Integration scenarios (60.2217ms)
+Ô£ö getTrayHealthSummary (1613.5917ms)
+ÔûÂ HeuristicEngine.analyze
+  Ô£ö returns score 0 for files larger than 50 MB (9.7206ms)
+  Ô£ö flags high-entropy content (6.6359ms)
+  Ô£ö flags PE header in non-executable extension (4.5743ms)
+Ô£ö HeuristicEngine.analyze (25.1538ms)
+ÔûÂ i18n
+  Ô£ö loads the English catalog by default (37.0126ms)
+  Ô£ö falls back to English for missing keys (1.7039ms)
+  Ô£ö normalizes regional locale codes (1.7073ms)
+  Ô£ö falls back to English for unsupported locales (0.3108ms)
+  Ô£ö returns translated strings for all initial target languages (17.9829ms)
+  Ô£ö lists all initial target locale files (0.5057ms)
+  Ô£ö replaces placeholders in translated strings (0.2481ms)
+  Ô£ö detects RTL locales (0.2157ms)
+  Ô£ö returns locale metadata for the settings picker (0.4669ms)
+Ô£ö i18n (63.257ms)
+[2026-07-31T13:44:32.030Z] INFO hello {"a":1}
+[2026-07-31T13:44:32.037Z] ERROR should-appear
+[2026-07-31T13:44:32.042Z] ERROR failed {"name":"Error","error":"boom","stack":"Error: boom\n    at TestContext.<anonymous> (D:\\Soterios\\tests\\logger.test.js:39:17)\n    at Test.runInAsyncScope (node:async_hooks:226:14)\n    at Test.run (node:internal/test_runner/test:1382:25)\n    at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7)"}
+ÔûÂ logger
+  Ô£ö writes structured lines to an optional log file (7.6656ms)
+  Ô£ö respects configured minimum level (3.8475ms)
+  Ô£ö serializes Error objects with message and stack (3.6834ms)
+Ô£ö logger (17.3697ms)
+ÔûÂ suspiciousPathSignals
+  Ô£ö flags AppData, Temp, and Recycle Bin paths (1.0925ms)
+Ô£ö suspiciousPathSignals (1.355ms)
+ÔûÂ MaintenanceScheduler
+  Ô£ö skips run when disabled (2.8974ms)
+  Ô£ö runs configured scripts via run-script and records lastRun (5.2835ms)
+  Ô£ö uses dry-run cleanup for scheduled runs (0.6146ms)
+  Ô£ö does not run again before interval elapses (0.5747ms)
+  Ô£ö does not update lastRun when every script fails (0.4265ms)
+  Ô£ö throttles failed runs using lastAttempt (0.453ms)
+  Ô£ö skips idle preset runs while user is active (0.3666ms)
+  Ô£ö records maintenance runs for System Audit history (0.4688ms)
+Ô£ö MaintenanceScheduler (15.8205ms)
+ÔûÂ scriptArgsFor
+  Ô£ö returns dry-run args for clear-temp-files when requested (0.3677ms)
+Ô£ö scriptArgsFor (0.7434ms)
+ÔûÂ NetworkAlertMonitor
+  Ô£ö alerts once for a blocklisted remote IP (4.5878ms)
+  Ô£ö honors ignore keys (1.8009ms)
+  Ô£ö kill delegates to ProcessInspector (2.1293ms)
+Ô£ö NetworkAlertMonitor (11.8721ms)
+ÔûÂ DatabaseService network_stats
+  Ô£ö creates network_stats table and stores samples (34.6785ms)
+  Ô£ö prunes samples older than retention window (23.7148ms)
+Ô£ö DatabaseService network_stats (60.5734ms)
+D:\Soterios\tests\passwordTools.test.js:6
+test('uses adjacent keyboard substrings',() => {
+^
+
+ReferenceError: test is not defined
+    at Object.<anonymous> (D:\Soterios\tests\passwordTools.test.js:6:1)
+    at Module._compile (node:internal/modules/cjs/loader:1944:14)
+    at Object..js (node:internal/modules/cjs/loader:2084:10)
+    at Module.load (node:internal/modules/cjs/loader:1666:32)
+    at Module._load (node:internal/modules/cjs/loader:1447:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:260:19)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+    at node:internal/main/run_main_module:33:47
+
+Node.js v26.4.0
+Ô£û tests\passwordTools.test.js (141.6156ms)
+ÔûÂ platform abstraction
+  Ô£ö returns a provider for the current platform (1.7959ms)
+  Ô£ö reports Windows-only features as unsupported elsewhere (0.3891ms)
+  Ô£ö returns unavailable messages for unsupported features (1.7189ms)
+  Ô£ö uses the base provider for unknown platforms (0.306ms)
+Ô£ö platform abstraction (8.223ms)
+ÔûÂ ProcessInspector suspicious assessment
+  Ô£ö flags unsigned executables under system directories (2.5793ms)
+  Ô£ö does not treat Valid signatures in system dirs as suspicious (2.9651ms)
+  Ô£ö marks location-based AppData paths as suspicious for UI badges (0.2635ms)
+Ô£ö ProcessInspector suspicious assessment (7.7822ms)
+[2026-07-31T13:44:32.506Z] ERROR Failed to quarantine {"error":"ENOENT: no such file or directory, open 'C:\\Users\\Noobyx\\AppData\\Local\\Temp\\soterios-quarantine-0SOVP1\\missing.bin'"}
+ÔûÂ QuarantineManager workflow
+  Ô£ö quarantines a file with XOR obfuscation and removes the original (38.0648ms)
+  Ô£ö restores quarantined file contents byte-for-byte (33.6427ms)
+  Ô£ö deletes a quarantined file permanently (30.6338ms)
+  Ô£ö returns an error when the original file does not exist (29.7713ms)
+  Ô£ö rejects restore for an already-processed record (26.8662ms)
+  Ô£û returns an error when the source file cannot be read due to permissions (31.9003ms)
+Ô£û QuarantineManager workflow (193.6388ms)
+Ô£ö start() returns a tamper protection error when Defender does not actually enable real-time protection (3.3135ms)
+Ô£ö stop() returns a tamper protection error when Defender does not actually disable real-time protection (0.4674ms)
+D:\Soterios\tests\reportExport.test.js:5
+const mockPrintToPDF = jest.fn();
+                       ^
+
+ReferenceError: jest is not defined
+    at Object.<anonymous> (D:\Soterios\tests\reportExport.test.js:5:24)
+    at Module._compile (node:internal/modules/cjs/loader:1944:14)
+    at Object..js (node:internal/modules/cjs/loader:2084:10)
+    at Module.load (node:internal/modules/cjs/loader:1666:32)
+    at Module._load (node:internal/modules/cjs/loader:1447:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:260:19)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+    at node:internal/main/run_main_module:33:47
+
+Node.js v26.4.0
+Ô£û tests\reportExport.test.js (111.4749ms)
+ÔûÂ ReputationEngine
+  Ô£ö returns null for unknown hashes (7.2641ms)
+  Ô£ö stores and returns safe verdicts (1.6955ms)
+  Ô£ö stores and returns malicious verdicts (1.5769ms)
+  Ô£ö rejects invalid hash input (2.3173ms)
+  Ô£ö removes stored hashes (4.1977ms)
+  Ô£ö lists stored hashes (2.7861ms)
+Ô£ö ReputationEngine (21.7788ms)
+ÔûÂ Scan cancellation cleanup
+  Ô£ö resets scanning state and emits scan:canceled (6.5078ms)
+  Ô£ö ignores abort requests when no scan is running (1.8601ms)
+  Ô£ö does not abort background folderwatch scans via abortScan guard pattern (27.0019ms)
+  Ô£ö does not persist reports for canceled or folderwatch scans (1.3222ms)
+Ô£ö Scan cancellation cleanup (39.1918ms)
+ÔûÂ ClamAVEngine.abortCurrentScan
+  Ô£ö sets cancel flag only when an active scan process exists (1.2441ms)
+  Ô£ö does not leave cancel flags when no subprocess is active (0.4727ms)
+Ô£ö ClamAVEngine.abortCurrentScan (2.1158ms)
+ÔûÂ ScanEngine
+  Ô£ö constructor initializes with dependencies (12.4658ms)
+  Ô£ö getStatus returns current scan state (3.2123ms)
+  Ô£ö runQuickScan returns error when scan already in progress (2.6305ms)
+  Ô£ö runFullScan returns error when scan already in progress (2.6129ms)
+  Ô£ö runCustomScan returns error when scan already in progress (2.4739ms)
+  Ô£ö runScan sets isScanning flag for user scans (45.9231ms)
+  Ô£ö runScan sets isFolderWatchScanning flag for folderwatch scans (2.6436ms)
+  Ô£ö runScan returns error when user scan already in progress (2.7616ms)
+  Ô£ö runScan allows folderwatch scan during user scan (4.0168ms)
+  Ô£ö runScan completes successfully with no threats (6.0092ms)
+  Ô£ö runScan handles threats and quarantines them (6.5178ms)
+  Ô£ö runScan handles scan errors (4.5791ms)
+  Ô£ö abortScan cancels active user scan (2.9771ms)
+  Ô£ö abortScan returns error when no scan in progress (2.5213ms)
+  Ô£ö abortScan returns error when only folderwatch scan is active (2.429ms)
+  Ô£ö abortScan calls clamEngine.abortCurrentScan (2.3586ms)
+  Ô£ö saveScanReport creates JSON and HTML files (5.8808ms)
+  Ô£ö saveScanReport does not save when scanHistory disabled (3.222ms)
+  Ô£ö runScan emits progress events (6.1415ms)
+  Ô£ö runScan emits complete event with results (6.6816ms)
+  Ô£ö runScan handles quarantine errors gracefully (9.2973ms)
+Ô£ö ScanEngine (142.817ms)
+ÔûÂ ScoringEngine.classify
+  Ô£ö private IPv4 ranges are SAFE (1.2304ms)
+  Ô£ö loopback addresses are SAFE (0.418ms)
+  Ô£ö blocklisted IPs are MALICIOUS regardless of port (0.3158ms)
+  Ô£ö public HTTPS with hostname is SAFE (0.388ms)
+  Ô£ö public HTTPS without hostname is UNKNOWN (0.9004ms)
+  Ô£ö public IP on uncommon port is UNKNOWN (1.3846ms)
+Ô£ö ScoringEngine.classify (7.083ms)
+ÔûÂ ScoringEngine helper edge cases
+  Ô£ö isPrivateIp handles null and empty input (0.4071ms)
+  Ô£ö isLoopback handles null and empty input (0.3276ms)
+Ô£ö ScoringEngine helper edge cases (1.2136ms)
+ÔûÂ SystemAudit
+  Ô£ö runPowerShell executes PowerShell command successfully (186.8083ms)
+  Ô£ö runPowerShell handles command errors (1.3546ms)
+  Ô£ö runPowerShell handles timeout (1.4328ms)
+  Ô£ö checkDefender returns pass when Defender is enabled (1.8226ms)
+  Ô£ö checkDefender returns fail when Defender is disabled (1.2816ms)
+  Ô£ö checkDefender handles parse errors (1.0411ms)
+  Ô£ö checkDefender handles query failures (0.9943ms)
+  Ô£ö checkUac returns pass when UAC is enabled (0.9224ms)
+  Ô£ö checkUac returns fail when UAC is disabled (0.9384ms)
+  Ô£ö checkUac handles query failures (3.2942ms)
+  Ô£ö checkWindowsUpdate returns pass when no updates pending (1.1227ms)
+  Ô£ö checkWindowsUpdate returns warn when updates pending (0.8292ms)
+  Ô£ö checkWindowsUpdate handles parse errors (1.1214ms)
+  Ô£ö checkWindowsUpdate handles query failures (1.006ms)
+  Ô£ö checkBitLocker returns pass when drive is encrypted (1.2509ms)
+  Ô£ö checkBitLocker returns warn when drive not encrypted (1.0436ms)
+  Ô£ö checkBitLocker handles unsupported systems (0.8638ms)
+  Ô£ö checkExecutionPolicy returns pass for secure policies (1.0785ms)
+  Ô£ö checkExecutionPolicy returns warn for insecure policies (0.9228ms)
+  Ô£ö checkExecutionPolicy handles query failures (1.0574ms)
+  Ô£ö checkSecureBoot returns pass when enabled (0.9349ms)
+  Ô£ö checkSecureBoot returns fail when disabled (1.0337ms)
+  Ô£ö checkSecureBoot handles unsupported systems (2.395ms)
+  Ô£ö runAudit executes all checks concurrently (1.5387ms)
+  Ô£ö runAudit returns results in expected order (1.9757ms)
+  Ô£ö runAudit works without progress callback (0.8551ms)
+  Ô£ö runAudit handles individual check failures gracefully (1.0405ms)
+Ô£ö SystemAudit (224.6198ms)
+ÔûÂ uninstallLaunchUtils
+  Ô£ö parses quoted uninstall commands (3.4256ms)
+  Ô£ö parses unquoted uninstall commands with spaces in the path (0.5591ms)
+  Ô£ö strips embedded newlines from uninstall strings (0.3214ms)
+  Ô£ö accepts bare msiexec uninstall commands (1.1616ms)
+  Ô£ö rejects msiexec install flags (0.4248ms)
+  Ô£ö rejects shell-based uninstall launchers (0.325ms)
+  Ô£ö rejects other System32 living-off-the-land hosts (0.5579ms)
+  Ô£ö rejects executables outside trusted install roots (0.5981ms)
+  Ô£ö rejects executables under LocalAppData outside Programs (0.5576ms)
+  Ô£ö accepts rundll32 commands with comma-separated entry points (0.8035ms)
+  Ô£ö allows per-user install roots under LocalAppData (0.6088ms)
+Ô£ö uninstallLaunchUtils (13.9598ms)
+ÔûÂ uninstallUtils
+  Ô£ö normalizes registry rows into app objects (1.3416ms)
+  Ô£ö tokenizes app names for fuzzy matching (1.6454ms)
+  Ô£ö refuses protected paths during leftover removal checks (2.4364ms)
+Ô£ö uninstallUtils (9.1034ms)
+ÔûÂ findLeftoverCandidates
+  Ô£ö returns an array without throwing when no matches exist (4.6714ms)
+Ô£ö findLeftoverCandidates (5.0355ms)
+ÔûÂ uninstallerReport platform guard
+  Ô£ö returns supported:false on non-Windows platforms (2.7106ms)
+Ô£ö uninstallerReport platform guard (4.5399ms)
+ÔûÂ windowsChecks
+  Ô£ö asArray returns empty array for null/undefined (7.6294ms)
+  Ô£ö asArray returns array for single value (1.7883ms)
+  Ô£ö asArray returns array as-is for arrays (0.9661ms)
+  Ô£ö runPowerShell returns error on non-Windows (1.1722ms)
+  Ô£ö runPowerShell executes successfully on Windows (0.8661ms)
+  Ô£ö runPowerShell handles errors (0.5247ms)
+  Ô£ö runJsonPowerShell parses JSON output successfully (0.6706ms)
+  Ô£ö runJsonPowerShell handles parse errors (0.6733ms)
+  Ô£ö runJsonPowerShell returns fallback on empty output (0.9268ms)
+  Ô£ö runJsonPowerShell returns fallback on PowerShell error (1.3805ms)
+  Ô£ö getDefenderStatus returns available status on Windows (1.2188ms)
+  Ô£ö getDefenderStatus returns unavailable on non-Windows (0.7929ms)
+  Ô£ö getDefenderStatus handles all strategy failures (1.2491ms)
+  Ô£ö getFirewallStatus returns firewall profiles (0.9808ms)
+  Ô£ö getFirewallStatus handles empty results (1.1015ms)
+  Ô£ö getUpdateStatus returns update information (0.7025ms)
+  Ô£ö getUpdateStatus returns unavailable on non-Windows (0.7336ms)
+  Ô£ö getUpdateStatus handles all strategy failures (1.1982ms)
+  Ô£ö getSignatureInfo returns signature status (3.0918ms)
+  Ô£ö getSignatureInfo returns unknown for non-existent file (0.826ms)
+  Ô£ö getSignatureInfo returns unknown on non-Windows (0.6835ms)
+  Ô£ö isExecutablePath returns true for executable extensions (0.5736ms)
+  Ô£ö isExecutablePath returns false for non-executable extensions (2.6466ms)
+  Ô£ö isExecutablePath is case-insensitive (0.7256ms)
+  Ô£ö suspiciousPathSignals detects AppData locations (1.1265ms)
+  Ô£ö suspiciousPathSignals detects temp locations (1.095ms)
+  Ô£ö suspiciousPathSignals detects Windows temp (0.6947ms)
+  Ô£ö suspiciousPathSignals detects recycle bin (0.5512ms)
+  Ô£ö suspiciousPathSignals detects double extensions (0.5362ms)
+  Ô£ö suspiciousPathSignals returns empty for safe paths (0.5576ms)
+  Ô£ö suspiciousPathSignals handles empty/null paths (0.755ms)
+  Ô£ö getStartupFolders returns startup items (3.8408ms)
+  Ô£ö getStartupFolders handles non-existent folders (1.4036ms)
+  Ô£ö getRegistryRunItems returns registry run items (0.5393ms)
+  Ô£ö getRegistryRunItems handles empty results (0.6653ms)
+  Ô£ö getScheduledTasks returns scheduled tasks (0.4706ms)
+  Ô£ö getScheduledTasks handles empty results (0.6233ms)
+  Ô£ö getServices returns Windows services (1.5959ms)
+  Ô£ö getServices handles empty results (1.4315ms)
+  Ô£ö extractExecutablePath extracts from quoted paths (0.5538ms)
+  Ô£ö extractExecutablePath extracts from unquoted paths (0.7079ms)
+  Ô£ö extractExecutablePath handles null/empty (0.507ms)
+  Ô£ö extractExecutablePath handles complex paths (0.553ms)
+  Ô£ö extractExecutablePath handles paths with spaces (0.4077ms)
+Ô£ö windowsChecks (58.1923ms)
+ÔûÂ workerManager
+  Ô£ö runs a script in a worker thread and returns the result (58.1226ms)
+  Ô£ö rejects canceled tasks (2.5393ms)
+  Ô£ö exposes cancel() on the returned task handle (12.8234ms)
+Ô£ö workerManager (75.804ms)
+Ôä¦ tests 278
+Ôä¦ suites 49
+Ôä¦ pass 273
+Ôä¦ fail 5
+Ôä¦ cancelled 0
+Ôä¦ skipped 0
+Ôä¦ todo 0
+Ôä¦ duration_ms 2091.046
+
+Ô£û failing tests:
+
+test at tests\clamavEngine.test.js:105:3
+Ô£û init sets isReady false when clamscan not found (29.1025ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (D:\Soterios\tests\clamavEngine.test.js:110:12)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\clamavEngine.test.js:174:3
+Ô£û updateDefinitions returns error when freshclam not found (30.7323ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (D:\Soterios\tests\clamavEngine.test.js:179:12)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\passwordTools.test.js:1:1
+Ô£û tests\passwordTools.test.js (141.6156ms)
+  'test failed'
+
+test at tests\quarantineManager.test.js:86:3
+Ô£û returns an error when the source file cannot be read due to permissions (31.9003ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (D:\Soterios\tests\quarantineManager.test.js:90:14)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\reportExport.test.js:1:1
+Ô£û tests\reportExport.test.js (111.4749ms)
+  'test failed'

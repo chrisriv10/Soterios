@@ -12,6 +12,11 @@ describe('windowsChecks', () => {
   let originalExecFile;
   let mockExecResults = [];
 
+  const reloadWindowsChecks = () => {
+    delete require.cache[require.resolve('../src/security/windowsChecks')];
+    windowsChecks = require('../src/security/windowsChecks');
+  };
+
   beforeEach(() => {
     // Mock execFile to avoid running actual PowerShell commands
     originalExecFile = childProcess.execFile;
@@ -127,7 +132,7 @@ describe('windowsChecks', () => {
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
     
     try {
-      const result = await windowsChecks.runPowerShell('Get-Process');
+      const result = await windowsChecks.runPowerShell('Get-NetFirewallProfile');
       assert.equal(result.ok, true);
       assert.ok(result.stdout);
     } finally {
@@ -157,7 +162,7 @@ describe('windowsChecks', () => {
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
     
     try {
-      const result = await windowsChecks.runJsonPowerShell('Get-Process');
+      const result = await windowsChecks.runJsonPowerShell('Get-NetFirewallProfile');
       assert.equal(result.ok, true);
       assert.ok(result.data);
     } finally {
@@ -190,6 +195,8 @@ describe('windowsChecks', () => {
       childProcess.execFile = (command, args, options, callback) => {
         callback(null, '', '');
       };
+      delete require.cache[require.resolve('../src/security/windowsChecks')];
+      windowsChecks = require('../src/security/windowsChecks');
       
       const fallback = { test: 'fallback' };
       const result = await windowsChecks.runJsonPowerShell('Get-Process', fallback);
@@ -251,6 +258,8 @@ describe('windowsChecks', () => {
       childProcess.execFile = (command, args, options, callback) => {
         callback(new Error('All strategies failed'), '', 'Error');
       };
+      delete require.cache[require.resolve('../src/security/windowsChecks')];
+      windowsChecks = require('../src/security/windowsChecks');
       
       const result = await windowsChecks.getDefenderStatus();
       assert.equal(result.available, false);
@@ -269,10 +278,12 @@ describe('windowsChecks', () => {
   });
 
   it('getFirewallStatus handles empty results', async () => {
-    execFile = (command, args, options, callback) => {
+    childProcess.execFile = (command, args, options, callback) => {
       callback(null, '[]', '');
     };
-    
+    delete require.cache[require.resolve('../src/security/windowsChecks')];
+    windowsChecks = require('../src/security/windowsChecks');
+
     const result = await windowsChecks.getFirewallStatus();
     assert.deepEqual(result, []);
   });
@@ -295,9 +306,11 @@ describe('windowsChecks', () => {
   });
 
   it('getUpdateStatus handles all strategy failures', async () => {
-    execFile = (command, args, options, callback) => {
+    childProcess.execFile = (command, args, options, callback) => {
       callback(new Error('All strategies failed'), '', 'Error');
     };
+    delete require.cache[require.resolve('../src/security/windowsChecks')];
+    windowsChecks = require('../src/security/windowsChecks');
     
     const result = await windowsChecks.getUpdateStatus();
     assert.equal(result.pendingCount, null);
@@ -429,9 +442,11 @@ describe('windowsChecks', () => {
   });
 
   it('getRegistryRunItems handles empty results', async () => {
-    execFile = (command, args, options, callback) => {
+    childProcess.execFile = (command, args, options, callback) => {
       callback(null, '[]', '');
     };
+    delete require.cache[require.resolve('../src/security/windowsChecks')];
+    windowsChecks = require('../src/security/windowsChecks');
     
     const result = await windowsChecks.getRegistryRunItems();
     assert.deepEqual(result, []);
@@ -441,15 +456,17 @@ describe('windowsChecks', () => {
     const result = await windowsChecks.getScheduledTasks();
     assert.ok(Array.isArray(result));
     if (result.length > 0) {
-      assert.equal(result[0].source, 'Scheduled Task');
-      assert.ok(result[0].name);
+      assert.equal(result[0].TaskName, 'Task1');
+      assert.ok(result[0].TaskPath);
     }
   });
 
   it('getScheduledTasks handles empty results', async () => {
-    execFile = (command, args, options, callback) => {
+    childProcess.execFile = (command, args, options, callback) => {
       callback(null, '[]', '');
     };
+    delete require.cache[require.resolve('../src/security/windowsChecks')];
+    windowsChecks = require('../src/security/windowsChecks');
     
     const result = await windowsChecks.getScheduledTasks();
     assert.deepEqual(result, []);
@@ -465,9 +482,11 @@ describe('windowsChecks', () => {
   });
 
   it('getServices handles empty results', async () => {
-    execFile = (command, args, options, callback) => {
+    childProcess.execFile = (command, args, options, callback) => {
       callback(null, '[]', '');
     };
+    delete require.cache[require.resolve('../src/security/windowsChecks')];
+    windowsChecks = require('../src/security/windowsChecks');
     
     const result = await windowsChecks.getServices();
     assert.deepEqual(result, []);

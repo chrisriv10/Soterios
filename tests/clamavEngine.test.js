@@ -105,9 +105,18 @@ describe('ClamAVEngine', () => {
   it('init sets isReady false when clamscan not found', async () => {
     const badDir = path.join(tmp, 'bad-clamav');
     fs.mkdirSync(badDir, { recursive: true });
-    const engine = new ClamAVEngine({ baseDir: badDir });
-    await engine.init();
-    assert.equal(engine.isReady, false);
+    const originalExistsSync = fs.existsSync;
+    fs.existsSync = (p) => {
+      if (typeof p === 'string' && p.includes('clamscan.exe')) return false;
+      return originalExistsSync(p);
+    };
+    try {
+      const engine = new ClamAVEngine({ baseDir: badDir });
+      await engine.init();
+      assert.equal(engine.isReady, false);
+    } finally {
+      fs.existsSync = originalExistsSync;
+    }
   });
 
   it('getStatus returns current engine state', async () => {
@@ -174,10 +183,19 @@ describe('ClamAVEngine', () => {
   it('updateDefinitions returns error when freshclam not found', async () => {
     const badDir = path.join(tmp, 'bad-clamav');
     fs.mkdirSync(badDir, { recursive: true });
-    const engine = new ClamAVEngine({ baseDir: badDir });
-    const result = await engine.updateDefinitions();
-    assert.equal(result.success, false);
-    assert.ok(result.error.includes('not found'));
+    const originalExistsSync = fs.existsSync;
+    fs.existsSync = (p) => {
+      if (typeof p === 'string' && (p.includes('clamscan.exe') || p.includes('freshclam.exe'))) return false;
+      return originalExistsSync(p);
+    };
+    try {
+      const engine = new ClamAVEngine({ baseDir: badDir });
+      const result = await engine.updateDefinitions();
+      assert.equal(result.success, false);
+      assert.ok(result.error.includes('not found'));
+    } finally {
+      fs.existsSync = originalExistsSync;
+    }
   });
 
   it('scanFile returns error when not ready', async () => {
