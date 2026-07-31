@@ -13,6 +13,7 @@ const FirewallManager = require('../security/FirewallManager');
 const NetworkMonitor = require('../security/NetworkMonitor');
 const FolderWatcher = require('../security/FolderWatcher');
 const NetworkAlertMonitor = require('../security/NetworkAlertMonitor');
+const EmergencyLockdown = require('../security/EmergencyLockdown');
 const { ProcessResolver } = require('../security/ProcessResolver');
 const { BlocklistService } = require('../security/BlocklistService');
 const { NetworkEnricher } = require('../security/NetworkEnricher');
@@ -73,6 +74,7 @@ class ServiceRegistry {
       db,
       notify
     });
+    const emergencyLockdown = new EmergencyLockdown(db, eventBus, notify);
 
     this._services = {
       db,
@@ -93,6 +95,7 @@ class ServiceRegistry {
       geoLocationService,
       folderWatcher,
       networkAlertMonitor,
+      emergencyLockdown,
       toolRegistry
     };
     return this._services;
