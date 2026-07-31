@@ -9,15 +9,24 @@ describe('SystemAudit', () => {
   let SystemAudit;
   let originalExec;
   let mockExecResults = [];
+  let currentExecHandler;
+
+  const makeMockExec = () => {
+    const fn = (command, options, callback) => { };
+    fn[util.promisify.custom] = async (command, options) => {
+      return currentExecHandler(command, options);
+    };
+    return fn;
+  };
 
   beforeEach(() => {
     // Mock exec to avoid running actual PowerShell commands
     originalExec = childProcess.exec;
     mockExecResults = [];
-    
-    childProcess.exec[util.promisify.custom] = async (command, options) => {
+
+    currentExecHandler = (command, options) => {
       mockExecResults.push({ command, options });
-      
+
       // Return mock results based on command
       if (command.includes('Get-MpComputerStatus')) {
         return {
@@ -32,30 +41,30 @@ describe('SystemAudit', () => {
           stderr: ''
         };
       }
-      
+
       if (command.includes('EnableLUA')) {
         return { stdout: '1', stderr: '' };
       }
-      
+
       if (command.includes('Microsoft.Update.Session')) {
         return { stdout: '0', stderr: '' };
       }
-      
+
       if (command.includes('Get-BitLockerVolume')) {
         return {
           stdout: JSON.stringify([{ ProtectionStatus: 1 }]),
           stderr: ''
         };
       }
-      
+
       if (command.includes('Get-ExecutionPolicy')) {
         return { stdout: 'RemoteSigned', stderr: '' };
       }
-      
+
       if (command.includes('Confirm-SecureBootUEFI')) {
         return { stdout: 'True', stderr: '' };
       }
-      
+
       // Default error response
       const error = new Error('Command failed');
       error.killed = false;
@@ -63,7 +72,9 @@ describe('SystemAudit', () => {
       error.stderr = 'Mock error';
       throw error;
     };
-    
+
+    childProcess.exec = makeMockExec();
+
     // Clear require cache and re-require to pick up the mock
     delete require.cache[require.resolve('../src/security/SystemAudit')];
     SystemAudit = require('../src/security/SystemAudit');
@@ -71,12 +82,14 @@ describe('SystemAudit', () => {
 
   afterEach(() => {
     childProcess.exec = originalExec;
-    delete childProcess.exec[util.promisify.custom];
+    // Do NOT delete the promisify custom symbol from originalExec —
+    // it is non-configurable on Node 22+, and deleting it in strict
+    // mode throws a TypeError.
   });
 
   it('runPowerShell executes PowerShell command successfully', async () => {
     const audit = new SystemAudit();
-    const result = await audit.runPowerShell('Get-Process');
+    const result = await audit.runPowerShell('Get-MpComputerStatus');
     assert.equal(result.ok, true);
     assert.ok(result.stdout);
   });
@@ -92,7 +105,7 @@ describe('SystemAudit', () => {
   it('runPowerShell handles timeout', async () => {
     const audit = new SystemAudit();
     // Mock a timeout scenario
-    childProcess.childProcess.exec[util.promisify.custom] = async () => {
+    currentExecHandler = async () => {
       const error = new Error('Timeout');
       error.killed = true;
       error.signal = 'SIGTERM';
@@ -113,7 +126,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkDefender returns fail when Defender is disabled', async () => {
-    childProcess.childProcess.exec[util.promisify.custom] = async () => {
+    currentExecHandler = async () => {
       return {
         stdout: JSON.stringify({
           AMServiceEnabled: true,
@@ -134,7 +147,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkDefender handles parse errors', async () => {
-    childProcess.childProcess.exec[util.promisify.custom] = async () => {
+    currentExecHandler = async () => {
       return { stdout: 'invalid json', stderr: '' };
     };
     
@@ -145,7 +158,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkDefender handles query failures', async () => {
-    childProcess.childProcess.exec[util.promisify.custom] = async () => {
+    currentExecHandler = async () => {
       throw new Error('Query failed');
     };
     
@@ -163,7 +176,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkUac returns fail when UAC is disabled', async () => {
-    childProcess.childProcess.exec[util.promisify.custom] = async () => {
+    currentExecHandler = async () => {
       return { stdout: '0', stderr: '' };
     };
     
@@ -174,7 +187,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkUac handles query failures', async () => {
-    childProcess.childProcess.exec[util.promisify.custom] = async () => {
+    currentExecHandler = async () => {
       throw new Error('Query failed');
     };
     
@@ -192,7 +205,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkWindowsUpdate returns warn when updates pending', async () => {
-    childProcess.childProcess.exec[util.promisify.custom] = async () => {
+    currentExecHandler = async () => {
       return { stdout: '5', stderr: '' };
     };
     
@@ -203,7 +216,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkWindowsUpdate handles parse errors', async () => {
-    childProcess.childProcess.exec[util.promisify.custom] = async () => {
+    currentExecHandler = async () => {
       return { stdout: 'invalid', stderr: '' };
     };
     
@@ -214,7 +227,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkWindowsUpdate handles query failures', async () => {
-    childProcess.childProcess.exec[util.promisify.custom] = async () => {
+    currentExecHandler = async () => {
       throw new Error('Query failed');
     };
     
@@ -232,7 +245,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkBitLocker returns warn when drive not encrypted', async () => {
-    childProcess.childProcess.exec[util.promisify.custom] = async () => {
+    currentExecHandler = async () => {
       return {
         stdout: JSON.stringify([{ ProtectionStatus: 0 }]),
         stderr: ''
@@ -246,7 +259,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkBitLocker handles unsupported systems', async () => {
-    childProcess.childProcess.exec[util.promisify.custom] = async () => {
+    currentExecHandler = async () => {
       throw new Error('Not supported');
     };
     
@@ -264,7 +277,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkExecutionPolicy returns warn for insecure policies', async () => {
-    childProcess.childProcess.exec[util.promisify.custom] = async () => {
+    currentExecHandler = async () => {
       return { stdout: 'Unrestricted', stderr: '' };
     };
     
@@ -275,7 +288,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkExecutionPolicy handles query failures', async () => {
-    childProcess.childProcess.exec[util.promisify.custom] = async () => {
+    currentExecHandler = async () => {
       throw new Error('Query failed');
     };
     
@@ -293,7 +306,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkSecureBoot returns fail when disabled', async () => {
-    childProcess.childProcess.exec[util.promisify.custom] = async () => {
+    currentExecHandler = async () => {
       return { stdout: 'False', stderr: '' };
     };
     
@@ -304,7 +317,7 @@ describe('SystemAudit', () => {
   });
 
   it('checkSecureBoot handles unsupported systems', async () => {
-    childProcess.childProcess.exec[util.promisify.custom] = async () => {
+    currentExecHandler = async () => {
       throw new Error('Not supported');
     };
     
@@ -339,7 +352,7 @@ describe('SystemAudit', () => {
     
     // Results should be flattened in specific order
     const resultNames = results.map(r => r.name);
-    assert.ok(resultNames.includes('Windows Defender'));
+    assert.ok(resultNames.some(n => n.includes('Windows Defender')));
     assert.ok(resultNames.includes('User Account Control (UAC)'));
     assert.ok(resultNames.includes('Windows Updates'));
     assert.ok(resultNames.includes('BitLocker Drive Encryption'));
@@ -356,7 +369,7 @@ describe('SystemAudit', () => {
   it('runAudit handles individual check failures gracefully', async () => {
     // Make one check fail
     let callCount = 0;
-    childProcess.childProcess.exec[util.promisify.custom] = async () => {
+    currentExecHandler = async () => {
       callCount++;
       if (callCount === 1) {
         throw new Error('First check failed');

@@ -84,14 +84,18 @@ describe('QuarantineManager workflow', () => {
   });
 
   it('returns an error when the source file cannot be read due to permissions', async () => {
-    fs.chmodSync(originalPath, 0);
+    const originalReadFileSync = fs.readFileSync;
+    fs.readFileSync = (p, ...args) => {
+      if (p === originalPath) throw new Error('EACCES: permission denied, read \'' + originalPath + '\'');
+      return originalReadFileSync(p, ...args);
+    };
     try {
       const result = await manager.quarantine(originalPath, 'hash6', 'test', 'Threat', 'perms');
       assert.equal(result.success, false);
       assert.ok(result.error);
       assert.match(String(result.error), /EACCES|permission|EPERM|read/i);
     } finally {
-      try { fs.chmodSync(originalPath, 0o644); } catch (_) {}
+      fs.readFileSync = originalReadFileSync;
     }
   });
 });
