@@ -64,14 +64,17 @@ Var AutoLaunch
 Var InstallMode
 Var PreviousVersion
 Var IsUpgrade
+Var TitleFont
 
 ; ============================================================
 ; GUI Initialization - Modern Styling
 ; ============================================================
 Function onGuiInit
+  CreateFont $TitleFont "MS Shell Dlg" 12 700
 FunctionEnd
 
 Function un.onGuiInit
+  CreateFont $TitleFont "MS Shell Dlg" 12 700
 FunctionEnd
 
 ; ============================================================
@@ -97,7 +100,7 @@ Function onWelcomePageCreate
   ${NSD_CreateLabel} 24 140 100% 24 "Soterios"
   Pop $WelcomeTitle
   SetCtlColors $WelcomeTitle 0xFFFFFF 0x15202B
-  SendMessage $WelcomeTitle ${WM_SETFONT} ${__FONT__16_BOLD} 1
+  SendMessage $WelcomeTitle ${WM_SETFONT} $TitleFont 1
 
   ; Version
   ${NSD_CreateLabel} 24 168 100% 20 "Version ${PRODUCT_VERSION}"
@@ -158,7 +161,7 @@ Function onFinishPageCreate
   ${NSD_CreateLabel} 24 140 100% 24 "Soterios Installed Successfully"
   Pop $FinishTitle
   SetCtlColors $FinishTitle 0xFFFFFF 0x15202B
-  SendMessage $FinishTitle ${WM_SETFONT} ${__FONT__16_BOLD} 1
+  SendMessage $FinishTitle ${WM_SETFONT} $TitleFont 1
 
   ${NSD_CreateLabel} 24 170 100% 60 "Soterios has been installed on your computer.\nYou can now manage system maintenance, monitor security, and run scans."
   Pop $FinishText
@@ -257,7 +260,7 @@ Function un.onWelcomeCreate
   ${NSD_CreateLabel} 24 140 100% 24 "Uninstall Soterios"
   Pop $0
   SetCtlColors $0 0xFFFFFF 0x15202B
-  SendMessage $0 ${WM_SETFONT} ${__FONT__16_BOLD} 1
+  SendMessage $0 ${WM_SETFONT} $TitleFont 1
 
   ${NSD_CreateLabel} 24 170 100% 60 "This will remove Soterios from your computer."
   Pop $0
@@ -280,7 +283,7 @@ Function un.onFinishCreate
   ${NSD_CreateLabel} 24 140 100% 24 "Soterios Uninstalled"
   Pop $0
   SetCtlColors $0 0xFFFFFF 0x15202B
-  SendMessage $0 ${WM_SETFONT} ${__FONT__16_BOLD} 1
+  SendMessage $0 ${WM_SETFONT} $TitleFont 1
 
   ${NSD_CreateLabel} 24 170 100% 60 "Soterios has been removed from your computer."
   Pop $0
