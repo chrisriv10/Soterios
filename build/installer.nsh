@@ -25,7 +25,7 @@
 ; ============================================================
 !define MUI_WELCOMEPAGE_TITLE "Welcome to Soterios Setup"
 !define MUI_WELCOMEPAGE_TITLE_3LINES
-!define MUI_WELCOMEPAGE_TEXT "This will install Soterios ${PRODUCT_VERSION} on your computer.\n\nSoterios is a local-first desktop suite for system maintenance, monitoring, and basic security checks.\n\nClick Next to continue."
+!define MUI_WELCOMEPAGE_TEXT "This will install Soterios ${VERSION} on your computer.\n\nSoterios is a local-first desktop suite for system maintenance, monitoring, and basic security checks.\n\nClick Next to continue."
 
 !define MUI_FINISHPAGE_TITLE "Installation Complete"
 !define MUI_FINISHPAGE_TITLE_3LINES
@@ -103,7 +103,7 @@ Function onWelcomePageCreate
   SendMessage $WelcomeTitle ${WM_SETFONT} $TitleFont 1
 
   ; Version
-  ${NSD_CreateLabel} 24 168 100% 20 "Version ${PRODUCT_VERSION}"
+  ${NSD_CreateLabel} 24 168 100% 20 "Version ${VERSION}"
   Pop $WelcomeVersion
   SetCtlColors $WelcomeVersion ${SOTERIOS_MUTED} 0x15202B
 
