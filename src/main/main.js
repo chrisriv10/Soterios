@@ -59,6 +59,7 @@ const { getTrayHealthSummary } = require('./healthSummary');
 
 // Legacy utilities
 const { loadPlugins } = require('../core/pluginLoader');
+const featureFlags = require('../core/featureFlags');
 
 let mainWindow;
 let splashWindow;
@@ -290,10 +291,7 @@ function repositionToasts() {
 }
 
 function showNotification(title, body, level = 'info', iconOverride = null) {
-  // Previously fired unconditionally regardless of the Settings toggle --
-  // this was the same "flag saved but never read" bug found earlier with
-  // System Monitoring.
-  if (dbRef && !dbRef.getSetting('feature.notificationsEnabled', true)) return;
+  if (dbRef && !featureFlags.getFlag(dbRef, 'notificationsEnabled', true)) return;
   try {
     const themeName = dbRef ? dbRef.getSetting('ui.theme', 'dark') : 'dark';
     const display = screen.getPrimaryDisplay();
@@ -673,6 +671,9 @@ app.whenReady().then(async () => {
     return { running: false };
   };
 
+  const featureFlags = require('../core/featureFlags');
+  const { getFlag: getFeatureFlag } = featureFlags;
+
   const maintenanceScheduler = new MaintenanceScheduler({
     db: services.db,
     toolRegistry: services.toolRegistry,
@@ -743,7 +744,7 @@ app.whenReady().then(async () => {
   }
 
   setTimeout(() => {
-    if (db.getSetting('feature.autoUpdates', true)) {
+    if (featureFlags.getFlag(db, 'autoUpdates', true)) {
       updater.checkForUpdates().catch(() => {});
     }
   }, 30_000);
@@ -766,7 +767,7 @@ app.whenReady().then(async () => {
         mainWindow.webContents.send('scan:progress', data);
       }
       if (!data || typeof data.pct !== 'number') return;
-      if (dbRef && !dbRef.getSetting('feature.scanNotifications', true)) return;
+      if (dbRef && !featureFlags.getFlag(dbRef, 'scanNotifications', true)) return;
       // Explicitly filter out folder watch, definitions, and custom scans from notifications
       if (scanType === 'definitions' || isBackgroundScan(scanType) || scanType === 'custom') return;
       const milestone = [0, 25, 50, 75].find((value) => data.pct >= value && !announcedProgress.has(value));
@@ -821,7 +822,7 @@ app.whenReady().then(async () => {
       // Auto-generate a scan report
       (async () => {
         try {
-          if (!db.getSetting('feature.autoReports', true)) return;
+          if (!featureFlags.getFlag(db, 'autoReports', true)) return;
           const isCanceled = data.status === 'canceled' || data.report?.status === 'canceled';
           if (isCanceled || (scanType !== 'quick' && scanType !== 'full')) return;
           logLine('info', 'Generating scan report...');
@@ -998,21 +999,21 @@ app.whenReady().then(async () => {
       logLine('error', 'ClamAV init failed', { message: err.message });
     }
     try {
-      if (db.getSetting('feature.realtimeProtection', true)) {
+      if (featureFlags.getFlag(db, 'realtimeProtection', true)) {
         await realtimeWatcher.start();
       }
     } catch (err) {
       logLine('error', 'Real-time protection init failed', { message: err.message });
     }
     try {
-      if (db.getSetting('feature.folderWatch', true)) {
+      if (featureFlags.getFlag(db, 'folderWatch', true)) {
         folderWatcher.start();
       }
     } catch (err) {
       logLine('error', 'Folder watcher init failed', { message: err.message });
     }
     try {
-      if (db.getSetting('feature.networkAlerts', true)) {
+      if (featureFlags.getFlag(db, 'networkAlerts', true)) {
         networkAlertMonitor.start();
       }
     } catch (err) {
@@ -1023,7 +1024,7 @@ app.whenReady().then(async () => {
     } catch (err) {
       logLine('error', 'Blocklist refresh failed', { message: err.message });
     }
-    if (db.getSetting('feature.networkTrafficHistory', true)) {
+    if (featureFlags.getFlag(db, 'networkTrafficHistory', true)) {
       services.startNetworkStatsTimer();
     }
     const pruneTimer = setInterval(() => {

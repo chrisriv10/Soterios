@@ -72,7 +72,7 @@ describe('ScanEngine', () => {
     assert.equal(engine.clamEngine, mockClamEngine);
     assert.equal(engine.isScanning, false);
     assert.equal(engine.isFolderWatchScanning, false);
-    assert.equal(engine.currentScan, null);
+    assert.equal(engine.userScan.currentScan, null);
   });
 
   it('getStatus returns current scan state', () => {
@@ -100,7 +100,7 @@ describe('ScanEngine', () => {
       mockReputationEngine,
       mockQuarantineManager
     );
-    engine.isScanning = true;
+    engine.userScan.isScanning = true;
     
     const result = await engine.runQuickScan();
     assert.equal(result.error, 'Scan already in progress');
@@ -115,7 +115,7 @@ describe('ScanEngine', () => {
       mockReputationEngine,
       mockQuarantineManager
     );
-    engine.isScanning = true;
+    engine.userScan.isScanning = true;
     
     const result = await engine.runFullScan();
     assert.equal(result.error, 'Scan already in progress');
@@ -130,7 +130,7 @@ describe('ScanEngine', () => {
       mockReputationEngine,
       mockQuarantineManager
     );
-    engine.isScanning = true;
+    engine.userScan.isScanning = true;
     
     const result = await engine.runCustomScan(['C:\\test']);
     assert.equal(result.error, 'Scan already in progress');
@@ -180,7 +180,7 @@ describe('ScanEngine', () => {
       mockReputationEngine,
       mockQuarantineManager
     );
-    engine.isScanning = true;
+    engine.userScan.isScanning = true;
     
     const result = await engine.runScan('quick', [tmp], 'Starting...');
     assert.equal(result.error, 'Scan already in progress');
@@ -195,11 +195,17 @@ describe('ScanEngine', () => {
       mockReputationEngine,
       mockQuarantineManager
     );
-    engine.isScanning = true;
     
-    const result = await engine.runScan('folderwatch', [tmp], 'Starting...');
-    // Should not return error since folderwatch uses separate flag
-    assert.equal(result.success, true);
+    // Start folderwatch scan without a user scan active
+    const folderwatchPromise = engine.runScan('folderwatch', [tmp], 'Starting...');
+    assert.equal(engine.isFolderWatchScanning, true);
+    
+    // A user scan must still be rejected while folderwatch is active
+    const blocked = await engine.runScan('quick', [tmp], 'Starting...');
+    assert.equal(blocked.error, 'Scan already in progress');
+    
+    await folderwatchPromise;
+    assert.equal(engine.isFolderWatchScanning, false);
   });
 
   it('runScan completes successfully with no threats', async () => {
@@ -280,9 +286,9 @@ describe('ScanEngine', () => {
       mockQuarantineManager
     );
     
-    engine.isScanning = true;
-    engine.currentScan = { scanType: 'quick', paths: [tmp] };
-    engine.abortController = { abort: () => {} };
+    engine.userScan.isScanning = true;
+    engine.userScan.currentScan = { scanType: 'quick', paths: [tmp] };
+    engine.userScan.abortController = { abort: () => {} };
     
     const result = engine.abortScan();
     assert.equal(result.success, true);
@@ -301,7 +307,7 @@ describe('ScanEngine', () => {
     
     const result = engine.abortScan();
     assert.equal(result.success, false);
-    assert.equal(result.error, 'No scan in progress');
+    assert.equal(result.error, 'No user scan in progress');
   });
 
   it('abortScan returns error when only folderwatch scan is active', () => {
@@ -314,8 +320,8 @@ describe('ScanEngine', () => {
       mockQuarantineManager
     );
     
-    engine.isFolderWatchScanning = true;
-    engine.currentScan = { scanType: 'folderwatch', paths: [tmp] };
+    engine.folderWatchScan.isScanning = true;
+    engine.folderWatchScan.currentScan = { scanType: 'folderwatch', paths: [tmp] };
     
     const result = engine.abortScan();
     assert.equal(result.success, false);
@@ -338,9 +344,9 @@ describe('ScanEngine', () => {
       mockQuarantineManager
     );
     
-    engine.isScanning = true;
-    engine.currentScan = { scanType: 'quick', paths: [tmp] };
-    engine.abortController = { abort: () => {} };
+    engine.userScan.isScanning = true;
+    engine.userScan.currentScan = { scanType: 'quick', paths: [tmp] };
+    engine.userScan.abortController = { abort: () => {} };
     
     engine.abortScan();
     assert.equal(abortCalled, true);
