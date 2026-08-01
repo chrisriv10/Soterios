@@ -60,15 +60,22 @@ function launchDesktopApp() {
   if (desktopProc) return Promise.resolve();
 
   return new Promise((resolve, reject) => {
-    const appPath = process.env.DESKTOP_APP;
-    if (!appPath) {
-      return reject(new Error('DESKTOP_APP environment variable not set'));
+    const appPath = DESKTOP_APP;
+    if (!appPath || appPath === 'soterios://') {
+      return reject(new Error('SOTERIOS_APP_PATH environment variable not set'));
     }
 
     // Resolve and validate path - prevent command injection
     const resolvedPath = path.resolve(appPath);
+    
+    // Validate the path is within expected boundaries and is an executable
     if (!fs.existsSync(resolvedPath)) {
       return reject(new Error('Desktop app not found at: ' + resolvedPath));
+    }
+    
+    // Additional security: ensure path ends with .exe on Windows
+    if (process.platform === 'win32' && !resolvedPath.toLowerCase().endsWith('.exe')) {
+      return reject(new Error('Invalid executable path on Windows: ' + resolvedPath));
     }
 
     const isWin = process.platform === 'win32';
