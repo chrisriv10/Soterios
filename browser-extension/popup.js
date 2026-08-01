@@ -40,15 +40,15 @@ function showResult(count) {
 
 async function checkConnection() {
   try {
-    const response = await chrome.runtime.sendMessage({ type: 'CHECK_NATIVE_HOST' });
-    if (response && response.connected) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1000);
+    const resp = await fetch('http://localhost:17234/api/health', { method: 'GET', signal: controller.signal });
+    clearTimeout(timeout);
+    if (resp.ok) {
       document.getElementById('statusDot').classList.remove('offline');
       document.getElementById('statusText').textContent = 'Soterios app connected';
-    } else {
-      document.getElementById('statusDot').classList.add('offline');
-      document.getElementById('statusText').textContent = response?.error || 'Soterios app not running';
-    }
-  } catch (err) {
+    } else throw new Error();
+  } catch {
     document.getElementById('statusDot').classList.add('offline');
     document.getElementById('statusText').textContent = 'Soterios app not running';
   }
