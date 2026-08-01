@@ -108,8 +108,8 @@ describe('Browser Extension Integration', () => {
         }
         const extDir = path.join(__dirname, '..', 'browser-extension');
         const manifestPath = path.join(extDir, 'native-host-manifest.json');
-        const batPath = path.join(extDir, 'native-host.bat');
-        const jsPath = path.join(extDir, 'native-host.js');
+        const batPath = path.join(extDir, 'src', 'native-host.bat');
+        const jsPath = path.join(extDir, 'src', 'native-host.js');
         if (!fs.existsSync(manifestPath) || !fs.existsSync(batPath) || !fs.existsSync(jsPath)) {
           return { ok: false, error: 'Extension files not found. Reinstall Soterios.' };
         }
