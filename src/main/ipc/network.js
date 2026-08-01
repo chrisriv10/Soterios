@@ -3,6 +3,8 @@ const { execFile } = require('child_process');
 const util = require('util');
 const execFilePromise = util.promisify(execFile);
 const logger = require('../../utils/logger');
+const featureFlags = require('../../core/featureFlags');
+
 
 function isValidIPv4(ip) {
   if (typeof ip !== 'string') return false;
