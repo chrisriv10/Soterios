@@ -36,7 +36,7 @@ function onStatus(channel, handler) {
 function initAutoUpdater({ onNotify } = {}) {
   if (initialized) return state;
   if (!autoUpdater || !app.isPackaged) {
-    setState({ status: 'unsupported', message: 'Updates are available in packaged builds only.' });
+    setState({ status: 'unsupported', message: 'Updates are available in packaged builds only.', messageKey: 'settings.updates.onlyPackaged' });
     return state;
   }
   initialized = true;
@@ -45,15 +45,16 @@ function initAutoUpdater({ onNotify } = {}) {
   autoUpdater.autoInstallOnAppQuit = true;
 
   onStatus('checking-for-update', () => {
-    setState({ status: 'checking', message: 'Checking for updates...', error: null });
+    setState({ status: 'checking', message: 'Checking for updates...', messageKey: 'settings.updates.checking', error: null });
   });
   onStatus('update-not-available', () => {
-    setState({ status: 'idle', message: 'You are on the latest version.', error: null });
+    setState({ status: 'idle', message: 'You are on the latest version.', messageKey: 'settings.updates.upToDate', error: null });
   });
   onStatus('update-available', (info) => {
     setState({
       status: 'available',
       message: `Update ${info.version} is downloading...`,
+      messageKey: 'settings.updates.downloading',
       version: info.version,
       error: null
     });
@@ -63,6 +64,7 @@ function initAutoUpdater({ onNotify } = {}) {
     setState({
       status: 'downloading',
       message: `Downloading update (${Math.round(progress.percent)}%)...`,
+      messageKey: 'settings.updates.downloadingProgress',
       progress,
       error: null
     });
@@ -71,6 +73,7 @@ function initAutoUpdater({ onNotify } = {}) {
     setState({
       status: 'ready',
       message: `Update ${info.version} is ready to install.`,
+      messageKey: 'settings.updates.ready',
       version: info.version,
       error: null
     });
@@ -86,7 +89,7 @@ function initAutoUpdater({ onNotify } = {}) {
 
 async function checkForUpdates() {
   if (!autoUpdater || !app.isPackaged) {
-    return { ...state, status: 'unsupported', message: 'Updates are available in packaged builds only.' };
+    return { ...state, status: 'unsupported', message: 'Updates are available in packaged builds only.', messageKey: 'settings.updates.onlyPackaged' };
   }
   try {
     await autoUpdater.checkForUpdates();

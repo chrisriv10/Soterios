@@ -1,6 +1,22 @@
 let savedTheme = 'dark';
 let unsubscribeUpdateStatus = null;
 
+const MAINTENANCE_SCRIPT_TRANSLATIONS = {
+  'clear-temp-files': { name: 'tools.script.clearTempFiles.name', desc: 'tools.script.clearTempFiles.desc' },
+  'disk-space-report': { name: 'tools.script.diskSpaceReport.name', desc: 'tools.script.diskSpaceReport.desc' },
+  'large-files-report': { name: 'tools.script.largeFilesReport.name', desc: 'tools.script.largeFilesReport.desc' },
+  'browser-cache-report': { name: 'tools.script.browserCacheReport.name', desc: 'tools.script.browserCacheReport.desc' }
+};
+
+function translateUpdateStatus(status) {
+  if (!status || !status.messageKey) return status.message || '';
+  const vars = {};
+  if (status.version) vars.version = status.version;
+  if (status.progress && typeof status.progress.percent === 'number') vars.percent = Math.round(status.progress.percent);
+  const translated = window.I18n?.t(status.messageKey, vars) ?? '';
+  return translated && translated !== status.messageKey ? translated : (status.message || '');
+}
+
 window.Pages = window.Pages || {};
 window.Pages.settings = {
   async render(container) {
@@ -502,12 +518,16 @@ window.Pages.settings = {
     const scriptListEl = container.querySelector('#maintenanceScriptList');
     const selectedScriptIds = new Set((maintenanceConfig && maintenanceConfig.scriptIds) || ['clear-temp-files', 'disk-space-report']);
     if (maintenanceScripts.length) {
-      scriptListEl.innerHTML = maintenanceScripts.map((script) => `
+      scriptListEl.innerHTML = maintenanceScripts.map((script) => {
+        const trans = MAINTENANCE_SCRIPT_TRANSLATIONS[script.id];
+        const name = trans ? t(trans.name, script.name) : script.name;
+        const desc = trans ? t(trans.desc, script.description) : script.description;
+        return `
         <label style="display:flex; align-items:flex-start; gap:8px; margin-bottom:8px; cursor:pointer;">
           <input type="checkbox" class="maintenance-script-checkbox" value="${escapeHtml(script.id)}" ${selectedScriptIds.has(script.id) ? 'checked' : ''} />
-          <span><strong>${escapeHtml(script.name)}</strong><br /><span style="color:var(--text-muted);">${escapeHtml(script.description || '')}</span></span>
-        </label>
-      `).join('');
+          <span><strong>${escapeHtml(name)}</strong><br /><span style="color:var(--text-muted);">${escapeHtml(desc)}</span></span>
+        </label>`;
+      }).join('');
     } else {
       scriptListEl.textContent = t('settings.maintenanceUnavailable');
     }
@@ -593,7 +613,7 @@ window.Pages.settings = {
     async function refreshUpdateStatus() {
       try {
         const status = await window.api.invoke('update:status');
-        updateStatusEl.textContent = status.message || status.status || t('settings.updateUnavailable');
+        updateStatusEl.textContent = translateUpdateStatus(status) || t('settings.updateUnavailable');
         installUpdateBtn.disabled = status.status !== 'ready';
       } catch (err) {
         updateStatusEl.textContent = err.message || t('settings.updateReadError');
