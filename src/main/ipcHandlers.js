@@ -48,6 +48,7 @@ function registerIpcHandlers(mainWindow, services) {
     geoLocationService: services.geoLocationService,
     systemAudit: services.systemAudit,
     realtimeWatcher: services.realtimeWatcher,
+    folderWatcher: services.folderWatcher,
     startNetworkStatsTimer: services.startNetworkStatsTimer,
     stopNetworkStatsTimer: services.stopNetworkStatsTimer,
     emergencyLockdown: services.emergencyLockdown,

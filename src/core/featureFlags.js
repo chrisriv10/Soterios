@@ -16,6 +16,7 @@ const DEFAULT_FLAGS = Object.freeze({
   folderWatch: true,
   networkAlerts: true,
   networkTrafficHistory: true,
+  autoUpdates: true,
 });
 
 const FLAG_KEYS = Object.freeze(Object.keys(DEFAULT_FLAGS));

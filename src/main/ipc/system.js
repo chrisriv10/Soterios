@@ -39,6 +39,7 @@ function register(mainWindow, {
   geoLocationService,
   systemAudit,
   realtimeWatcher,
+  folderWatcher,
   startNetworkStatsTimer,
   stopNetworkStatsTimer,
   emergencyLockdown,
@@ -59,6 +60,30 @@ function register(mainWindow, {
   ipcMain.handle('app:setLaunchAtStartup', (_event, enabled) => {
     app.setLoginItemSettings({ openAtLogin: !!enabled });
     return app.getLoginItemSettings().openAtLogin;
+  });
+
+  // -- Real-Time Protection --
+  ipcMain.handle('rtp:status', async () => {
+    const result = await realtimeWatcher.getStatus();
+    return result.ok ? result.enabled : false;
+  });
+
+  ipcMain.handle('rtp:toggle', async (_event, enable) => {
+    const result = enable ? await realtimeWatcher.start() : await realtimeWatcher.stop();
+    if (!result.ok) throw new Error(result.error || 'Unable to update real-time protection.');
+    return result.enabled;
+  });
+
+  // -- Folder Watch --
+  ipcMain.handle('folderwatch:status', async () => {
+    return (folderWatcher && folderWatcher.getStatus()) || { running: false };
+  });
+
+  ipcMain.handle('folderwatch:toggle', async (_event, enable) => {
+    if (!folderWatcher) return false;
+    if (enable) folderWatcher.start();
+    else folderWatcher.stop();
+    return folderWatcher.getStatus().running;
   });
 
   // -- Database / Settings --
