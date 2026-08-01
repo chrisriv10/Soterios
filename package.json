@@ -35,10 +35,12 @@
     "adm-zip": "^0.6.0",
     "ajv-keywords": "^5.1.0",
     "axios": "^1.19.0",
+    "canvas": "^3.2.3",
     "electron": "^43.2.0",
     "electron-builder": "^26.15.3",
     "electronmon": "^2.0.4",
-    "jest": "^30.4.2"
+    "jest": "^30.4.2",
+    "jimp": "^1.6.1"
   },
   "build": {
     "appId": "com.soterios.app",
