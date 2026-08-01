@@ -2,13 +2,14 @@
 /**
  * Soterios Native Messaging Host
  * Bridges browser extension <-> desktop Electron app via stdin/stdout JSON messages
- * First attempts to connect via named pipe (if app is running), falls back to launching app
  */
 
 const { spawn } = require('child_process');
+const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
-const net = require('net');
+
+const DESKTOP_APP = process.env.SOTERIOS_APP_PATH || 'soterios://';
 
 function log(...args) {
   console.error('[Soterios Native Host]', new Date().toISOString(), ...args);
@@ -23,126 +24,67 @@ function send(msg) {
   process.stdout.write(buf);
 }
 
-// Persistent stream parser to avoid listener accumulation
-let messageBuffer = Buffer.alloc(0);
-let messageResolver = null;
-
-function readMessage() {
-  return new Promise((resolve, reject) => {
-    messageResolver = { resolve, reject };
-    tryParseBuffer();
+function readMessages() {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    terminal: false
   });
-}
 
-function tryParseBuffer() {
-  if (!messageResolver) return;
+  let buffer = Buffer.alloc(0);
 
-  while (messageBuffer.length >= 4) {
-    const len = messageBuffer.readUInt32LE(0);
-    if (messageBuffer.length < 4 + len) break;
+  process.stdin.on('data', chunk => {
+    buffer = Buffer.concat([buffer, chunk]);
 
-    const msgBuf = messageBuffer.subarray(4, 4 + len);
-    messageBuffer = messageBuffer.subarray(4 + len);
+    while (buffer.length >= 4) {
+      const len = buffer.readUInt32LE(0);
+      if (buffer.length < 4 + len) break;
 
-    try {
-      const msg = JSON.parse(msgBuf.toString('utf8'));
-      messageResolver.resolve(msg);
-      messageResolver = null;
-      return;
-    } catch (e) {
-      messageResolver.reject(new Error(`Failed to parse message: ${e.message}`));
-      messageResolver = null;
-      return;
+      const json = buffer.subarray(4, 4 + len).toString();
+      buffer = buffer.subarray(4 + len);
+
+      try {
+        const msg = JSON.parse(json);
+        handleMessage(msg);
+      } catch (e) {
+        log('Parse error:', e.message);
+      }
     }
-  }
-}
-
-// Set up persistent stdin listener once
-process.stdin.on('data', (chunk) => {
-  messageBuffer = Buffer.concat([messageBuffer, chunk]);
-  tryParseBuffer();
-});
-
-process.stdin.on('error', (err) => {
-  if (messageResolver) {
-    messageResolver.reject(err);
-    messageResolver = null;
-  }
-});
-
-process.stdin.on('end', () => {
-  if (messageResolver) {
-    messageResolver.reject(new Error('Stream ended'));
-    messageResolver = null;
-  }
-});
-
-let desktopClient = null;
-let desktopProc = null;
-
-async function connectToDesktopApp() {
-  const pipeName = process.platform === 'win32' ? '\\\\.\\pipe\\soterios-credential-safety' : '/tmp/soterios-credential-safety.sock';
-  
-  return new Promise((resolve, reject) => {
-    const client = net.createConnection(pipeName, () => {
-      log('Connected to desktop app via named pipe');
-      resolve(client);
-    });
-    
-    client.on('error', (err) => {
-      log('Named pipe connection failed:', err.message);
-      reject(err);
-    });
   });
 }
+
+let desktopProc = null;
+const pending = new Map();
+let msgId = 0;
 
 function launchDesktopApp() {
   if (desktopProc) return Promise.resolve();
 
   return new Promise((resolve, reject) => {
-    const appPath = process.env.DESKTOP_APP || 'soterios://';
-    
-    // Check if it's a protocol URL or an executable path
-    const isProtocolUrl = appPath.startsWith('soterios://') || appPath.startsWith('http://') || appPath.startsWith('https://');
-
-    if (isProtocolUrl) {
-      // Launch using OS-appropriate protocol handler
-      const isWin = process.platform === 'win32';
-      const args = isWin ? ['/c', 'start', '', appPath] : ['open', appPath];
-      const cmd = isWin ? 'cmd' : (process.platform === 'darwin' ? 'open' : 'xdg-open');
-      const options = { shell: false, detached: true };
-
-      desktopProc = spawn(cmd, args, options);
-      desktopProc.unref();
-
-      desktopProc.on('error', e => {
-        log('Desktop app launch error:', e.message);
-        desktopProc = null;
-      });
-
-      setTimeout(resolve, 1500);
-    } else {
-      // Launch as executable path
-      const resolvedPath = path.resolve(appPath);
-      if (!fs.existsSync(resolvedPath)) {
-        return reject(new Error('Desktop app not found at: ' + resolvedPath));
-      }
-
-      const isWin = process.platform === 'win32';
-      const args = isWin ? ['/c', 'start', '""', resolvedPath] : [resolvedPath];
-      const cmd = isWin ? 'cmd' : resolvedPath;
-      const options = { shell: false, detached: true };
-
-      desktopProc = spawn(cmd, args, options);
-      desktopProc.unref();
-
-      desktopProc.on('error', e => {
-        log('Desktop app launch error:', e.message);
-        desktopProc = null;
-      });
-
-      setTimeout(resolve, 1500);
+    const appPath = process.env.DESKTOP_APP;
+    if (!appPath) {
+      return reject(new Error('DESKTOP_APP environment variable not set'));
     }
+
+    // Resolve and validate path - prevent command injection
+    const resolvedPath = path.resolve(appPath);
+    if (!fs.existsSync(resolvedPath)) {
+      return reject(new Error('Desktop app not found at: ' + resolvedPath));
+    }
+
+    const isWin = process.platform === 'win32';
+    const args = isWin ? ['/c', 'start', '""', resolvedPath] : [resolvedPath];
+    const cmd = isWin ? 'cmd' : resolvedPath;
+    const options = { shell: false, detached: true };
+
+    desktopProc = spawn(cmd, args, options);
+    desktopProc.unref();
+
+    desktopProc.on('error', e => {
+      log('Desktop app launch error:', e.message);
+      desktopProc = null;
+    });
+
+    setTimeout(resolve, 1500);
   });
 }
 
@@ -151,20 +93,8 @@ async function handleMessage(msg) {
 
   switch (msg.type) {
     case 'CREDENTIAL_LEAK': {
-      // Try to connect via named pipe first
-      try {
-        if (!desktopClient) {
-          desktopClient = await connectToDesktopApp();
-        }
-        if (desktopClient) {
-          desktopClient.write(JSON.stringify({ type: 'CREDENTIAL_LEAK', ...msg.payload }) + '\n');
-        }
-        send({ type: 'LEAK_NOTIFIED', ok: true, original: msg });
-      } catch (pipeErr) {
-        log('Pipe connection failed, launching desktop app:', pipeErr.message);
-        await launchDesktopApp();
-        send({ type: 'LEAK_NOTIFIED', ok: true, original: msg });
-      }
+      await launchDesktopApp();
+      send({ type: 'LEAK_NOTIFIED', ok: true, original: msg });
       break;
     }
     case 'PING': {
@@ -182,29 +112,6 @@ async function handleMessage(msg) {
   }
 }
 
-async function main() {
-  log('Starting native messaging host');
-
-  // Try to connect to desktop app on startup
-  try {
-    desktopClient = await connectToDesktopApp();
-  } catch (e) {
-    log('Desktop app not running on startup, will launch when needed');
-  }
-
-  while (true) {
-    try {
-      const msg = await readMessage();
-      await handleMessage(msg);
-    } catch (e) {
-      if (e.message.includes('Stream ended') || e.message.includes('Unexpected end of JSON')) {
-        break;
-      }
-      log('Error processing message:', e.message);
-    }
-  }
-}
-
 process.on('uncaughtException', e => {
   log('Uncaught:', e);
   send({ type: 'ERROR', error: e.message });
@@ -214,7 +121,5 @@ process.on('unhandledRejection', e => {
   log('Unhandled rejection:', e);
 });
 
-main().catch(e => {
-  log('Fatal:', e);
-  process.exit(1);
-});
+log('Starting native messaging host');
+readMessages();

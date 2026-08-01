@@ -6,27 +6,6 @@
 let soteriosIcon = null;
 let passwordFields = new Map();
 let observer = null;
-let currentSettings = { showIcon: true, autoCheck: false };
-
-// Load settings from storage
-function loadSettings() {
-  chrome.storage.sync.get(['showIcon', 'autoCheck'], (result) => {
-    currentSettings.showIcon = result.showIcon !== false;
-    currentSettings.autoCheck = result.autoCheck === true;
-  });
-}
-
-// Listen for settings updates
-chrome.storage.onChanged.addListener((changes, namespace) => {
-  if (namespace === 'sync') {
-    if (changes.showIcon !== undefined) {
-      currentSettings.showIcon = changes.showIcon.newValue !== false;
-    }
-    if (changes.autoCheck !== undefined) {
-      currentSettings.autoCheck = changes.autoCheck.newValue === true;
-    }
-  }
-});
 
 function createIcon() {
   const icon = document.createElement('img');
@@ -103,9 +82,6 @@ function removeResult(input) {
 
 function addIconToField(input) {
   if (input.dataset.soteriosId) return;
-  
-  // Check showIcon setting before adding icon
-  if (!currentSettings.showIcon) return;
 
   const id = `soterios-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   input.dataset.soteriosId = id;
@@ -118,45 +94,7 @@ function addIconToField(input) {
   const updatePos = () => positionIcon(icon, input);
   window.addEventListener('scroll', updatePos, true);
   window.addEventListener('resize', updatePos);
-
-  // Store handler references for cleanup
-  icon._soteriosHandlers = { updatePos, scroll: true, resize: true };
-
-  const cleanup = () => {
-    if (icon._soteriosHandlers) {
-      if (icon._soteriosHandlers.scroll) {
-        window.removeEventListener('scroll', icon._soteriosHandlers.updatePos, true);
-      }
-      if (icon._soteriosHandlers.resize) {
-        window.removeEventListener('resize', icon._soteriosHandlers.updatePos);
-      }
-      if (icon._soteriosHandlers.autoCheckHandler) {
-        input.removeEventListener('input', icon._soteriosHandlers.autoCheckHandler);
-      }
-    }
-    icon.remove();
-    passwordFields.delete(input);
-    delete input.dataset.soteriosId;
-  };
-
-  input.addEventListener('blur', () => setTimeout(cleanup, 200), { once: true });
-
-  // Add autoCheck listener if enabled
-  if (currentSettings.autoCheck) {
-    const autoCheckHandler = async () => {
-      const password = input.value;
-      if (password && password.length >= 8) {
-        try {
-          const result = await chrome.runtime.sendMessage({ type: 'CHECK_PASSWORD', password });
-          showResult(input, result);
-        } catch (err) {
-          console.error('[Soterios] Auto-check failed:', err);
-        }
-      }
-    };
-    input.addEventListener('input', autoCheckHandler);
-    icon._soteriosHandlers.autoCheckHandler = autoCheckHandler;
-  }
+  input.addEventListener('blur', () => setTimeout(() => icon.remove(), 200), { once: true });
 
   passwordFields.set(input, icon);
 }
@@ -172,7 +110,6 @@ function init() {
     return;
   }
 
-  loadSettings();
   scanForPasswordFields();
 
   observer = new MutationObserver(mutations => {
@@ -196,22 +133,7 @@ if (typeof window !== 'undefined') {
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'SETTINGS_UPDATED') {
     if (!msg.settings.showIcon) {
-      // Properly clean up all icons and their listeners
-      passwordFields.forEach((icon, input) => {
-        if (icon._soteriosHandlers) {
-          if (icon._soteriosHandlers.scroll) {
-            window.removeEventListener('scroll', icon._soteriosHandlers.updatePos, true);
-          }
-          if (icon._soteriosHandlers.resize) {
-            window.removeEventListener('resize', icon._soteriosHandlers.updatePos);
-          }
-          if (icon._soteriosHandlers.autoCheckHandler) {
-            input.removeEventListener('input', icon._soteriosHandlers.autoCheckHandler);
-          }
-        }
-        icon.remove();
-        delete input.dataset.soteriosId;
-      });
+      passwordFields.forEach((icon, input) => icon.remove());
       passwordFields.clear();
     } else {
       scanForPasswordFields();

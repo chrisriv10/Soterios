@@ -351,6 +351,54 @@ function register(mainWindow, {
     return result.data;
   });
 
+  // -- Browser Extension Credential Leak Notification --
+  ipcMain.handle('credential-leak:notify', async (_event, payload) => {
+    if (!payload?.password) return { ok: false, error: 'Missing password' };
+    const sha = crypto.createHash('sha1').update(payload.password).digest('hex').toUpperCase();
+    const alert = {
+      level: 'danger',
+      source: 'Browser Extension',
+      title: 'Credential Leak Detected',
+      message: `Password found in ${payload.count} breach${payload.count > 1 ? 'es' : ''} via browser extension`,
+      detail: `SHA-1 prefix: ${sha.slice(0, 5)}... | Breaches: ${payload.count}`,
+      timestamp: new Date().toISOString(),
+      metadata: { source: 'browser-extension', hashPrefix: sha.slice(0, 5), count: payload.count }
+    };
+    db.addAlert(alert);
+    if (eventBus) eventBus.emit('alert:new', alert);
+    return { ok: true };
+  });
+
+  // -- Browser Extension Native Host Installation --
+  ipcMain.handle('browserExtension:installNativeHost', async () => {
+    if (process.platform !== 'win32') {
+      return { ok: false, error: 'Native host install only supported on Windows' };
+    }
+    const { execSync } = require('child_process');
+    const extDir = path.join(__dirname, '..', '..', 'browser-extension');
+    const manifestPath = path.join(extDir, 'native-host-manifest.json');
+    const batPath = path.join(extDir, 'native-host.bat');
+    const jsPath = path.join(extDir, 'native-host.js');
+    if (!fs.existsSync(manifestPath) || !fs.existsSync(batPath) || !fs.existsSync(jsPath)) {
+      return { ok: false, error: 'Extension files not found. Reinstall Soterios.' };
+    }
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    const extId = process.env.SOTERIOS_EXT_ID || 'YOUR_EXTENSION_ID_HERE';
+    manifest.allowed_origins = [manifest.allowed_origins[0].replace('<EXTENSION_ID>', extId)];
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    const regPath = `HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${manifest.name}`;
+    const regCmd = `reg add "${regPath}" /ve /t REG_SZ /d "${manifestPath.replace(/\\/g, '\\\\')}" /f`;
+    try {
+      execSync(regCmd, { stdio: 'ignore' });
+      const regPathEdge = `HKCU\\Software\\Microsoft\\Edge\\NativeMessagingHosts\\${manifest.name}`;
+      const regCmdEdge = `reg add "${regPathEdge}" /ve /t REG_SZ /d "${manifestPath.replace(/\\/g, '\\\\')}" /f`;
+      try { execSync(regCmdEdge, { stdio: 'ignore' }); } catch (_) {}
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e.message || String(e) };
+    }
+  });
+
   // -- Dialogs & Shell --
   ipcMain.handle('dialog:pickFolder', async () => {
     const result = await dialog.showOpenDialog(mainWindow || BrowserWindow.getFocusedWindow(), {

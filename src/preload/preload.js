@@ -47,5 +47,8 @@ contextBridge.exposeInMainWorld('soterios', {
     setAllowlist: (allowlist) => ipcRenderer.invoke('lockdown:setAllowlist', allowlist),
     addToAllowlist: (type, value) => ipcRenderer.invoke('lockdown:addToAllowlist', type, value),
     removeFromAllowlist: (type, value) => ipcRenderer.invoke('lockdown:removeFromAllowlist', type, value)
+  },
+  browserExtension: {
+    installNativeHost: () => ipcRenderer.invoke('browserExtension:installNativeHost')
   }
 });

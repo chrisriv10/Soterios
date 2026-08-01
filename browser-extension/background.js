@@ -1,7 +1,5 @@
-chrome.runtime.onInstalled.addListener((details) => {
-  if (details.reason === 'install') {
-    chrome.storage.sync.set({ externalLookupsEnabled: true });
-  }
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.storage.sync.set({ externalLookupsEnabled: true });
 });
 
 // Handle CHECK_PASSWORD from content script
@@ -9,14 +7,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'CHECK_PASSWORD' && msg.password) {
     checkPassword(msg.password).then(sendResponse);
     return true; // async response
-  }
-  if (msg.type === 'CHECK_NATIVE_HOST') {
-    // Check if native host is connected
-    const connected = nativePort !== null;
-    sendResponse({ 
-      connected, 
-      error: connected ? null : 'Native host not installed or desktop app not running' 
-    });
   }
 });
 
