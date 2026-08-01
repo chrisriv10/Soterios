@@ -109,7 +109,8 @@ function register(mainWindow, {
       try {
         return featureFlags.setFlag(db, key, value);
       } catch (_) {
-        throw new Error(`Unknown feature flag: ${key}`);
+        // Unknown feature flag; fall through to raw DB write
+        return db.setSetting(key, value);
       }
     }
     return db.setSetting(key, value);

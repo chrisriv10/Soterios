@@ -22,16 +22,19 @@ const DEFAULT_FLAGS = Object.freeze({
 const FLAG_KEYS = Object.freeze(Object.keys(DEFAULT_FLAGS));
 
 function isKnownFlag(key) {
-  return Object.prototype.hasOwnProperty.call(DEFAULT_FLAGS, key);
+  const logicalKey = key.startsWith('feature.') ? key.substring(8) : key;
+  return Object.prototype.hasOwnProperty.call(DEFAULT_FLAGS, logicalKey);
 }
 
 function getFlag(db, key, fallback) {
   if (!isKnownFlag(key)) {
     throw new Error(`Unknown feature flag: ${key}`);
   }
-  const raw = db.getSetting(key, undefined);
+  const dbKey = key.startsWith('feature.') ? key : `feature.${key}`;
+  const raw = db.getSetting(dbKey, undefined);
   if (raw === undefined || raw === null) {
-    return typeof fallback === 'undefined' ? DEFAULT_FLAGS[key] : fallback;
+    const logicalKey = key.startsWith('feature.') ? key.substring(8) : key;
+    return typeof fallback === 'undefined' ? DEFAULT_FLAGS[logicalKey] : fallback;
   }
   return Boolean(raw);
 }
@@ -41,7 +44,8 @@ function setFlag(db, key, value) {
     throw new Error(`Unknown feature flag: ${key}`);
   }
   const boolValue = Boolean(value);
-  db.setSetting(key, boolValue);
+  const dbKey = key.startsWith('feature.') ? key : `feature.${key}`;
+  db.setSetting(dbKey, boolValue);
   return boolValue;
 }
 
