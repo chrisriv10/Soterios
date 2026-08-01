@@ -3,6 +3,10 @@ dist/
 build/win-unpacked/
 .tmp-user-data/
 *.log
+app.log
+debug.log
+electron.log
+electron_test.log
 .env
 .env.*
 assets/clamav/*.pdb
