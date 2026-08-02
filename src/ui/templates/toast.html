@@ -1,0 +1,75 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  html, body { margin:0; padding:0; background:transparent; overflow:hidden; user-select:none; }
+  .toast {
+    box-sizing: border-box;
+    position: relative;
+    width: {{TOAST_WIDTH}}px;
+    display:flex; flex-direction:column;
+    background: {{THEME_BG}};
+    border: 1px solid {{THEME_BORDER}};
+    border-left: 3px solid {{ACCENT}};
+    border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+    font-family: 'Segoe UI', -apple-system, sans-serif;
+    color: {{THEME_TEXT_MAIN}};
+    cursor: pointer;
+    animation: toastIn 220ms ease-out;
+    overflow: hidden;
+  }
+  .toast.closing { animation: toastOut 200ms ease-in forwards; }
+  @keyframes toastIn { from { transform: translateX(24px); opacity:0; } to { transform: translateX(0); opacity:1; } }
+  @keyframes toastOut { from { transform: translateX(0); opacity:1; } to { transform: translateX(24px); opacity:0; } }
+  .header { flex-shrink:0; position:relative; display:flex; align-items:center; padding:16px 12px 0 14px; }
+  .mark { position:absolute; top:16px; left:12px; height:56px; width:56px; border-radius:8px; }
+  .wordmark { height:56px; width:auto; display:block; opacity:0.97; margin-left:49px; }
+  .wordmark-fallback { font-size:17px; font-weight:600; color:{{THEME_TEXT_MAIN}}; letter-spacing:-0.02em; margin-left:12px; }
+  .header .spacer { flex:1; }
+  .close { flex-shrink:0; color:{{THEME_CLOSE_BTN}}; font-size:16px; line-height:1; padding:2px 4px; align-self:flex-start; margin-top:4px; }
+  .close:hover { color:{{THEME_CLOSE_HOVER}}; }
+  .body-row { flex-shrink:0; display:flex; gap:14px; align-items:flex-start; padding:14px 16px 16px 14px; }
+  .status-circle {
+    flex-shrink:0; width:48px; height:48px; border-radius:50%;
+    border:2px solid {{ACCENT}};
+    display:flex; align-items:center; justify-content:center;
+    background: rgba(255,255,255,0.03);
+  }
+  .status-glyph { width:22px; height:22px; stroke:{{ACCENT}}; }
+  .text { flex:1; min-width:0; padding-top:2px; }
+  .title { font-size:14px; font-weight:700; color:{{THEME_TEXT_MAIN}}; margin-bottom:3px; }
+  .desc { font-size:12px; color:{{THEME_TEXT_MUTED}}; line-height:1.42; word-wrap:break-word; }
+</style></head>
+<body>
+  <div class="toast" id="toast">
+    <div class="header">
+      {{MARK_DATA_URI}}
+      {{WORDMARK_DATA_URI}}
+      <div class="spacer"></div>
+      <div class="close" id="closeBtn">&times;</div>
+    </div>
+    <div class="body-row">
+      <div class="status-circle">
+        <svg class="status-glyph" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{{ICON_PATHS}}</svg>
+      </div>
+      <div class="text">
+        <div class="title">{{TITLE}}</div>
+        <div class="desc">{{BODY}}</div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const toast = document.getElementById('toast');
+    function dismiss() {
+      toast.classList.add('closing');
+      setTimeout(() => { window.close(); }, 200);
+    }
+    document.getElementById('closeBtn').addEventListener('click', (e) => { e.stopPropagation(); dismiss(); });
+    toast.addEventListener('click', () => {
+      if (window.toastApi && window.toastApi.navigateToScanner) {
+        window.toastApi.navigateToScanner();
+      }
+      dismiss();
+    });
+    setTimeout(dismiss, {{LIFETIME_MS}});
+  </script>
+</body></html>

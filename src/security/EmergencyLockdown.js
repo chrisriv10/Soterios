@@ -3,6 +3,10 @@
 const { execFileSync } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(require('child_process').exec);
+const { InvalidInputError, AppError } = require('../utils/errors');
+const { log, ACTIONS } = require('../core/auditLog');
+
+const SAFE_INTERFACE_NAME = /^[^\s'"\\|&;<>]+$/;
 
 /**
  * Emergency Lockdown Service
@@ -102,7 +106,7 @@ class EmergencyLockdown {
       }
       return interfaces;
     } catch (err) {
-      throw new Error(`Failed to get network interfaces: ${err.message}`);
+      throw new AppError(`Failed to get network interfaces: ${err.message}`);
     }
   }
 
@@ -110,11 +114,14 @@ class EmergencyLockdown {
    * Disable a network interface
    */
   async disableInterface(interfaceName) {
+    if (!interfaceName || !SAFE_INTERFACE_NAME.test(interfaceName)) {
+      throw new InvalidInputError('Invalid interface name.');
+    }
     try {
       execFileSync('netsh', ['interface', 'set', 'interface', interfaceName, 'admin=disable'], { timeout: 10000 });
       return { success: true, interface: interfaceName };
     } catch (err) {
-      throw new Error(`Failed to disable ${interfaceName}: ${err.message}`);
+      throw new AppError(`Failed to disable ${interfaceName}: ${err.message}`);
     }
   }
 
@@ -122,11 +129,14 @@ class EmergencyLockdown {
    * Enable a network interface
    */
   async enableInterface(interfaceName) {
+    if (!interfaceName || !SAFE_INTERFACE_NAME.test(interfaceName)) {
+      throw new InvalidInputError('Invalid interface name.');
+    }
     try {
       execFileSync('netsh', ['interface', 'set', 'interface', interfaceName, 'admin=enable'], { timeout: 10000 });
       return { success: true, interface: interfaceName };
     } catch (err) {
-      throw new Error(`Failed to enable ${interfaceName}: ${err.message}`);
+      throw new AppError(`Failed to enable ${interfaceName}: ${err.message}`);
     }
   }
 
@@ -178,7 +188,7 @@ class EmergencyLockdown {
         return isNonEssential && isRunning;
       });
     } catch (err) {
-      throw new Error(`Failed to get services: ${err.message}`);
+      throw new AppError(`Failed to get services: ${err.message}`);
     }
   }
 
@@ -190,7 +200,7 @@ class EmergencyLockdown {
       execFileSync('sc', ['stop', serviceName], { timeout: 15000 });
       return { success: true, service: serviceName };
     } catch (err) {
-      throw new Error(`Failed to stop ${serviceName}: ${err.message}`);
+      throw new AppError(`Failed to stop ${serviceName}: ${err.message}`);
     }
   }
 
@@ -202,7 +212,7 @@ class EmergencyLockdown {
       execFileSync('sc', ['start', serviceName], { timeout: 15000 });
       return { success: true, service: serviceName };
     } catch (err) {
-      throw new Error(`Failed to start ${serviceName}: ${err.message}`);
+      throw new AppError(`Failed to start ${serviceName}: ${err.message}`);
     }
   }
 
@@ -222,7 +232,7 @@ class EmergencyLockdown {
       const interfaces = await this.getNetworkInterfaces();
       const services = await this.getNonEssentialServices();
       
-      this.savedNetworkState = interfaces.map(i => ({ name: i.name, state: i.state }));
+      this.savedNetworkState = interfaces.map(i => ({ name: i.name.trim(), state: i.state }));
       this.savedServicesState = services.map(s => ({ name: s.name, state: s.state }));
 
       const results = {
@@ -282,13 +292,15 @@ class EmergencyLockdown {
         'warn'
       );
 
+      log(this.db, ACTIONS.LOCKDOWN_ACTIVATE, results, { success: true }, true);
       return { success: true, results };
     } catch (err) {
       // Reset guard on failure so restore() doesn't receive corrupted state
       this.isLockedDown = false;
       this.savedNetworkState = null;
       this.savedServicesState = null;
-      throw new Error(`Lockdown failed: ${err.message}`);
+      log(this.db, ACTIONS.LOCKDOWN_ACTIVATE, null, { success: false, error: err.message }, true);
+      throw new AppError(`Lockdown failed: ${err.message}`);
     }
   }
 
@@ -374,9 +386,11 @@ class EmergencyLockdown {
         );
       }
 
+      log(this.db, ACTIONS.LOCKDOWN_RESTORE, results, { success: status === 'success', status }, true);
       return { success: status === 'success', results, status };
     } catch (err) {
-      throw new Error(`Restore failed: ${err.message}`);
+      log(this.db, ACTIONS.LOCKDOWN_RESTORE, null, { success: false, error: err.message }, true);
+      throw new AppError(`Restore failed: ${err.message}`);
     }
   }
 

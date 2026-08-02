@@ -2,6 +2,7 @@
 
 const { Worker } = require('worker_threads');
 const path = require('path');
+const logger = require('../utils/logger');
 
 const WORKER_ENTRY = path.join(__dirname, '../scripts/workerEntry.js');
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
@@ -30,13 +31,13 @@ class WorkerManager {
       };
 
       const timer = setTimeout(() => {
-        try { worker.terminate(); } catch (_) {}
+        try { worker.terminate(); } catch (e) { logger.debug('worker terminate on timeout failed', { error: e?.message || String(e) }); }
         finish(reject, new Error('Script timed out'));
       }, timeoutMs);
       if (typeof timer.unref === 'function') timer.unref();
 
       const onAbort = () => {
-        try { worker.terminate(); } catch (_) {}
+        try { worker.terminate(); } catch (e) { logger.debug('worker terminate on abort failed', { error: e?.message || String(e) }); }
         finish(reject, new Error('Task canceled'));
       };
 
@@ -79,7 +80,7 @@ class WorkerManager {
   cancel(taskId) {
     const task = this._tasks.get(taskId);
     if (!task) return false;
-    try { task.worker.terminate(); } catch (_) {}
+    try { task.worker.terminate(); } catch (e) { logger.debug('worker terminate on cancel failed', { error: e?.message || String(e) }); }
     this._tasks.delete(taskId);
     return true;
   }

@@ -160,6 +160,51 @@ class DatabaseService {
       CREATE INDEX IF NOT EXISTS idx_network_stats_recorded_at
       ON network_stats(recorded_at)
     `);
+
+    // User blocklist
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS user_blocklist (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ip TEXT NOT NULL,
+        reason TEXT,
+        added_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_user_blocklist_ip ON user_blocklist(ip)
+    `);
+
+    // User domain blocklist
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS user_domain_blocklist (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        domain TEXT NOT NULL UNIQUE,
+        reason TEXT,
+        added_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Audit log
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        action TEXT NOT NULL,
+        detail TEXT,
+        result TEXT,
+        user_initiated INTEGER DEFAULT 0
+      )
+    `);
+
+    // Scanned files cache for incremental scans
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS scanned_files (
+        path TEXT PRIMARY KEY,
+        last_scanned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        size INTEGER,
+        modified_at TEXT
+      )
+    `);
   }
 
   // --- Scan History API ---
@@ -451,6 +496,125 @@ class DatabaseService {
   pruneNetworkStats(retentionDays = 7) {
     const cutoff = new Date(Date.now() - Number(retentionDays) * 86400 * 1000).toISOString();
     return this.db.prepare('DELETE FROM network_stats WHERE recorded_at < ?').run(cutoff);
+  }
+
+  // --- Alerts API ---
+  getAlerts(options = {}) {
+    const limit = Math.min(500, Number(options.limit) || 50);
+    const unreadOnly = !!options.unreadOnly;
+    let sql = 'SELECT * FROM alerts';
+    if (unreadOnly) sql += ' WHERE is_read = 0';
+    sql += ' ORDER BY timestamp DESC LIMIT ?';
+    return this.db.prepare(sql).all(limit);
+  }
+
+  getAlertCounts() {
+    const total = this.db.prepare('SELECT COUNT(*) AS c FROM alerts').get().c;
+    const unread = this.db.prepare('SELECT COUNT(*) AS c FROM alerts WHERE is_read = 0').get().c;
+    return { total, unread };
+  }
+
+  // --- Audit Log API ---
+  addAuditEntry({ action, detail, result, userInitiated = false }) {
+    const stmt = this.db.prepare(`
+      INSERT INTO audit_log (action, detail, result, user_initiated)
+      VALUES (?, ?, ?, ?)
+    `);
+    return stmt.run(action, detail, result, userInitiated ? 1 : 0);
+  }
+
+  getAuditLog(limit = 100) {
+    return this.db.prepare('SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT ?').all(limit);
+  }
+
+  // --- User Blocklist API ---
+  addUserBlocklistEntry(entry) {
+    const stmt = this.db.prepare(`
+      INSERT INTO user_blocklist (ip, reason) VALUES (@ip, @reason)
+    `);
+    return stmt.run({ ip: entry.ip, reason: entry.reason || null });
+  }
+
+  removeUserBlocklistEntry(id) {
+    return this.db.prepare('DELETE FROM user_blocklist WHERE id = ?').run(id);
+  }
+
+  getUserBlocklist() {
+    return this.db.prepare('SELECT * FROM user_blocklist ORDER BY added_at DESC').all();
+  }
+
+  clearUserBlocklist() {
+    return this.db.prepare('DELETE FROM user_blocklist').run();
+  }
+
+  // --- User Domain Blocklist API ---
+  addUserDomainBlocklistEntry(entry) {
+    const stmt = this.db.prepare(`
+      INSERT INTO user_domain_blocklist (domain, reason) VALUES (@domain, @reason)
+    `);
+    return stmt.run({ domain: entry.domain, reason: entry.reason || null });
+  }
+
+  removeUserDomainBlocklistEntry(id) {
+    return this.db.prepare('DELETE FROM user_domain_blocklist WHERE id = ?').run(id);
+  }
+
+  getUserDomainBlocklist() {
+    return this.db.prepare('SELECT * FROM user_domain_blocklist ORDER BY added_at DESC').all();
+  }
+
+  clearUserDomainBlocklist() {
+    return this.db.prepare('DELETE FROM user_domain_blocklist').run();
+  }
+
+  // --- Settings Export ---
+  exportAllSettings() {
+    const settings = {};
+    const rows = this.db.prepare('SELECT key, value FROM settings').all();
+    for (const row of rows) {
+      try { settings[row.key] = JSON.parse(row.value); }
+      catch (_) { settings[row.key] = row.value; }
+    }
+    return settings;
+  }
+
+  exportQuarantineState() {
+    return this.db.prepare(`
+      SELECT id, original_path, quarantine_path, hash, engine,
+             threat_name, date_quarantined, reason, status
+      FROM quarantine WHERE status = 'quarantined'
+    `).all();
+  }
+
+  // --- Incremental Scan Cache ---
+  recordScannedFile({ path, size, modifiedAt }) {
+    const stmt = this.db.prepare(`
+      INSERT INTO scanned_files (path, size, modified_at)
+      VALUES (@path, @size, @modifiedAt)
+      ON CONFLICT(path) DO UPDATE SET
+        size = excluded.size,
+        modified_at = excluded.modified_at,
+        last_scanned_at = CURRENT_TIMESTAMP
+    `);
+    return stmt.run({ path, size: size || null, modifiedAt: modifiedAt || null });
+  }
+
+  getFilesToSkip(paths) {
+    if (!paths || !paths.length) return new Set();
+    const placeholders = paths.map(() => '?').join(',');
+    const rows = this.db.prepare(`
+      SELECT path, modified_at FROM scanned_files WHERE path IN (${placeholders})
+    `).all(...paths);
+    const skip = new Set();
+    for (const row of rows) {
+      skip.add(row.path);
+    }
+    return skip;
+  }
+
+  pruneScannedFiles(olderThanDays = 30) {
+    const cutoff = new Date(Date.now() - Number(olderThanDays) * 86400 * 1000).toISOString();
+    return this.db.prepare('DELETE FROM scanned_files WHERE last_scanned_at < ?').run(cutoff);
   }
 }
 

@@ -1,18 +1,13 @@
 const logger = require('../utils/logger');
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 const crypto = require('crypto');
 const { clampProgress } = require('../core/scanProgress');
+const { scanReportsDir } = require('./reportExport');
+const { renderTemplate } = require('../utils/templates');
 
 function esc(v) {
-  return String(v ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
-}
-
-function scanReportsDir() {
-  const dir = path.join(os.homedir(), '.soterios', 'scan-reports');
-  fs.mkdirSync(dir, { recursive: true });
-  return dir;
+  return String(v ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;' }[ch]));
 }
 
 function renderScanReportHtml(report) {
@@ -22,23 +17,20 @@ function renderScanReportHtml(report) {
   const errors = report.errors.length
     ? report.errors.map((e) => `<li>${esc(e)}</li>`).join('')
     : '<li>No scan errors recorded.</li>';
-  return `<!doctype html>
-<html><head><meta charset="utf-8"><title>Soterios Scan Report</title>
-<style>body{font-family:Segoe UI,Arial,sans-serif;margin:32px;color:#15202b;background:#fff}.muted{color:#667085}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0}.card{border:1px solid #d7dde5;border-radius:6px;padding:14px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{text-align:left;border-bottom:1px solid #e6eaf0;padding:8px;font-size:13px}.danger{color:#b42318}.ok{color:#027a48}.warn{color:#b54708}pre{white-space:pre-wrap;word-break:break-word}</style>
-</head><body>
-<h1>Soterios Scan Report</h1>
-<div class="muted">Generated ${esc(new Date(report.completedAt).toLocaleString())}</div>
-<div class="grid">
-  <div class="card"><div class="muted">Type</div><h2>${esc(report.scanType)}</h2></div>
-  <div class="card"><div class="muted">Status</div><h2 class="${report.status === 'completed' ? 'ok' : 'warn'}">${esc(report.status)}</h2></div>
-  <div class="card"><div class="muted">Files Scanned</div><h2>${esc(report.filesScanned)}</h2></div>
-  <div class="card"><div class="muted">Threats</div><h2 class="${report.threatsFound ? 'danger' : 'ok'}">${esc(report.threatsFound)}</h2></div>
-</div>
-<h2>Targets</h2><pre>${esc(report.targetPaths.join('\n'))}</pre>
-<h2>Threat Details</h2>
-<table><thead><tr><th>Name</th><th>Path</th></tr></thead><tbody>${threatRows}</tbody></table>
-<h2>Errors and Notes</h2><ul>${errors}</ul>
-</body></html>`;
+  const statusClass = report.status === 'completed' ? 'ok' : 'warn';
+  const threatsClass = report.threatsFound ? 'danger' : 'ok';
+  return renderTemplate(path.join(__dirname, '..', 'ui', 'templates', 'scan-report.html'), {
+    GENERATED_AT: new Date(report.completedAt).toLocaleString(),
+    SCAN_TYPE: esc(report.scanType),
+    STATUS_CLASS: statusClass,
+    STATUS: esc(report.status),
+    FILES_SCANNED: esc(report.filesScanned),
+    THREATS_CLASS: threatsClass,
+    THREATS_FOUND: esc(report.threatsFound),
+    TARGETS: esc(report.targetPaths.join('\n')),
+    THREAT_ROWS: threatRows,
+    ERRORS: errors,
+  });
 }
 
 class ScanEngine {
@@ -140,7 +132,10 @@ class ScanEngine {
     let totalThreatsFound = 0;
     const threats = [];
     const errors = [];
-    let wasCanceled = false;
+
+    // Build skip set for incremental scans (full scans only).
+    const isFullScan = scanType === 'full';
+    const skipPaths = isFullScan ? this.db.getFilesToSkip(paths) : new Set();
 
     // Progress must never move backward within a single scan. Previously,
     // each target path computed its own fresh, lower "basePct" and emitted
@@ -160,6 +155,7 @@ class ScanEngine {
       this.eventBus.emit('scan:progress', { scanType, pct, message, ...extra });
     };
 
+    let wasCanceled = false;
     try {
       emitProgress(5, startMessage);
 
@@ -170,6 +166,13 @@ class ScanEngine {
         }
 
         const targetPath = paths[i];
+
+        // Incremental scan: skip paths that haven't changed since last scan.
+        if (skipPaths.has(targetPath)) {
+          emitProgress(basePct, 'Skipping unchanged: ' + targetPath + '...', { filesScanned: cumulativeFiles });
+          continue;
+        }
+
         const basePct = Math.round((i / paths.length) * 80 + 10);
         emitProgress(basePct, 'Scanning ' + targetPath + '...');
 
@@ -205,6 +208,18 @@ class ScanEngine {
           if (Array.isArray(result.threats)) threats.push(...result.threats);
           if (result.note) {
             scanState.notes.push(result.note);
+          }
+
+          // Record scanned path for incremental scans.
+          try {
+            const stat = fs.statSync(targetPath);
+            this.db.recordScannedFile({
+              path: targetPath,
+              size: stat.size,
+              modifiedAt: stat.mtime.toISOString()
+            });
+          } catch (_) {
+            // Non-fatal: record best-effort for incremental cache.
           }
 
           // Quarantine each newly-found threat from this iteration
@@ -272,7 +287,9 @@ class ScanEngine {
         if (shouldPersistReport && this.db.getSetting('feature.scanHistory', true)) {
           this.db.logScan(scanType, totalFilesScanned, totalThreatsFound, durationMs);
         }
-      } catch (_) {}
+      } catch (err) {
+        logger.debug('Scan history log failed', { error: err.message });
+      }
       scanState.currentScan = null;
       scanState.abortController = null;
       if (wasCanceled) {

@@ -60,9 +60,9 @@ module.exports = async function listStartupItems() {
           if (fs.existsSync(dir)) {
             fs.readdirSync(dir).forEach(file => items.push({ name: file, path: path.join(dir, file), scope, source: 'startup-folder' }));
           }
-        } catch (_) { }
+        } catch (e) { console.debug?.('listStartupItems folder read failed', { dir, error: e?.message || String(e) }); }
       });
-    } catch (_) { }
+    } catch (e) { console.debug?.('listStartupItems outer failed', { error: e?.message || String(e) }); }
 
     // Fallback: wmic if nothing found
     if (items.length === 0) {

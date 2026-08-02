@@ -114,5 +114,11 @@
         "repo": "Soterios"
       }
     ]
+  },
+  "allowScripts": {
+    "better-sqlite3@13.0.2": true,
+    "canvas@3.2.3": true,
+    "electron-winstaller@5.4.0": true,
+    "unrs-resolver@1.12.2": true
   }
 }

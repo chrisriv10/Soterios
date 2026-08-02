@@ -36,7 +36,7 @@ module.exports = async function largeFilesReport(args = {}, onProgress) {
       if (onProgress && scannedCount % REPORT_EVERY === 0) {
         onProgress({ label: 'Scanning files', count: scannedCount });
       }
-      try { const stat = fs.statSync(fullPath); if (stat.size >= minBytes) files.push({ path: fullPath, sizeMB: +(stat.size / 1024 / 1024).toFixed(1), modifiedAt: stat.mtime.toISOString() }); } catch (err) {}
+      try { const stat = fs.statSync(fullPath); if (stat.size >= minBytes) files.push({ path: fullPath, sizeMB: +(stat.size / 1024 / 1024).toFixed(1), modifiedAt: stat.mtime.toISOString() }); } catch (err) { console.debug?.('largeFilesReport stat failed', { path: fullPath, error: err?.message || String(err) }); }
     }
   }
   walk(root, 0);

@@ -707,7 +707,7 @@ window.Pages['network'] = {
     let status = { recentHits: [] };
     try {
       status = await window.api.invoke('network-alerts:status') || status;
-    } catch (_) {}
+    } catch (e) { console.debug?.('Network alerts status fetch failed', { error: e?.message || String(e) }); }
     const hits = status.recentHits || [];
 
     const hitsKey = hits.map(h => h.key).join('|');

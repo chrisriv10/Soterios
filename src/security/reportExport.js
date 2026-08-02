@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { NotFoundError } = require('../utils/errors');
 
 function scanReportsDir() {
   const dir = path.join(os.homedir(), '.soterios', 'scan-reports');
@@ -136,7 +137,7 @@ function safeWriteFileSync(destPath, data, encoding) {
 
 async function generatePdfFromHtml(htmlPath) {
   if (!htmlPath || !fs.existsSync(htmlPath)) {
-    throw new Error('Report HTML file not found.');
+    throw new NotFoundError('Report HTML file not found.');
   }
 
   const { BrowserWindow } = require('electron');

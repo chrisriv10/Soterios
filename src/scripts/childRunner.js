@@ -19,7 +19,7 @@
     // progress) simply ignore the extra argument, which is safe in JS.
     const onProgress = (payload) => {
       if (process && process.send) {
-        try { process.send({ type: 'progress', payload }); } catch (_) {}
+        try { process.send({ type: 'progress', payload }); } catch (e) { console.debug?.('childRunner progress send failed', { error: e?.message || String(e) }); }
       }
     };
 

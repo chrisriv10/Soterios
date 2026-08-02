@@ -52,6 +52,7 @@ function registerIpcHandlers(mainWindow, services) {
     startNetworkStatsTimer: services.startNetworkStatsTimer,
     stopNetworkStatsTimer: services.stopNetworkStatsTimer,
     emergencyLockdown: services.emergencyLockdown,
+    isActuallyAdmin: services.isActuallyAdmin,
   };
 
   registerScan(mainWindow, servicesForScan);

@@ -2,6 +2,8 @@ const { ipcMain, dialog, BrowserWindow } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { requestText } = require('../ipc/_shared');
+const { validateArgs } = require('./validate');
+const { InvalidInputError, AppError } = require('../../utils/errors');
 const {
   isPathInScanReportsDir,
 } = require('../../security/reportExport');
@@ -32,10 +34,16 @@ function register(mainWindow, { db, firewallManager }) {
   });
 
   ipcMain.handle('firewall:createRule', async (_event, spec) => {
+    validateArgs([
+      { name: 'spec', type: 'object', required: true },
+    ], [spec]);
     return firewallManager.createRule(spec);
   });
 
   ipcMain.handle('firewall:deleteRule', async (_event, name) => {
+    validateArgs([
+      { name: 'name', type: 'string', required: true, max: 256 },
+    ], [name]);
     return firewallManager.deleteRule(name);
   });
 
@@ -44,7 +52,7 @@ function register(mainWindow, { db, firewallManager }) {
   });
 
   ipcMain.handle('firewall:setProfileEnabled', async (_event, { profile, enabled }) => {
-    if (!isValidFirewallProfile(profile)) throw new Error(`Invalid firewall profile: ${profile}`);
+    if (!isValidFirewallProfile(profile)) throw new InvalidInputError(`Invalid firewall profile: ${profile}`);
     return firewallManager.setProfileEnabled(profile, !!enabled);
   });
 
@@ -74,14 +82,14 @@ function register(mainWindow, { db, firewallManager }) {
     const stat = await fs.promises.stat(filePath);
     const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
     if (stat.size > MAX_IMPORT_BYTES) {
-      throw new Error('Import file is too large (limit 2 MB).');
+      throw new InvalidInputError('Import file is too large (limit 2 MB).');
     }
     let payload;
     try {
       const raw = await fs.promises.readFile(filePath, 'utf8');
       payload = JSON.parse(raw);
     } catch (e) {
-      throw new Error('Could not parse import file as JSON.');
+      throw new InvalidInputError('Could not parse import file as JSON.');
     }
     const summary = await firewallManager.importRules(payload, { onConflict });
     return { ...summary, path: filePath };
@@ -94,7 +102,7 @@ function register(mainWindow, { db, firewallManager }) {
   });
 
   ipcMain.handle('firewall:trustConnection', (_event, ip) => {
-    if (!ip || !isValidIp(ip)) throw new Error('Invalid address.');
+    if (!ip || !isValidIp(ip)) throw new InvalidInputError('Invalid address.');
     const current = db.getSetting(TRUSTED_IPS_KEY, []);
     if (!current.includes(ip)) current.push(ip);
     db.setSetting(TRUSTED_IPS_KEY, current);
@@ -109,9 +117,9 @@ function register(mainWindow, { db, firewallManager }) {
 
   // -- WHOIS lookup (no API key required) --
   ipcMain.handle('network:whois', async (_event, ip) => {
-    if (!ip || !isValidIp(ip)) throw new Error('Invalid address.');
+    if (!ip || !isValidIp(ip)) throw new InvalidInputError('Invalid address.');
     const res = await requestText(`https://ipwho.is/${encodeURIComponent(ip)}`);
-    if (res.statusCode !== 200) throw new Error(`WHOIS lookup failed (${res.statusCode}).`);
+    if (res.statusCode !== 200) throw new AppError(`WHOIS lookup failed (${res.statusCode}).`);
     const data = JSON.parse(res.body || '{}');
     if (data.success === false) return { found: false };
     return {

@@ -41,7 +41,7 @@ function parseUninstallCommand(uninstallString) {
     if (/\.(exe|msi|bat|cmd)$/i.test(candidate)) break;
     try {
       if (fs.existsSync(candidate)) break;
-    } catch (_) {}
+    } catch (e) { console.debug?.('uninstallLaunchUtils existsSync failed', { candidate, error: e?.message || String(e) }); }
   }
 
   return {

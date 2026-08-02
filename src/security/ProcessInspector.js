@@ -5,6 +5,7 @@ const util = require('util');
 const execPromise = util.promisify(exec);
 const { suspiciousPathSignals, getSignatureInfo } = require('./windowsChecks');
 const logger = require('../utils/logger');
+const { log, ACTIONS } = require('../core/auditLog');
 
 // PIDs that should never be terminated regardless of what they resolve to.
 const PROTECTED_PIDS = new Set([0, 4]);
@@ -50,6 +51,7 @@ function isSystemDirectoryPath(filePath) {
 // ps-list is ESM-only so we must use dynamic import()
 class ProcessInspector {
   constructor(options = {}) {
+    this._db = options.db || null;
     this._getSignatureInfo = options.getSignatureInfo || getSignatureInfo;
   }
 
@@ -169,9 +171,11 @@ class ProcessInspector {
       // terminating arbitrary third-party processes, including ones that
       // don't respond to a plain terminate signal.
       await execPromise(`taskkill /PID ${numericPid} /F`, { timeout: 10000 });
+      log(this._db, ACTIONS.PROCESS_KILL, { pid: numericPid, name: target.name }, { success: true });
       return { success: true };
     } catch (err) {
       const message = (err.stderr && err.stderr.trim()) || err.message || 'Unknown error ending process.';
+      log(this._db, ACTIONS.PROCESS_KILL, { pid: numericPid, name: target.name }, { success: false, error: message });
       return { success: false, error: message };
     }
   }

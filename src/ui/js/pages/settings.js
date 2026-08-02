@@ -47,7 +47,7 @@ window.Pages.settings = {
             if (catalog && catalog['settings.languageInDevelopment']) {
               languageInDevMap[code] = catalog['settings.languageInDevelopment'];
             }
-          } catch (_) {}
+          } catch (e) { console.debug?.('Settings i18n catalog fetch failed', { code, error: e?.message || String(e) }); }
         }
       }));
       localeOptions = locales.map(({ code, label }) => {

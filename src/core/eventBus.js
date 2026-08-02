@@ -5,6 +5,14 @@ class EventBus {
     this._listeners.get(eventName).add(handler);
     return () => this.off(eventName, handler);
   }
+  once(eventName, handler) {
+    const wrapper = (payload) => {
+      this.off(eventName, wrapper);
+      return handler(payload);
+    };
+    this.on(eventName, wrapper);
+    return () => this.off(eventName, wrapper);
+  }
   off(eventName, handler) {
     if (!this._listeners.has(eventName)) return;
     this._listeners.get(eventName).delete(handler);

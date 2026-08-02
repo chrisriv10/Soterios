@@ -46,7 +46,9 @@ class BlocklistService {
         if (cached && cached.raw_data) {
           this.parseAndStore(source.name, cached.raw_data, source.version);
         }
-      } catch (_) {}
+      } catch (e) {
+        logger.debug('Blocklist cache parse failed', { source: source?.name, error: e?.message || String(e) });
+      }
     }
   }
 
@@ -173,15 +175,24 @@ class BlocklistService {
   }
 
   async fetchBlocklist(source) {
+    const MAX_BLOCKLIST_BODY_BYTES = 10 * 1024 * 1024; // 10 MB
     return new Promise((resolve, reject) => {
       const req = https.get(source.url, {
         headers: { 'User-Agent': 'Soterios' }
       }, (res) => {
         let data = '';
-        res.on('data', chunk => { data += chunk; });
+        res.on('data', chunk => {
+          data += chunk;
+          if (Buffer.byteLength(data) > MAX_BLOCKLIST_BODY_BYTES) {
+            req.destroy(new Error('Blocklist response exceeds size limit'));
+            reject(new Error('Blocklist response too large'));
+          }
+        });
         res.on('end', () => {
-          if (res.statusCode === 200) resolve(data);
-          else reject(new Error(`HTTP ${res.statusCode}`));
+          if (!req.destroyed) {
+            if (res.statusCode === 200) resolve(data);
+            else reject(new Error(`HTTP ${res.statusCode}`));
+          }
         });
       });
 

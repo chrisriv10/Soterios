@@ -2,6 +2,7 @@
 
 const { Tray, BrowserWindow, nativeImage, screen } = require('electron');
 const path = require('path');
+const logger = require('../utils/logger');
 
 const TRAY_WIDTH = 320;
 const TRAY_HEIGHT = 220;
@@ -46,7 +47,9 @@ function initTrayDashboard({ app, mainWindow, getSummary }) {
     try {
       const summary = await getSummary();
       trayWindow.webContents.send('tray:summary', summary);
-    } catch (_) {}
+    } catch (e) {
+      logger.debug?.('refreshTrayWindow failed', { error: e?.message || String(e) });
+    }
   };
 
   tray = new Tray(createTrayIcon());

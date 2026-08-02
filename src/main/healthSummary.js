@@ -1,5 +1,7 @@
 'use strict';
 
+const logger = require('../utils/logger');
+
 /**
  * Shared health summary for tray popup and IPC handlers.
  * @param {import('../core/database')} db
@@ -27,7 +29,9 @@ async function getTrayHealthSummary(db, toolRegistry) {
     // Check if RTP is enabled in settings
     const rtpEnabled = db.getSetting('feature.realtimeProtection', false);
     rtp = { enabled: rtpEnabled };
-  } catch (_) {}
+  } catch (e) {
+    logger.debug('RTP status check failed', { error: e?.message || String(e) });
+  }
 
   // Firewall status
   let firewall = { active: false };
@@ -37,7 +41,9 @@ async function getTrayHealthSummary(db, toolRegistry) {
     const execFileAsync = promisify(execFile);
     const { stdout } = await execFileAsync('netsh', ['advfirewall', 'show', 'allprofiles', 'state'], { timeout: 5000 });
     firewall = { active: /ON|ENABLED/i.test(stdout) };
-  } catch (_) {}
+  } catch (e) {
+    logger.debug('Firewall status check failed', { error: e?.message || String(e) });
+  }
 
   // Network traffic history (last 24h)
   let network = { rxKBs: 0, txKBs: 0, history: [], rx: [], tx: [] };
@@ -53,7 +59,9 @@ async function getTrayHealthSummary(db, toolRegistry) {
       network.tx = recent.map(h => (h.tx_bytes || 0) / 1024);
       network.history = recent.map(h => (h.tx_bytes + h.rx_bytes) / 1024);
     }
-  } catch (_) {}
+  } catch (e) {
+    logger.debug('Network history lookup failed', { error: e?.message || String(e) });
+  }
 
   // Last scan info
   let lastScan = null;

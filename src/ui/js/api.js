@@ -12,7 +12,7 @@ const Api = {
     if (window.AppState) window.AppState.currentTheme = finalTheme;
     try {
       if (window.localStorage) window.localStorage.setItem('soterios.theme', finalTheme);
-    } catch (_) {}
+    } catch (e) { console.debug?.('Theme localStorage write failed', { error: e?.message || String(e) }); }
   },
   async initializeTheme() {
     if (window.AppState && window.AppState.currentTheme) {
@@ -25,14 +25,14 @@ const Api = {
         this.applyTheme(theme);
         return;
       }
-    } catch (_) {}
+    } catch (e) { console.debug?.('Theme db read failed', { error: e?.message || String(e) }); }
     try {
       const storedTheme = window.localStorage && window.localStorage.getItem('soterios.theme');
       if (storedTheme) {
         this.applyTheme(storedTheme);
         return;
       }
-    } catch (_) {}
+    } catch (e) { console.debug?.('Theme localStorage read failed', { error: e?.message || String(e) }); }
     this.applyTheme('dark');
   },
   async initializeLanguage() {
@@ -49,10 +49,10 @@ const Api = {
       // re-write it, and the transient failure fallback below must never
       // clobber it.
       await window.I18n.setLocale(locale || 'en', { persist: !saved });
-    } catch (_) {
+    } catch (e) {
       try {
         await window.I18n.setLocale('en', { persist: false });
-      } catch (_) {}
+      } catch (e2) { console.debug?.('I18n fallback locale failed', { error: e2?.message || String(e2) }); }
     }
   },
   async listTools() { return window.soterios.tools.list(); },
@@ -181,7 +181,7 @@ const Api = {
         await window.api.invoke('db:setSetting', 'ui.theme', u.theme || 'dark');
         try {
           if (window.localStorage) window.localStorage.setItem('soterios.theme', u.theme || 'dark');
-        } catch (_) {}
+        } catch (e) { console.debug?.('Settings theme localStorage write failed', { error: e?.message || String(e) }); }
       }
       if (Object.prototype.hasOwnProperty.call(u, 'language') && window.I18n) {
         await window.I18n.setLocale(u.language || 'en');

@@ -23,7 +23,9 @@ const state = {
 function setState(patch) {
   Object.assign(state, patch);
   for (const listener of setState._listeners) {
-    try { listener({ ...state }); } catch (_) {}
+    try { listener({ ...state }); } catch (err) {
+      logger.debug('Updater listener threw', { error: err.message });
+    }
   }
 }
 setState._listeners = new Set();

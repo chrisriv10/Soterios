@@ -1,11 +1,13 @@
 const { ipcMain } = require('electron');
 const i18n = require('../../i18n');
 const logger = require('../../utils/logger');
+const { validateArgs } = require('./validate');
+const fs = require('fs');
 
 const DEFAULT_SCHEDULE = {
   enabled: false,
   scanType: 'quick',
-  customPath: null,
+  customPaths: [],
   intervalHours: 24,
   lastRun: null,
 };
@@ -56,6 +58,9 @@ function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputation
   });
 
   ipcMain.handle('scan:custom', async (_event, targetPaths) => {
+    validateArgs([
+      { name: 'targetPaths', type: 'array', required: true, minItems: 1, maxItems: 50 }
+    ], [targetPaths]);
     return scanEngine.runCustomScan(targetPaths);
   });
 
@@ -69,6 +74,11 @@ function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputation
 
   // -- Reputation --
   ipcMain.handle('reputation:addHash', async (_event, hash, verdict, note) => {
+    validateArgs([
+      { name: 'hash', type: 'string', required: true, pattern: /^[a-f0-9]{64}$/i },
+      { name: 'verdict', type: 'string', required: true, allowed: ['safe', 'malicious'] },
+      { name: 'note', type: 'string', required: false },
+    ], [hash, verdict, note]);
     return reputationEngine.addHash(hash, verdict, note);
   });
 
@@ -101,7 +111,19 @@ function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputation
   ipcMain.handle('schedule:get', () => loadScheduleConfig());
 
   ipcMain.handle('schedule:set', (_event, config) => {
+    validateArgs([
+      { name: 'config', type: 'object', required: false },
+      { name: 'config.enabled', type: 'boolean', required: false },
+      { name: 'config.scanType', type: 'string', required: false, allowed: ['quick', 'full', 'custom'] },
+      { name: 'config.intervalHours', type: 'number', required: false, min: 1, max: 720 },
+      { name: 'config.customPaths', type: 'array', required: false },
+    ], [config]);
     return saveScheduleConfig(config || {});
+  });
+
+  ipcMain.handle('schedule:getCustomPaths', () => {
+    const config = loadScheduleConfig();
+    return config.customPaths || [];
   });
 
   // Runs in the main process, independent of any open renderer page, so the
@@ -111,7 +133,7 @@ function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputation
     if (scheduledScanRunning) return;
     const config = loadScheduleConfig();
     if (!config.enabled) return;
-    if (config.scanType === 'custom' && !config.customPath) return;
+    if (config.scanType === 'custom' && (!config.customPaths || !config.customPaths.length)) return;
 
     const engineStatus = scanEngine.getStatus();
     if (engineStatus && (engineStatus.isScanning || engineStatus.isFolderWatchScanning)) return; // don't collide with any scan
@@ -126,7 +148,11 @@ function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputation
       if (config.scanType === 'full') {
         await scanEngine.runFullScan();
       } else if (config.scanType === 'custom') {
-        await scanEngine.runCustomScan([config.customPath]);
+        for (const customPath of config.customPaths) {
+          if (fs.existsSync(customPath)) {
+            await scanEngine.runCustomScan([customPath]);
+          }
+        }
       } else {
         await scanEngine.runQuickScan();
       }

@@ -1,7 +1,9 @@
 const logger = require('../utils/logger');
+const { InvalidInputError } = require('../utils/errors');
 const { execFile } = require('child_process');
 const util = require('util');
 const execFilePromise = util.promisify(execFile);
+const { log, ACTIONS } = require('../core/auditLog');
 
 // Prefix used for every rule this app creates. Destructive/mutating actions
 // (delete, enable/disable) are restricted to rules carrying this prefix so a
@@ -37,6 +39,9 @@ function friendlyFirewallError(e, fallback) {
 }
 
 class FirewallManager {
+  constructor(db) {
+    this._db = db;
+  }
   async runPowerShell(command) {
     const { stdout } = await execFilePromise('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], {
       timeout: 15000,
@@ -153,10 +158,13 @@ class FirewallManager {
   // omitted is left unrestricted by Windows Firewall's defaults.
   async createRule(spec) {
     const { name, direction, action, protocol, remoteAddress, remotePort, localPort, program } = spec || {};
-    if (!name || !direction || !action) throw new Error('name, direction, and action are required.');
-    if (remoteAddress && !isValidIp(remoteAddress)) throw new Error('Invalid remote address.');
+    if (!name || !direction || !action) throw new InvalidInputError('name, direction, and action are required.');
+    if (remoteAddress && !isValidIp(remoteAddress)) throw new InvalidInputError('Invalid remote address.');
 
     const fullName = name.startsWith(APP_RULE_PREFIX) ? name : `${APP_RULE_PREFIX}${name}`;
+    if (fullName.includes("'")) {
+      throw new InvalidInputError('Rule name contains an invalid character.');
+    }
     const parts = [
       `-DisplayName '${psEscape(fullName)}'`,
       `-Direction ${direction === 'Inbound' ? 'Inbound' : 'Outbound'}`,
@@ -167,14 +175,14 @@ class FirewallManager {
     if (remotePort != null && remotePort !== '') {
       const port = Number(remotePort);
       if (!Number.isInteger(port) || port < 1 || port > 65535) {
-        throw new Error(`Invalid remotePort: ${remotePort}`);
+        throw new InvalidInputError(`Invalid remotePort: ${remotePort}`);
       }
       parts.push(`-RemotePort ${port}`);
     }
     if (localPort != null && localPort !== '') {
       const port = Number(localPort);
       if (!Number.isInteger(port) || port < 1 || port > 65535) {
-        throw new Error(`Invalid localPort: ${localPort}`);
+        throw new InvalidInputError(`Invalid localPort: ${localPort}`);
       }
       parts.push(`-LocalPort ${port}`);
     }
@@ -185,30 +193,33 @@ class FirewallManager {
     } catch (e) {
       throw friendlyFirewallError(e, 'Could not create the firewall rule.');
     }
+    log(this._db, ACTIONS.FIREWALL_RULE_CREATE, { name: fullName, spec }, { success: true });
     return { success: true, name: fullName };
   }
 
   async deleteRule(name) {
     if (!name || !name.startsWith(APP_RULE_PREFIX)) {
-      throw new Error('Only rules created in this app can be deleted here.');
+      throw new InvalidInputError('Only rules created in this app can be deleted here.');
     }
     try {
       await this.runPowerShell(`Remove-NetFirewallRule -DisplayName '${psEscape(name)}'`);
     } catch (e) {
       throw friendlyFirewallError(e, 'Could not delete that rule.');
     }
+    log(this._db, ACTIONS.FIREWALL_RULE_DELETE, { name }, { success: true });
     return { success: true };
   }
 
   async setRuleEnabled(name, enabled) {
     if (!name || !name.startsWith(APP_RULE_PREFIX)) {
-      throw new Error('Only rules created in this app can be toggled here.');
+      throw new InvalidInputError('Only rules created in this app can be toggled here.');
     }
     try {
       await this.runPowerShell(`Set-NetFirewallRule -DisplayName '${psEscape(name)}' -Enabled ${enabled ? 'True' : 'False'}`);
     } catch (e) {
       throw friendlyFirewallError(e, 'Could not update that rule.');
     }
+    log(this._db, ACTIONS.FIREWALL_RULE_TOGGLE, { name, enabled }, { success: true });
     return { success: true };
   }
 
@@ -219,7 +230,7 @@ class FirewallManager {
   async setProfileEnabled(profile, enabled) {
     const VALID_PROFILES = ['Domain', 'Private', 'Public'];
     if (!VALID_PROFILES.includes(profile)) {
-      throw new Error('Invalid firewall profile.');
+      throw new InvalidInputError('Invalid firewall profile.');
     }
     try {
       await this.runPowerShell(`Set-NetFirewallProfile -Name ${profile} -Enabled ${enabled ? 'True' : 'False'}`);
@@ -258,11 +269,11 @@ class FirewallManager {
     if (/^any$/i.test(raw)) return undefined;
     // Fail closed: do not silently drop ranges/lists/keywords (e.g. "80,443", "1-65535", "RPC").
     if (!/^\d{1,5}$/.test(raw)) {
-      throw new Error(`Unsupported port expression (import supports a single numeric port only): ${value}`);
+      throw new InvalidInputError(`Unsupported port expression (import supports a single numeric port only): ${value}`);
     }
     const n = Number(raw);
     if (!Number.isInteger(n) || n < 1 || n > 65535) {
-      throw new Error(`Invalid port value: ${value}`);
+      throw new InvalidInputError(`Invalid port value: ${value}`);
     }
     return n;
   }
@@ -272,7 +283,7 @@ class FirewallManager {
     const protocol = String(value).trim();
     const allowed = new Set(['TCP', 'UDP', 'ICMPv4', 'ICMPv6', 'Any']);
     if (!allowed.has(protocol)) {
-      throw new Error(`Unsupported protocol: ${protocol}`);
+      throw new InvalidInputError(`Unsupported protocol: ${protocol}`);
     }
     return protocol === 'Any' ? undefined : protocol;
   }
@@ -284,34 +295,38 @@ class FirewallManager {
     // Multi-value / range exports are not re-imported as address filters.
     if (raw.includes(',')) return undefined;
     if (!isValidIp(raw)) {
-      throw new Error(`Invalid remote address: ${raw}`);
+      throw new InvalidInputError(`Invalid remote address: ${raw}`);
     }
     return raw;
   }
 
   _validateImportRule(rule, index) {
     if (!rule || typeof rule !== 'object' || Array.isArray(rule)) {
-      throw new Error(`Rule at index ${index} is invalid.`);
+      throw new InvalidInputError(`Rule at index ${index} is invalid.`);
     }
     if (!rule.name || !rule.direction || !rule.action) {
-      throw new Error(`Rule at index ${index} is missing name, direction, or action.`);
+      throw new InvalidInputError(`Rule at index ${index} is missing name, direction, or action.`);
     }
     if (String(rule.name).length > 256) {
-      throw new Error(`Rule at index ${index} has a name that is too long.`);
+      throw new InvalidInputError(`Rule at index ${index} has a name that is too long.`);
     }
     const dir = String(rule.direction);
     const action = String(rule.action);
     if (dir !== 'Inbound' && dir !== 'Outbound') {
-      throw new Error(`Rule "${rule.name}" has an invalid direction.`);
+      throw new InvalidInputError(`Rule "${rule.name}" has an invalid direction.`);
     }
     if (action !== 'Allow' && action !== 'Block') {
-      throw new Error(`Rule "${rule.name}" has an invalid action.`);
+      throw new InvalidInputError(`Rule "${rule.name}" has an invalid action.`);
     }
     // Throw early for bad address/port/protocol shapes before shelling out.
-    this._normalizeRemoteAddress(rule.remoteAddress);
-    this._normalizePort(rule.remotePort);
-    this._normalizePort(rule.localPort);
-    this._normalizeProtocol(rule.protocol);
+    try {
+      this._normalizeRemoteAddress(rule.remoteAddress);
+      this._normalizePort(rule.remotePort);
+      this._normalizePort(rule.localPort);
+      this._normalizeProtocol(rule.protocol);
+    } catch (normErr) {
+      throw new InvalidInputError(`Rule at index ${index} has invalid fields: ${normErr.message}`);
+    }
   }
 
   async importRules(payload, options = {}) {
@@ -320,17 +335,17 @@ class FirewallManager {
       : 'skip';
 
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-      throw new Error('Import payload must be a JSON object.');
+      throw new InvalidInputError('Import payload must be a JSON object.');
     }
     if (payload.version != null && Number(payload.version) !== 1) {
-      throw new Error(`Unsupported firewall export version: ${payload.version}`);
+      throw new InvalidInputError(`Unsupported firewall export version: ${payload.version}`);
     }
     const rules = Array.isArray(payload.rules) ? payload.rules : null;
     if (!rules) {
-      throw new Error('Import file must include a "rules" array.');
+      throw new InvalidInputError('Import file must include a "rules" array.');
     }
     if (rules.length > 500) {
-      throw new Error('Import file contains too many rules (limit 500).');
+      throw new InvalidInputError('Import file contains too many rules (limit 500).');
     }
 
     const existing = await this.listRules();
@@ -383,7 +398,7 @@ class FirewallManager {
           });
         } catch (createErr) {
           if (mode === 'overwrite') {
-            throw new Error(
+            throw new InvalidInputError(
               `Rule "${name}" was removed during overwrite but could not be recreated: ${createErr.message || createErr}`
             );
           }
