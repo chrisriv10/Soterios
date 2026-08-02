@@ -1,5 +1,16 @@
+/**
+ * Cleanup and maintenance tool definitions.
+ *
+ * Provides script listing and execution capabilities.
+ */
+
 const { loadRegistry, runScript } = require('../scripts/scriptRunner');
 
+/**
+ * Summarize a script result into a compact object.
+ * @param {Object} result
+ * @returns {Object}
+ */
 function summarizeScriptResult(result) {
   if (!result || typeof result !== 'object') return {};
   if (Array.isArray(result.removed) || Array.isArray(result.skipped)) {

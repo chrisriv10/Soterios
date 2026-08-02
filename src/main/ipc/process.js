@@ -1,6 +1,12 @@
 const { ipcMain } = require('electron');
 const { validateArgs } = require('./validate');
 
+/**
+ * Register process-related IPC handlers.
+ * @param {BrowserWindow} mainWindow
+ * @param {Object} services
+ * @param {object} services.processInspector
+ */
 function register(mainWindow, { processInspector }) {
   ipcMain.handle('process:list', async () => {
     return processInspector.getProcesses();

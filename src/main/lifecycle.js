@@ -1,5 +1,16 @@
 'use strict';
 
+/**
+ * Application lifecycle and startup orchestration.
+ *
+ * Handles:
+ * - Startup locale/theme detection
+ * - IPC handler registration
+ * - Service wiring
+ * - Tray initialization
+ * - Updater initialization
+ * - Background engines (maintenance scheduler, folder watcher, etc.)
+ */
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -16,12 +27,24 @@ const { initTrayDashboard } = require('./trayDashboard');
 const { registerIpcHandlers } = require('./ipcHandlers');
 const { MaintenanceScheduler } = require('./maintenanceScheduler');
 const windowManager = require('./windowManager');
+const { InvalidInputError } = require('../utils/errors');
 
+/**
+ * Log a line through the centralized logger.
+ * @param {string} level
+ * @param {string} message
+ * @param {Object} [meta]
+ */
 function logLine(level, message, meta) {
   const fn = logger[level] || logger.info;
   fn(message, meta || undefined);
 }
 
+/**
+ * Peek the saved UI language from the database without opening a full service.
+ * @param {string} dbPath
+ * @returns {string}
+ */
 function peekUiLanguage(dbPath) {
   try {
     if (!fs.existsSync(dbPath)) return 'en';
@@ -39,6 +62,11 @@ function peekUiLanguage(dbPath) {
   }
 }
 
+/**
+ * Peek the saved UI theme from the database without opening a full service.
+ * @param {string} dbPath
+ * @returns {string}
+ */
 function peekUiTheme(dbPath) {
   try {
     if (!fs.existsSync(dbPath)) return 'dark';
@@ -56,6 +84,12 @@ function peekUiTheme(dbPath) {
   }
 }
 
+/**
+ * Resolve the effective locale from DB or fallback.
+ * @param {object} dbRef
+ * @param {string} startupLocale
+ * @returns {string}
+ */
 function getLocale(dbRef, startupLocale) {
   if (dbRef) {
     try {
@@ -68,10 +102,68 @@ function getLocale(dbRef, startupLocale) {
   return startupLocale;
 }
 
+/**
+ * Translate a key using the current startup locale.
+ * @param {string} key
+ * @param {Object} [vars]
+ * @returns {string}
+ */
 function t(key, vars) {
   return i18n.t(key, getLocale(windowManager.dbRef, windowManager.startupLocale), vars);
 }
 
+/**
+ * Validate a startup persistence item.
+ * Rejects path separators, control characters, and traversal attempts.
+ * @param {Object} item
+ * @param {string} item.source
+ * @param {string} item.value
+ * @throws {InvalidInputError}
+ */
+function validateStartupItem(item) {
+  if (!item || typeof item !== 'object') {
+    throw new InvalidInputError('Invalid startup item');
+  }
+  if (!item.source || !['registry', 'startup-folder'].includes(item.source)) {
+    throw new InvalidInputError('Invalid startup item source');
+  }
+  if (!item.name || typeof item.name !== 'string' || item.name.length === 0 || item.name.length > 256) {
+    throw new InvalidInputError('Invalid startup item name');
+  }
+  // Reject path separators and control characters in registry value names / filenames.
+  if (/[\\/:*?"<>|\x00-\x1f]/.test(item.name)) {
+    throw new InvalidInputError('Startup item name contains invalid characters');
+  }
+  if (item.source === 'registry') {
+    if (!item.command || typeof item.command !== 'string') {
+      throw new InvalidInputError('Invalid registry command');
+    }
+  } else if (item.source === 'startup-folder') {
+    if (!item.path || typeof item.path !== 'string') {
+      throw new InvalidInputError('Invalid startup item path');
+    }
+    const appData = process.env.APPDATA || '';
+    const programData = process.env.ProgramData || '';
+    const userStartup = path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
+    const allStartup = path.join(programData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
+    const expectedDir = item.scope === 'user' ? userStartup : allStartup;
+    const resolved = path.resolve(item.path);
+    if (resolved !== expectedDir && !resolved.startsWith(expectedDir + path.sep)) {
+      throw new InvalidInputError('Startup item path is outside the allowed directory');
+    }
+  }
+}
+
+/**
+ * Wire core services from the service registry.
+ * @param {object} db
+ * @param {object} eventBus
+ * @param {Object} [options]
+ * @param {string} [options.userDataPath]
+ * @param {string} [options.locale]
+ * @param {Function} [options.notify]
+ * @returns {Object}
+ */
 function wireServices(db, eventBus, options = {}) {
   const notify = options.notify || (() => {});
   const locale = options.locale || 'en';
@@ -83,6 +175,12 @@ function wireServices(db, eventBus, options = {}) {
   return services;
 }
 
+/**
+ * Initialize auto-updater and broadcast status to windows.
+ * @param {Object} services
+ * @param {Object} [options]
+ * @param {Function} [options.notify]
+ */
 function initUpdater(services, options = {}) {
   const notify = options.notify || (() => {});
   updater.initAutoUpdater({ onNotify: (title, body, level) => notify(title, body, level) });
@@ -93,6 +191,15 @@ function initUpdater(services, options = {}) {
   });
 }
 
+/**
+ * Initialize the system tray dashboard.
+ * @param {Object} services
+ * @param {Object} [options]
+ * @param {BrowserWindow} [options.mainWindow]
+ * @param {Electron.App} [options.app]
+ * @param {object} [options.db]
+ * @param {Function} [options.notify]
+ */
 function initTray(services, options = {}) {
   const { mainWindow, app } = options;
   const db = options.db;
@@ -111,6 +218,11 @@ function initTray(services, options = {}) {
   }
 }
 
+/**
+ * Register event-bus listeners for scan progress and completion.
+ * @param {Object} services
+ * @param {object} db
+ */
 function registerProgressListeners(services, db) {
   const { mainWindow, eventBus } = services;
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -193,6 +305,11 @@ function registerProgressListeners(services, db) {
   });
 }
 
+/**
+ * Start background engines: ClamAV, realtime watcher, folder watcher, etc.
+ * @param {Object} services
+ * @param {object} db
+ */
 async function startBackgroundEngines(services, db) {
   const { clamEngine, realtimeWatcher, folderWatcher, networkAlertMonitor, blocklistService, networkMonitor } = services;
 
@@ -237,6 +354,16 @@ async function startBackgroundEngines(services, db) {
   }
 }
 
+/**
+ * Start the application: wire services, initialize engines, create windows.
+ * @param {object} db
+ * @param {object} eventBus
+ * @param {Object} [options]
+ * @param {string} [options.userDataPath]
+ * @param {string} [options.startupLocale]
+ * @param {Function} [options.notify]
+ * @returns {Promise<Object>} Started services.
+ */
 async function start(db, eventBus, options = {}) {
   const { userDataPath, notify } = options;
   const locale = getLocale(db, options.startupLocale || 'en');
@@ -411,6 +538,7 @@ async function start(db, eventBus, options = {}) {
   // Enable/disable a startup item
   ipcMain.handle('startup:toggle', async (_event, item, enable) => {
     try {
+      validateStartupItem(item);
       if (item.source === 'registry') {
         const hive = item.scope === 'HKLM' ? 'HKLM' : 'HKCU';
         const key = `${hive}\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`;
@@ -481,17 +609,6 @@ async function start(db, eventBus, options = {}) {
   // blocking startup.
   (async () => {
     await startBackgroundEngines(services, db);
-
-    const pruneTimer = setInterval(() => {
-      try {
-        db.pruneNetworkStats(7);
-        db.pruneMaintenanceRuns(100);
-      } catch (err) {
-        logLine('debug', 'Prune maintenance task failed', { error: err.message });
-      }
-    }, 60 * 60_000);
-    if (typeof pruneTimer.unref === 'function') pruneTimer.unref();
-    services._pruneTimer = pruneTimer;
   })();
 
   return services;

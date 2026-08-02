@@ -1,5 +1,12 @@
 'use strict';
 
+/**
+ * Electron window creation, toast management, and screenshot capture.
+ *
+ * Maintains module-level references to the main window, splash window,
+ * and lifecycle refs so other main-process modules can access them
+ * without tight coupling.
+ */
 const { app, BrowserWindow, ipcMain, dialog, Menu, nativeImage, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -20,7 +27,18 @@ let t = (key, vars) => i18n.t(key, i18n.normalizeLocale(startupLocale), vars);
 let mainWindow = null;
 let splashWindow = null;
 let splashTimeoutId = null;
+let lifecycleRefs = null;
 
+/**
+ * Initialize module-level dependencies injected by lifecycle.
+ * @param {Object} deps
+ * @param {object} deps.dbRef
+ * @param {object} deps.featureFlags
+ * @param {string} deps.currentUiTheme
+ * @param {string} deps.startupLocale
+ * @param {Function} deps.logLine
+ * @param {Function} deps.t
+ */
 function init({ dbRef: db, featureFlags: ff, currentUiTheme: theme, startupLocale: locale, logLine: ll, t: translator }) {
   dbRef = db;
   featureFlags = ff;
@@ -46,10 +64,20 @@ const TOAST_ICONS = {
   threat: '<circle cx="12" cy="12" r="5"/><path d="M12 2v3"/><path d="M12 19v3"/><path d="M2 12h3"/><path d="M19 12h3"/><path d="M5.6 5.6l2.1 2.1"/><path d="M18.3 18.3l-2.1-2.1"/><path d="M18.3 5.6l-2.1 2.1"/><path d="M5.6 18.3l2.1-2.1"/><circle cx="10" cy="10" r=".5"/><circle cx="14.5" cy="10.5" r=".5"/><circle cx="13" cy="14.5" r=".5"/><circle cx="9.5" cy="14" r=".5"/>'
 };
 
+/**
+ * Escape a string for safe insertion into toast HTML.
+ * @param {string} v
+ * @returns {string}
+ */
 function escToastHtml(v) {
   return String(v ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;' }[ch]));
 }
 
+/**
+ * Read a PNG asset and return a base64 data URI.
+ * @param {string} relativePath - Path relative to the project root.
+ * @returns {string}
+ */
 function readPngAsDataUri(relativePath) {
   try {
     const fullPath = path.join(__dirname, '../../', relativePath);
@@ -60,16 +88,33 @@ function readPngAsDataUri(relativePath) {
   }
 }
 
+/**
+ * Get the toast mark icon as a base64 data URI.
+ * @returns {string}
+ */
 function getToastMarkDataUri() {
   if (!getToastMarkDataUri._cache) getToastMarkDataUri._cache = readPngAsDataUri('assets/toast-icon.png');
   return getToastMarkDataUri._cache;
 }
 
+/**
+ * Get the toast wordmark icon as a base64 data URI.
+ * @returns {string}
+ */
 function getToastWordmarkDataUri() {
   if (!getToastWordmarkDataUri._cache) getToastWordmarkDataUri._cache = readPngAsDataUri('assets/toast-wordmark.png');
   return getToastWordmarkDataUri._cache;
 }
 
+/**
+ * Render the toast HTML payload.
+ * @param {string} title
+ * @param {string} body
+ * @param {'info'|'success'|'warn'|'danger'} [level]
+ * @param {string} themeName
+ * @param {string} [iconOverride]
+ * @returns {string}
+ */
 function toastHtml(title, body, level, themeName, iconOverride = null) {
   const theme = TOAST_THEMES[themeName] || TOAST_THEMES.dark;
   const accent = theme.accents[level] || theme.accents.info;
@@ -94,9 +139,9 @@ function toastHtml(title, body, level, themeName, iconOverride = null) {
   });
 }
 
-// Newest toast lands closest to the bottom margin; older ones already on
-// screen get pushed upward above it, same stacking behavior as Windows'
-// own Action Center toasts.
+/**
+ * Reposition active toast windows in a bottom-right stack.
+ */
 function repositionToasts() {
   const display = screen.getPrimaryDisplay();
   const { x, y, width, height } = display.workArea;
@@ -110,6 +155,13 @@ function repositionToasts() {
   }
 }
 
+/**
+ * Show a toast notification.
+ * @param {string} title
+ * @param {string} body
+ * @param {'info'|'success'|'warn'|'danger'} [level]
+ * @param {string} [iconOverride]
+ */
 function showNotification(title, body, level = 'info', iconOverride = null) {
   if (dbRef && featureFlags && !featureFlags.getFlag(dbRef, 'notificationsEnabled', true)) return;
   try {
@@ -157,6 +209,11 @@ function showNotification(title, body, level = 'info', iconOverride = null) {
   }
 }
 
+/**
+ * Create the splash window shown during app startup.
+ * @param {string} [themeName]
+ * @returns {BrowserWindow}
+ */
 function createSplashWindow(themeName = 'dark') {
   const theme = resolveThemeName(themeName);
   splashWindow = new BrowserWindow({
@@ -186,12 +243,24 @@ function createSplashWindow(themeName = 'dark') {
   return splashWindow;
 }
 
+/**
+ * Send progress data to the splash window.
+ * @param {BrowserWindow} splashWindow
+ * @param {number} pct
+ * @param {string} label
+ */
 function sendSplashProgress(splashWindow, pct, label) {
   if (splashWindow && !splashWindow.isDestroyed()) {
     splashWindow.webContents.send('splash:progress', { pct, label });
   }
 }
 
+/**
+ * Dismiss the splash window and show the main window.
+ * @param {BrowserWindow} [mainWindowArg]
+ * @param {BrowserWindow} [splashWindowArg]
+ * @param {number} [splashTimeoutIdArg]
+ */
 function dismissSplash(mainWindowArg, splashWindowArg, splashTimeoutIdArg) {
   const timeout = splashTimeoutIdArg ?? splashTimeoutId;
   if (timeout) {
@@ -207,11 +276,19 @@ function dismissSplash(mainWindowArg, splashWindowArg, splashTimeoutIdArg) {
   }
 }
 
+/**
+ * Create the app icon from the packaged asset.
+ * @returns {Electron.NativeImage}
+ */
 function createIcon() {
   const iconPath = path.join(__dirname, '../../assets/icon.ico');
   return nativeImage.createFromPath(iconPath);
 }
 
+/**
+ * Create the main application window.
+ * @returns {{ mainWindow: BrowserWindow, splashTimeoutId: number }}
+ */
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -255,6 +332,10 @@ function createWindow() {
   return { mainWindow, splashTimeoutId };
 }
 
+/**
+ * Build and apply the application menu.
+ * @param {BrowserWindow} mainWindow
+ */
 function buildAppMenu(mainWindow) {
   const isMac = process.platform === 'darwin';
   const aboutHandler = () => {
@@ -291,10 +372,18 @@ function buildAppMenu(mainWindow) {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
+/**
+ * Check whether the app was launched in screenshot capture mode.
+ * @returns {boolean}
+ */
 function isScreenshotCaptureMode() {
   return process.argv.includes('--screenshot-capture');
 }
 
+/**
+ * Parse screenshot capture config from argv.
+ * @returns {Object|null}
+ */
 function getScreenshotConfig() {
   if (!isScreenshotCaptureMode()) return null;
   const pageArg = process.argv.find((arg) => arg.startsWith('--screenshot-page='));
@@ -306,11 +395,23 @@ function getScreenshotConfig() {
   return { page, outPath, runUninstaller: process.argv.includes('--screenshot-run-uninstaller') };
 }
 
+/**
+ * Log a fatal screenshot capture config error and exit.
+ * @param {string} message
+ */
 function failScreenshotCapture(message) {
     logLine('error', message);
   app.exit(1);
 }
 
+/**
+ * Schedule a screenshot capture after page load.
+ * @param {BrowserWindow} win
+ * @param {Object} config
+ * @param {string} config.page
+ * @param {string} config.outPath
+ * @param {boolean} [config.runUninstaller]
+ */
 function scheduleScreenshotCapture(win, config) {
   win.webContents.once('did-finish-load', () => {
     dismissSplash(win, null, null);
@@ -398,4 +499,18 @@ module.exports = {
   TOAST_GAP,
   TOAST_LIFETIME_MS,
   TOAST_ICONS,
+  get dbRef() { return dbRef; },
+  get featureFlags() { return featureFlags; },
+  get currentUiTheme() { return currentUiTheme; },
+  get startupLocale() { return startupLocale; },
+  get mainWindow() { return mainWindow; },
+  get splashWindow() { return splashWindow; },
+  get splashTimeoutId() { return splashTimeoutId; },
+  get lifecycleRefs() { return lifecycleRefs; },
+  set mainWindow(value) { mainWindow = value; },
+  set splashWindow(value) { splashWindow = value; },
+  set splashTimeoutId(value) { splashTimeoutId = value; },
+  set lifecycleRefs(value) { lifecycleRefs = value; },
+  get dbRefDirect() { return dbRef; },
+  get mainWindowDirect() { return mainWindow; },
 };

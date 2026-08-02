@@ -25,6 +25,10 @@ const { requestText } = require('./_shared');
 const featureFlags = require('../../core/featureFlags');
 const { AppError, PermissionError } = require('../../utils/errors');
 
+/**
+ * Delete a file if it exists, swallowing non-critical filesystem errors.
+ * @param {string} filePath
+ */
 function deleteFileIfSafe(filePath) {
   if (!filePath) return;
   try {
@@ -34,6 +38,25 @@ function deleteFileIfSafe(filePath) {
   }
 }
 
+/**
+ * Register system-related IPC handlers.
+ * @param {BrowserWindow} mainWindow
+ * @param {Object} services
+ * @param {object} services.db
+ * @param {object} services.eventBus
+ * @param {object} services.toolRegistry
+ * @param {object} services.maintenanceScheduler
+ * @param {object} services.firewallManager
+ * @param {object} services.networkMonitor
+ * @param {object} services.geoLocationService
+ * @param {object} services.systemAudit
+ * @param {object} services.realtimeWatcher
+ * @param {object} services.folderWatcher
+ * @param {Function} services.startNetworkStatsTimer
+ * @param {Function} services.stopNetworkStatsTimer
+ * @param {object} services.emergencyLockdown
+ * @param {boolean} services.isActuallyAdmin
+ */
 function register(mainWindow, {
   db,
   eventBus,
@@ -146,7 +169,7 @@ function register(mainWindow, {
       { name: 'detail', type: 'string', required: false },
       { name: 'result', type: 'string', required: false },
       { name: 'userInitiated', type: 'boolean', required: false },
-    ], [entry]);
+    ], entry);
     return db.addAuditEntry({
       action: entry.action,
       detail: entry.detail || null,
@@ -159,7 +182,7 @@ function register(mainWindow, {
     validateArgs([
       { name: 'limit', type: 'number', required: false, min: 1, max: 500 },
       { name: 'unreadOnly', type: 'boolean', required: false },
-    ], [options]);
+    ], options);
     return db.getAlerts(options);
   });
 

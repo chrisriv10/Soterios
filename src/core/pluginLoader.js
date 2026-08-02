@@ -4,6 +4,10 @@ const toolRegistry = require('./toolRegistry');
 
 const TOOLS_DIR = path.join(__dirname, '..', 'tools');
 
+/**
+ * Load all tool modules from the tools directory into the tool registry.
+ * @returns {Promise<void>}
+ */
 async function loadAll() {
   const files = fs
     .readdirSync(TOOLS_DIR)

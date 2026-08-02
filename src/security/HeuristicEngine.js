@@ -9,6 +9,11 @@ const EXECUTABLE_EXTENSIONS = new Set([
   '.exe', '.dll', '.scr', '.com', '.bat', '.cmd', '.msi', '.ps1', '.vbs', '.js', '.jar', '.sys'
 ]);
 
+/**
+ * Calculate Shannon entropy for a buffer.
+ * @param {Buffer} buffer
+ * @returns {number}
+ */
 function shannonEntropy(buffer) {
   if (!buffer.length) return 0;
   const freq = new Uint32Array(256);
@@ -23,9 +28,20 @@ function shannonEntropy(buffer) {
   return entropy;
 }
 
+/**
+ * lightweight file heuristic analysis.
+ *
+ * Produces a suspicion score and signal list based on file size,
+ * entropy, path, and extension heuristics.
+ */
 class HeuristicEngine {
   constructor() {}
 
+  /**
+   * Analyze a file and return a heuristic suspicion score.
+   * @param {string} filePath
+   * @returns {Promise<{score:number, signals:Array}>}
+   */
   async analyze(filePath) {
     const empty = { score: 0, signals: [] };
     if (!filePath || typeof filePath !== 'string') return empty;

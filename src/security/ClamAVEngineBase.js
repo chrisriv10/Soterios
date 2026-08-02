@@ -3,7 +3,19 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
+/**
+ * Base implementation for the ClamAV antivirus engine.
+ *
+ * Discovers `clamscan`/`freshclam` binaries, manages definition updates,
+ * and runs file/directory scans. Platform-specific subclasses override
+ * binary names and spawn options.
+ */
 class ClamAVEngineBase {
+  /**
+   * @param {Object} [options]
+   * @param {string} [options.baseDir] - ClamAV installation directory.
+   * @param {string} [options.dbDir] - Virus definition directory.
+   */
   constructor(options = {}) {
     const candidates = [
       options.baseDir,
@@ -12,7 +24,9 @@ class ClamAVEngineBase {
       path.join(__dirname, '..', '..', 'assets', 'clamav')
     ].filter(Boolean);
 
-    this.baseDir = candidates.find(dir => fs.existsSync(this._clamscanPath(dir))) || candidates[candidates.length - 1];
+    const systemCandidates = this._systemPathCandidates();
+    const allCandidates = [...candidates, ...systemCandidates];
+    this.baseDir = allCandidates.find(dir => fs.existsSync(this._clamscanPath(dir))) || allCandidates[allCandidates.length - 1];
     this.clamscanPath = this._clamscanPath(this.baseDir);
     this.freshclamPath = this._freshclamPath(this.baseDir);
     this.certsDir = path.join(this.baseDir, 'certs');
@@ -25,8 +39,54 @@ class ClamAVEngineBase {
     this.cancelUpdateRequested = false;
   }
 
+  /**
+   * Standard ClamAV install locations for the current platform.
+   * @returns {Array<string>}
+   */
+  _systemPathCandidates() {
+    const platform = process.platform;
+    if (platform === 'win32') {
+      const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
+      const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+      return [
+        path.join(programFiles, 'ClamAV'),
+        path.join(programFilesX86, 'ClamAV'),
+        path.join(process.env.ProgramData || 'C:\\ProgramData', 'ClamAV')
+      ];
+    }
+    if (platform === 'darwin') {
+      return [
+        '/usr/local/bin',
+        '/opt/homebrew/bin',
+        '/usr/local/clamav'
+      ];
+    }
+    return [
+      '/usr/bin',
+      '/usr/local/bin',
+      '/usr/local/clamav'
+    ];
+  }
+
+  /**
+   * Resolve the clamscan binary path for a given base directory.
+   * @param {string} baseDir
+   * @returns {string}
+   */
   _clamscanPath(baseDir) { return path.join(baseDir, 'clamscan'); }
+  /**
+   * Resolve the freshclam binary path for a given base directory.
+   * @param {string} baseDir
+   * @returns {string}
+   */
   _freshclamPath(baseDir) { return path.join(baseDir, 'freshclam'); }
+  /**
+   * Build spawn args for clamscan.
+   * @param {string} command
+   * @param {string} filePath
+   * @param {boolean} isDir
+   * @returns {Array<string>}
+   */
   _spawnArgs(command, filePath, isDir) {
     const args = [
       '--stdout',
@@ -37,10 +97,18 @@ class ClamAVEngineBase {
     args.push(filePath);
     return args;
   }
+  /**
+   * Spawn options for child processes.
+   * @returns {Object}
+   */
   _spawnOptions() {
     return { windowsHide: true };
   }
 
+  /**
+   * Initialize the engine: verify binaries, download definitions if needed.
+   * @returns {Promise<void>}
+   */
   async init() {
     if (!fs.existsSync(this.clamscanPath)) {
       logger.warn('ClamAV executable not found at ' + this.clamscanPath);
@@ -63,6 +131,10 @@ class ClamAVEngineBase {
     logger.info('ClamAV engine initialized at ' + this.baseDir);
   }
 
+  /**
+   * Get current engine status.
+   * @returns {Object}
+   */
   getStatus() {
     return {
       ready: this.isReady,
@@ -73,6 +145,10 @@ class ClamAVEngineBase {
     };
   }
 
+  /**
+   * Check whether virus definition databases are present.
+   * @returns {boolean}
+   */
   hasVirusDatabase() {
     const dbFiles = [
       'main.cvd', 'daily.cvd', 'bytecode.cvd',
@@ -87,6 +163,11 @@ class ClamAVEngineBase {
     }
   }
 
+  /**
+   * Update ClamAV virus definitions via freshclam.
+   * @param {Function} [onProgress]
+   * @returns {Promise<{success:boolean, canceled?:boolean, error?:string, output?:string}>}
+   */
   updateDefinitions(onProgress) {
     if (!fs.existsSync(this.freshclamPath)) {
       return Promise.resolve({ success: false, error: this.freshclamPath + ' not found', output: '' });
@@ -163,6 +244,10 @@ class ClamAVEngineBase {
     });
   }
 
+  /**
+   * Ensure a freshclam.conf exists in the database directory.
+   * @returns {string} Config file path.
+   */
   ensureFreshclamConfig() {
     const configPath = path.join(this.dbDir, 'freshclam.conf');
     const lines = [
@@ -183,10 +268,21 @@ class ClamAVEngineBase {
     return configPath;
   }
 
+  /**
+   * Convert a Windows path to a ClamAV-style forward-slash path.
+   * @param {string} value
+   * @returns {string}
+   */
   toClamPath(value) {
     return path.resolve(value).replace(/\\/g, '/');
   }
 
+  /**
+   * Scan a file or directory with clamscan.
+   * @param {string} filePath
+   * @param {Function} [onProgress]
+   * @returns {Promise<Object>}
+   */
   async scanFile(filePath, onProgress) {
     if (!this.isReady) {
       return { success: false, error: 'ClamAV not ready', threatsFound: 0, filesScanned: 0, output: '' };
@@ -306,6 +402,10 @@ class ClamAVEngineBase {
     });
   }
 
+  /**
+   * Request cancellation of the active scan and/or definition update.
+   * @returns {boolean} Whether a process was signaled to stop.
+   */
   abortCurrentScan() {
     let killed = false;
 

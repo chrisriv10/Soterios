@@ -48,18 +48,29 @@ function isSystemDirectoryPath(filePath) {
   return SYSTEM_DIR_MARKERS.some((marker) => lower.includes(marker));
 }
 
-// ps-list is ESM-only so we must use dynamic import()
+/**
+ * Inspects running processes, assesses suspicious characteristics, and
+ * can terminate non-critical processes on request.
+ *
+ * Critical system PIDs/names and the Soterios process itself are protected.
+ */
 class ProcessInspector {
+  /**
+   * @param {Object} [options]
+   * @param {object} [options.db] - DatabaseService for audit logging.
+   * @param {Function} [options.getSignatureInfo] - Signature lookup override.
+   */
   constructor(options = {}) {
     this._db = options.db || null;
     this._getSignatureInfo = options.getSignatureInfo || getSignatureInfo;
   }
 
-  // ps-list's Windows output doesn't include a separate executable path
-  // field — only the full command line. This pulls the executable portion
-  // out of it on a best-effort basis (handles the common quoted-path case;
-  // unquoted paths containing spaces can't be split reliably, so this is an
-  // approximation, not a guarantee).
+  /**
+   * Extract the executable path from a command line string.
+   * Handles quoted paths; unquoted paths with spaces are approximate.
+   * @param {string} cmd
+   * @returns {string|null}
+   */
   _extractPathFromCmd(cmd) {
     if (!cmd) return null;
     const trimmed = cmd.trim();
@@ -72,6 +83,15 @@ class ProcessInspector {
     return spaceIdx === -1 ? trimmed : trimmed.slice(0, spaceIdx);
   }
 
+  /**
+   * Assess whether a process looks suspicious based on path, name, and signature.
+   * @param {Object} proc
+   * @param {number} proc.pid
+   * @param {string} proc.name
+   * @param {string} proc.cmd
+   * @param {string} [proc.path]
+   * @returns {Promise<Object>}
+   */
   async _assessSuspicious(proc) {
     const reasons = [];
     const locationReasons = [];
@@ -108,6 +128,10 @@ class ProcessInspector {
     };
   }
 
+  /**
+   * Get all running processes with suspicion assessment.
+   * @returns {Promise<Array<Object>>}
+   */
   async getProcesses() {
     try {
       const { default: psList } = await import('ps-list');
@@ -131,6 +155,11 @@ class ProcessInspector {
     }
   }
 
+  /**
+   * Terminate a process after safety checks.
+   * @param {number} pid
+   * @returns {Promise<{success:boolean, error?:string}>}
+   */
   async killProcess(pid) {
     const numericPid = Number(pid);
 

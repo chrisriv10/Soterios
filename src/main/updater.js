@@ -1,3 +1,9 @@
+/**
+ * Electron auto-updater wrapper.
+ *
+ * Manages update state, forwards status to listeners, and exposes
+ * simple init/check/install helpers.
+ */
 'use strict';
 
 const { app } = require('electron');
@@ -20,6 +26,10 @@ const state = {
   error: null
 };
 
+/**
+ * Merge a patch into the shared update state and notify listeners.
+ * @param {Object} patch
+ */
 function setState(patch) {
   Object.assign(state, patch);
   for (const listener of setState._listeners) {
@@ -101,6 +111,10 @@ async function checkForUpdates() {
   return { ...state };
 }
 
+/**
+ * Quit and install the downloaded update.
+ * @returns {Promise<{success:boolean, error?:string}>}
+ */
 function quitAndInstall() {
   if (!autoUpdater || state.status !== 'ready') {
     return { success: false, error: 'No downloaded update is ready to install.' };
@@ -109,14 +123,23 @@ function quitAndInstall() {
   return { success: true };
 }
 
+/**
+ * Get the current update status.
+ * @returns {Object}
+ */
 function getUpdateStatus() {
   return { ...state };
 }
 
-function subscribe(listener) {
-  setState._listeners.add(listener);
-  return () => setState._listeners.delete(listener);
-}
+  /**
+   * Subscribe to updater status changes.
+   * @param {Function} listener
+   * @returns {Function} Unsubscribe function.
+   */
+  function subscribe(listener) {
+    setState._listeners.add(listener);
+    return () => setState._listeners.delete(listener);
+  }
 
 module.exports = {
   initAutoUpdater,

@@ -6,10 +6,20 @@ const { clampProgress } = require('../core/scanProgress');
 const { scanReportsDir } = require('./reportExport');
 const { renderTemplate } = require('../utils/templates');
 
+/**
+ * Escape a string for safe insertion into HTML.
+ * @param {*} v - Value to escape.
+ * @returns {string} Escaped string.
+ */
 function esc(v) {
   return String(v ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;' }[ch]));
 }
 
+/**
+ * Render a scan report as an HTML string.
+ * @param {Object} report - Scan report payload.
+ * @returns {string} HTML document string.
+ */
 function renderScanReportHtml(report) {
   const threatRows = report.threats.length
     ? report.threats.map((t) => `<tr><td>${esc(t.name)}</td><td>${esc(t.path)}</td></tr>`).join('')
@@ -33,7 +43,72 @@ function renderScanReportHtml(report) {
   });
 }
 
+/**
+ * Walk paths and collect file metadata for incremental scan comparison.
+ * @param {string[]} paths - Root paths to walk.
+ * @returns {Array<{ path: string, size: number|null, modifiedAt: string|null }>} File metadata objects.
+ */
+function collectFileMetadatas(paths) {
+  const metadatas = [];
+  const visited = new Set();
+
+  function walk(current) {
+    if (visited.has(current)) return;
+    visited.add(current);
+    let stat;
+    try {
+      stat = fs.statSync(current);
+    } catch (_) {
+      return;
+    }
+    if (stat.isFile()) {
+      metadatas.push({
+        path: current,
+        size: stat.size,
+        modifiedAt: new Date(stat.mtime).toISOString()
+      });
+      return;
+    }
+    if (stat.isDirectory()) {
+      try {
+        const entries = fs.readdirSync(current);
+        for (const entry of entries) {
+          const full = path.join(current, entry);
+          // Skip junctions/symlinks to avoid cycles and permission issues.
+          let entryStat;
+          try {
+            entryStat = fs.lstatSync(full);
+          } catch (_) {
+            continue;
+          }
+          if (entryStat.isSymbolicLink()) continue;
+          walk(full);
+        }
+      } catch (_) {
+        // Permission denied or other access error — skip this directory.
+      }
+    }
+  }
+
+  for (const target of paths || []) {
+    walk(target);
+  }
+  return metadatas;
+}
+
+/**
+ * Coordinates ClamAV scans, progress reporting, threat quarantine,
+ * and scan report generation.
+ */
 class ScanEngine {
+  /**
+   * @param {DatabaseService} db
+   * @param {EventBus} eventBus
+   * @param {ClamAVEngine} clamEngine
+   * @param {HeuristicEngine} heuristicEngine
+   * @param {ReputationEngine} reputationEngine
+   * @param {QuarantineManager} quarantineManager
+   */
   constructor(db, eventBus, clamEngine, heuristicEngine, reputationEngine, quarantineManager) {
     this.db = db;
     this.eventBus = eventBus;
@@ -41,7 +116,7 @@ class ScanEngine {
     this.heuristicEngine = heuristicEngine;
     this.reputationEngine = reputationEngine;
     this.quarantineManager = quarantineManager;
-    
+
     // Separate state for user scans and folder-watch scans
     this.userScan = {
       abortController: null,
@@ -73,6 +148,10 @@ class ScanEngine {
     return this.folderWatchScan.isScanning;
   }
 
+  /**
+   * Run a quick scan against common system temp/startup locations.
+   * @returns {Promise<Object>} Scan result.
+   */
   async runQuickScan() {
     if (this.userScan.isScanning) return { error: 'Scan already in progress' };
 
@@ -96,17 +175,35 @@ class ScanEngine {
     return this.runScan('quick', targets, 'Quick scan starting...');
   }
 
+  /**
+   * Run a full system scan starting from C:\.
+   * @returns {Promise<Object>} Scan result.
+   */
   async runFullScan() {
     if (this.userScan.isScanning) return { error: 'Scan already in progress' };
 
     return this.runScan('full', ['C:\\'], 'Full scan starting (this may take a while)...');
   }
 
+  /**
+   * Run a custom scan against user-specified paths.
+   * @param {string[]} paths - Target paths.
+   * @returns {Promise<Object>} Scan result.
+   */
   async runCustomScan(paths) {
     if (this.userScan.isScanning) return { error: 'Scan already in progress' };
     return this.runScan('custom', paths, 'Custom scan starting...');
   }
 
+  /**
+   * Core scan orchestrator. Runs a single scan of the given type and paths,
+   * emitting progress events and quarantining any threats found.
+   *
+   * @param {'quick'|'full'|'custom'|'folderwatch'} scanType
+   * @param {string[]} paths - Target paths.
+   * @param {string} startMessage - Initial progress message.
+   * @returns {Promise<Object>} Scan result.
+   */
   async runScan(scanType, paths, startMessage) {
     const isFolderWatch = scanType === 'folderwatch';
     const scanState = isFolderWatch ? this.folderWatchScan : this.userScan;
@@ -135,7 +232,12 @@ class ScanEngine {
 
     // Build skip set for incremental scans (full scans only).
     const isFullScan = scanType === 'full';
-    const skipPaths = isFullScan ? this.db.getFilesToSkip(paths) : new Set();
+    const scanMetadatas = isFullScan ? paths.map((p) => {
+      let stat;
+      try { stat = fs.statSync(p); } catch (_) { stat = null; }
+      return { path: p, size: stat ? stat.size : null, modifiedAt: stat ? new Date(stat.mtime).toISOString() : null };
+    }) : [];
+    const skipPaths = isFullScan ? this.db.getFilesToSkip(scanMetadatas) : new Set();
 
     // Progress must never move backward within a single scan. Previously,
     // each target path computed its own fresh, lower "basePct" and emitted
@@ -166,6 +268,7 @@ class ScanEngine {
         }
 
         const targetPath = paths[i];
+        const basePct = Math.round((i / paths.length) * 80 + 10);
 
         // Incremental scan: skip paths that haven't changed since last scan.
         if (skipPaths.has(targetPath)) {
@@ -173,7 +276,6 @@ class ScanEngine {
           continue;
         }
 
-        const basePct = Math.round((i / paths.length) * 80 + 10);
         emitProgress(basePct, 'Scanning ' + targetPath + '...');
 
         let pathLastChecked = 0;
@@ -212,12 +314,17 @@ class ScanEngine {
 
           // Record scanned path for incremental scans.
           try {
-            const stat = fs.statSync(targetPath);
-            this.db.recordScannedFile({
-              path: targetPath,
-              size: stat.size,
-              modifiedAt: stat.mtime.toISOString()
-            });
+            const meta = isFullScan ? scanMetadatas[i] : null;
+            if (meta) {
+              this.db.recordScannedFile(meta);
+            } else {
+              const stat = fs.statSync(targetPath);
+              this.db.recordScannedFile({
+                path: targetPath,
+                size: stat.size,
+                modifiedAt: stat.mtime.toISOString()
+              });
+            }
           } catch (_) {
             // Non-fatal: record best-effort for incremental cache.
           }
@@ -328,6 +435,10 @@ class ScanEngine {
     };
   }
 
+  /**
+   * Abort the current user-initiated scan.
+   * @returns {Object} Abort result.
+   */
   abortScan() {
     // Only abort user scans, not folder-watch scans
     if (!this.userScan.isScanning) {
@@ -341,6 +452,10 @@ class ScanEngine {
     return { success: true, canceled: true };
   }
 
+  /**
+   * Get the current scan status.
+   * @returns {Object} Status object.
+   */
   getStatus() {
     const activeScan = this.userScan.isScanning ? this.userScan
       : this.folderWatchScan.isScanning ? this.folderWatchScan
@@ -354,6 +469,11 @@ class ScanEngine {
     };
   }
 
+  /**
+   * Persist a scan report to disk and the database.
+   * @param {Object} report - Scan report payload.
+   * @returns {Object} Saved report with file paths.
+   */
   saveScanReport(report) {
     const shouldSaveHistory = this.db.getSetting('feature.scanHistory', true);
     if (!shouldSaveHistory) {

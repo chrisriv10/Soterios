@@ -12,6 +12,16 @@ const DEFAULT_SCHEDULE = {
   lastRun: null,
 };
 
+/**
+ * Register scan-related IPC handlers.
+ * @param {BrowserWindow} mainWindow
+ * @param {Object} services
+ * @param {object} services.db
+ * @param {object} services.eventBus
+ * @param {object} services.clamEngine
+ * @param {object} services.scanEngine
+ * @param {object} services.reputationEngine
+ */
 function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputationEngine }) {
   // -- Scanning Engine --
   ipcMain.handle('scan:status', () => {

@@ -1,32 +1,27 @@
-// src/core/featureFlags.js
-// Single source of truth for feature-flag defaults, typed keys, and
-// get/set semantics. Falls back to defaults when a key is missing from
-// the database, and rejects writes to unknown keys in debug builds.
+/**
+ * Single source of truth for feature-flag defaults, typed keys, and
+ * get/set semantics. Falls back to defaults when a key is missing from
+ * the database, and rejects writes to unknown keys in debug builds.
+ */
 
-const DEFAULT_FLAGS = Object.freeze({
-  realtimeProtection: true,
-  autoReports: true,
-  scanHistory: true,
-  externalLookups: true,
-  geoLookup: true,
-  networkPerimeterMap: true,
-  notificationsEnabled: true,
-  scanNotifications: true,
-  launchAtStartup: false,
-  folderWatch: true,
-  networkAlerts: true,
-  networkTrafficHistory: true,
-  autoUpdates: true,
-});
-
-const FLAG_KEYS = Object.freeze(Object.keys(DEFAULT_FLAGS));
-
+/**
+ * Check whether a flag key is known.
+ * @param {string} key
+ * @returns {boolean}
+ */
 function isKnownFlag(key) {
   const logicalKey = key.startsWith('feature.') ? key.substring(8) : key;
   return Object.prototype.hasOwnProperty.call(DEFAULT_FLAGS, logicalKey);
 }
 
-function getFlag(db, key, fallback) {
+  /**
+   * Get a boolean feature flag from the database or default.
+   * @param {object} db
+   * @param {string} key
+   * @param {*} [fallback]
+   * @returns {boolean}
+   */
+  function getFlag(db, key, fallback) {
   if (!isKnownFlag(key)) {
     throw new Error(`Unknown feature flag: ${key}`);
   }
@@ -39,7 +34,14 @@ function getFlag(db, key, fallback) {
   return Boolean(raw);
 }
 
-function setFlag(db, key, value) {
+  /**
+   * Set a boolean feature flag in the database.
+   * @param {object} db
+   * @param {string} key
+   * @param {boolean} value
+   * @returns {boolean}
+   */
+  function setFlag(db, key, value) {
   if (!isKnownFlag(key)) {
     throw new Error(`Unknown feature flag: ${key}`);
   }
@@ -49,7 +51,11 @@ function setFlag(db, key, value) {
   return boolValue;
 }
 
-function getDefaults() {
+  /**
+   * Get a shallow copy of the default feature flags.
+   * @returns {Object}
+   */
+  function getDefaults() {
   return { ...DEFAULT_FLAGS };
 }
 

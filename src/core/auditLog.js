@@ -1,5 +1,16 @@
+/**
+ * Audit logging constants and helper.
+ *
+ * All sensitive security actions should call log() after the primary
+ * action completes so there is an immutable record of who did what.
+ */
 'use strict';
 
+/**
+ * Well-known audit action identifiers.
+ * @readonly
+ * @enum {string}
+ */
 const ACTIONS = Object.freeze({
   FIREWALL_RULE_CREATE: 'firewall.rule.create',
   FIREWALL_RULE_DELETE: 'firewall.rule.delete',
@@ -14,6 +25,16 @@ const ACTIONS = Object.freeze({
   MAINTENANCE_RUN: 'maintenance.run',
 });
 
+/**
+ * Append an audit entry. Failures are swallowed so audit logging
+ * never breaks the primary action.
+ *
+ * @param {DatabaseService} db - Database service instance.
+ * @param {string} action - One of ACTIONS.
+ * @param {*} [detail] - Action detail payload.
+ * @param {*} [result] - Action result payload.
+ * @param {boolean} [userInitiated=false] - Whether the user triggered this.
+ */
 function log(db, action, detail, result, userInitiated = false) {
   if (!db || !action) return;
   try {

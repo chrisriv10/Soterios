@@ -1,5 +1,14 @@
 'use strict';
 
+/**
+ * Electron main-process entry point for Soterios.
+ *
+ * Responsibilities:
+ * - Configure Electron paths/command-line switches before app ready.
+ * - Enforce single-instance lock.
+ * - Start the lifecycle services and create the main window.
+ * - Register top-level app event handlers (second-instance, ready, window-all-closed, quit).
+ */
 const { app, BrowserWindow, ipcMain, dialog, Menu, nativeImage, screen } = require('electron');
 const { execFileSync } = require('child_process');
 const path = require('path');
@@ -116,7 +125,7 @@ app.whenReady().then(async () => {
 
   const eventBus = require('../core/eventBus');
 
-  const services = lifecycle.start(db, eventBus, {
+  const services = await lifecycle.start(db, eventBus, {
     userDataPath: app.getPath('userData'),
     startupLocale,
     notify: (title, body, level) => windowManager.showNotification(lifecycle.t(title), lifecycle.t(body), level),
@@ -127,6 +136,7 @@ app.whenReady().then(async () => {
   // splashWindow was created earlier via windowManager.createSplashWindow();
   // do NOT overwrite it with services.splashWindow (which is undefined).
   windowManager.splashTimeoutId = services.splashTimeoutId;
+  windowManager.lifecycleRefs = services;
 
   // Renderer signals it has finished loading data; dismiss the splash.
   ipcMain.handle('app:ready', () => {
@@ -158,14 +168,16 @@ process.on('unhandledRejection', (err) => {
 });
 
 app.on('before-quit', () => {
-  if (windowManager.lifecycleRefs) {
-    windowManager.lifecycleRefs.maintenanceScheduler?.stop();
-    windowManager.lifecycleRefs.trayController?.dispose();
-    if (windowManager.lifecycleRefs.networkStatsTimer) clearInterval(windowManager.lifecycleRefs.networkStatsTimer);
-    if (windowManager.lifecycleRefs.pruneTimer) clearInterval(windowManager.lifecycleRefs.pruneTimer);
+  const lifecycleRefs = windowManager.lifecycleRefs;
+  if (lifecycleRefs) {
+    lifecycleRefs.maintenanceScheduler?.stop();
+    lifecycleRefs.trayController?.dispose();
+    if (lifecycleRefs.networkStatsTimer) clearInterval(lifecycleRefs.networkStatsTimer);
+    if (lifecycleRefs.pruneTimer) clearInterval(lifecycleRefs.pruneTimer);
   }
   try {
-    if (windowManager.dbRef?.db && typeof windowManager.dbRef.db.close === 'function') windowManager.dbRef.db.close();
+    const dbRef = windowManager.dbRef;
+    if (dbRef?.db && typeof dbRef.db.close === 'function') dbRef.db.close();
   } catch (err) {
     lifecycle.logLine('debug', 'Database close failed', { error: err.message });
   }

@@ -10,16 +10,33 @@ const {
 
 const VALID_FIREWALL_PROFILES = ['Domain', 'Private', 'Public'];
 
+/**
+ * Check whether a string is a valid firewall profile name.
+ * @param {string} name
+ * @returns {boolean}
+ */
 function isValidFirewallProfile(name) {
   return typeof name === 'string' && VALID_FIREWALL_PROFILES.includes(name);
 }
 
+/**
+ * Validate an IP address string (IPv4 or IPv6).
+ * @param {string} ip
+ * @returns {boolean}
+ */
 function isValidIp(ip) {
   const v4 = /^(\d{1,3}\.){3}\d{1,3}$/;
   const v6 = /^[0-9a-fA-F:]+$/;
   return v4.test(ip) || (v6.test(ip) && ip.includes(':'));
 }
 
+/**
+ * Register firewall-related IPC handlers.
+ * @param {BrowserWindow} mainWindow
+ * @param {Object} services
+ * @param {object} services.db
+ * @param {object} services.firewallManager
+ */
 function register(mainWindow, { db, firewallManager }) {
   ipcMain.handle('firewall:status', async () => {
     return firewallManager.getStatus();

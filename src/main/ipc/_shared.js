@@ -1,7 +1,18 @@
+/**
+ * Shared IPC helper utilities.
+ */
+
 const https = require('https');
 
 const MAX_API_BODY_BYTES = 1 * 1024 * 1024; // 1 MB
 
+/**
+ * Make an HTTP GET request and return the response body as text.
+ * @param {string} url
+ * @param {Object} [options]
+ * @param {Object} [options.headers]
+ * @returns {Promise<{statusCode:number, body:string}>}
+ */
 function requestText(url, options = {}) {
   return new Promise((resolve, reject) => {
     const req = https.request(url, {

@@ -28,6 +28,9 @@ class EmergencyLockdown {
     this._loadAllowlist();
   }
 
+  /**
+   * Load the lockdown allowlist from the database.
+   */
   _loadAllowlist() {
     try {
       const stored = this.db.get('lockdown_allowlist');
@@ -39,6 +42,9 @@ class EmergencyLockdown {
     }
   }
 
+  /**
+   * Persist the current allowlist to the database.
+   */
   _saveAllowlist() {
     try {
       this.db.set('lockdown_allowlist', this.allowlist);
@@ -47,10 +53,22 @@ class EmergencyLockdown {
     }
   }
 
+  /**
+   * Return a copy of the current allowlist.
+   * @returns {Object}
+   */
   getAllowlist() {
     return { ...this.allowlist };
   }
 
+  /**
+   * Replace the entire allowlist and persist it.
+   * @param {Object} allowlist
+   * @param {Array} [allowlist.interfaces]
+   * @param {Array} [allowlist.services]
+   * @param {Array} [allowlist.ips]
+   * @returns {Object}
+   */
   setAllowlist(allowlist) {
     this.allowlist = {
       interfaces: allowlist.interfaces || [],
@@ -61,6 +79,12 @@ class EmergencyLockdown {
     return this.allowlist;
   }
 
+  /**
+   * Add an entry to the allowlist.
+   * @param {'interfaces'|'services'|'ips'} type
+   * @param {string} value
+   * @returns {Object}
+   */
   addToAllowlist(type, value) {
     if (!this.allowlist[type]) {
       this.allowlist[type] = [];
@@ -73,6 +97,12 @@ class EmergencyLockdown {
     return this.allowlist;
   }
 
+  /**
+   * Remove an entry from the allowlist.
+   * @param {'interfaces'|'services'|'ips'} type
+   * @param {string} value
+   * @returns {Object}
+   */
   removeFromAllowlist(type, value) {
     if (!this.allowlist[type]) return this.allowlist;
     const normalized = type === 'ips' ? value.trim() : value.trim().toLowerCase();
@@ -82,7 +112,8 @@ class EmergencyLockdown {
   }
 
   /**
-   * Get list of network interfaces
+   * Get list of network interfaces.
+   * @returns {Promise<Array<{name:string, state:string, type:string, connectivity:string}>>}
    */
   async getNetworkInterfaces() {
     try {
@@ -111,7 +142,9 @@ class EmergencyLockdown {
   }
 
   /**
-   * Disable a network interface
+   * Disable a network interface by name.
+   * @param {string} interfaceName
+   * @returns {Promise<{success:boolean, interface:string}>}
    */
   async disableInterface(interfaceName) {
     if (!interfaceName || !SAFE_INTERFACE_NAME.test(interfaceName)) {
@@ -126,7 +159,9 @@ class EmergencyLockdown {
   }
 
   /**
-   * Enable a network interface
+   * Enable a network interface by name.
+   * @param {string} interfaceName
+   * @returns {Promise<{success:boolean, interface:string}>}
    */
   async enableInterface(interfaceName) {
     if (!interfaceName || !SAFE_INTERFACE_NAME.test(interfaceName)) {
@@ -141,7 +176,8 @@ class EmergencyLockdown {
   }
 
   /**
-   * Get list of non-essential Windows services
+   * Get list of non-essential Windows services.
+   * @returns {Promise<Array<{name:string, displayName:string, state:string}>>}
    */
   async getNonEssentialServices() {
     const nonEssentialPatterns = [
@@ -193,7 +229,9 @@ class EmergencyLockdown {
   }
 
   /**
-   * Stop a Windows service
+   * Stop a Windows service.
+   * @param {string} serviceName
+   * @returns {Promise<{success:boolean, service:string}>}
    */
   async stopService(serviceName) {
     try {
@@ -205,7 +243,9 @@ class EmergencyLockdown {
   }
 
   /**
-   * Start a Windows service
+   * Start a Windows service.
+   * @param {string} serviceName
+   * @returns {Promise<{success:boolean, service:string}>}
    */
   async startService(serviceName) {
     try {
@@ -217,7 +257,8 @@ class EmergencyLockdown {
   }
 
   /**
-   * Emergency lockdown - disable all network interfaces and stop non-essential services
+   * Activate emergency lockdown: disable interfaces, stop non-essential services.
+   * @returns {Promise<{success:boolean, message?:string}>}
    */
   async lockdown() {
     if (this.isLockedDown) {
@@ -305,7 +346,8 @@ class EmergencyLockdown {
   }
 
   /**
-   * Restore from lockdown - re-enable network interfaces and restart services
+   * Restore from lockdown - re-enable network interfaces and restart services.
+   * @returns {Promise<{success:boolean, message?:string, results?:Object}>}
    */
   async restore() {
     if (!this.isLockedDown) {
@@ -395,7 +437,8 @@ class EmergencyLockdown {
   }
 
   /**
-   * Get current lockdown status
+   * Get current lockdown status.
+   * @returns {Object}
    */
   getStatus() {
     return {

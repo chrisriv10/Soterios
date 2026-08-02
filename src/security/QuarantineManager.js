@@ -1,3 +1,11 @@
+/**
+ * Manages quarantined threat files using AES-256-GCM encryption.
+ *
+ * Each quarantined file is encrypted with a machine-specific key derived
+ * from a random key stored on disk (with restrictive permissions). Legacy
+ * files encrypted with the old hostname-derived key can still be decrypted
+ * via a fallback path.
+ */
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -5,17 +13,26 @@ const crypto = require('crypto');
 const logger = require('../utils/logger');
 const { InvalidInputError } = require('../utils/errors');
 const { log, ACTIONS } = require('../core/auditLog');
+const { QuarantineKeyStore } = require('../utils/quarantineKeyStore');
 
 const PBKDF2_ITERATIONS = 100_000;
 const PBKDF2_HASH = 'sha256';
 const PBKDF2_KEY_LENGTH = 32; // 256-bit AES key
 const PBKDF2_SALT = Buffer.from('Soterios-Quarantine-KDF-v1', 'utf8');
+const ENCRYPTED_FILE_VERSION = 1; // first 4 bytes: little-endian version marker
 
+/**
+ * @param {object} db - DatabaseService with quarantine record helpers.
+ * @param {object} [options]
+ * @param {string} [options.quarantineDir] - Override quarantine directory (tests).
+ * @param {Buffer} [options.key] - Direct encryption key override (tests).
+ */
 class QuarantineManager {
   /**
    * @param {object} db - DatabaseService with quarantine record helpers.
    * @param {object} [options]
    * @param {string} [options.quarantineDir] - Override quarantine directory (tests).
+   * @param {Buffer} [options.key] - Direct encryption key override (tests).
    */
   constructor(db, options = {}) {
     this.db = db;
@@ -24,31 +41,82 @@ class QuarantineManager {
       fs.mkdirSync(this.quarantineDir, { recursive: true });
     }
 
-    // Derive a machine-specific encryption key. This is not a password — it's
-    // a convenience secret so quarantined files from one machine cannot be
-    // trivially decrypted on another. A determined local attacker can still
-    // recover the key from memory, but casual inspection of the quarantined
-    // file is no longer sufficient.
+    const keyStore = new QuarantineKeyStore({ ...options, storageDir: options.quarantineDir });
+    this._key = keyStore.key;
+
+    // Legacy fallback key derived from machine-specific info. Used only when
+    // decrypting older quarantined files that were encrypted before the random
+    // key store was introduced.
     const machineSecret = `${os.hostname()}\x00${os.userInfo().username}`;
-    this._key = crypto.pbkdf2Sync(machineSecret, PBKDF2_SALT, PBKDF2_ITERATIONS, PBKDF2_KEY_LENGTH, PBKDF2_HASH);
+    this._legacyKey = crypto.pbkdf2Sync(machineSecret, PBKDF2_SALT, PBKDF2_ITERATIONS, PBKDF2_KEY_LENGTH, PBKDF2_HASH);
   }
 
+  /**
+   * Encrypt a buffer with AES-256-GCM and prepend a version marker.
+   * @param {Buffer} data - Plaintext.
+   * @returns {Buffer} Encrypted payload.
+   */
   _encrypt(data) {
     const iv = crypto.randomBytes(12);
     const cipher = crypto.createCipheriv('aes-256-gcm', this._key, iv);
     const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
     const tag = cipher.getAuthTag();
-    return Buffer.concat([iv, tag, encrypted]);
+    // Version marker + iv + tag + encrypted data
+    const versionBuf = Buffer.alloc(4);
+    versionBuf.writeUInt32LE(ENCRYPTED_FILE_VERSION, 0);
+    return Buffer.concat([versionBuf, iv, tag, encrypted]);
   }
 
+  /**
+   * Decrypt a quarantined file payload. Tries the current random key first,
+   * then falls back to the legacy hostname-derived key for old files.
+   * @param {Buffer} buffer - Encrypted payload.
+   * @returns {Buffer} Plaintext.
+   */
   _decrypt(buffer) {
     if (buffer.length < 28) {
       throw new InvalidInputError('Quarantined file is too short to be valid.');
     }
-    const iv = buffer.slice(0, 12);
-    const tag = buffer.slice(12, 28);
-    const encrypted = buffer.slice(28);
-    const decipher = crypto.createDecipheriv('aes-256-gcm', this._key, iv);
+
+    // Try new format with version marker first.
+    const versionMarker = buffer.readUInt32LE(0);
+    if (versionMarker === ENCRYPTED_FILE_VERSION) {
+      if (buffer.length < 32) {
+        throw new InvalidInputError('Quarantined file is too short to be valid.');
+      }
+      const iv = buffer.slice(4, 16);
+      const tag = buffer.slice(16, 32);
+      const encrypted = buffer.slice(32);
+      return this._decryptWithKey(this._key, iv, tag, encrypted);
+    }
+
+    // Legacy format: iv(12) + tag(16) + encrypted (no version marker).
+    if (buffer.length >= 28) {
+      const iv = buffer.slice(0, 12);
+      const tag = buffer.slice(12, 28);
+      const encrypted = buffer.slice(28);
+      try {
+        return this._decryptWithKey(this._key, iv, tag, encrypted);
+      } catch (_) {
+        // Fall back to legacy hostname-derived key for files quarantined
+        // before the random key store was introduced.
+        return this._decryptWithKey(this._legacyKey, iv, tag, encrypted);
+      }
+    }
+
+    throw new InvalidInputError('Quarantined file has an unsupported format.');
+  }
+
+  /**
+   * Decrypt with an explicit key.
+   * @param {Buffer} key
+   * @param {Buffer} iv
+   * @param {Buffer} tag
+   * @param {Buffer} encrypted
+   * @returns {Buffer}
+   */
+  _decryptWithKey(key, iv, tag, encrypted) {
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
     decipher.setAuthTag(tag);
     return Buffer.concat([decipher.update(encrypted), decipher.final()]);
   }

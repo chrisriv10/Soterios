@@ -20,7 +20,17 @@ async function runPs1(scriptName) {
   return stdout;
 }
 
+/**
+ * Reads Windows network connections and interface statistics.
+ *
+ * Connection data comes from a PowerShell helper script; interface stats
+ * come from `systeminformation`.
+ */
 class NetworkMonitor {
+  /**
+   * Get active network connections.
+   * @returns {Promise<Array<Object>>}
+   */
   async getConnections() {
     try {
       const stdout = await runPs1('network-connections.ps1');
@@ -33,6 +43,10 @@ class NetworkMonitor {
     }
   }
 
+  /**
+   * Get network interface stats and connection summary.
+   * @returns {Promise<{interfaces:Array, connections:Object}>}
+   */
   async getStats() {
     try {
       const netStats = await si.networkStats();
