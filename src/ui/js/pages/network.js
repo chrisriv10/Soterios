@@ -5,6 +5,9 @@ window.Pages['network'] = {
   _connectionRiskFilter: 'all',
   _connectionStateFilter: 'all',
   _geoCache: {},
+  _groupByProcess: true,
+  _simpleView: true,
+  _expandedGroups: new Set(),
 
   _classificationLabel(classification) {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
@@ -13,6 +16,72 @@ window.Pages['network'] = {
       case 'UNKNOWN': return t('network.flagUnverified');
       case 'MALICIOUS': return t('network.flagMalicious');
       default: return classification;
+    }
+  },
+
+  _renderConnectionRow(c, t, getState, firstDefined, simpleView) {
+    const proc = c.processName ? ` (${escapeHtml(c.processName)})` : (c.pid ? ` (PID: ${escapeHtml(c.pid)})` : '');
+    const hostname = c.hostname ? ` \u2192 ${escapeHtml(c.hostname)}` : '';
+    const service = c.serviceName ? ` [${escapeHtml(c.serviceName)}]` : '';
+    const state = getState(c);
+
+    const remoteAddress = firstDefined(c.remoteAddress, c.RemoteAddress);
+    const remotePort = firstDefined(c.remotePort, c.RemotePort);
+    const localAddress = firstDefined(c.localAddress, c.LocalAddress);
+    const localPort = firstDefined(c.localPort, c.LocalPort);
+
+    let badgeColor = 'var(--text-dim)';
+    let borderColor = 'var(--accent-primary)';
+    if (c.classification === 'SAFE') {
+      badgeColor = 'var(--ok)';
+      borderColor = 'var(--ok)';
+    } else if (c.classification === 'MALICIOUS') {
+      badgeColor = 'var(--danger)';
+      borderColor = 'var(--danger)';
+    } else if (c.classification === 'UNKNOWN') {
+      badgeColor = 'var(--warn)';
+      borderColor = 'var(--warn)';
+    }
+
+    let stateColor = 'var(--text-dim)';
+    const stateUpper = state.toString().toUpperCase();
+    if (stateUpper === 'ESTABLISHED') {
+      stateColor = 'var(--ok)';
+    } else if (stateUpper === 'LISTEN' || stateUpper === 'LISTENING') {
+      stateColor = 'var(--accent-primary)';
+    } else if (stateUpper === 'TIME_WAIT' || stateUpper === 'TIMEWAIT') {
+      stateColor = 'var(--warn)';
+    } else if (stateUpper === 'CLOSE_WAIT' || stateUpper === 'CLOSEWAIT') {
+      stateColor = 'var(--danger)';
+    }
+    const stateBadge = state
+      ? `<span style="font-size:0.7rem; font-weight:600; color:${stateColor}; background:${stateColor}15; padding:2px 6px; border-radius:4px; margin-right:6px;">${escapeHtml(state)}</span>`
+      : '';
+
+    const searchBlob = [
+      c.processName, c.hostname, c.serviceName, state, c.classification,
+      remoteAddress, remotePort, localAddress, localPort, c.pid
+    ].filter((v) => v !== undefined && v !== null && v !== '').join(' ').toLowerCase();
+
+    const riskDisplay = this._classificationLabel(c.classification);
+
+    if (simpleView) {
+      // Simple view: just show IP, port, and risk
+      return `<div class="list-row connection-row" data-ip="${escapeHtml(remoteAddress)}" data-search="${escapeHtml(searchBlob)}" data-risk="${escapeHtml(c.classification || 'UNKNOWN')}" data-state="${escapeHtml(state)}" style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-left:3px solid ${borderColor}; background:var(--bg-surface); border-radius:4px;">
+        <div style="font-weight:500; font-family:monospace; font-size:0.9rem;">${escapeHtml(remoteAddress)}:${escapeHtml(remotePort)}${hostname}</div>
+        <div style="font-size:0.75rem; font-weight:600; color:${badgeColor}; background:${badgeColor}15; padding:3px 6px; border-radius:4px;">${escapeHtml(riskDisplay)}</div>
+      </div>`;
+    } else {
+      // Technical view: show full details
+      return `<div class="list-row connection-row" data-ip="${escapeHtml(remoteAddress)}" data-search="${escapeHtml(searchBlob)}" data-risk="${escapeHtml(c.classification || 'UNKNOWN')}" data-state="${escapeHtml(state)}" style="display:flex; flex-direction:column; gap:4px; padding:12px 16px; border-left:4px solid ${borderColor}; content-visibility:auto; contain-intrinsic-size:0 70px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-weight:600; font-family:monospace; word-break:break-all;">${stateBadge}${escapeHtml(remoteAddress)}:${escapeHtml(remotePort)}${service}${hostname}</div>
+            <div class="page-subtitle" style="font-size:0.85rem; word-break:break-all;">${escapeHtml(t('network.localConnection', { localIp: localAddress, localPort: localPort, proc: proc }))}</div>
+          </div>
+          <div style="font-size:0.75rem; font-weight:600; color:${badgeColor}; background:${badgeColor}15; padding:4px 8px; border-radius:4px;">${escapeHtml(riskDisplay)}</div>
+        </div>
+      </div>`;
     }
   },
 
@@ -98,6 +167,31 @@ window.Pages['network'] = {
         } else if (e.target && e.target.id === 'connectionStateFilter') {
           window.Pages['network']._connectionStateFilter = e.target.value;
           window.Pages['network'].applyConnectionFilter(container);
+        }
+      });
+      content.addEventListener('change', (e) => {
+        if (e.target && e.target.id === 'viewToggle') {
+          window.Pages['network']._simpleView = e.target.value === 'simple';
+          window.Pages['network'].load(container, false);
+        } else if (e.target && e.target.id === 'groupToggle') {
+          window.Pages['network']._groupByProcess = e.target.value === 'grouped';
+          // Clear expanded groups when switching to grouped view to ensure auto-expand works
+          if (window.Pages['network']._groupByProcess) {
+            window.Pages['network']._expandedGroups = new Set();
+          }
+          window.Pages['network'].load(container, false);
+        }
+      });
+      content.addEventListener('click', (e) => {
+        if (e.target.closest('.process-group-header')) {
+          const header = e.target.closest('.process-group-header');
+          const processName = header.dataset.process;
+          if (window.Pages['network']._expandedGroups.has(processName)) {
+            window.Pages['network']._expandedGroups.delete(processName);
+          } else {
+            window.Pages['network']._expandedGroups.add(processName);
+          }
+          window.Pages['network'].load(container, false);
         }
       });
     }
@@ -461,6 +555,14 @@ window.Pages['network'] = {
         <h3 style="margin:0; font-size:1rem;">${escapeHtml(t('network.activeConnections'))}</h3>
         <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
           <span id="connectionCount" class="page-subtitle" style="font-size:0.8rem; white-space:nowrap;"></span>
+          <select id="viewToggle" style="padding:6px 10px; border-radius:8px; border:1px solid var(--glass-border); background:var(--bg-surface); color:inherit; font-size:0.85rem;">
+            <option value="simple" ${this._simpleView ? 'selected' : ''}>${escapeHtml(t('network.simpleView'))}</option>
+            <option value="technical" ${!this._simpleView ? 'selected' : ''}>${escapeHtml(t('network.technicalView'))}</option>
+          </select>
+          <select id="groupToggle" style="padding:6px 10px; border-radius:8px; border:1px solid var(--glass-border); background:var(--bg-surface); color:inherit; font-size:0.85rem;">
+            <option value="flat" ${!this._groupByProcess ? 'selected' : ''}>Flat View</option>
+            <option value="grouped" ${this._groupByProcess ? 'selected' : ''}>${escapeHtml(t('network.groupByProcess'))}</option>
+          </select>
           <select id="connectionStateFilter" style="padding:6px 10px; border-radius:8px; border:1px solid var(--glass-border); background:var(--bg-surface); color:inherit; font-size:0.85rem;">
             <option value="all" ${this._connectionStateFilter === 'all' ? 'selected' : ''}>${escapeHtml(t('network.stateFilterAll'))}</option>
             <option value="ESTABLISHED" ${this._connectionStateFilter === 'ESTABLISHED' ? 'selected' : ''}>${escapeHtml(t('network.stateFilterEstablished'))}</option>
@@ -494,62 +596,62 @@ window.Pages['network'] = {
         });
 
         html += '<div id="activeConnectionsList" style="display:flex; flex-direction:column; gap:8px; max-height:400px; overflow-y:auto;">';
-        for (const c of sortedConnections) {
-          const proc = c.processName ? ` (${escapeHtml(c.processName)})` : (c.pid ? ` (PID: ${escapeHtml(c.pid)})` : '');
-          const hostname = c.hostname ? ` \u2192 ${escapeHtml(c.hostname)}` : '';
-          const service = c.serviceName ? ` [${escapeHtml(c.serviceName)}]` : '';
-          const state = getState(c);
 
-          const remoteAddress = firstDefined(c.remoteAddress, c.RemoteAddress);
-          const remotePort = firstDefined(c.remotePort, c.RemotePort);
-          const localAddress = firstDefined(c.localAddress, c.LocalAddress);
-          const localPort = firstDefined(c.localPort, c.LocalPort);
-
-          let badgeColor = 'var(--text-dim)';
-          let borderColor = 'var(--accent-primary)';
-          if (c.classification === 'SAFE') {
-            badgeColor = 'var(--ok)';
-            borderColor = 'var(--ok)';
-          } else if (c.classification === 'MALICIOUS') {
-            badgeColor = 'var(--danger)';
-            borderColor = 'var(--danger)';
-          } else if (c.classification === 'UNKNOWN') {
-            badgeColor = 'var(--warn)';
-            borderColor = 'var(--warn)';
+        if (this._groupByProcess) {
+          // Group connections by process
+          const groups = new Map();
+          for (const c of sortedConnections) {
+            const processKey = c.processName || (c.pid ? `PID:${c.pid}` : t('network.unknownProcess'));
+            if (!groups.has(processKey)) {
+              groups.set(processKey, []);
+            }
+            groups.get(processKey).push(c);
           }
 
-          let stateColor = 'var(--text-dim)';
-          const stateUpper = state.toString().toUpperCase();
-          if (stateUpper === 'ESTABLISHED') {
-            stateColor = 'var(--ok)';
-          } else if (stateUpper === 'LISTEN' || stateUpper === 'LISTENING') {
-            stateColor = 'var(--accent-primary)';
-          } else if (stateUpper === 'TIME_WAIT' || stateUpper === 'TIMEWAIT') {
-            stateColor = 'var(--warn)';
-          } else if (stateUpper === 'CLOSE_WAIT' || stateUpper === 'CLOSEWAIT') {
-            stateColor = 'var(--danger)';
+          // Auto-expand groups only if none are expanded (first time grouping)
+          if (this._expandedGroups.size === 0) {
+            // Don't auto-expand by default - let users choose which to expand
           }
-          const stateBadge = state
-            ? `<span style="font-size:0.7rem; font-weight:600; color:${stateColor}; background:${stateColor}15; padding:2px 6px; border-radius:4px; margin-right:6px;">${escapeHtml(state)}</span>`
-            : '';
 
-          const searchBlob = [
-            c.processName, c.hostname, c.serviceName, state, c.classification,
-            remoteAddress, remotePort, localAddress, localPort, c.pid
-          ].filter((v) => v !== undefined && v !== null && v !== '').join(' ').toLowerCase();
+          for (const [processName, groupConnections] of groups) {
+            const safeCount = groupConnections.filter(c => c.classification === 'SAFE').length;
+            const unknownCount = groupConnections.filter(c => c.classification === 'UNKNOWN').length;
+            const maliciousCount = groupConnections.filter(c => c.classification === 'MALICIOUS').length;
+            
+            let groupBorderColor = '#58A6FF';
+            if (maliciousCount > 0) {
+              groupBorderColor = '#F85149';
+            } else if (unknownCount > 0) {
+              groupBorderColor = '#D29922';
+            } else {
+              groupBorderColor = '#3FB950';
+            }
 
-          const riskDisplay = this._classificationLabel(c.classification);
+            const isExpanded = this._expandedGroups.has(processName);
 
-          html += `<div class="list-row connection-row" data-ip="${escapeHtml(remoteAddress)}" data-search="${escapeHtml(searchBlob)}" data-risk="${escapeHtml(c.classification || 'UNKNOWN')}" data-state="${escapeHtml(state)}" style="display:flex; flex-direction:column; gap:4px; padding:12px 16px; border-left:4px solid ${borderColor}; content-visibility:auto; contain-intrinsic-size:0 70px;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <div>
-                <div style="font-weight:600; font-family:monospace; word-break:break-all;">${stateBadge}${escapeHtml(remoteAddress)}:${escapeHtml(remotePort)}${service}${hostname}</div>
-                <div class="page-subtitle" style="font-size:0.85rem; word-break:break-all;">${escapeHtml(t('network.localConnection', { localIp: localAddress, localPort: localPort, proc: proc }))}</div>
+            html += `<div class="process-group" style="border-left:4px solid ${groupBorderColor}; background:#1e2329; border-radius:8px; margin-bottom:12px; display:block;">
+              <div class="process-group-header" data-process="${escapeHtml(processName)}" style="padding:12px 16px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:#252b32;">
+                <div>
+                  <div style="font-weight:600; font-size:0.95rem; color:#fff;">${escapeHtml(t('network.processGroup', { process: processName, count: groupConnections.length }))}</div>
+                  <div style="font-size:0.8rem; color:#888; margin-top:2px;">${escapeHtml(t('network.riskSummary', { safe: safeCount, unknown: unknownCount, malicious: maliciousCount }))}</div>
+                </div>
+                <div style="font-size:1.2rem; color:#888; transition:transform 0.2s;">${isExpanded ? '▼' : '▶'}</div>
               </div>
-              <div style="font-size:0.75rem; font-weight:600; color:${badgeColor}; background:${badgeColor}15; padding:4px 8px; border-radius:4px;">${escapeHtml(riskDisplay)}</div>
-            </div>
-          </div>`;
+              <div class="process-group-connections" style="display:${isExpanded ? 'block' : 'none'}; padding:8px 0;">`;
+
+            for (const c of groupConnections) {
+              html += this._renderConnectionRow(c, t, getState, firstDefined, this._simpleView);
+            }
+
+            html += '</div></div>';
+          }
+        } else {
+          // Flat list view (original behavior)
+          for (const c of sortedConnections) {
+            html += this._renderConnectionRow(c, t, getState, firstDefined, this._simpleView);
+          }
         }
+
         html += '</div>';
         html += `<div id="connectionNoResults" class="empty-state" style="display:none; margin-top:8px;">${escapeHtml(t('network.noResults'))}</div>`;
       }
@@ -620,25 +722,62 @@ window.Pages['network'] = {
     const query = (this._connectionQuery || '').trim().toLowerCase();
     const riskFilter = this._connectionRiskFilter || 'all';
     const stateFilter = this._connectionStateFilter || 'all';
-    const rows = listEl.querySelectorAll('.connection-row');
-    let visible = 0;
+    
+    // Handle grouped view
+    if (this._groupByProcess) {
+      const groups = listEl.querySelectorAll('.process-group');
+      let visibleGroups = 0;
+      let totalConnections = 0;
 
-    rows.forEach((row) => {
-      const searchMatches = !query || (row.dataset.search || '').includes(query);
-      const riskMatches = riskFilter === 'all' || row.dataset.risk === riskFilter;
-      const stateMatches = stateFilter === 'all' || row.dataset.state === stateFilter;
-      const matches = searchMatches && riskMatches && stateMatches;
-      row.style.display = matches ? '' : 'none';
-      if (matches) visible += 1;
-    });
+      groups.forEach((group) => {
+        const rows = group.querySelectorAll('.connection-row');
+        let visibleInGroup = 0;
 
-    if (countEl) {
-      countEl.textContent = query
-        ? t('network.connectionCountFiltered', { visible, total: rows.length })
-        : t('network.connectionCount', { count: rows.length });
-    }
-    if (noResultsEl) {
-      noResultsEl.style.display = (rows.length > 0 && visible === 0) ? '' : 'none';
+        rows.forEach((row) => {
+          const searchMatches = !query || (row.dataset.search || '').includes(query);
+          const riskMatches = riskFilter === 'all' || row.dataset.risk === riskFilter;
+          const stateMatches = stateFilter === 'all' || row.dataset.state === stateFilter;
+          const matches = searchMatches && riskMatches && stateMatches;
+          row.style.display = matches ? '' : 'none';
+          if (matches) visibleInGroup += 1;
+        });
+
+        // Show/hide group based on visible connections
+        group.style.display = visibleInGroup > 0 ? 'block' : 'none';
+        if (visibleInGroup > 0) visibleGroups += 1;
+        totalConnections += rows.length;
+      });
+      
+      if (countEl) {
+        countEl.textContent = query
+          ? t('network.connectionCountFiltered', { visible: visibleGroups, total: groups.length })
+          : t('network.connectionCount', { count: groups.length });
+      }
+      if (noResultsEl) {
+        noResultsEl.style.display = (groups.length > 0 && visibleGroups === 0) ? '' : 'none';
+      }
+    } else {
+      // Flat list view
+      const rows = listEl.querySelectorAll('.connection-row');
+      let visible = 0;
+
+      rows.forEach((row) => {
+        const searchMatches = !query || (row.dataset.search || '').includes(query);
+        const riskMatches = riskFilter === 'all' || row.dataset.risk === riskFilter;
+        const stateMatches = stateFilter === 'all' || row.dataset.state === stateFilter;
+        const matches = searchMatches && riskMatches && stateMatches;
+        row.style.display = matches ? '' : 'none';
+        if (matches) visible += 1;
+      });
+
+      if (countEl) {
+        countEl.textContent = query
+          ? t('network.connectionCountFiltered', { visible, total: rows.length })
+          : t('network.connectionCount', { count: rows.length });
+      }
+      if (noResultsEl) {
+        noResultsEl.style.display = (rows.length > 0 && visible === 0) ? '' : 'none';
+      }
     }
   },
 
@@ -730,18 +869,31 @@ window.Pages['network'] = {
     const displayHits = showAll ? hits.slice(0, 8) : hits.slice(0, 1);
     const hasMore = hits.length > 1;
 
-    list.innerHTML = displayHits.map((h) => `
-      <div class="list-row" style="display:flex; justify-content:space-between; gap:8px; align-items:center; padding:6px 0; border-bottom:1px solid var(--glass-border);">
-        <div style="font-size:0.8rem;">
-          <div style="font-weight:600; font-family:monospace;">${escapeHtml(h.remoteAddress || '')}${h.remotePort ? ':' + escapeHtml(h.remotePort) : ''}</div>
-          <div class="page-subtitle" style="font-size:0.75rem;">${escapeHtml(t('network.alertPidState', { pid: h.pid || 'n/a', state: h.state || '' }))}</div>
+    list.innerHTML = displayHits.map((h) => {
+      const alertType = h.classification === 'MALICIOUS' ? 'blockedIp' : 'suspiciousActivity';
+      const alertTitle = t(`network.alert.${alertType}`);
+      const alertDesc = t(`network.alert.${alertType}Desc`);
+      
+      return `
+      <div class="list-row" style="display:flex; flex-direction:column; gap:8px; padding:12px; border-bottom:1px solid var(--glass-border); background:var(--bg-surface); border-radius:6px; border-left:3px solid var(--danger);">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+          <div style="flex:1;">
+            <div style="font-weight:600; font-size:0.85rem; color:var(--danger); margin-bottom:4px;">${escapeHtml(alertTitle)}</div>
+            <div style="font-family:monospace; font-size:0.9rem; margin-bottom:4px;">${escapeHtml(h.remoteAddress || '')}${h.remotePort ? ':' + escapeHtml(h.remotePort) : ''}</div>
+            <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:6px;">${escapeHtml(alertDesc)}</div>
+            <div class="page-subtitle" style="font-size:0.75rem;">${escapeHtml(t('network.alertPidState', { pid: h.pid || 'n/a', state: h.state || '' }))}</div>
+          </div>
         </div>
-        <div style="display:flex; gap:6px;">
-          <button class="btn btn-sm" style="font-size:0.75rem; padding:4px 8px;" data-alert-ignore="${escapeHtml(h.key)}">${escapeHtml(t('network.alertIgnore'))}</button>
-          <button class="btn btn-sm" style="font-size:0.75rem; padding:4px 8px; color:var(--accent-danger);" data-alert-kill="${escapeHtml(h.pid || '')}" ${h.pid ? '' : 'disabled'}>${escapeHtml(t('network.alertKill'))}</button>
+        <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
+          <div style="font-size:0.75rem; font-weight:600; color:var(--text-dim);">${escapeHtml(t('network.alert.recommendation'))}</div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-sm btn-primary" style="font-size:0.75rem; padding:4px 10px;" data-alert-block="${escapeHtml(h.remoteAddress || '')}">${escapeHtml(t('network.alert.blockIp'))}</button>
+            <button class="btn btn-sm" style="font-size:0.75rem; padding:4px 10px; color:var(--accent-danger);" data-alert-kill="${escapeHtml(h.pid || '')}" ${h.pid ? '' : 'disabled'}>${escapeHtml(t('network.alert.terminateConnection'))}</button>
+            <button class="btn btn-sm" style="font-size:0.75rem; padding:4px 10px;" data-alert-ignore="${escapeHtml(h.key)}">${escapeHtml(t('network.alertIgnore'))}</button>
+          </div>
         </div>
       </div>
-    `).join('');
+    `}).join('');
 
     if (hasMore) {
       const expandBtn = document.createElement('button');
@@ -759,6 +911,7 @@ window.Pages['network'] = {
   },
 
   bindAlertActions(content) {
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     content.querySelectorAll('[data-alert-ignore]').forEach((btn) => {
       btn.onclick = async () => {
         try {
@@ -775,6 +928,22 @@ window.Pages['network'] = {
           const res = await window.api.invoke('network-alerts:kill', Number(btn.getAttribute('data-alert-kill')));
           if (!res || !res.success) alert((res && res.error) || t('network.alertKillFailed'));
           else btn.closest('.list-row')?.remove();
+        } catch (e) {
+          alert(e.message || String(e));
+        }
+      };
+    });
+    content.querySelectorAll('[data-alert-block]').forEach((btn) => {
+      btn.onclick = async () => {
+        try {
+          const ip = btn.getAttribute('data-alert-block');
+          await window.api.invoke('firewall:addRule', {
+            direction: 'inbound',
+            action: 'block',
+            remoteAddress: ip
+          });
+          btn.textContent = 'Blocked';
+          btn.disabled = true;
         } catch (e) {
           alert(e.message || String(e));
         }

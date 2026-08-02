@@ -757,6 +757,7 @@
   "toast.scanProgressDetail": "{files} Datei(en) gescannt — {pct}% abgeschlossen.",
   "toast.scanProgressDetailShort": "{files} Datei(en) gescannt — {pct}%",
   "toast.definitionsUpdatedDetail": "ClamAV-Signaturen sind bereit.",
+  "toast.open": "Öffnen",
   "splash.starting": "Starting Soterios...",
   "splash.connectingDb": "Connecting to database...",
   "splash.loadingEngines": "Loading security engines...",

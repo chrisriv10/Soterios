@@ -193,7 +193,7 @@ function escToastHtml(v) {
   return String(v ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 }
 
-function toastHtml(title, body, level, themeName, iconOverride = null) {
+function toastHtml(title, body, level, themeName, iconOverride = null, openText = 'Open') {
   const theme = TOAST_THEMES[themeName] || TOAST_THEMES.dark;
   const accent = theme.accents[level] || theme.accents.info;
   const iconPaths = iconOverride || TOAST_ICONS[level] || TOAST_ICONS.info;
@@ -226,8 +226,11 @@ function toastHtml(title, body, level, themeName, iconOverride = null) {
   .wordmark { height:56px; width:auto; display:block; opacity:0.97; margin-left:49px; }
   .wordmark-fallback { font-size:17px; font-weight:600; color:${theme.textMain}; letter-spacing:-0.02em; margin-left:12px; }
   .header .spacer { flex:1; }
-  .close { flex-shrink:0; color:${theme.closeBtn}; font-size:16px; line-height:1; padding:2px 4px; align-self:flex-start; margin-top:4px; }
+  .header-actions { flex-shrink:0; display:flex; gap:4px; align-self:flex-start; margin-top:4px; }
+  .close { color:${theme.closeBtn}; font-size:16px; line-height:1; padding:2px 4px; cursor:pointer; }
   .close:hover { color:${theme.closeHover}; }
+  .open-btn { color:${theme.textMuted}; font-size:14px; line-height:1; padding:2px 6px; cursor:pointer; border:1px solid ${theme.border}; border-radius:4px; background:rgba(255,255,255,0.05); }
+  .open-btn:hover { color:${theme.textMain}; border-color:${accent}; background:rgba(255,255,255,0.1); }
   .body-row { flex-shrink:0; display:flex; gap:14px; align-items:flex-start; padding:14px 16px 16px 14px; }
   .status-circle {
     flex-shrink:0; width:48px; height:48px; border-radius:50%;
@@ -246,7 +249,10 @@ function toastHtml(title, body, level, themeName, iconOverride = null) {
       ${markDataUri ? `<img class="mark" src="${markDataUri}" alt="" />` : ''}
       ${wordmarkDataUri ? `<img class="wordmark" src="${wordmarkDataUri}" alt="" />` : '<span class="wordmark-fallback">Soterios</span>'}
       <div class="spacer"></div>
-      <div class="close" id="closeBtn">&times;</div>
+      <div class="header-actions">
+        <div class="open-btn" id="openBtn">${escToastHtml(openText)}</div>
+        <div class="close" id="closeBtn">&times;</div>
+      </div>
     </div>
     <div class="body-row">
       <div class="status-circle">
@@ -264,10 +270,14 @@ function toastHtml(title, body, level, themeName, iconOverride = null) {
       toast.classList.add('closing');
       setTimeout(() => { window.close(); }, 200);
     }
-    document.getElementById('closeBtn').addEventListener('click', (e) => { e.stopPropagation(); dismiss(); });
-    toast.addEventListener('click', () => {
+    function openApp() {
       window.location.href = 'soterios://navigate-scanner';
       dismiss();
+    }
+    document.getElementById('closeBtn').addEventListener('click', (e) => { e.stopPropagation(); dismiss(); });
+    document.getElementById('openBtn').addEventListener('click', (e) => { e.stopPropagation(); openApp(); });
+    toast.addEventListener('click', () => {
+      openApp();
     });
     setTimeout(dismiss, ${TOAST_LIFETIME_MS});
   </script>
@@ -322,8 +332,9 @@ function showNotification(title, body, level = 'info', iconOverride = null) {
     // Translate title and body before rendering
     const translatedTitle = t(title);
     const translatedBody = t(body);
+    const translatedOpenText = t('toast.open');
     toastWindow.setAlwaysOnTop(true, 'screen-saver');
-    toastWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(toastHtml(translatedTitle, translatedBody, level, themeName, iconOverride)));
+    toastWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(toastHtml(translatedTitle, translatedBody, level, themeName, iconOverride, translatedOpenText)));
     toastWindow.once('ready-to-show', () => toastWindow.show());
     toastWindow.on('closed', () => {
       const idx = activeToasts.indexOf(toastWindow);

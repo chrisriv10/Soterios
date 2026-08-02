@@ -42,16 +42,16 @@ async function getTrayHealthSummary(db, toolRegistry) {
   // Network traffic history (last 24h)
   let network = { rxKBs: 0, txKBs: 0, history: [], rx: [], tx: [] };
   try {
-    const history = db.getNetworkHistory ? db.getNetworkHistory(24 * 60) : []; // last 24h, 1 sample per min
+    const history = db.getNetworkStatsHistory ? db.getNetworkStatsHistory(24) : []; // last 24h
     if (history.length) {
       const latest = history[history.length - 1];
-      network.rxKBs = Math.round((latest.rx_bytes || 0) / 1024);
-      network.txKBs = Math.round((latest.tx_bytes || 0) / 1024);
-      // For sparkline: use last 60 samples, convert to KB/s
+      network.rxKBs = Math.round(latest.rx_sec || 0);
+      network.txKBs = Math.round(latest.tx_sec || 0);
+      // For sparkline: use last 60 samples
       const recent = history.slice(-60);
-      network.rx = recent.map(h => (h.rx_bytes || 0) / 1024);
-      network.tx = recent.map(h => (h.tx_bytes || 0) / 1024);
-      network.history = recent.map(h => (h.tx_bytes + h.rx_bytes) / 1024);
+      network.rx = recent.map(h => h.rx_sec || 0);
+      network.tx = recent.map(h => h.tx_sec || 0);
+      network.history = recent.map(h => (h.tx_sec + h.rx_sec) || 0);
     }
   } catch (_) {}
 
