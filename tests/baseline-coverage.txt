@@ -1,0 +1,46 @@
+Soterios Test Baseline — recorded 2026-08-01
+=============================================
+Command: node tests/node-test-runner.js
+Result: 282 passed, 0 failed, 0 cancelled, 0 skipped
+Duration: ~2696ms
+Suites: 53
+
+Pre-existing failure modes:
+- systeminformation module not installed before npm install
+  (fixed by running npm install; no test code changes needed)
+
+Notes for future comparison:
+- All 282 tests pass cleanly before Phase 1 changes.
+- Watch for regressions in:
+  - tests/windowsChecks.test.js
+  - tests/blocklistService.test.js
+  - tests/networkAlertMonitor.test.js
+  - tests/processInspector.test.js
+  - tests/scanEngine.test.js
+  - tests/quarantineManager.test.js
+  - tests/reportExport.test.js
+  - tests/firewallManager.test.js
+  - tests/emergencyLockdown.test.js
+  - tests/realTimeWatcher.test.js
+  - tests/clamavEngine.test.js
+  - tests/heuristicEngine.test.js
+  - tests/scoringEngine.test.js
+  - tests/reputationEngine.test.js
+  - tests/database.test.js
+  - tests/logger.test.js
+  - tests/maintenanceScheduler.test.js
+  - tests/i18n.test.js
+  - tests/platform.test.js
+  - tests/passwordTools.test.js
+  - tests/fileShredder.test.js
+  - tests/duplicateFileFinder.test.js
+  - tests/healthScore.test.js
+  - tests/healthSummary.test.js
+  - tests/scanCancellation.test.js
+  - tests/workerManager.test.js
+  - tests/uninstallUtils.test.js
+  - tests/uninstallLaunchUtils.test.js
+  - tests/uninstallerReport.test.js
+  - tests/systemAudit.test.js
+  - tests/networkStats.test.js
+  - tests/folderWatcher.test.js

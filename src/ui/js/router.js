@@ -21,7 +21,7 @@
     if (currentPage && currentPage !== pageId) {
       const prev = window.Pages[currentPage];
       if (prev && typeof prev.destroy === 'function') {
-        try { prev.destroy(); } catch (_) {}
+        try { prev.destroy(); } catch (e) { console.debug?.('Router page destroy failed', { page: currentPage, error: e?.message || String(e) }); }
       }
     }
     navItems.forEach((item) => { item.classList.toggle('active', item.dataset.page === pageId); });

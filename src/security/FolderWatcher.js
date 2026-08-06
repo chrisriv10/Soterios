@@ -3,6 +3,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const logger = require('../utils/logger');
 
 /**
  * Watches high-risk directories and queues custom scans when files appear
@@ -47,6 +48,10 @@ class FolderWatcher {
     ];
   }
 
+  /**
+   * Get current watcher status.
+   * @returns {Object}
+   */
   getStatus() {
     return {
       running: this._running,
@@ -55,6 +60,10 @@ class FolderWatcher {
     };
   }
 
+  /**
+   * Start watching configured directories.
+   * @returns {Object}
+   */
   start() {
     if (this._running) return this.getStatus();
     this._running = true;
@@ -64,10 +73,16 @@ class FolderWatcher {
     return this.getStatus();
   }
 
+  /**
+   * Stop all watchers and clear the queue.
+   * @returns {Object}
+   */
   stop() {
     this._running = false;
     for (const [, watcher] of this._watchers) {
-      try { watcher.close(); } catch (_) {}
+      try { watcher.close(); } catch (err) {
+        logger.debug('FolderWatcher close failed', { error: err.message });
+      }
     }
     this._watchers.clear();
     for (const timer of this._pending.values()) clearTimeout(timer);
@@ -76,6 +91,10 @@ class FolderWatcher {
     return this.getStatus();
   }
 
+  /**
+   * Watch a single directory for file changes.
+   * @param {string} dir
+   */
   _watchDir(dir) {
     try {
       if (!fs.existsSync(dir)) return;
@@ -86,7 +105,9 @@ class FolderWatcher {
         this._schedule(fullPath);
       });
       watcher.on('error', () => {
-        try { watcher.close(); } catch (_) {}
+        try { watcher.close(); } catch (err) {
+          logger.debug('FolderWatcher error-close failed', { error: err.message });
+        }
         this._watchers.delete(dir);
       });
       this._watchers.set(dir, watcher);
@@ -95,6 +116,10 @@ class FolderWatcher {
     }
   }
 
+  /**
+   * Debounce a file path before enqueuing it.
+   * @param {string} filePath
+   */
   _schedule(filePath) {
     const existing = this._pending.get(filePath);
     if (existing) clearTimeout(existing);
@@ -106,6 +131,10 @@ class FolderWatcher {
     this._pending.set(filePath, timer);
   }
 
+  /**
+   * Enqueue a file for scanning if it passes cooldown and dedup checks.
+   * @param {string} filePath
+   */
   _enqueue(filePath) {
     try {
       const st = fs.statSync(filePath);
@@ -120,6 +149,9 @@ class FolderWatcher {
     this._drain();
   }
 
+  /**
+   * Drain the scan queue, processing one file at a time.
+   */
   async _drain() {
     if (this._draining) return;
     this._draining = true;

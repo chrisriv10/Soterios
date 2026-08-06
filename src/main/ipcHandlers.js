@@ -5,6 +5,15 @@ const { register: registerFirewall } = require('./ipc/firewall');
 const { register: registerNetwork } = require('./ipc/network');
 const { register: registerSystem } = require('./ipc/system');
 
+/**
+ * Register all IPC handlers for the main window.
+ *
+ * Each domain (scan, quarantine, process, firewall, network, system)
+ * gets its own service slice to keep handlers decoupled.
+ *
+ * @param {BrowserWindow} mainWindow
+ * @param {Object} services
+ */
 function registerIpcHandlers(mainWindow, services) {
   const servicesForScan = {
     db: services.db,
@@ -52,6 +61,7 @@ function registerIpcHandlers(mainWindow, services) {
     startNetworkStatsTimer: services.startNetworkStatsTimer,
     stopNetworkStatsTimer: services.stopNetworkStatsTimer,
     emergencyLockdown: services.emergencyLockdown,
+    isActuallyAdmin: services.isActuallyAdmin,
   };
 
   registerScan(mainWindow, servicesForScan);

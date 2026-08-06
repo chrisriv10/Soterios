@@ -1,3 +1,10 @@
+/**
+ * Password strength and generation tools.
+ *
+ * Includes common-password checks, entropy estimation, and
+ * secure random password generation.
+ */
+
 const crypto = require('crypto');
 
 const LOWER = 'abcdefghijklmnopqrstuvwxyz';

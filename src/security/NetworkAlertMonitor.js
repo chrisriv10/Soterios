@@ -30,6 +30,10 @@ class NetworkAlertMonitor {
     this._lastHits = [];
   }
 
+  /**
+   * Get current monitor status.
+   * @returns {Object}
+   */
   getStatus() {
     return {
       running: this._running,
@@ -38,6 +42,10 @@ class NetworkAlertMonitor {
     };
   }
 
+  /**
+   * Start polling for suspicious connections.
+   * @returns {Object}
+   */
   start() {
     if (this._running) return this.getStatus();
     this._running = true;
@@ -49,6 +57,10 @@ class NetworkAlertMonitor {
     return this.getStatus();
   }
 
+  /**
+   * Stop polling.
+   * @returns {Object}
+   */
   stop() {
     this._running = false;
     if (this._timer) clearInterval(this._timer);
@@ -56,11 +68,21 @@ class NetworkAlertMonitor {
     return this.getStatus();
   }
 
+  /**
+   * Ignore a connection key or remote address.
+   * @param {string} key
+   * @returns {Object}
+   */
   ignore(key) {
     if (key) this._ignored.add(String(key));
     return { success: true };
   }
 
+  /**
+   * Kill a process by PID via ProcessInspector.
+   * @param {number|string} pid
+   * @returns {Promise<{success:boolean, error?:string}>}
+   */
   async kill(pid) {
     const n = Number(pid);
     if (!Number.isInteger(n) || n <= 0) return { success: false, error: 'Invalid PID' };
@@ -70,10 +92,19 @@ class NetworkAlertMonitor {
     return this.processInspector.killProcess(n);
   }
 
+  /**
+   * Build a dedup key for a connection.
+   * @param {Object} conn
+   * @returns {string}
+   */
   _key(conn) {
     return `${conn.OwningProcess || 0}|${conn.RemoteAddress || ''}|${conn.RemotePort || ''}`;
   }
 
+  /**
+   * Poll current connections and alert on blocklisted IPs.
+   * @returns {Promise<Array>}
+   */
   async poll() {
     if (!this.networkMonitor || !this.blocklistService) return [];
     let connections = [];

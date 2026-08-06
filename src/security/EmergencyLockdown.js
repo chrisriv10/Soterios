@@ -3,6 +3,10 @@
 const { execFileSync } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(require('child_process').exec);
+const { InvalidInputError, AppError } = require('../utils/errors');
+const { log, ACTIONS } = require('../core/auditLog');
+
+const SAFE_INTERFACE_NAME = /^[^\s'"\\|&;<>]+$/;
 
 /**
  * Emergency Lockdown Service
@@ -24,6 +28,9 @@ class EmergencyLockdown {
     this._loadAllowlist();
   }
 
+  /**
+   * Load the lockdown allowlist from the database.
+   */
   _loadAllowlist() {
     try {
       const stored = this.db.get('lockdown_allowlist');
@@ -35,6 +42,9 @@ class EmergencyLockdown {
     }
   }
 
+  /**
+   * Persist the current allowlist to the database.
+   */
   _saveAllowlist() {
     try {
       this.db.set('lockdown_allowlist', this.allowlist);
@@ -43,10 +53,22 @@ class EmergencyLockdown {
     }
   }
 
+  /**
+   * Return a copy of the current allowlist.
+   * @returns {Object}
+   */
   getAllowlist() {
     return { ...this.allowlist };
   }
 
+  /**
+   * Replace the entire allowlist and persist it.
+   * @param {Object} allowlist
+   * @param {Array} [allowlist.interfaces]
+   * @param {Array} [allowlist.services]
+   * @param {Array} [allowlist.ips]
+   * @returns {Object}
+   */
   setAllowlist(allowlist) {
     this.allowlist = {
       interfaces: allowlist.interfaces || [],
@@ -57,6 +79,12 @@ class EmergencyLockdown {
     return this.allowlist;
   }
 
+  /**
+   * Add an entry to the allowlist.
+   * @param {'interfaces'|'services'|'ips'} type
+   * @param {string} value
+   * @returns {Object}
+   */
   addToAllowlist(type, value) {
     if (!this.allowlist[type]) {
       this.allowlist[type] = [];
@@ -69,6 +97,12 @@ class EmergencyLockdown {
     return this.allowlist;
   }
 
+  /**
+   * Remove an entry from the allowlist.
+   * @param {'interfaces'|'services'|'ips'} type
+   * @param {string} value
+   * @returns {Object}
+   */
   removeFromAllowlist(type, value) {
     if (!this.allowlist[type]) return this.allowlist;
     const normalized = type === 'ips' ? value.trim() : value.trim().toLowerCase();
@@ -78,7 +112,8 @@ class EmergencyLockdown {
   }
 
   /**
-   * Get list of network interfaces
+   * Get list of network interfaces.
+   * @returns {Promise<Array<{name:string, state:string, type:string, connectivity:string}>>}
    */
   async getNetworkInterfaces() {
     try {
@@ -102,36 +137,47 @@ class EmergencyLockdown {
       }
       return interfaces;
     } catch (err) {
-      throw new Error(`Failed to get network interfaces: ${err.message}`);
+      throw new AppError(`Failed to get network interfaces: ${err.message}`);
     }
   }
 
   /**
-   * Disable a network interface
+   * Disable a network interface by name.
+   * @param {string} interfaceName
+   * @returns {Promise<{success:boolean, interface:string}>}
    */
   async disableInterface(interfaceName) {
+    if (!interfaceName || !SAFE_INTERFACE_NAME.test(interfaceName)) {
+      throw new InvalidInputError('Invalid interface name.');
+    }
     try {
       execFileSync('netsh', ['interface', 'set', 'interface', interfaceName, 'admin=disable'], { timeout: 10000 });
       return { success: true, interface: interfaceName };
     } catch (err) {
-      throw new Error(`Failed to disable ${interfaceName}: ${err.message}`);
+      throw new AppError(`Failed to disable ${interfaceName}: ${err.message}`);
     }
   }
 
   /**
-   * Enable a network interface
+   * Enable a network interface by name.
+   * @param {string} interfaceName
+   * @returns {Promise<{success:boolean, interface:string}>}
    */
   async enableInterface(interfaceName) {
+    if (!interfaceName || !SAFE_INTERFACE_NAME.test(interfaceName)) {
+      throw new InvalidInputError('Invalid interface name.');
+    }
     try {
       execFileSync('netsh', ['interface', 'set', 'interface', interfaceName, 'admin=enable'], { timeout: 10000 });
       return { success: true, interface: interfaceName };
     } catch (err) {
-      throw new Error(`Failed to enable ${interfaceName}: ${err.message}`);
+      throw new AppError(`Failed to enable ${interfaceName}: ${err.message}`);
     }
   }
 
   /**
-   * Get list of non-essential Windows services
+   * Get list of non-essential Windows services.
+   * @returns {Promise<Array<{name:string, displayName:string, state:string}>>}
    */
   async getNonEssentialServices() {
     const nonEssentialPatterns = [
@@ -178,36 +224,41 @@ class EmergencyLockdown {
         return isNonEssential && isRunning;
       });
     } catch (err) {
-      throw new Error(`Failed to get services: ${err.message}`);
+      throw new AppError(`Failed to get services: ${err.message}`);
     }
   }
 
   /**
-   * Stop a Windows service
+   * Stop a Windows service.
+   * @param {string} serviceName
+   * @returns {Promise<{success:boolean, service:string}>}
    */
   async stopService(serviceName) {
     try {
       execFileSync('sc', ['stop', serviceName], { timeout: 15000 });
       return { success: true, service: serviceName };
     } catch (err) {
-      throw new Error(`Failed to stop ${serviceName}: ${err.message}`);
+      throw new AppError(`Failed to stop ${serviceName}: ${err.message}`);
     }
   }
 
   /**
-   * Start a Windows service
+   * Start a Windows service.
+   * @param {string} serviceName
+   * @returns {Promise<{success:boolean, service:string}>}
    */
   async startService(serviceName) {
     try {
       execFileSync('sc', ['start', serviceName], { timeout: 15000 });
       return { success: true, service: serviceName };
     } catch (err) {
-      throw new Error(`Failed to start ${serviceName}: ${err.message}`);
+      throw new AppError(`Failed to start ${serviceName}: ${err.message}`);
     }
   }
 
   /**
-   * Emergency lockdown - disable all network interfaces and stop non-essential services
+   * Activate emergency lockdown: disable interfaces, stop non-essential services.
+   * @returns {Promise<{success:boolean, message?:string}>}
    */
   async lockdown() {
     if (this.isLockedDown) {
@@ -222,7 +273,7 @@ class EmergencyLockdown {
       const interfaces = await this.getNetworkInterfaces();
       const services = await this.getNonEssentialServices();
       
-      this.savedNetworkState = interfaces.map(i => ({ name: i.name, state: i.state }));
+      this.savedNetworkState = interfaces.map(i => ({ name: i.name.trim(), state: i.state }));
       this.savedServicesState = services.map(s => ({ name: s.name, state: s.state }));
 
       const results = {
@@ -282,18 +333,21 @@ class EmergencyLockdown {
         'warn'
       );
 
+      log(this.db, ACTIONS.LOCKDOWN_ACTIVATE, results, { success: true }, true);
       return { success: true, results };
     } catch (err) {
       // Reset guard on failure so restore() doesn't receive corrupted state
       this.isLockedDown = false;
       this.savedNetworkState = null;
       this.savedServicesState = null;
-      throw new Error(`Lockdown failed: ${err.message}`);
+      log(this.db, ACTIONS.LOCKDOWN_ACTIVATE, null, { success: false, error: err.message }, true);
+      throw new AppError(`Lockdown failed: ${err.message}`);
     }
   }
 
   /**
-   * Restore from lockdown - re-enable network interfaces and restart services
+   * Restore from lockdown - re-enable network interfaces and restart services.
+   * @returns {Promise<{success:boolean, message?:string, results?:Object}>}
    */
   async restore() {
     if (!this.isLockedDown) {
@@ -374,14 +428,17 @@ class EmergencyLockdown {
         );
       }
 
+      log(this.db, ACTIONS.LOCKDOWN_RESTORE, results, { success: status === 'success', status }, true);
       return { success: status === 'success', results, status };
     } catch (err) {
-      throw new Error(`Restore failed: ${err.message}`);
+      log(this.db, ACTIONS.LOCKDOWN_RESTORE, null, { success: false, error: err.message }, true);
+      throw new AppError(`Restore failed: ${err.message}`);
     }
   }
 
   /**
-   * Get current lockdown status
+   * Get current lockdown status.
+   * @returns {Object}
    */
   getStatus() {
     return {

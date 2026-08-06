@@ -9,7 +9,7 @@ function dirSize(dirPath) {
     try { entries = fs.readdirSync(current, { withFileTypes: true }); } catch (err) { return; }
     for (const entry of entries) {
       const fullPath = path.join(current, entry.name);
-      try { if (entry.isDirectory()) walk(fullPath); else if (entry.isFile()) total += fs.statSync(fullPath).size; } catch (err) {}
+      try { if (entry.isDirectory()) walk(fullPath); else if (entry.isFile()) total += fs.statSync(fullPath).size; } catch (err) { console.debug?.('browserCacheReport walk failed', { path: fullPath, error: err?.message || String(err) }); }
     }
   }
   if (fs.existsSync(dirPath)) walk(dirPath);

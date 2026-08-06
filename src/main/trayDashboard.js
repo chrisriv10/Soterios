@@ -1,17 +1,32 @@
+/**
+ * System tray icon and dashboard window.
+ *
+ * Shows a compact health-summary popup anchored to the tray icon.
+ */
 'use strict';
 
 const { Tray, BrowserWindow, nativeImage, screen } = require('electron');
 const path = require('path');
+const logger = require('../utils/logger');
 
 const TRAY_WIDTH = 320;
 const TRAY_HEIGHT = 220;
 const TRAY_MARGIN = 8;
 
+/**
+ * Create the tray icon image.
+ * @returns {Electron.NativeImage}
+ */
 function createTrayIcon() {
   const iconPath = path.join(__dirname, '../../assets/icon.ico');
   return nativeImage.createFromPath(iconPath);
 }
 
+/**
+ * Position the tray dashboard window near the tray icon.
+ * @param {Electron.Tray} tray
+ * @param {BrowserWindow} trayWindow
+ */
 function positionTrayWindow(tray, trayWindow) {
   const trayBounds = tray.getBounds();
   const display = screen.getDisplayNearestPoint({ x: trayBounds.x, y: trayBounds.y });
@@ -25,6 +40,14 @@ function positionTrayWindow(tray, trayWindow) {
   trayWindow.setBounds({ x, y, width: effectiveWidth, height: effectiveHeight }, false);
 }
 
+/**
+ * Initialize the tray dashboard.
+ * @param {Object} params
+ * @param {Electron.App} params.app
+ * @param {BrowserWindow} params.mainWindow
+ * @param {Function} params.getSummary
+ * @returns {Object|null}
+ */
 function initTrayDashboard({ app, mainWindow, getSummary }) {
   let tray = null;
   let trayWindow = null;
@@ -46,7 +69,9 @@ function initTrayDashboard({ app, mainWindow, getSummary }) {
     try {
       const summary = await getSummary();
       trayWindow.webContents.send('tray:summary', summary);
-    } catch (_) {}
+    } catch (e) {
+      logger.debug?.('refreshTrayWindow failed', { error: e?.message || String(e) });
+    }
   };
 
   tray = new Tray(createTrayIcon());

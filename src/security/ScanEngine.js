@@ -1,20 +1,25 @@
 const logger = require('../utils/logger');
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 const crypto = require('crypto');
 const { clampProgress } = require('../core/scanProgress');
+const { scanReportsDir } = require('./reportExport');
+const { renderTemplate } = require('../utils/templates');
 
+/**
+ * Escape a string for safe insertion into HTML.
+ * @param {*} v - Value to escape.
+ * @returns {string} Escaped string.
+ */
 function esc(v) {
-  return String(v ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  return String(v ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;' }[ch]));
 }
 
-function scanReportsDir() {
-  const dir = path.join(os.homedir(), '.soterios', 'scan-reports');
-  fs.mkdirSync(dir, { recursive: true });
-  return dir;
-}
-
+/**
+ * Render a scan report as an HTML string.
+ * @param {Object} report - Scan report payload.
+ * @returns {string} HTML document string.
+ */
 function renderScanReportHtml(report) {
   const threatRows = report.threats.length
     ? report.threats.map((t) => `<tr><td>${esc(t.name)}</td><td>${esc(t.path)}</td></tr>`).join('')
@@ -22,26 +27,88 @@ function renderScanReportHtml(report) {
   const errors = report.errors.length
     ? report.errors.map((e) => `<li>${esc(e)}</li>`).join('')
     : '<li>No scan errors recorded.</li>';
-  return `<!doctype html>
-<html><head><meta charset="utf-8"><title>Soterios Scan Report</title>
-<style>body{font-family:Segoe UI,Arial,sans-serif;margin:32px;color:#15202b;background:#fff}.muted{color:#667085}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0}.card{border:1px solid #d7dde5;border-radius:6px;padding:14px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{text-align:left;border-bottom:1px solid #e6eaf0;padding:8px;font-size:13px}.danger{color:#b42318}.ok{color:#027a48}.warn{color:#b54708}pre{white-space:pre-wrap;word-break:break-word}</style>
-</head><body>
-<h1>Soterios Scan Report</h1>
-<div class="muted">Generated ${esc(new Date(report.completedAt).toLocaleString())}</div>
-<div class="grid">
-  <div class="card"><div class="muted">Type</div><h2>${esc(report.scanType)}</h2></div>
-  <div class="card"><div class="muted">Status</div><h2 class="${report.status === 'completed' ? 'ok' : 'warn'}">${esc(report.status)}</h2></div>
-  <div class="card"><div class="muted">Files Scanned</div><h2>${esc(report.filesScanned)}</h2></div>
-  <div class="card"><div class="muted">Threats</div><h2 class="${report.threatsFound ? 'danger' : 'ok'}">${esc(report.threatsFound)}</h2></div>
-</div>
-<h2>Targets</h2><pre>${esc(report.targetPaths.join('\n'))}</pre>
-<h2>Threat Details</h2>
-<table><thead><tr><th>Name</th><th>Path</th></tr></thead><tbody>${threatRows}</tbody></table>
-<h2>Errors and Notes</h2><ul>${errors}</ul>
-</body></html>`;
+  const statusClass = report.status === 'completed' ? 'ok' : 'warn';
+  const threatsClass = report.threatsFound ? 'danger' : 'ok';
+  return renderTemplate(path.join(__dirname, '..', 'ui', 'templates', 'scan-report.html'), {
+    GENERATED_AT: new Date(report.completedAt).toLocaleString(),
+    SCAN_TYPE: esc(report.scanType),
+    STATUS_CLASS: statusClass,
+    STATUS: esc(report.status),
+    FILES_SCANNED: esc(report.filesScanned),
+    THREATS_CLASS: threatsClass,
+    THREATS_FOUND: esc(report.threatsFound),
+    TARGETS: esc(report.targetPaths.join('\n')),
+    THREAT_ROWS: threatRows,
+    ERRORS: errors,
+  });
 }
 
+/**
+ * Walk paths and collect file metadata for incremental scan comparison.
+ * @param {string[]} paths - Root paths to walk.
+ * @returns {Array<{ path: string, size: number|null, modifiedAt: string|null }>} File metadata objects.
+ */
+function collectFileMetadatas(paths) {
+  const metadatas = [];
+  const visited = new Set();
+
+  function walk(current) {
+    if (visited.has(current)) return;
+    visited.add(current);
+    let stat;
+    try {
+      stat = fs.statSync(current);
+    } catch (_) {
+      return;
+    }
+    if (stat.isFile()) {
+      metadatas.push({
+        path: current,
+        size: stat.size,
+        modifiedAt: new Date(stat.mtime).toISOString()
+      });
+      return;
+    }
+    if (stat.isDirectory()) {
+      try {
+        const entries = fs.readdirSync(current);
+        for (const entry of entries) {
+          const full = path.join(current, entry);
+          // Skip junctions/symlinks to avoid cycles and permission issues.
+          let entryStat;
+          try {
+            entryStat = fs.lstatSync(full);
+          } catch (_) {
+            continue;
+          }
+          if (entryStat.isSymbolicLink()) continue;
+          walk(full);
+        }
+      } catch (_) {
+        // Permission denied or other access error — skip this directory.
+      }
+    }
+  }
+
+  for (const target of paths || []) {
+    walk(target);
+  }
+  return metadatas;
+}
+
+/**
+ * Coordinates ClamAV scans, progress reporting, threat quarantine,
+ * and scan report generation.
+ */
 class ScanEngine {
+  /**
+   * @param {DatabaseService} db
+   * @param {EventBus} eventBus
+   * @param {ClamAVEngine} clamEngine
+   * @param {HeuristicEngine} heuristicEngine
+   * @param {ReputationEngine} reputationEngine
+   * @param {QuarantineManager} quarantineManager
+   */
   constructor(db, eventBus, clamEngine, heuristicEngine, reputationEngine, quarantineManager) {
     this.db = db;
     this.eventBus = eventBus;
@@ -49,7 +116,7 @@ class ScanEngine {
     this.heuristicEngine = heuristicEngine;
     this.reputationEngine = reputationEngine;
     this.quarantineManager = quarantineManager;
-    
+
     // Separate state for user scans and folder-watch scans
     this.userScan = {
       abortController: null,
@@ -81,6 +148,10 @@ class ScanEngine {
     return this.folderWatchScan.isScanning;
   }
 
+  /**
+   * Run a quick scan against common system temp/startup locations.
+   * @returns {Promise<Object>} Scan result.
+   */
   async runQuickScan() {
     if (this.userScan.isScanning) return { error: 'Scan already in progress' };
 
@@ -104,17 +175,35 @@ class ScanEngine {
     return this.runScan('quick', targets, 'Quick scan starting...');
   }
 
+  /**
+   * Run a full system scan starting from C:\.
+   * @returns {Promise<Object>} Scan result.
+   */
   async runFullScan() {
     if (this.userScan.isScanning) return { error: 'Scan already in progress' };
 
     return this.runScan('full', ['C:\\'], 'Full scan starting (this may take a while)...');
   }
 
+  /**
+   * Run a custom scan against user-specified paths.
+   * @param {string[]} paths - Target paths.
+   * @returns {Promise<Object>} Scan result.
+   */
   async runCustomScan(paths) {
     if (this.userScan.isScanning) return { error: 'Scan already in progress' };
     return this.runScan('custom', paths, 'Custom scan starting...');
   }
 
+  /**
+   * Core scan orchestrator. Runs a single scan of the given type and paths,
+   * emitting progress events and quarantining any threats found.
+   *
+   * @param {'quick'|'full'|'custom'|'folderwatch'} scanType
+   * @param {string[]} paths - Target paths.
+   * @param {string} startMessage - Initial progress message.
+   * @returns {Promise<Object>} Scan result.
+   */
   async runScan(scanType, paths, startMessage) {
     const isFolderWatch = scanType === 'folderwatch';
     const scanState = isFolderWatch ? this.folderWatchScan : this.userScan;
@@ -140,7 +229,15 @@ class ScanEngine {
     let totalThreatsFound = 0;
     const threats = [];
     const errors = [];
-    let wasCanceled = false;
+
+    // Build skip set for incremental scans (full scans only).
+    const isFullScan = scanType === 'full';
+    const scanMetadatas = isFullScan ? paths.map((p) => {
+      let stat;
+      try { stat = fs.statSync(p); } catch (_) { stat = null; }
+      return { path: p, size: stat ? stat.size : null, modifiedAt: stat ? new Date(stat.mtime).toISOString() : null };
+    }) : [];
+    const skipPaths = isFullScan ? this.db.getFilesToSkip(scanMetadatas) : new Set();
 
     // Progress must never move backward within a single scan. Previously,
     // each target path computed its own fresh, lower "basePct" and emitted
@@ -160,6 +257,7 @@ class ScanEngine {
       this.eventBus.emit('scan:progress', { scanType, pct, message, ...extra });
     };
 
+    let wasCanceled = false;
     try {
       emitProgress(5, startMessage);
 
@@ -171,6 +269,13 @@ class ScanEngine {
 
         const targetPath = paths[i];
         const basePct = Math.round((i / paths.length) * 80 + 10);
+
+        // Incremental scan: skip paths that haven't changed since last scan.
+        if (skipPaths.has(targetPath)) {
+          emitProgress(basePct, 'Skipping unchanged: ' + targetPath + '...', { filesScanned: cumulativeFiles });
+          continue;
+        }
+
         emitProgress(basePct, 'Scanning ' + targetPath + '...');
 
         let pathLastChecked = 0;
@@ -205,6 +310,23 @@ class ScanEngine {
           if (Array.isArray(result.threats)) threats.push(...result.threats);
           if (result.note) {
             scanState.notes.push(result.note);
+          }
+
+          // Record scanned path for incremental scans.
+          try {
+            const meta = isFullScan ? scanMetadatas[i] : null;
+            if (meta) {
+              this.db.recordScannedFile(meta);
+            } else {
+              const stat = fs.statSync(targetPath);
+              this.db.recordScannedFile({
+                path: targetPath,
+                size: stat.size,
+                modifiedAt: stat.mtime.toISOString()
+              });
+            }
+          } catch (_) {
+            // Non-fatal: record best-effort for incremental cache.
           }
 
           // Quarantine each newly-found threat from this iteration
@@ -272,7 +394,9 @@ class ScanEngine {
         if (shouldPersistReport && this.db.getSetting('feature.scanHistory', true)) {
           this.db.logScan(scanType, totalFilesScanned, totalThreatsFound, durationMs);
         }
-      } catch (_) {}
+      } catch (err) {
+        logger.debug('Scan history log failed', { error: err.message });
+      }
       scanState.currentScan = null;
       scanState.abortController = null;
       if (wasCanceled) {
@@ -311,6 +435,10 @@ class ScanEngine {
     };
   }
 
+  /**
+   * Abort the current user-initiated scan.
+   * @returns {Object} Abort result.
+   */
   abortScan() {
     // Only abort user scans, not folder-watch scans
     if (!this.userScan.isScanning) {
@@ -324,6 +452,10 @@ class ScanEngine {
     return { success: true, canceled: true };
   }
 
+  /**
+   * Get the current scan status.
+   * @returns {Object} Status object.
+   */
   getStatus() {
     const activeScan = this.userScan.isScanning ? this.userScan
       : this.folderWatchScan.isScanning ? this.folderWatchScan
@@ -337,6 +469,11 @@ class ScanEngine {
     };
   }
 
+  /**
+   * Persist a scan report to disk and the database.
+   * @param {Object} report - Scan report payload.
+   * @returns {Object} Saved report with file paths.
+   */
   saveScanReport(report) {
     const shouldSaveHistory = this.db.getSetting('feature.scanHistory', true);
     if (!shouldSaveHistory) {

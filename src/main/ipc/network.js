@@ -3,9 +3,16 @@ const { execFile } = require('child_process');
 const util = require('util');
 const execFilePromise = util.promisify(execFile);
 const logger = require('../../utils/logger');
+const { validateArgs } = require('./validate');
+const { InvalidInputError } = require('../../utils/errors');
 const featureFlags = require('../../core/featureFlags');
 
 
+/**
+ * Validate an IPv4 address string.
+ * @param {string} ip
+ * @returns {boolean}
+ */
 function isValidIPv4(ip) {
   if (typeof ip !== 'string') return false;
   const m = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
@@ -13,6 +20,11 @@ function isValidIPv4(ip) {
   return m.slice(1).every((o) => Number(o) >= 0 && Number(o) <= 255);
 }
 
+/**
+ * Execute a raw PowerShell command and return stdout.
+ * @param {string} command
+ * @returns {Promise<string>}
+ */
 async function runPowerShellRaw(command) {
   const { stdout } = await execFilePromise(
     'powershell.exe',
@@ -22,14 +34,23 @@ async function runPowerShellRaw(command) {
   return stdout;
 }
 
-async function measureConnectionBandwidth({ localAddress, localPort, remoteAddress, remotePort }) {
+  /**
+   * Measure bandwidth for a specific TCP connection.
+   * @param {Object} params
+   * @param {string} params.localAddress
+   * @param {number} params.localPort
+   * @param {string} params.remoteAddress
+   * @param {number} params.remotePort
+   * @returns {Promise<Object>}
+   */
+  async function measureConnectionBandwidth({ localAddress, localPort, remoteAddress, remotePort }) {
   if (!isValidIPv4(localAddress) || !isValidIPv4(remoteAddress)) {
-    throw new Error('Per-connection bandwidth currently only supports IPv4 TCP connections.');
+    throw new InvalidInputError('Per-connection bandwidth currently only supports IPv4 TCP connections.');
   }
   const lp = Number(localPort);
   const rp = Number(remotePort);
   if (!Number.isInteger(lp) || lp < 0 || lp > 65535 || !Number.isInteger(rp) || rp < 0 || rp > 65535) {
-    throw new Error('Invalid port.');
+    throw new InvalidInputError('Invalid port.');
   }
 
   const script = `
@@ -136,6 +157,19 @@ Write-Output "OK|$outBitsPerSec|$inBitsPerSec"
   };
 }
 
+/**
+ * Register network-related IPC handlers.
+ * @param {BrowserWindow} mainWindow
+ * @param {Object} services
+ * @param {object} services.db
+ * @param {object} services.eventBus
+ * @param {object} services.networkMonitor
+ * @param {object} services.networkEnricher
+ * @param {object} services.networkAlertMonitor
+ * @param {object} services.geoLocationService
+ * @param {Function} services.startNetworkStatsTimer
+ * @param {Function} services.stopNetworkStatsTimer
+ */
 function register(mainWindow, { db, eventBus, networkMonitor, networkEnricher, networkAlertMonitor, geoLocationService, startNetworkStatsTimer, stopNetworkStatsTimer }) {
   // -- Network suspicious-connection alerts --
   ipcMain.handle('network-alerts:status', async () => {
@@ -196,7 +230,61 @@ function register(mainWindow, { db, eventBus, networkMonitor, networkEnricher, n
   // -- Per-connection bandwidth (on-demand, IPv4 TCP only -- see
   // measureConnectionBandwidth's comment for why) --
   ipcMain.handle('network:measureBandwidth', async (_event, spec) => {
+    validateArgs([
+      { name: 'localAddress', type: 'string', required: true },
+      { name: 'localPort', type: 'number', required: true, min: 0, max: 65535 },
+      { name: 'remoteAddress', type: 'string', required: true },
+      { name: 'remotePort', type: 'number', required: true, min: 0, max: 65535 },
+    ], spec);
     return measureConnectionBandwidth(spec || {});
+  });
+
+  // -- User IP blocklist --
+  ipcMain.handle('network:userBlocklist:list', async () => {
+    return db.getUserBlocklist();
+  });
+
+  ipcMain.handle('network:userBlocklist:add', async (_event, entry) => {
+    validateArgs([
+      { name: 'ip', type: 'string', required: true },
+      { name: 'reason', type: 'string', required: false },
+    ], entry);
+    return db.addUserBlocklistEntry(entry);
+  });
+
+  ipcMain.handle('network:userBlocklist:remove', async (_event, id) => {
+    validateArgs([
+      { name: 'id', type: 'number', required: true, min: 1 },
+    ], [id]);
+    return db.removeUserBlocklistEntry(id);
+  });
+
+  ipcMain.handle('network:userBlocklist:clear', async () => {
+    return db.clearUserBlocklist();
+  });
+
+  // -- Domain blocklist --
+  ipcMain.handle('network:domainBlocklist:list', async () => {
+    return db.getUserDomainBlocklist();
+  });
+
+  ipcMain.handle('network:domainBlocklist:add', async (_event, entry) => {
+    validateArgs([
+      { name: 'domain', type: 'string', required: true },
+      { name: 'reason', type: 'string', required: false },
+    ], entry);
+    return db.addUserDomainBlocklistEntry(entry);
+  });
+
+  ipcMain.handle('network:domainBlocklist:remove', async (_event, id) => {
+    validateArgs([
+      { name: 'id', type: 'number', required: true, min: 1 },
+    ], [id]);
+    return db.removeUserDomainBlocklistEntry(id);
+  });
+
+  ipcMain.handle('network:domainBlocklist:clear', async () => {
+    return db.clearUserDomainBlocklist();
   });
 }
 

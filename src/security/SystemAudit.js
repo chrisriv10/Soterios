@@ -6,19 +6,44 @@ const path = require('path');
 const fs = require('fs');
 const i18n = require('../i18n');
 
+/**
+ * Runs local Windows security audit checks.
+ *
+ * Checks are executed via PowerShell and include Defender, UAC, Windows
+ * Update, BitLocker, execution policy, and Secure Boot.
+ */
 class SystemAudit {
+  /**
+   * @param {string} [locale] - Locale for localized messages.
+   */
   constructor() {
     this.locale = 'en';
   }
 
+  /**
+   * Set the locale used for audit result messages.
+   * @param {string} locale
+   */
   setLocale(locale) {
     this.locale = locale || 'en';
   }
 
+  /**
+   * Translate a message key using the current locale.
+   * @param {string} key
+   * @param {Object} [vars]
+   * @returns {string}
+   */
   t(key, vars = {}) {
     return i18n.t(key, this.locale, vars);
   }
 
+  /**
+   * Run a PowerShell script snippet and return parsed stdout/stderr.
+   * @param {string} script
+   * @param {number} [timeoutMs]
+   * @returns {Promise<{ok:boolean, stdout?:string, stderr?:string, error?:string}>}
+   */
   async runPowerShell(script, timeoutMs = 15000) {
     try {
       const { stdout, stderr } = await execPromise(
@@ -37,6 +62,10 @@ class SystemAudit {
     }
   }
 
+  /**
+   * Check Windows Defender status.
+   * @returns {Promise<Array<{name:string, status:string, message:string, detail:string, recommendation:string}>>}
+   */
   async checkDefender() {
     const def = await this.runPowerShell(`Get-MpComputerStatus | Select-Object AMServiceEnabled, AntivirusEnabled, RealTimeProtectionEnabled, AMEngineVersion, AntivirusSignatureVersion, AntivirusSignatureAge | ConvertTo-Json`);
     const out = [];
@@ -58,6 +87,10 @@ class SystemAudit {
     return out;
   }
 
+  /**
+   * Check User Account Control (UAC) status.
+   * @returns {Promise<Array<{name:string, status:string, message:string, detail:string, recommendation:string}>>}
+   */
   async checkUac() {
     const uac = await this.runPowerShell(`(Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System').EnableLUA`);
     if (uac.ok) {
@@ -72,6 +105,10 @@ class SystemAudit {
     return [{ name: 'User Account Control', status: 'error', message: 'Could not check UAC status.' }];
   }
 
+  /**
+   * Check pending Windows Updates.
+   * @returns {Promise<Array<{name:string, status:string, message:string, detail:string, recommendation:string}>>}
+   */
   async checkWindowsUpdate() {
     // Primary: COM query (comprehensive but may include driver/optional updates)
     const up = await this.runPowerShell(`$session = New-Object -ComObject Microsoft.Update.Session -ErrorAction Stop; $searcher = $session.CreateUpdateSearcher(); $pending = $searcher.Search('IsInstalled=0 and IsHidden=0 and Type=\'Software\''); $pending.Updates.Count`, 90000);
@@ -103,6 +140,10 @@ class SystemAudit {
     return [{ name: 'Windows Updates', status: 'warn', message: 'Could not query update status.', detail: up.error || 'Windows Update may be disabled or the COM query timed out.', recommendation: 'Check Windows Update in Settings manually.' }];
   }
 
+  /**
+   * Check BitLocker drive encryption status.
+   * @returns {Promise<Array<{name:string, status:string, message:string, detail:string, recommendation:string}>>}
+   */
   async checkBitLocker() {
     const bl = await this.runPowerShell(`Get-BitLockerVolume -MountPoint $env:SystemDrive -ErrorAction Stop | Select-Object ProtectionStatus | ConvertTo-Json`);
     if (bl.ok) {
@@ -138,6 +179,10 @@ class SystemAudit {
     return [{ name: 'BitLocker', status: 'info', message: 'BitLocker is not available on this system.', detail: 'Requires Windows Pro/Enterprise and a TPM chip.' }];
   }
 
+  /**
+   * Check PowerShell execution policy.
+   * @returns {Promise<Array<{name:string, status:string, message:string, detail:string, recommendation:string}>>}
+   */
   async checkExecutionPolicy() {
     const ep = await this.runPowerShell(`try { (Get-ExecutionPolicy -Scope LocalMachine -ErrorAction Stop).ToString() } catch { '' }`);
     if (ep.ok) {
@@ -154,6 +199,10 @@ class SystemAudit {
     return [{ name: 'PowerShell Execution Policy', status: 'warn', message: 'PowerShell execution policy query failed.', detail: ep.error || 'Unable to query execution policy.', recommendation: 'Check execution policy with Get-ExecutionPolicy -List in PowerShell.' }];
   }
 
+  /**
+   * Check Secure Boot status.
+   * @returns {Promise<Array<{name:string, status:string, message:string, detail:string, recommendation:string}>>}
+   */
   async checkSecureBoot() {
     const sb = await this.runPowerShell(`Confirm-SecureBootUEFI`);
     if (sb.ok) {
@@ -168,6 +217,11 @@ class SystemAudit {
     return [{ name: 'Secure Boot', status: 'info', message: 'Secure Boot status could not be determined.', detail: 'This check may not be supported on virtual machines or older hardware.' }];
   }
 
+  /**
+   * Run all audit checks concurrently and report progress.
+   * @param {Function} [onProgress]
+   * @returns {Promise<Array>} Flat array of check results in display order.
+   */
   async runAudit(onProgress) {
     // All six checks are independent of each other, so run them concurrently
     // instead of sequentially. Each PowerShell spawn has significant cold-start

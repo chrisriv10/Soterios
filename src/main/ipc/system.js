@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const os = require('os');
+const { execSync } = require('child_process');
 const {
   isPathInScanReportsDir,
   isPathInAllowedReportDir,
@@ -19,16 +20,43 @@ const { getTrayHealthSummary } = require('../healthSummary');
 const { MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS, ALLOWED_SCRIPT_IDS, SCHEDULE_PRESETS } = require('../maintenanceScheduler');
 const { loadRegistry } = require('../../scripts/scriptRunner');
 const i18n = require('../../i18n');
+const logger = require('../../utils/logger');
 const { requestText } = require('./_shared');
 const featureFlags = require('../../core/featureFlags');
+const { AppError, PermissionError } = require('../../utils/errors');
 
+/**
+ * Delete a file if it exists, swallowing non-critical filesystem errors.
+ * @param {string} filePath
+ */
 function deleteFileIfSafe(filePath) {
   if (!filePath) return;
   try {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-  } catch (_) { }
+  } catch (e) {
+    logger.debug?.('deleteFileIfSafe failed', { filePath, error: e?.message || String(e) });
+  }
 }
 
+/**
+ * Register system-related IPC handlers.
+ * @param {BrowserWindow} mainWindow
+ * @param {Object} services
+ * @param {object} services.db
+ * @param {object} services.eventBus
+ * @param {object} services.toolRegistry
+ * @param {object} services.maintenanceScheduler
+ * @param {object} services.firewallManager
+ * @param {object} services.networkMonitor
+ * @param {object} services.geoLocationService
+ * @param {object} services.systemAudit
+ * @param {object} services.realtimeWatcher
+ * @param {object} services.folderWatcher
+ * @param {Function} services.startNetworkStatsTimer
+ * @param {Function} services.stopNetworkStatsTimer
+ * @param {object} services.emergencyLockdown
+ * @param {boolean} services.isActuallyAdmin
+ */
 function register(mainWindow, {
   db,
   eventBus,
@@ -43,13 +71,14 @@ function register(mainWindow, {
   startNetworkStatsTimer,
   stopNetworkStatsTimer,
   emergencyLockdown,
+  isActuallyAdmin = false,
 }) {
   // -- System --
   ipcMain.handle('app:info', () => ({
     name: app.getName(),
     version: app.getVersion(),
     userData: app.getPath('userData'),
-    isAdmin: true, // We requested admin rights
+    isAdmin: !!isActuallyAdmin,
   }));
 
   // -- Launch at Startup --
@@ -70,7 +99,7 @@ function register(mainWindow, {
 
   ipcMain.handle('rtp:toggle', async (_event, enable) => {
     const result = enable ? await realtimeWatcher.start() : await realtimeWatcher.stop();
-    if (!result.ok) throw new Error(result.error || 'Unable to update real-time protection.');
+    if (!result.ok) throw new AppError(result.error || 'Unable to update real-time protection.');
     return result.enabled;
   });
 
@@ -132,6 +161,41 @@ function register(mainWindow, {
     return systemAudit.runAudit((label) => {
       event.sender.send('audit:progress', label);
     });
+  });
+
+  ipcMain.handle('audit:log', async (_event, entry) => {
+    validateArgs([
+      { name: 'action', type: 'string', required: true },
+      { name: 'detail', type: 'string', required: false },
+      { name: 'result', type: 'string', required: false },
+      { name: 'userInitiated', type: 'boolean', required: false },
+    ], entry);
+    return db.addAuditEntry({
+      action: entry.action,
+      detail: entry.detail || null,
+      result: entry.result || null,
+      userInitiated: !!entry.userInitiated,
+    });
+  });
+
+  ipcMain.handle('alerts:list', async (_event, options = {}) => {
+    validateArgs([
+      { name: 'limit', type: 'number', required: false, min: 1, max: 500 },
+      { name: 'unreadOnly', type: 'boolean', required: false },
+    ], options);
+    return db.getAlerts(options);
+  });
+
+  ipcMain.handle('alerts:counts', async () => {
+    return db.getAlertCounts();
+  });
+
+  ipcMain.handle('app:exportSettings', async () => {
+    return {
+      settings: db.exportAllSettings(),
+      quarantine: db.exportQuarantineState(),
+      exportedAt: new Date().toISOString(),
+    };
   });
 
   // -- Scheduled maintenance (#71) --
@@ -338,14 +402,14 @@ function register(mainWindow, {
   // -- External lookups --
   ipcMain.handle('hibp:password', async (_event, password) => {
     if (!password) return { found: false, count: 0 };
-    if (!featureFlags.getFlag(db, 'externalLookups', true)) throw new Error('External lookups are disabled in Settings.');
+    if (!featureFlags.getFlag(db, 'externalLookups', true)) throw new PermissionError('External lookups are disabled in Settings.');
     const sha = crypto.createHash('sha1').update(password).digest('hex').toUpperCase();
     const prefix = sha.slice(0, 5);
     const suffix = sha.slice(5);
     const res = await requestText(`https://api.pwnedpasswords.com/range/${prefix}`, {
       headers: { 'Add-Padding': 'true' },
     });
-    if (res.statusCode !== 200) throw new Error(`HIBP password check failed (${res.statusCode}).`);
+    if (res.statusCode !== 200) throw new AppError(`HIBP password check failed (${res.statusCode}).`);
     const line = res.body.split(/\r?\n/).find((row) => row.split(':')[0] === suffix);
     const count = line ? Number(line.split(':')[1] || 0) : 0;
     return { found: count > 0, count };
@@ -353,12 +417,12 @@ function register(mainWindow, {
 
   ipcMain.handle('xon:email', async (_event, email) => {
     if (!email) return { found: false, breaches: [] };
-    if (!featureFlags.getFlag(db, 'externalLookups', true)) throw new Error('External lookups are disabled in Settings.');
+    if (!featureFlags.getFlag(db, 'externalLookups', true)) throw new PermissionError('External lookups are disabled in Settings.');
     const encoded = encodeURIComponent(email);
     const res = await requestText(`https://api.xposedornot.com/v1/check-email/${encoded}?details=true`);
     if (res.statusCode === 404) return { found: false, breaches: [] };
-    if (res.statusCode === 429) throw new Error('XposedOrNot rate limit reached. Try again in a moment.');
-    if (res.statusCode !== 200) throw new Error(`XposedOrNot email check failed (${res.statusCode}).`);
+    if (res.statusCode === 429) throw new AppError('XposedOrNot rate limit reached. Try again in a moment.');
+    if (res.statusCode !== 200) throw new AppError(`XposedOrNot email check failed (${res.statusCode}).`);
     const body = JSON.parse(res.body || '{}');
     if (body.Error || body.error) return { found: false, breaches: [] };
     const raw = body.breaches || body.Breaches || body.breach_details || body.BreachMetrics?.breaches_details || [];
@@ -373,7 +437,7 @@ function register(mainWindow, {
       lastScanMatches: latest ? latest.threats_found : null,
       passwordScore: passwordScore === null ? null : Number(passwordScore),
     }, { db });
-    if (!result.ok) throw new Error(result.error || 'Unable to calculate health score');
+    if (!result.ok) throw new AppError(result.error || 'Unable to calculate health score');
     return result.data;
   });
 
@@ -418,7 +482,7 @@ function register(mainWindow, {
       execSync(regCmd, { stdio: 'ignore' });
       const regPathEdge = `HKCU\\Software\\Microsoft\\Edge\\NativeMessagingHosts\\${manifest.name}`;
       const regCmdEdge = `reg add "${regPathEdge}" /ve /t REG_SZ /d "${manifestPath.replace(/\\/g, '\\\\')}" /f`;
-      try { execSync(regCmdEdge, { stdio: 'ignore' }); } catch (_) {}
+      try { execSync(regCmdEdge, { stdio: 'ignore' }); } catch (e) { logger.debug?.('Native host Edge reg write failed', { error: e?.message || String(e) }); }
       return { ok: true };
     } catch (e) {
       return { ok: false, error: e.message || String(e) };
@@ -509,6 +573,9 @@ function register(mainWindow, {
   });
 
   ipcMain.handle('lockdown:setAllowlist', async (event, allowlist) => {
+    validateArgs([
+      { name: 'allowlist', type: 'array', required: true, minItems: 0, maxItems: 1000 }
+    ], [allowlist]);
     if (!emergencyLockdown) {
       return { ok: false, error: 'Emergency lockdown service unavailable' };
     }
@@ -521,6 +588,10 @@ function register(mainWindow, {
   });
 
   ipcMain.handle('lockdown:addToAllowlist', async (event, type, value) => {
+    validateArgs([
+      { name: 'type', type: 'string', required: true, allowed: ['ip', 'port', 'program', 'interface'] },
+      { name: 'value', type: 'string', required: true },
+    ], [type, value]);
     if (!emergencyLockdown) {
       return { ok: false, error: 'Emergency lockdown service unavailable' };
     }
@@ -533,12 +604,35 @@ function register(mainWindow, {
   });
 
   ipcMain.handle('lockdown:removeFromAllowlist', async (event, type, value) => {
+    validateArgs([
+      { name: 'type', type: 'string', required: true, allowed: ['ip', 'port', 'program', 'interface'] },
+      { name: 'value', type: 'string', required: true },
+    ], [type, value]);
     if (!emergencyLockdown) {
       return { ok: false, error: 'Emergency lockdown service unavailable' };
     }
     try {
       const result = emergencyLockdown.removeFromAllowlist(type, value);
       return { ok: true, data: result };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // -- Tools --
+  ipcMain.handle('tools:list', async () => {
+    try {
+      const list = toolRegistry.list();
+      return { ok: true, data: list };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('tools:run', async (_event, toolId, args = {}) => {
+    try {
+      const result = await toolRegistry.run(toolId, args, { db, eventBus, mainWindow });
+      return result;
     } catch (err) {
       return { ok: false, error: err.message };
     }

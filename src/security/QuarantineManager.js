@@ -1,23 +1,38 @@
+/**
+ * Manages quarantined threat files using AES-256-GCM encryption.
+ *
+ * Each quarantined file is encrypted with a machine-specific key derived
+ * from a random key stored on disk (with restrictive permissions). Legacy
+ * files encrypted with the old hostname-derived key can still be decrypted
+ * via a fallback path.
+ */
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const crypto = require('crypto');
 const logger = require('../utils/logger');
+const { InvalidInputError } = require('../utils/errors');
+const { log, ACTIONS } = require('../core/auditLog');
+const { QuarantineKeyStore } = require('../utils/quarantineKeyStore');
 
-// XOR key used to obfuscate quarantined files. This is not cryptographic
-// security — it's just enough to prevent accidental double-click execution.
-// Both quarantine() and restore() must use the same value.
-const QUARANTINE_XOR_KEY = 0x55;
+const PBKDF2_ITERATIONS = 100_000;
+const PBKDF2_HASH = 'sha256';
+const PBKDF2_KEY_LENGTH = 32; // 256-bit AES key
+const PBKDF2_SALT = Buffer.from('Soterios-Quarantine-KDF-v1', 'utf8');
+const ENCRYPTED_FILE_VERSION = 1; // first 4 bytes: little-endian version marker
 
 /**
- * QuarantineManager — isolates detected threat files by XOR-encrypting
- * them (key `0x55`) and moving them to a dedicated quarantine directory.
- * Files can later be restored to their original path or permanently deleted.
+ * @param {object} db - DatabaseService with quarantine record helpers.
+ * @param {object} [options]
+ * @param {string} [options.quarantineDir] - Override quarantine directory (tests).
+ * @param {Buffer} [options.key] - Direct encryption key override (tests).
  */
 class QuarantineManager {
   /**
    * @param {object} db - DatabaseService with quarantine record helpers.
    * @param {object} [options]
    * @param {string} [options.quarantineDir] - Override quarantine directory (tests).
+   * @param {Buffer} [options.key] - Direct encryption key override (tests).
    */
   constructor(db, options = {}) {
     this.db = db;
@@ -25,10 +40,89 @@ class QuarantineManager {
     if (!fs.existsSync(this.quarantineDir)) {
       fs.mkdirSync(this.quarantineDir, { recursive: true });
     }
+
+    const keyStore = new QuarantineKeyStore({ ...options, storageDir: options.quarantineDir });
+    this._key = keyStore.key;
+
+    // Legacy fallback key derived from machine-specific info. Used only when
+    // decrypting older quarantined files that were encrypted before the random
+    // key store was introduced.
+    const machineSecret = `${os.hostname()}\x00${os.userInfo().username}`;
+    this._legacyKey = crypto.pbkdf2Sync(machineSecret, PBKDF2_SALT, PBKDF2_ITERATIONS, PBKDF2_KEY_LENGTH, PBKDF2_HASH);
   }
 
   /**
-   * XOR-encrypt a threat file into quarantine, record it, then remove the original.
+   * Encrypt a buffer with AES-256-GCM and prepend a version marker.
+   * @param {Buffer} data - Plaintext.
+   * @returns {Buffer} Encrypted payload.
+   */
+  _encrypt(data) {
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', this._key, iv);
+    const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    // Version marker + iv + tag + encrypted data
+    const versionBuf = Buffer.alloc(4);
+    versionBuf.writeUInt32LE(ENCRYPTED_FILE_VERSION, 0);
+    return Buffer.concat([versionBuf, iv, tag, encrypted]);
+  }
+
+  /**
+   * Decrypt a quarantined file payload. Tries the current random key first,
+   * then falls back to the legacy hostname-derived key for old files.
+   * @param {Buffer} buffer - Encrypted payload.
+   * @returns {Buffer} Plaintext.
+   */
+  _decrypt(buffer) {
+    if (buffer.length < 28) {
+      throw new InvalidInputError('Quarantined file is too short to be valid.');
+    }
+
+    // Try new format with version marker first.
+    const versionMarker = buffer.readUInt32LE(0);
+    if (versionMarker === ENCRYPTED_FILE_VERSION) {
+      if (buffer.length < 32) {
+        throw new InvalidInputError('Quarantined file is too short to be valid.');
+      }
+      const iv = buffer.slice(4, 16);
+      const tag = buffer.slice(16, 32);
+      const encrypted = buffer.slice(32);
+      return this._decryptWithKey(this._key, iv, tag, encrypted);
+    }
+
+    // Legacy format: iv(12) + tag(16) + encrypted (no version marker).
+    if (buffer.length >= 28) {
+      const iv = buffer.slice(0, 12);
+      const tag = buffer.slice(12, 28);
+      const encrypted = buffer.slice(28);
+      try {
+        return this._decryptWithKey(this._key, iv, tag, encrypted);
+      } catch (_) {
+        // Fall back to legacy hostname-derived key for files quarantined
+        // before the random key store was introduced.
+        return this._decryptWithKey(this._legacyKey, iv, tag, encrypted);
+      }
+    }
+
+    throw new InvalidInputError('Quarantined file has an unsupported format.');
+  }
+
+  /**
+   * Decrypt with an explicit key.
+   * @param {Buffer} key
+   * @param {Buffer} iv
+   * @param {Buffer} tag
+   * @param {Buffer} encrypted
+   * @returns {Buffer}
+   */
+  _decryptWithKey(key, iv, tag, encrypted) {
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(tag);
+    return Buffer.concat([decipher.update(encrypted), decipher.final()]);
+  }
+
+  /**
+   * AES-256-GCM-encrypt a threat file into quarantine, record it, then remove the original.
    * @param {string} originalPath
    * @param {string} hash
    * @param {string} engine
@@ -43,12 +137,9 @@ class QuarantineManager {
       const safeName = `${Date.now()}_${fileName}.encrypted`;
       quarantinePath = path.join(this.quarantineDir, safeName);
 
-      // Basic XOR encryption to prevent accidental execution
       const data = fs.readFileSync(originalPath);
-      for (let i = 0; i < data.length; i++) {
-        data[i] ^= QUARANTINE_XOR_KEY;
-      }
-      fs.writeFileSync(quarantinePath, data);
+      const encrypted = this._encrypt(data);
+      fs.writeFileSync(quarantinePath, encrypted);
 
       const res = this.db.addQuarantineRecord({
         originalPath,
@@ -62,10 +153,10 @@ class QuarantineManager {
       // Only delete original file after DB record is successfully created
       fs.unlinkSync(originalPath);
 
+      log(this.db, ACTIONS.QUARANTINE_ADD, { originalPath, hash, engine, threatName, reason }, { success: true, id: res.lastInsertRowid });
       return { success: true, id: res.lastInsertRowid };
     } catch (err) {
       logger.error('Failed to quarantine', { error: err.message || String(err) });
-      // If DB failed but we already encrypted the file, clean it up
       try {
         if (quarantinePath && fs.existsSync(quarantinePath)) {
           fs.unlinkSync(quarantinePath);
@@ -75,6 +166,7 @@ class QuarantineManager {
           error: cleanupErr.message || String(cleanupErr)
         });
       }
+      log(this.db, ACTIONS.QUARANTINE_ADD, { originalPath, hash, engine, threatName, reason }, { success: false, error: err.message });
       return { success: false, error: err.message };
     }
   }
@@ -95,9 +187,12 @@ class QuarantineManager {
         return { success: false, error: 'Quarantined file is missing from disk.' };
       }
 
-      const data = fs.readFileSync(record.quarantine_path);
-      for (let i = 0; i < data.length; i++) {
-        data[i] ^= QUARANTINE_XOR_KEY;
+      const encrypted = fs.readFileSync(record.quarantine_path);
+      let data;
+      try {
+        data = this._decrypt(encrypted);
+      } catch (decErr) {
+        return { success: false, error: 'Quarantined file integrity check failed — file may have been tampered with.' };
       }
 
       const destDir = path.dirname(record.original_path);
@@ -109,8 +204,10 @@ class QuarantineManager {
       fs.unlinkSync(record.quarantine_path);
 
       this.db.updateQuarantineStatus(id, 'restored');
+      log(this.db, ACTIONS.QUARANTINE_RESTORE, { id, originalPath: record.original_path }, { success: true });
       return { success: true };
     } catch (err) {
+      log(this.db, ACTIONS.QUARANTINE_RESTORE, { id }, { success: false, error: err.message });
       return { success: false, error: err.message };
     }
   }
@@ -131,8 +228,10 @@ class QuarantineManager {
         fs.unlinkSync(record.quarantine_path);
       }
       this.db.updateQuarantineStatus(id, 'deleted');
+      log(this.db, ACTIONS.QUARANTINE_DELETE, { id, originalPath: record.original_path }, { success: true });
       return { success: true };
     } catch (err) {
+      log(this.db, ACTIONS.QUARANTINE_DELETE, { id }, { success: false, error: err.message });
       return { success: false, error: err.message };
     }
   }

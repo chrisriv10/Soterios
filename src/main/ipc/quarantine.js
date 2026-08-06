@@ -1,11 +1,24 @@
 const { ipcMain } = require('electron');
+const { validateArgs } = require('./validate');
 
+/**
+ * Register quarantine-related IPC handlers.
+ * @param {BrowserWindow} mainWindow
+ * @param {Object} services
+ * @param {object} services.quarantineManager
+ */
 function register(mainWindow, { quarantineManager }) {
   ipcMain.handle('quarantine:restore', async (_event, id) => {
+    validateArgs([
+      { name: 'id', type: 'number', required: true, min: 1 },
+    ], [id]);
     return quarantineManager.restore(id);
   });
 
   ipcMain.handle('quarantine:delete', async (_event, id) => {
+    validateArgs([
+      { name: 'id', type: 'number', required: true, min: 1 },
+    ], [id]);
     return quarantineManager.delete(id);
   });
 }

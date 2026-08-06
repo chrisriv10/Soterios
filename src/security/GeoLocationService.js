@@ -1,24 +1,11 @@
-const https = require('https');
+const { requestText } = require('../main/ipc/_shared');
 
-function requestText(url, options = {}) {
-  return new Promise((resolve, reject) => {
-    const req = https.request(url, {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Soterios',
-        ...options.headers
-      }
-    }, (res) => {
-      let body = '';
-      res.setEncoding('utf8');
-      res.on('data', chunk => { body += chunk; });
-      res.on('end', () => resolve({ statusCode: res.statusCode, body }));
-    });
-    req.on('error', reject);
-    req.setTimeout(15000, () => req.destroy(new Error('Request timed out')));
-    req.end();
-  });
-}
+/**
+ * GeoLocationService — looks up geographic data for an IP address.
+ * Results are cached in the database to avoid redundant API calls.
+ * In-flight requests are deduplicated so concurrent lookups for the
+ * same IP only make one network request.
+ */
 
 /**
  * GeoLocationService — looks up geographic data for an IP address.

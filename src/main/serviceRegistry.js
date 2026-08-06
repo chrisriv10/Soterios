@@ -1,7 +1,11 @@
 'use strict';
 
 const path = require('path');
-const ClamAVEngine = require('../security/ClamAVEngine');
+const ClamAVEngine = require(process.platform === 'darwin'
+  ? '../security/ClamAVEngine.macos'
+  : process.platform === 'linux'
+    ? '../security/ClamAVEngine.linux'
+    : '../security/ClamAVEngine');
 const HeuristicEngine = require('../security/HeuristicEngine');
 const ReputationEngine = require('../security/ReputationEngine');
 const QuarantineManager = require('../security/QuarantineManager');
@@ -51,10 +55,10 @@ class ServiceRegistry {
       quarantineManager
     );
     const realtimeWatcher = new RealTimeWatcher(db, eventBus, scanEngine);
-    const processInspector = new ProcessInspector();
+    const processInspector = new ProcessInspector({ db });
     const systemAudit = new SystemAudit();
     systemAudit.setLocale(locale);
-    const firewallManager = new FirewallManager();
+    const firewallManager = new FirewallManager(db);
     const networkMonitor = new NetworkMonitor();
     const processResolver = new ProcessResolver(processInspector);
     const blocklistService = new BlocklistService(db);
@@ -96,7 +100,8 @@ class ServiceRegistry {
       folderWatcher,
       networkAlertMonitor,
       emergencyLockdown,
-      toolRegistry
+      toolRegistry,
+      isActuallyAdmin: false
     };
     return this._services;
   }

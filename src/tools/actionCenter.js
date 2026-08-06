@@ -1,5 +1,21 @@
+/**
+ * Action Center tool.
+ *
+ * Generates prioritized security and maintenance recommendations
+ * based on scan history, quarantine state, and system metrics.
+ */
+
 const si = require('systeminformation');
 
+/**
+ * Build a recommendation object.
+ * @param {string} id
+ * @param {'danger'|'warn'|'ok'} level
+ * @param {string} title
+ * @param {string} detail
+ * @param {string} actionPage
+ * @returns {Object}
+ */
 function recommendation(id, level, title, detail, actionPage) {
   return { id, level, title, detail, actionPage };
 }

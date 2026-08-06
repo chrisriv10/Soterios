@@ -1,5 +1,7 @@
 'use strict';
 
+const { log, ACTIONS } = require('../core/auditLog');
+
 const DEFAULT_MAINTENANCE = {
   enabled: false,
   schedulePreset: 'weekly',
@@ -157,6 +159,8 @@ class MaintenanceScheduler {
     this.saveConfig({ lastAttempt: startedAt });
     const results = [];
 
+    log(this.db, ACTIONS.MAINTENANCE_RUN, { scriptIds: config.scriptIds, dryRunCleanup }, { startedAt }, true);
+
     try {
       for (const scriptId of config.scriptIds) {
         try {
@@ -180,6 +184,13 @@ class MaintenanceScheduler {
 
       this.db.addMaintenanceRun({ startedAt, results, dryRunCleanup });
       this.db.addAlert('info', `[Maintenance] ${summary} ${auditDetail}`);
+
+      // Prune stale incremental-scan cache entries (best-effort).
+      try {
+        this.db.pruneScannedFiles(30);
+      } catch (_) {
+        // Non-fatal: do not fail maintenance due to cache pruning errors.
+      }
 
       if (okCount > 0) {
         this.saveConfig({ lastRun: startedAt });
