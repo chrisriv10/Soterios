@@ -358,11 +358,21 @@ body {
 }
 
 .nav::-webkit-scrollbar {
-  width: 4px;
+  width: 10px;
+}
+.nav::-webkit-scrollbar-track {
+  background: transparent;
 }
 .nav::-webkit-scrollbar-thumb {
-  background: var(--bg-surface-hover);
-  border-radius: 4px;
+  background: var(--text-muted);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.nav::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-primary);
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 .nav-group-label {
@@ -1495,4 +1505,216 @@ body {
 
 [dir="rtl"] .output-panel {
   align-self: stretch;
+}
+
+/* Toast Notifications */
+@keyframes toastSlideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes toastSlideOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+/* AI Assistant */
+.ai-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 190px);
+  min-height: 420px;
+  gap: 10px;
+}
+
+.ai-config-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  background: var(--panel-raised, rgba(30, 38, 48, 0.6));
+  border: 1px solid rgba(128, 140, 160, 0.18);
+  border-radius: 10px;
+}
+
+.ai-config-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.ai-config-field:first-child {
+  flex: 1;
+  min-width: 220px;
+}
+
+.ai-input {
+  background: var(--bg-surface);
+  color: var(--text-primary, #E6EDF3);
+  border: 1px solid rgba(128, 140, 160, 0.25);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.ai-input:focus {
+  border-color: var(--accent-primary);
+}
+
+.ai-prompt {
+  flex: 1;
+  resize: none;
+  font-family: inherit;
+}
+
+.ai-config-saved {
+  font-size: 0.78rem;
+  color: var(--accent-success);
+  padding-bottom: 8px;
+}
+
+.ai-status-banner {
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  border: 1px solid;
+}
+
+.ai-status-banner a {
+  color: var(--accent-primary);
+}
+
+.ai-status-info {
+  background: var(--accent-primary-glow, rgba(88, 166, 255, 0.12));
+  border-color: rgba(88, 166, 255, 0.35);
+  color: var(--text-primary);
+}
+
+.ai-status-warn {
+  background: var(--accent-warning-glow, rgba(210, 153, 34, 0.12));
+  border-color: rgba(210, 153, 34, 0.4);
+  color: var(--text-primary);
+}
+
+.ai-status-error {
+  background: var(--accent-danger-glow, rgba(248, 81, 73, 0.12));
+  border-color: rgba(248, 81, 73, 0.4);
+  color: var(--text-primary);
+}
+
+.ai-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: var(--panel-raised, rgba(30, 38, 48, 0.4));
+  border: 1px solid rgba(128, 140, 160, 0.15);
+  border-radius: 10px;
+}
+
+.ai-empty {
+  margin: auto;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  text-align: center;
+  max-width: 340px;
+  line-height: 1.6;
+}
+
+.ai-msg {
+  display: flex;
+}
+
+.ai-msg-user {
+  justify-content: flex-end;
+}
+
+.ai-msg-assistant {
+  justify-content: flex-start;
+}
+
+.ai-bubble {
+  max-width: 78%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  white-space: normal;
+  word-break: break-word;
+  background: var(--bg-surface);
+  border: 1px solid rgba(128, 140, 160, 0.18);
+  color: var(--text-primary, #E6EDF3);
+}
+
+.ai-msg-user .ai-bubble {
+  background: var(--accent-primary-glow, rgba(88, 166, 255, 0.18));
+  border-color: rgba(88, 166, 255, 0.4);
+}
+
+.ai-bubble-error {
+  border-color: rgba(248, 81, 73, 0.5);
+  color: var(--accent-danger);
+}
+
+.ai-error-label {
+  font-weight: 600;
+}
+
+.ai-thinking {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.ai-bubble code {
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 0.82em;
+  background: rgba(128, 140, 160, 0.18);
+  padding: 1px 5px;
+  border-radius: 5px;
+}
+
+.ai-code {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(128, 140, 160, 0.2);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  overflow-x: auto;
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 0.82em;
+  white-space: pre;
+}
+
+.ai-input-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+[dir="rtl"] .ai-msg-user {
+  justify-content: flex-start;
+}
+
+[dir="rtl"] .ai-msg-assistant {
+  justify-content: flex-end;
 }

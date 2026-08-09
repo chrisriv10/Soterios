@@ -44,3 +44,48 @@ function truncatePath(p, maxLen) {
   const tail = parts.slice(-2).join('\\');
   return head + tail;
 }
+
+let toastContainer = null;
+function showToast(message, type = 'success', duration = 3000) {
+  if (!toastContainer) {
+    toastContainer = document.createElement('div');
+    toastContainer.id = 'toast-container';
+    toastContainer.style.cssText = 'position:fixed; top:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:10px; pointer-events:none;';
+    document.body.appendChild(toastContainer);
+  }
+  
+  const toast = document.createElement('div');
+  const bgColor = type === 'success' ? 'var(--accent-success)' : type === 'error' ? 'var(--accent-danger)' : 'var(--accent-primary)';
+  const icon = type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ';
+  
+  toast.style.cssText = `
+    pointer-events:auto;
+    background:var(--bg-surface);
+    border:1px solid ${bgColor};
+    border-left:4px solid ${bgColor};
+    border-radius:8px;
+    padding:16px 20px;
+    min-width:300px;
+    max-width:400px;
+    box-shadow:0 4px 20px rgba(0,0,0,0.3);
+    backdrop-filter:blur(10px);
+    display:flex;
+    align-items:center;
+    gap:12px;
+    animation:toastSlideIn 0.3s ease-out;
+    color:var(--text-main);
+    font-size:14px;
+  `;
+  
+  toast.innerHTML = `
+    <span style="display:flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:50%; background:${bgColor}; color:#fff; font-weight:bold; font-size:14px;">${icon}</span>
+    <span style="flex:1;">${escapeHtml(message)}</span>
+  `;
+  
+  toastContainer.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.style.animation = 'toastSlideOut 0.3s ease-in forwards';
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
