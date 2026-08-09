@@ -458,6 +458,14 @@ function register(mainWindow, {
     return errorMessage ? { success: false, error: errorMessage } : { success: true };
   });
 
+  ipcMain.handle('shell:openExternal', (_event, url) => {
+    if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
+      return { success: false, error: 'Invalid URL.' };
+    }
+    shell.openExternal(url);
+    return { success: true };
+  });
+
   // -- Emergency Lockdown --
   ipcMain.handle('lockdown:getStatus', async () => {
     if (!emergencyLockdown) {

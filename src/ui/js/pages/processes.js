@@ -10,6 +10,8 @@ window.Pages.processes = {
   _delegated: false,
   _refreshTimer: null,
   _compactView: false,
+  _contextMenu: null,
+  _contextMenuTarget: null,
 
   t(key, vars) {
     return window.I18n?.t(key, vars) ?? key;
@@ -198,6 +200,8 @@ window.Pages.processes = {
 
     if (!this._delegated) {
       listEl.addEventListener('click', (e) => this.handleEndProcessClick(e, container));
+      listEl.addEventListener('contextmenu', (e) => this.handleContextMenu(e, container));
+      document.addEventListener('click', (e) => this.closeContextMenu(e));
       this._delegated = true;
     }
   },
@@ -409,5 +413,213 @@ const locationBadge = locationSuspicious
     this._all = []; this._query = ''; this._riskFilter = 'all'; this._sortBy = 'default';
     this._rowIndex = null; this._order = []; this._delegated = false;
     this._listWrapper = null; this._noResultsEl = null; this._cpuHistory = [];
+    this.closeContextMenu();
+  },
+
+  handleContextMenu(e, container) {
+    const row = e.target.closest('.list-row');
+    if (!row) return;
+
+    e.preventDefault();
+    this._contextMenuTarget = row;
+
+    const pid = row.querySelector('[data-end-process]')?.dataset.endProcess;
+    const processName = row.querySelector('[data-end-process]')?.dataset.processName;
+    const pathEl = row.querySelector('.path-chip');
+    const filePath = pathEl?.title || '';
+
+    this.closeContextMenu();
+
+    const menu = document.createElement('div');
+    menu.className = 'context-menu';
+    menu.style.cssText = `
+      position: fixed;
+      left: ${e.clientX}px;
+      top: ${e.clientY}px;
+      background: var(--glass-bg, rgba(30, 30, 30, 0.95));
+      border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+      border-radius: 8px;
+      padding: 4px;
+      min-width: 180px;
+      z-index: 10000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    `;
+
+    const createMenuItem = (text, onClick) => {
+      const item = document.createElement('div');
+      item.style.cssText = `
+        padding: 8px 12px;
+        cursor: pointer;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        color: inherit;
+        transition: background 0.15s;
+      `;
+      item.textContent = text;
+      item.addEventListener('mouseenter', () => item.style.background = 'rgba(255, 255, 255, 0.1)');
+      item.addEventListener('mouseleave', () => item.style.background = 'transparent');
+      item.addEventListener('click', onClick);
+      return item;
+    };
+
+    menu.appendChild(createMenuItem(this.t('processes.runTask'), () => this.showRunTaskDialog(container)));
+    menu.appendChild(createMenuItem(this.t('processes.properties'), () => this.handleProperties(filePath)));
+    menu.appendChild(createMenuItem(this.t('processes.openFileLocation'), () => this.handleOpenFileLocation(filePath)));
+    menu.appendChild(createMenuItem(this.t('processes.searchOnline'), () => this.handleSearchOnline(processName)));
+
+    document.body.appendChild(menu);
+    this._contextMenu = menu;
+
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+      menu.style.left = (e.clientX - rect.width) + 'px';
+    }
+    if (rect.bottom > window.innerHeight) {
+      menu.style.top = (e.clientY - rect.height) + 'px';
+    }
+  },
+
+  closeContextMenu(e) {
+    if (this._contextMenu) {
+      if (e && this._contextMenu.contains(e.target)) return;
+      this._contextMenu.remove();
+      this._contextMenu = null;
+      this._contextMenuTarget = null;
+    }
+  },
+
+  showRunTaskDialog(container) {
+    this.closeContextMenu();
+
+    const existing = document.getElementById('runTaskDialog');
+    if (existing) existing.remove();
+
+    const dialog = document.createElement('div');
+    dialog.id = 'runTaskDialog';
+    dialog.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10001;
+    `;
+
+    const content = document.createElement('div');
+    content.style.cssText = `
+      background: var(--glass-bg, rgba(30, 30, 30, 0.95));
+      border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+      border-radius: 12px;
+      padding: 24px;
+      min-width: 400px;
+      max-width: 500px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    `;
+
+    content.innerHTML = `
+      <h2 style="margin: 0 0 16px 0; font-size: 1.2rem;">${escapeHtml(this.t('processes.runTaskTitle'))}</h2>
+      <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+        <input type="text" id="runTaskInput" placeholder="${escapeHtml(this.t('processes.runTaskPlaceholder'))}"
+          style="flex: 1; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(255, 255, 255, 0.05); color: inherit; font-size: 0.95rem;">
+        <button id="runTaskBrowse" class="btn btn-sm">${escapeHtml(this.t('processes.runTaskBrowse'))}</button>
+      </div>
+      <div style="display: flex; gap: 8px; justify-content: flex-end;">
+        <button id="runTaskCancel" class="btn btn-sm">Cancel</button>
+        <button id="runTaskRun" class="btn btn-sm" style="background: var(--accent-success);">${escapeHtml(this.t('processes.runTaskRun'))}</button>
+      </div>
+    `;
+
+    dialog.appendChild(content);
+    document.body.appendChild(dialog);
+
+    const input = dialog.querySelector('#runTaskInput');
+    const browseBtn = dialog.querySelector('#runTaskBrowse');
+    const cancelBtn = dialog.querySelector('#runTaskCancel');
+    const runBtn = dialog.querySelector('#runTaskRun');
+
+    const close = () => dialog.remove();
+
+    browseBtn.addEventListener('click', async () => {
+      try {
+        const files = await window.soterios.dialog.pickFiles();
+        if (files && files.length > 0) {
+          input.value = files[0];
+        }
+      } catch (err) {
+        console.error('Failed to pick file:', err);
+      }
+    });
+
+    cancelBtn.addEventListener('click', close);
+    dialog.addEventListener('click', (e) => {
+      if (e.target === dialog) close();
+    });
+
+    runBtn.addEventListener('click', async () => {
+      const command = input.value.trim();
+      if (!command) return;
+
+      runBtn.disabled = true;
+      runBtn.textContent = 'Running...';
+
+      try {
+        await window.soterios.process.runTask(command);
+        close();
+        this.load(container, true);
+      } catch (err) {
+        alert(this.t('processes.runTaskError', { error: err.message || String(err) }));
+        runBtn.disabled = false;
+        runBtn.textContent = this.t('processes.runTaskRun');
+      }
+    });
+
+    input.focus();
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') runBtn.click();
+      if (e.key === 'Escape') close();
+    });
+  },
+
+  async handleProperties(filePath) {
+    this.closeContextMenu();
+    if (!filePath) {
+      alert('File path not available for this process');
+      return;
+    }
+    try {
+      await window.soterios.process.showProperties(filePath);
+    } catch (err) {
+      alert('Failed to show properties: ' + (err.message || String(err)));
+    }
+  },
+
+  async handleOpenFileLocation(filePath) {
+    this.closeContextMenu();
+    if (!filePath) {
+      alert('File path not available for this process');
+      return;
+    }
+    try {
+      await window.soterios.shell.showItemInFolder(filePath);
+    } catch (err) {
+      alert('Failed to open file location: ' + (err.message || String(err)));
+    }
+  },
+
+  async handleSearchOnline(processName) {
+    this.closeContextMenu();
+    if (!processName) {
+      alert('Process name not available');
+      return;
+    }
+    try {
+      await window.soterios.process.searchOnline(processName);
+    } catch (err) {
+      alert('Failed to search online: ' + (err.message || String(err)));
+    }
   }
 };

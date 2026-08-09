@@ -27,7 +27,8 @@ contextBridge.exposeInMainWorld('soterios', {
   },
   shell: {
     showItemInFolder: (filePath) => ipcRenderer.invoke('shell:showItemInFolder', filePath),
-    openPath: (filePath) => ipcRenderer.invoke('shell:openPath', filePath)
+    openPath: (filePath) => ipcRenderer.invoke('shell:openPath', filePath),
+    openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url)
   },
   app: {
     info: () => ipcRenderer.invoke('app:info')
@@ -37,7 +38,10 @@ contextBridge.exposeInMainWorld('soterios', {
     toggle: (item, enable) => ipcRenderer.invoke('startup:toggle', item, enable)
   },
   process: {
-    getIcons: (exePaths) => ipcRenderer.invoke('process:getIcons', exePaths)
+    getIcons: (exePaths) => ipcRenderer.invoke('process:getIcons', exePaths),
+    runTask: (command) => ipcRenderer.invoke('process:runTask', command),
+    showProperties: (filePath) => ipcRenderer.invoke('process:showProperties', filePath),
+    searchOnline: (query) => ipcRenderer.invoke('process:searchOnline', query)
   },
   lockdown: {
     getStatus: () => ipcRenderer.invoke('lockdown:getStatus'),
@@ -50,5 +54,17 @@ contextBridge.exposeInMainWorld('soterios', {
   },
   browserExtension: {
     installNativeHost: () => ipcRenderer.invoke('browserExtension:installNativeHost')
+  },
+  ai: {
+    status: () => ipcRenderer.invoke('ai:status'),
+    chat: (messages, model) => ipcRenderer.invoke('ai:chat', { messages, model }),
+    cancel: (requestId) => ipcRenderer.invoke('ai:chat:cancel', requestId),
+    getConfig: () => ipcRenderer.invoke('ai:config:get'),
+    setConfig: (config) => ipcRenderer.invoke('ai:config:set', config),
+    onChunk: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on('ai:chat:chunk', listener);
+      return () => ipcRenderer.removeListener('ai:chat:chunk', listener);
+    }
   }
 });
