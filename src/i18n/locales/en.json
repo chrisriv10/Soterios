@@ -206,6 +206,7 @@
   "settings.updates.ready": "Update {version} is ready to install.",
   "settings.featureSaved": "Feature toggle saved.",
   "settings.toast.featureEnabled": "{feature} enabled",
+  "settings.toast.featureDisabled": "{feature} disabled",
   "settings.toast.featureError": "Failed to update feature",
   "settings.about": "About",
   "settings.aboutDesc": "Local-first security and maintenance platform.",

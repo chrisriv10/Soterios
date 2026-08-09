@@ -407,9 +407,13 @@ window.Pages.settings = {
       try {
         await Api.updateSettings({ features: { [key]: value } });
         statusEl.textContent = t('settings.featureSaved');
-        if (value && showToast) {
+        if (showToast) {
           const featureName = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim();
-          showToast(t('settings.toast.featureEnabled', { feature: featureName }), 'success');
+          if (value) {
+            showToast(t('settings.toast.featureEnabled', { feature: featureName }), 'success');
+          } else {
+            showToast(t('settings.toast.featureDisabled', { feature: featureName }), 'info');
+          }
         }
       } catch (err) {
         input.checked = !value;
