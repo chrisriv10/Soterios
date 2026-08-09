@@ -103,7 +103,7 @@
         </div>
 
         <div class="nav-group-label" data-i18n="nav.utilities"></div>
-        <div class="nav-item" data-page="lockdown">
+        <div class="nav-item" data-page="lockdown" id="lockdownNav" style="display:none;">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             <path d="M12 7v4"/>
@@ -132,6 +132,15 @@
             <path d="M8 13h8M8 17h8M8 9h2" />
           </svg>
           <span data-i18n="nav.reports"></span>
+        </div>
+        <div class="nav-item" data-page="ai" id="aiNav">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a7 7 0 0 1 7 7c0 2.1-.9 3.9-2.3 5.2-.8.7-1.2 1.7-1.2 2.8h-7c0-1.1-.4-2.1-1.2-2.8A7 7 0 0 1 5 9a7 7 0 0 1 7-7z" />
+            <path d="M9 21h6" />
+            <path d="M10 17h4" />
+          </svg>
+          <span data-i18n="nav.ai"></span>
         </div>
 
         <div class="nav-group-label" data-i18n="nav.app"></div>
@@ -165,6 +174,7 @@
   <script src="../js/pages/passwords.js"></script>
   <script src="../js/pages/tools.js"></script>
   <script src="../js/pages/reports.js"></script>
+  <script src="../js/pages/ai.js"></script>
   <script src="../js/pages/settings.js"></script>
   <script src="../js/scanIndicator.js"></script>
   <script src="../js/router.js"></script>

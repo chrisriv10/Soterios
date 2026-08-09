@@ -39,6 +39,29 @@
   if (window.Api) {
     await window.Api.initializeTheme();
     await window.Api.initializeLanguage();
+    
+    // Show/hide lockdown nav based on feature flag
+    try {
+      const settings = await window.Api.getSettings();
+      const lockdownNav = document.getElementById('lockdownNav');
+      if (lockdownNav) {
+        lockdownNav.style.display = settings.features?.emergencyLockdown ? 'flex' : 'none';
+      }
+      const aiNav = document.getElementById('aiNav');
+      if (aiNav) {
+        aiNav.style.display = settings.features?.aiAssistant !== false ? 'flex' : 'none';
+      }
+    } catch (_) {
+      // If settings fail to load, keep lockdown hidden by default
+      const lockdownNav = document.getElementById('lockdownNav');
+      if (lockdownNav) {
+        lockdownNav.style.display = 'none';
+      }
+      const aiNav = document.getElementById('aiNav');
+      if (aiNav) {
+        aiNav.style.display = 'flex';
+      }
+    }
   }
   const hashPage = (window.location.hash || '').replace(/^#/, '');
   const initialPage = isKnownPage(hashPage) ? hashPage : 'dashboard';

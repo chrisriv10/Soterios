@@ -88,6 +88,7 @@ const Api = {
     const folderWatch = await window.api.invoke('db:getSetting', 'feature.folderWatch', true);
     const networkAlerts = await window.api.invoke('db:getSetting', 'feature.networkAlerts', true);
     const networkTrafficHistory = await window.api.invoke('db:getSetting', 'feature.networkTrafficHistory', true);
+    const aiAssistant = await window.api.invoke('db:getSetting', 'feature.aiAssistant', true);
     const dbTheme = await window.api.invoke('db:getSetting', 'ui.theme', 'dark');
     const savedLanguage = await window.api.invoke('db:getSetting', 'ui.language', '');
     let language = savedLanguage;
@@ -130,9 +131,9 @@ const Api = {
         launchAtStartup,
         folderWatch,
         networkAlerts,
-        networkTrafficHistory
-      },
-      ui: { theme, language }
+        networkTrafficHistory,
+        aiAssistant
+      },      ui: { theme, language }
     };
   },
   async updateSettings(patch) {
@@ -173,6 +174,9 @@ const Api = {
         const enable = !!f.networkTrafficHistory;
         const result = await window.api.invoke('network-traffic-history:toggle', enable);
         await window.api.invoke('db:setSetting', 'feature.networkTrafficHistory', !!(result && result.running));
+      }
+      if (Object.prototype.hasOwnProperty.call(f, 'aiAssistant')) {
+        await window.api.invoke('db:setSetting', 'feature.aiAssistant', !!f.aiAssistant);
       }
     }
     if (patch.ui) {

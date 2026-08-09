@@ -4,6 +4,7 @@ const { register: registerProcess } = require('./ipc/process');
 const { register: registerFirewall } = require('./ipc/firewall');
 const { register: registerNetwork } = require('./ipc/network');
 const { register: registerSystem } = require('./ipc/system');
+const { register: registerAi } = require('./ipc/ai');
 
 function registerIpcHandlers(mainWindow, services) {
   const servicesForScan = {
@@ -54,12 +55,17 @@ function registerIpcHandlers(mainWindow, services) {
     emergencyLockdown: services.emergencyLockdown,
   };
 
+  const servicesForAi = {
+    db: services.db,
+  };
+
   registerScan(mainWindow, servicesForScan);
   registerQuarantine(mainWindow, servicesForQuarantine);
   registerProcess(mainWindow, servicesForProcess);
   registerFirewall(mainWindow, servicesForFirewall);
   registerNetwork(mainWindow, servicesForNetwork);
   registerSystem(mainWindow, servicesForSystem);
+  registerAi(mainWindow, servicesForAi);
 }
 
 module.exports = { registerIpcHandlers };
