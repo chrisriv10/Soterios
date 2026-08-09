@@ -80,10 +80,10 @@ function register(mainWindow, {
   });
 
   ipcMain.handle('folderwatch:toggle', async (_event, enable) => {
-    if (!folderWatcher) return false;
+    if (!folderWatcher) return { running: false };
     if (enable) folderWatcher.start();
     else folderWatcher.stop();
-    return folderWatcher.getStatus().running;
+    return folderWatcher.getStatus();
   });
 
   // -- Database / Settings --
