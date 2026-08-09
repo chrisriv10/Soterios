@@ -41,6 +41,42 @@ function renderScanReportHtml(report) {
 </body></html>`;
 }
 
+function countFilesInPaths(paths) {
+  let totalFiles = 0;
+  for (const targetPath of paths) {
+    try {
+      if (fs.existsSync(targetPath)) {
+        const stat = fs.statSync(targetPath);
+        if (stat.isFile()) {
+          totalFiles += 1;
+        } else if (stat.isDirectory()) {
+          // Recursively count files in directory
+          function countFiles(dir) {
+            const items = fs.readdirSync(dir);
+            for (const item of items) {
+              const fullPath = path.join(dir, item);
+              try {
+                const itemStat = fs.statSync(fullPath);
+                if (itemStat.isFile()) {
+                  totalFiles += 1;
+                } else if (itemStat.isDirectory()) {
+                  countFiles(fullPath);
+                }
+              } catch (_) {
+                // Skip files we can't access
+              }
+            }
+          }
+          countFiles(targetPath);
+        }
+      }
+    } catch (_) {
+      // Skip paths we can't access
+    }
+  }
+  return totalFiles;
+}
+
 class ScanEngine {
   constructor(db, eventBus, clamEngine, heuristicEngine, reputationEngine, quarantineManager) {
     this.db = db;
@@ -163,6 +199,14 @@ class ScanEngine {
     try {
       emitProgress(5, startMessage);
 
+      // Pre-count total files for accurate progress calculation (skip for full scans to avoid long delays)
+      let totalFilesToScan = 0;
+      if (scanType !== 'full' && paths.length < 10) {
+        emitProgress(5, 'Counting files...');
+        totalFilesToScan = countFilesInPaths(paths);
+        console.log(`[ScanEngine] Pre-counted ${totalFilesToScan} files in ${paths.length} paths`);
+      }
+
       for (let i = 0; i < paths.length; i++) {
         if (scanState.abortController.signal.aborted) {
           wasCanceled = true;
@@ -170,24 +214,41 @@ class ScanEngine {
         }
 
         const targetPath = paths[i];
-        const basePct = Math.round((i / paths.length) * 80 + 10);
-        emitProgress(basePct, 'Scanning ' + targetPath + '...');
-
+        
         let pathLastChecked = 0;
+        let hasReportedProgress = false;
         const result = await this.clamEngine.scanFile(targetPath, (progress) => {
           if (!progress) return;
 
           if (progress.phase === 'update') {
-            emitProgress(Math.max(8, basePct - 2), 'Updating ClamAV definitions...');
+            emitProgress(Math.max(8, Math.min(20, cumulativeFiles / 5)), 'Updating ClamAV definitions...');
             return;
           }
 
           const checked = progress.fileCount || 0;
           cumulativeFiles += checked - pathLastChecked;
           pathLastChecked = checked;
-          const pct = Math.min(95, basePct + Math.min(70, Math.round(checked / 10)));
-          emitProgress(pct, 'Scanning ' + targetPath + ' (' + checked + ' files checked)...', { filesScanned: cumulativeFiles });
+          
+          // Only emit progress if files are actually being scanned
+          if (checked > 0) {
+            // Calculate progress based on actual files scanned
+            let pct;
+            if (totalFilesToScan > 0) {
+              // Use accurate percentage if we pre-counted files
+              pct = Math.min(95, Math.round((cumulativeFiles / totalFilesToScan) * 90));
+            } else {
+              // Fall back to logarithmic scaling for full scans or when pre-counting was skipped
+              pct = Math.min(95, Math.round(Math.log10(cumulativeFiles + 1) * 15));
+            }
+            emitProgress(pct, 'Scanning ' + targetPath + ' (' + checked + ' files checked)...', { filesScanned: cumulativeFiles });
+            hasReportedProgress = true;
+          }
         });
+        
+        // If no progress was reported during this path scan, emit a minimal progress update
+        if (!hasReportedProgress && !wasCanceled) {
+          emitProgress(Math.max(5, Math.min(20, cumulativeFiles / 5)), 'Scanning ' + targetPath + ' (no files found)...', { filesScanned: cumulativeFiles });
+        }
 
         if (scanState.abortController.signal.aborted) {
           wasCanceled = true;
@@ -212,9 +273,8 @@ class ScanEngine {
             for (const threat of result.threats) {
               try {
                 // Hold at the current highest percentage rather than
-                // basePct -- the path's scan has already completed by this
-                // point, so progress shouldn't dip back to where that path
-                // started just because a threat was found.
+                // recalculating - the path's scan has already completed by this
+                // point, so progress shouldn't dip back just because a threat was found.
                 emitProgress(maxEmittedPct, 'Quarantining ' + threat.name + '...');
                 
                 const fileBuffer = fs.readFileSync(threat.path);
