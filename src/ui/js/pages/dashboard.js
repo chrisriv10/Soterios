@@ -22,6 +22,95 @@ window.Pages['dashboard'] = {
       'Low disk space': { title: 'dashboard.warn.lowDisk.title', detail: 'dashboard.warn.lowDisk.detail' },
     };
 
+    // Action mapping for warning types
+    const warningActions = {
+      'Real-time protection is disabled': {
+        label: 'dashboard.action.enableRtp',
+        handler: async () => {
+          await window.api.invoke('rtp:toggle', true);
+          await window.api.invoke('db:setSetting', 'feature.realtimeProtection', true);
+        }
+      },
+      'Folder watch is disabled': {
+        label: 'dashboard.action.enableFolderWatch',
+        handler: async () => {
+          await window.api.invoke('db:setSetting', 'feature.folderWatch', true);
+        }
+      },
+      'Suspicious network alerts are disabled': {
+        label: 'dashboard.action.enableNetworkAlerts',
+        handler: async () => {
+          await window.api.invoke('db:setSetting', 'feature.networkAlerts', true);
+        }
+      },
+      'Network traffic history is disabled': {
+        label: 'dashboard.action.enableHistory',
+        handler: async () => {
+          await window.api.invoke('db:setSetting', 'feature.networkTrafficHistory', true);
+        }
+      },
+      'Auto-generate reports is disabled': {
+        label: 'dashboard.action.enableReports',
+        handler: async () => {
+          await window.api.invoke('db:setSetting', 'feature.autoReports', true);
+        }
+      },
+      'Scan history is disabled': {
+        label: 'dashboard.action.enableHistory',
+        handler: async () => {
+          await window.api.invoke('db:setSetting', 'feature.scanHistory', true);
+        }
+      },
+      'External lookups are disabled': {
+        label: 'dashboard.action.enableLookups',
+        handler: async () => {
+          await window.api.invoke('db:setSetting', 'feature.externalLookups', true);
+        }
+      },
+      'Geolocation heat map is disabled': {
+        label: 'dashboard.action.enableGeo',
+        handler: async () => {
+          await window.api.invoke('db:setSetting', 'feature.geoLookup', true);
+        }
+      },
+      'Network perimeter map is disabled': {
+        label: 'dashboard.action.enableMap',
+        handler: async () => {
+          await window.api.invoke('db:setSetting', 'feature.networkPerimeterMap', true);
+        }
+      },
+      'ClamAV definitions are outdated': {
+        label: 'dashboard.action.updateDefinitions',
+        handler: async () => {
+          await window.api.invoke('scan:updateDefinitions');
+        }
+      },
+      'Windows Firewall is disabled': {
+        label: 'dashboard.action.enableFirewall',
+        handler: async () => {
+          await window.api.invoke('firewall:enableAll');
+        }
+      },
+      'High memory usage detected': {
+        label: 'dashboard.action.runCleanup',
+        handler: async () => {
+          await window.api.invoke('tools:runScript', 'clearTempFiles');
+        }
+      },
+      'High CPU usage detected': {
+        label: 'dashboard.action.runCleanup',
+        handler: async () => {
+          await window.api.invoke('tools:runScript', 'clearTempFiles');
+        }
+      },
+      'Low disk space': {
+        label: 'dashboard.action.diskCleanup',
+        handler: async () => {
+          await window.api.invoke('tools:runScript', 'largeFilesReport');
+        }
+      }
+    };
+
     function translateWarning(w) {
       const trans = warningTranslations[w.title];
       if (trans) return { ...w, title: t(trans.title), detail: t(trans.detail) };
@@ -192,6 +281,28 @@ window.Pages['dashboard'] = {
             </div>
             <div style="margin-top: 16px;">
               <button class="btn" id="btnViewQuarantine">${escapeHtml(t('dashboard.viewQuarantine'))}</button>
+            </div>
+          </div>
+
+          <!-- AI Assistant -->
+          <div class="card" id="aiCard" style="display:none;">
+            <div class="status-card">
+              <div class="status-icon info" id="aiIcon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2a7 7 0 0 1 7 7c0 2.1-.9 3.9-2.3 5.2-.8.7-1.2 1.7-1.2 2.8h-7c0-1.1-.4-2.1-1.2-2.8A7 7 0 0 1 5 9a7 7 0 0 1 7-7z" />
+                  <path d="M9 21h6" />
+                  <path d="M10 17h4" />
+                </svg>
+              </div>
+              <div class="status-info">
+                <h3>${escapeHtml(t('nav.ai'))}</h3>
+                <div class="value" id="aiStatusText">${escapeHtml(t('dashboard.ai.checking'))}</div>
+              </div>
+            </div>
+            <div style="margin-top:16px; display:flex; gap:12px;">
+              <button class="btn btn-primary" id="btnOpenAiChat">${escapeHtml(t('dashboard.ai.openChat'))}</button>
+              <button class="btn" id="btnAiSetup">${escapeHtml(t('dashboard.ai.setup'))}</button>
             </div>
           </div>
         </div>
@@ -396,18 +507,42 @@ window.Pages['dashboard'] = {
         const data = await Api.runTool('security-overview', {});
         const warnings = (data.recommendations || []).filter((i) => i.level === 'warn' || i.level === 'danger');
         const translatedWarnings = warnings.map(translateWarning);
-        warningList.innerHTML = translatedWarnings.length ? translatedWarnings.map((w) => `
+        warningList.innerHTML = translatedWarnings.length ? translatedWarnings.map((w) => {
+          const action = warningActions[w.title];
+          const actionButton = action ? `<button class="btn btn-sm btn-primary" data-action-warning="${escapeHtml(w.title)}">${escapeHtml(t(action.label))}</button>` : '';
+          return `
           <div class="history-item">
             <div>
               <div class="history-title">${escapeHtml(w.title)} <span class="log-tag ${w.level === 'danger' ? 'match' : 'warn'}">${escapeHtml(w.level)}</span></div>
               <div class="history-meta">${escapeHtml(w.detail)}</div>
             </div>
             <div style="display:flex; gap:6px;">
+              ${actionButton}
               <button class="btn btn-sm" data-open-warning="${escapeHtml(w.actionPage || 'dashboard')}">${escapeHtml(t('dashboard.warningOpen'))}</button>
               <button class="btn btn-sm" data-ignore-warning="${escapeHtml(w.id || w.title)}" data-title="${escapeHtml(w.title)}" data-detail="${escapeHtml(w.detail)}">${escapeHtml(t('dashboard.warningIgnore'))}</button>
             </div>
-          </div>`).join('') : `<div class="empty-state">${escapeHtml(t('dashboard.noWarnings'))}</div>`;
+          </div>`;
+        }).join('') : `<div class="empty-state">${escapeHtml(t('dashboard.noWarnings'))}</div>`;
         warningList.querySelectorAll('[data-open-warning]').forEach((btn) => btn.addEventListener('click', () => window.AppRouter.navigate(btn.dataset.openWarning)));
+        warningList.querySelectorAll('[data-action-warning]').forEach((btn) => btn.addEventListener('click', async () => {
+          const warningTitle = btn.dataset.actionWarning;
+          const action = warningActions[warningTitle];
+          if (!action) return;
+          
+          const item = btn.closest('.history-item');
+          const originalText = btn.textContent;
+          btn.disabled = true;
+          btn.textContent = t('common.loading');
+          
+          try {
+            await action.handler();
+            await loadWarnings();
+          } catch (err) {
+            btn.disabled = false;
+            btn.textContent = originalText;
+            alert(err.message || t('common.failed'));
+          }
+        }));
         warningList.querySelectorAll('[data-ignore-warning]').forEach((btn) => btn.addEventListener('click', async () => {
           const item = btn.closest('.history-item');
           btn.disabled = true;
@@ -573,6 +708,54 @@ window.Pages['dashboard'] = {
       btnViewQuarantine.addEventListener('click', () => {
         if (window.AppRouter) window.AppRouter.navigate('quarantine');
       });
+    }
+
+    // AI Assistant card
+    const aiCard = container.querySelector('#aiCard');
+    const btnOpenAiChat = container.querySelector('#btnOpenAiChat');
+    const btnAiSetup = container.querySelector('#btnAiSetup');
+    if (aiCard) {
+      try {
+        const aiEnabled = await window.api.invoke('db:getSetting', 'feature.aiAssistant', true);
+        aiCard.style.display = aiEnabled !== false ? '' : 'none';
+      } catch (_) {}
+      const loadAiStatus = async () => {
+        const statusText = container.querySelector('#aiStatusText');
+        const aiIcon = container.querySelector('#aiIcon');
+        if (!statusText) return;
+        statusText.textContent = t('dashboard.ai.checking');
+        try {
+          const result = await window.soterios.ai.status();
+          const config = await window.soterios.ai.getConfig();
+          if (result.ok) {
+            const model = config.model || (result.models && result.models[0] && result.models[0].name);
+            statusText.textContent = model
+              ? t('dashboard.ai.ready', { model })
+              : t('dashboard.ai.noModels');
+            if (aiIcon) aiIcon.className = 'status-icon safe';
+            if (btnAiSetup) btnAiSetup.style.display = 'none';
+          } else {
+            statusText.textContent = t('dashboard.ai.offline');
+            if (aiIcon) aiIcon.className = 'status-icon warning';
+            if (btnAiSetup) btnAiSetup.style.display = '';
+          }
+        } catch (_) {
+          statusText.textContent = t('dashboard.ai.offline');
+          if (aiIcon) aiIcon.className = 'status-icon warning';
+          if (btnAiSetup) btnAiSetup.style.display = '';
+        }
+      };
+      if (btnOpenAiChat) {
+        btnOpenAiChat.addEventListener('click', () => {
+          if (window.AppRouter) window.AppRouter.navigate('ai');
+        });
+      }
+      if (btnAiSetup) {
+        btnAiSetup.addEventListener('click', () => {
+          window.soterios.shell.openExternal('https://ollama.com/download');
+        });
+      }
+      loadAiStatus();
     }
     await loadWarnings();
     window.api.invoke('splash:progress', { pct: 75, label: t('splash.loadingWarnings') });
