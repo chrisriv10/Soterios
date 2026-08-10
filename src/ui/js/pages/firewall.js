@@ -206,7 +206,7 @@ window.Pages['firewall'] = {
         </div>
 
         <div style="display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start;">
-          <div style="flex:2; min-width:320px;">
+          <div style="flex:2; min-width:320px;" id="perimeterVisualContainer">
             <svg id="perimeterSvg" viewBox="0 0 600 420" style="width:100%; height:auto; display:block;"></svg>
             <div style="display:flex; justify-content:center; gap:20px; margin-top:10px; flex-wrap:wrap; font-size:0.78rem; color:var(--text-dim);">
               <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--ok);margin-right:5px;"></span>${escapeHtml(t('firewall.legendAllowed'))}</span>
@@ -214,7 +214,13 @@ window.Pages['firewall'] = {
               <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--danger);margin-right:5px;"></span>${escapeHtml(t('firewall.legendBlocked'))}</span>
             </div>
           </div>
-          <div style="flex:1; min-width:270px; max-width:340px;" id="connectionDetailPanel"></div>
+          <div style="flex:1; min-width:270px; max-width:340px; display:flex; flex-direction:column; gap:8px;" id="connectionDetailPanel">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+              <span style="font-weight:600; font-size:0.85rem;">${escapeHtml(t('firewall.whatAmILookingAt'))}</span>
+              <button class="btn btn-sm btn-ghost" id="minimizeDetailBtn" style="padding:4px 8px; font-size:0.75rem;">${escapeHtml(t('common.minimize'))}</button>
+            </div>
+            <div id="connectionDetailContent"></div>
+          </div>
         </div>
 
         <div style="margin-top:24px; padding-top:20px; border-top:1px solid var(--glass-border);">
@@ -408,6 +414,29 @@ window.Pages['firewall'] = {
         reRenderFromCache();
       });
     });
+
+    const minimizeBtn = container.querySelector('#minimizeDetailBtn');
+    if (minimizeBtn) {
+      minimizeBtn.addEventListener('click', () => {
+        const detailPanel = container.querySelector('#connectionDetailPanel');
+        const visualContainer = container.querySelector('#perimeterVisualContainer');
+        if (!detailPanel || !visualContainer) return;
+        
+        const isMinimized = detailPanel.style.display === 'none';
+        detailPanel.style.display = isMinimized ? 'flex' : 'none';
+        minimizeBtn.textContent = isMinimized ? t('common.minimize') : t('common.expand');
+        
+        if (!isMinimized) {
+          visualContainer.style.flex = '1';
+          visualContainer.style.margin = '0 auto';
+          visualContainer.style.maxWidth = '600px';
+        } else {
+          visualContainer.style.flex = '2';
+          visualContainer.style.margin = '';
+          visualContainer.style.maxWidth = '';
+        }
+      });
+    }
 
     if (this._perimeterTimer) clearInterval(this._perimeterTimer);
     this._perimeterTimer = setInterval(() => {
@@ -781,18 +810,21 @@ window.Pages['firewall'] = {
   _renderDetailPanel(container, item) {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const panel = container.querySelector('#connectionDetailPanel');
+    const contentDiv = container.querySelector('#connectionDetailContent');
     if (!panel) return;
     if (!item) {
-      panel.innerHTML = `
-        <div class="card compact" style="display:flex; flex-direction:column; gap:8px;">
-          <div style="font-weight:600; font-size:0.85rem;">${escapeHtml(t('firewall.perimeterDetail'))}</div>
-          <div style="font-size:0.78rem; color:var(--text-dim); display:flex; flex-direction:column; gap:6px;">
-            <div>${escapeHtml(t('firewall.perimeterDesc1'))}</div>
-            <div style="margin-top:6px;">${t('firewall.perimeterDesc2', { unverified: `<span class="glossary-term" title="${escapeHtml(this._glossary('unverified'))}">${escapeHtml(t('common.unverified'))}</span>` })}</div>
-            <div><span class="glossary-term" title="${escapeHtml(this._glossary('inbound'))}">${escapeHtml(t('firewall.inbound'))}</span> / <span class="glossary-term" title="${escapeHtml(this._glossary('outbound'))}">${escapeHtml(t('firewall.outbound'))}</span> ${escapeHtml(t('firewall.perimeterDesc3'))}</div>
-            <div><span class="glossary-term" title="${escapeHtml(this._glossary('established'))}">${escapeHtml(t('firewall.established'))}</span>, <span class="glossary-term" title="${escapeHtml(this._glossary('listen'))}">${escapeHtml(t('firewall.listen'))}</span>, <span class="glossary-term" title="${escapeHtml(this._glossary('time_wait'))}">${escapeHtml(t('firewall.time_wait'))}</span> ${escapeHtml(t('firewall.perimeterDesc4'))}</div>
-          </div>
-        </div>`;
+      if (contentDiv) {
+        contentDiv.innerHTML = `
+          <div class="card compact" style="display:flex; flex-direction:column; gap:8px;">
+            <div style="font-weight:600; font-size:0.85rem;">${escapeHtml(t('firewall.perimeterDetail'))}</div>
+            <div style="font-size:0.78rem; color:var(--text-dim); display:flex; flex-direction:column; gap:6px;">
+              <div>${escapeHtml(t('firewall.perimeterDesc1'))}</div>
+              <div style="margin-top:6px;">${t('firewall.perimeterDesc2', { unverified: `<span class="glossary-term" title="${escapeHtml(this._glossary('unverified'))}">${escapeHtml(t('common.unverified'))}</span>` })}</div>
+              <div><span class="glossary-term" title="${escapeHtml(this._glossary('inbound'))}">${escapeHtml(t('firewall.inbound'))}</span> / <span class="glossary-term" title="${escapeHtml(this._glossary('outbound'))}">${escapeHtml(t('firewall.outbound'))}</span> ${escapeHtml(t('firewall.perimeterDesc3'))}</div>
+              <div><span class="glossary-term" title="${escapeHtml(this._glossary('established'))}">${escapeHtml(t('firewall.established'))}</span>, <span class="glossary-term" title="${escapeHtml(this._glossary('listen'))}">${escapeHtml(t('firewall.listen'))}</span>, <span class="glossary-term" title="${escapeHtml(this._glossary('time_wait'))}">${escapeHtml(t('firewall.time_wait'))}</span> ${escapeHtml(t('firewall.perimeterDesc4'))}</div>
+            </div>
+          </div>`;
+      }
       return;
     }
     const c = item.c;
@@ -812,7 +844,8 @@ window.Pages['firewall'] = {
     const isTrusted = this._trustedIps.includes(remoteAddress);
     const bandwidthEligible = this._isIPv4(localAddress) && this._isIPv4(remoteAddress) && state === 'ESTABLISHED';
 
-    panel.innerHTML = `
+    if (contentDiv) {
+      contentDiv.innerHTML = `
       <div class="card compact" style="display:flex; flex-direction:column; gap:10px;">
         <div style="display:flex; align-items:center; justify-content:space-between;">
           <span style="font-weight:600;">${escapeHtml(processName)}</span>
@@ -847,19 +880,20 @@ window.Pages['firewall'] = {
           <button class="btn btn-sm" data-action="process" ${pid ? '' : 'disabled'}>${escapeHtml(t('firewall.viewProcess'))}</button>
         </div>
       </div>
-    `;
+      `;
 
-    panel.querySelector('[data-action="block-conn"]').addEventListener('click', () => this._blockConnection(container, c));
-    panel.querySelector('[data-action="block-ip"]').addEventListener('click', () => this._blockIp(container, remoteAddress));
-    panel.querySelector('[data-action="block-app"]').addEventListener('click', () => this._blockApp(container, pid, processName));
-    panel.querySelector('[data-action="trust"]').addEventListener('click', () => this._toggleTrust(container, remoteAddress, isTrusted));
-    panel.querySelector('[data-action="whois"]').addEventListener('click', () => this._runWhois(container, remoteAddress));
-    panel.querySelector('[data-action="process"]').addEventListener('click', () => this._showProcessDetails(container, pid));
-    const bandwidthBtn = panel.querySelector('[data-action="bandwidth"]');
-    if (bandwidthBtn) {
-      bandwidthBtn.addEventListener('click', () => this._measureBandwidth(container, bandwidthBtn, {
-        localAddress, localPort, remoteAddress, remotePort
-      }));
+      contentDiv.querySelector('[data-action="block-conn"]').addEventListener('click', () => this._blockConnection(container, c));
+      contentDiv.querySelector('[data-action="block-ip"]').addEventListener('click', () => this._blockIp(container, remoteAddress));
+      contentDiv.querySelector('[data-action="block-app"]').addEventListener('click', () => this._blockApp(container, pid, processName));
+      contentDiv.querySelector('[data-action="trust"]').addEventListener('click', () => this._toggleTrust(container, remoteAddress, isTrusted));
+      contentDiv.querySelector('[data-action="whois"]').addEventListener('click', () => this._runWhois(container, remoteAddress));
+      contentDiv.querySelector('[data-action="process"]').addEventListener('click', () => this._showProcessDetails(container, pid));
+      const bandwidthBtn = contentDiv.querySelector('[data-action="bandwidth"]');
+      if (bandwidthBtn) {
+        bandwidthBtn.addEventListener('click', () => this._measureBandwidth(container, bandwidthBtn, {
+          localAddress, localPort, remoteAddress, remotePort
+        }));
+      }
     }
   },
 
