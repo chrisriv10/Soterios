@@ -422,22 +422,60 @@ window.Pages.reports = {
         return;
       }
       const t = tFactory();
-      const items = rows.map((row) => {
+      const items = rows.map((row, index) => {
         const when = row.started_at || row.timestamp;
         const whenLabel = when ? new Date(when).toLocaleString() : t('common.unknown');
-        const mode = row.dry_run ? t('audit.dryRun') : t('audit.liveRun');
+        const mode = row.dry_run ? t('reports.dryRun') : t('reports.liveRun');
         const detail = (row.results || []).map((r) => `${r.scriptId}: ${r.ok ? t('common.ok') : (r.error || t('common.failed'))}`).join('; ');
         return `
           <div class="history-item">
-            <div>
-              <div class="history-title">${escapeHtml(t('audit.maintenanceRun', { ok: row.ok_count || 0, total: row.total_count || 0, mode }))}</div>
+            <div style="min-width:0;">
+              <div class="history-title">${escapeHtml(t('reports.maintenanceRun', { ok: row.ok_count || 0, total: row.total_count || 0, mode }))}</div>
               <div class="history-meta">${escapeHtml(whenLabel)}${detail ? ` — ${escapeHtml(detail)}` : ''}</div>
             </div>
+            <button class="btn btn-sm view-maintenance" data-index="${index}">${escapeHtml(t('reports.viewDetails'))}</button>
           </div>`;
       }).join('');
       el.innerHTML = `<div class="history-list">${items}</div>`;
+      
+      el.querySelectorAll('.view-maintenance').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const index = parseInt(btn.dataset.index, 10);
+          const row = rows[index];
+          if (row) {
+            this.showMaintenanceDetails(container, row);
+          }
+        });
+      });
     } catch (err) {
       el.innerHTML = `<div class="empty-state">${escapeHtml(tFactory()('reports.errorPrefix', { error: err.message }))}</div>`;
     }
+  },
+
+  showMaintenanceDetails(container, row) {
+    const t = tFactory();
+    const when = row.started_at || row.timestamp;
+    const whenLabel = when ? new Date(when).toLocaleString() : t('common.unknown');
+    const mode = row.dry_run ? t('reports.dryRun') : t('reports.liveRun');
+    
+    const resultsHtml = (row.results || []).map((r) => `
+      <div class="log-row">
+        <span class="log-tag ${r.ok ? 'clean' : 'match'}">${escapeHtml(r.scriptId)}</span>
+        <span class="log-path">${escapeHtml(r.ok ? t('common.ok') : (r.error || t('common.failed')))}</span>
+      </div>
+    `).join('');
+
+    const html = `
+      <div class="report-stats">
+        <div class="stat-tile"><div class="stat-label">${escapeHtml(t('reports.maintenanceHistory'))}</div><div class="stat-value">${escapeHtml(whenLabel)}</div></div>
+        <div class="stat-tile"><div class="stat-label">${escapeHtml(t('reports.mode'))}</div><div class="stat-value">${escapeHtml(mode)}</div></div>
+        <div class="stat-tile"><div class="stat-label">${escapeHtml(t('reports.completed'))}</div><div class="stat-value">${escapeHtml(row.ok_count || 0)}/${escapeHtml(row.total_count || 0)}</div></div>
+      </div>
+      <div class="report-section"><div class="panel-title">${escapeHtml(t('reports.results'))}</div>
+        ${resultsHtml || `<div class="empty-state compact-empty">${escapeHtml(t('reports.noResults'))}</div>`}
+      </div>
+    `;
+    
+    this.showViewer(container, `${t('reports.maintenanceHistory')} - ${whenLabel}`, html);
   }
 };
