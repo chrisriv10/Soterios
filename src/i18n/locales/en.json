@@ -533,6 +533,7 @@
   "firewall.confirmTurnOn": "Turn ON the {profile} firewall profile?",
   "firewall.failedToggle": "Failed to {action} the {profile} firewall profile.",
   "firewall.perimeterTitle": "Network Perimeter",
+  "firewall.whatAmILookingAt": "What am I looking at?",
   "firewall.perimeterSummary": "{total} total connections · {filtered} match filters · {shown} on map",
   "firewall.searchPlaceholder": "Search by process, IP, or hostname…",
   "firewall.showOnMap": "Show on map",
