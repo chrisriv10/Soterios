@@ -117,29 +117,49 @@ class EmergencyLockdown {
   }
 
   /**
+   * Parse `netsh interface show interface` output (Windows 8+ layout:
+   * "Admin State  State  Type  Interface Name", plus legacy name-first layout).
+   * Handles CRLF line endings. State is lowercased for consumers.
+   */
+  static parseNetworkInterfaces(stdout) {
+    const interfaces = [];
+    const modernRe = /^\s*(Enabled|Disabled)\s+(Connected|Disconnected)\s+(Dedicated|Internal|Loopback|Tunnel)\s+(.+?)\s*$/;
+    const legacyRe = /^\s*(.+?)\s+(Connected|Disconnected)\s+(Dedicated|Internal|Loopback|Tunnel)\s+(\S+)\s*$/i;
+
+    for (const rawLine of String(stdout || '').split('\n')) {
+      const line = rawLine.replace(/\r$/, '');
+      let match = line.match(modernRe);
+      if (match) {
+        const [, adminState, state, type, name] = match;
+        interfaces.push({
+          name: name.trim(),
+          state: state.toLowerCase(),
+          type: type.trim(),
+          adminState: adminState.trim()
+        });
+        continue;
+      }
+      match = line.match(legacyRe);
+      if (match) {
+        const [, name, state, type, connectivity] = match;
+        interfaces.push({
+          name: name.trim(),
+          state: state.toLowerCase(),
+          type: type.trim(),
+          connectivity: connectivity.trim()
+        });
+      }
+    }
+    return interfaces;
+  }
+
+  /**
    * Get list of network interfaces
    */
   async getNetworkInterfaces() {
     try {
       const { stdout } = await execAsync('netsh interface show interface', { timeout: 5000 });
-      const lines = stdout.split('\n');
-      const interfaces = [];
-      
-      for (const line of lines) {
-        const match = line.match(/^\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*$/);
-        if (match) {
-          const [, name, state, type, connectivity, comment] = match;
-          if (type === 'Ethernet' || type === 'Wi-Fi' || type === 'Wireless') {
-            interfaces.push({
-              name: name.trim(),
-              state: state.trim(),
-              type: type.trim(),
-              connectivity: connectivity.trim()
-            });
-          }
-        }
-      }
-      return interfaces;
+      return EmergencyLockdown.parseNetworkInterfaces(stdout);
     } catch (err) {
       throw new Error(`Failed to get network interfaces: ${err.message}`);
     }
@@ -170,52 +190,60 @@ class EmergencyLockdown {
   }
 
   /**
-   * Get list of non-essential Windows services
+   * Parse `sc query type= service state= all` output. Handles CRLF line endings.
    */
-  async getNonEssentialServices() {
+  static parseScQueryServices(stdout) {
     const nonEssentialPatterns = [
       'Adobe', 'Google', 'Mozilla', 'Spooler', 'Print', 'Fax', 'Xbox', 
       'WSearch', 'SysMain', 'DiagTrack', 'WaaSMedicSvc', 'XblAuthManager',
       'XblGameSave', 'XboxNetApiSvc', 'BcastDVRUserService', 'OneSync'
     ];
 
-    try {
-      const { stdout } = await execAsync('sc query type= service state= all', { timeout: 10000 });
-      const lines = stdout.split('\n');
-      const services = [];
+    const lines = String(stdout || '').split('\n');
+    const services = [];
 
-      let currentService = null;
-      for (const line of lines) {
-        const serviceNameMatch = line.match(/^SERVICE_NAME:\s*(.+)$/);
-        if (serviceNameMatch) {
-          if (currentService && currentService.displayName) {
-            services.push(currentService);
-          }
-          currentService = { name: serviceNameMatch[1].trim(), displayName: '', state: '' };
-        } else if (currentService) {
-          const displayNameMatch = line.match(/^DISPLAY_NAME:\s*(.+)$/);
-          const stateMatch = line.match(/^\s+STATE:\s+(\d+)\s+(\w+)$/);
-          
-          if (displayNameMatch) {
-            currentService.displayName = displayNameMatch[1].trim();
-          } else if (stateMatch) {
-            currentService.state = stateMatch[2].trim();
-          }
+    let currentService = null;
+    for (const rawLine of lines) {
+      const line = rawLine.replace(/\r$/, '');
+      const serviceNameMatch = line.match(/^SERVICE_NAME:\s*(.+)$/);
+      if (serviceNameMatch) {
+        if (currentService && currentService.displayName) {
+          services.push(currentService);
+        }
+        currentService = { name: serviceNameMatch[1].trim(), displayName: '', state: '' };
+      } else if (currentService) {
+        const displayNameMatch = line.match(/^DISPLAY_NAME:\s*(.+)$/);
+        const stateMatch = line.match(/^\s+STATE\s*:\s+(\d+)\s+(\w+)\s*$/);
+
+        if (displayNameMatch) {
+          currentService.displayName = displayNameMatch[1].trim();
+        } else if (stateMatch) {
+          currentService.state = stateMatch[2].trim();
         }
       }
-      if (currentService && currentService.displayName) {
-        services.push(currentService);
-      }
+    }
+    if (currentService && currentService.displayName) {
+      services.push(currentService);
+    }
 
-      // Filter for non-essential services that are currently running
-      return services.filter(svc => {
-        const isNonEssential = nonEssentialPatterns.some(pattern => 
-          svc.name.toLowerCase().includes(pattern.toLowerCase()) ||
-          svc.displayName.toLowerCase().includes(pattern.toLowerCase())
-        );
-        const isRunning = svc.state === 'RUNNING';
-        return isNonEssential && isRunning;
-      });
+    // Filter for non-essential services that are currently running
+    return services.filter(svc => {
+      const isNonEssential = nonEssentialPatterns.some(pattern => 
+        svc.name.toLowerCase().includes(pattern.toLowerCase()) ||
+        svc.displayName.toLowerCase().includes(pattern.toLowerCase())
+      );
+      const isRunning = svc.state === 'RUNNING';
+      return isNonEssential && isRunning;
+    });
+  }
+
+  /**
+   * Get list of non-essential Windows services
+   */
+  async getNonEssentialServices() {
+    try {
+      const { stdout } = await execAsync('sc query type= service state= all', { timeout: 10000 });
+      return EmergencyLockdown.parseScQueryServices(stdout);
     } catch (err) {
       throw new Error(`Failed to get services: ${err.message}`);
     }

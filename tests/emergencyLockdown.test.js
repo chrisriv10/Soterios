@@ -159,6 +159,32 @@ describe('EmergencyLockdown', () => {
       assert.ok(Array.isArray(interfaces));
     });
 
+    it('should parse modern netsh output with CRLF line endings', () => {
+      const stdout = '\r\nAdmin State    State          Type             Interface Name\r\n-------------------------------------------------------------------------\r\nEnabled        Connected      Dedicated        Wi-Fi\r\nEnabled        Disconnected   Dedicated        Ethernet 2\r\n';
+      const interfaces = EmergencyLockdown.parseNetworkInterfaces(stdout);
+      assert.strictEqual(interfaces.length, 2);
+      assert.strictEqual(interfaces[0].name, 'Wi-Fi');
+      assert.strictEqual(interfaces[0].state, 'connected');
+      assert.strictEqual(interfaces[0].adminState, 'Enabled');
+      assert.strictEqual(interfaces[1].name, 'Ethernet 2');
+      assert.strictEqual(interfaces[1].state, 'disconnected');
+    });
+
+    it('should parse legacy netsh output', () => {
+      const stdout = 'Name                State           Type        Connectivity\r\nLocal Area Connection   connected     Dedicated   Internet\r\n';
+      const interfaces = EmergencyLockdown.parseNetworkInterfaces(stdout);
+      assert.strictEqual(interfaces.length, 1);
+      assert.strictEqual(interfaces[0].name, 'Local Area Connection');
+      assert.strictEqual(interfaces[0].state, 'connected');
+      assert.strictEqual(interfaces[0].connectivity, 'Internet');
+    });
+
+    it('should ignore headers and separators in netsh output', () => {
+      const stdout = 'Admin State    State          Type             Interface Name\r\n-------------------------------------------------------------------------\r\n';
+      const interfaces = EmergencyLockdown.parseNetworkInterfaces(stdout);
+      assert.strictEqual(interfaces.length, 0);
+    });
+
     it('should throw error when disabling interface fails', async () => {
       await assert.rejects(
         async () => await lockdown.disableInterface('NonExistent'),
@@ -184,6 +210,42 @@ describe('EmergencyLockdown', () => {
     it('should get non-essential services', async () => {
       const services = await lockdown.getNonEssentialServices();
       assert.ok(Array.isArray(services));
+    });
+
+    it('should parse sc query output with CRLF line endings and filter non-essential running services', () => {
+      const stdout = [
+        'SERVICE_NAME: Spooler',
+        'DISPLAY_NAME: Print Spooler',
+        '        TYPE               : 30  WIN32_SHARE_PROCESS  ',
+        '        STATE              : 4  RUNNING ',
+        '        WIN32_EXIT_CODE    : 0  (0x0)',
+        '',
+        'SERVICE_NAME: WSearch',
+        'DISPLAY_NAME: Windows Search',
+        '        TYPE               : 20  WIN32_OWN_PROCESS  ',
+        '        STATE              : 4  RUNNING ',
+        '        WIN32_EXIT_CODE    : 0  (0x0)',
+        '',
+        'SERVICE_NAME: BITS',
+        'DISPLAY_NAME: Background Intelligent Transfer Service',
+        '        TYPE               : 20  WIN32_OWN_PROCESS  ',
+        '        STATE              : 1  STOPPED ',
+        '        WIN32_EXIT_CODE    : 1077  (0x435)',
+        '',
+        'SERVICE_NAME: AppXSvc',
+        'DISPLAY_NAME: AppX Deployment Service',
+        '        TYPE               : 30  WIN32_SHARE_PROCESS  ',
+        '        STATE              : 1  STOPPED ',
+        '        WIN32_EXIT_CODE    : 0  (0x0)',
+        ''
+      ].join('\r\n');
+
+      const services = EmergencyLockdown.parseScQueryServices(stdout);
+      const names = services.map(s => s.name);
+      assert.deepStrictEqual(names, ['Spooler', 'WSearch']);
+      assert.strictEqual(services[0].displayName, 'Print Spooler');
+      assert.strictEqual(services[0].state, 'RUNNING');
+      assert.strictEqual(services[1].state, 'RUNNING');
     });
 
     it('should throw error when stopping service fails', async () => {
