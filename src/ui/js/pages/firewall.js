@@ -424,7 +424,7 @@ window.Pages['firewall'] = {
         
         const isMinimized = detailPanel.style.display === 'none';
         detailPanel.style.display = isMinimized ? 'flex' : 'none';
-        minimizeBtn.textContent = isMinimized ? t('common.minimize') : t('common.expand');
+        minimizeBtn.textContent = isMinimized ? (window.I18n?.t('common.minimize') ?? 'Minimize') : (window.I18n?.t('common.expand') ?? 'Expand');
         
         if (!isMinimized) {
           visualContainer.style.flex = '1';
