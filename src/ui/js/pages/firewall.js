@@ -217,10 +217,12 @@ window.Pages['firewall'] = {
           <div style="flex:1; min-width:270px; max-width:340px; display:flex; flex-direction:column; gap:8px;" id="connectionDetailPanel">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
               <span style="font-weight:600; font-size:0.85rem;">${escapeHtml(t('firewall.whatAmILookingAt'))}</span>
-              <button class="btn btn-sm btn-ghost" id="minimizeDetailBtn" style="padding:4px 8px; font-size:0.75rem;">${escapeHtml(t('common.minimize'))}</button>
             </div>
             <div id="connectionDetailContent"></div>
           </div>
+        </div>
+        <div style="display:flex; justify-content:center; margin-top:12px;">
+          <button class="btn btn-sm btn-ghost" id="minimizeDetailBtn" style="padding:4px 8px; font-size:0.75rem;">${escapeHtml(t('common.minimize'))}</button>
         </div>
 
         <div style="margin-top:24px; padding-top:20px; border-top:1px solid var(--glass-border);">
