@@ -473,7 +473,8 @@ window.Pages['firewall'] = {
   _updateProcessFilterOptions(container, connections) {
     const select = container.querySelector('#processFilterSelect');
     if (!select) return;
-    const names = [...new Set(connections.map((c) => this._field(c, 'processName') || '(unknown process)'))].sort();
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+    const names = [...new Set(connections.map((c) => this._field(c, 'processName') || t('common.unknown')))].sort();
     const previousValue = select.value;
     select.innerHTML = '<option value="all">All</option>' + names.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
     if (previousValue && (previousValue === 'all' || names.includes(previousValue))) {
