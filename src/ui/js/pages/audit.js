@@ -146,10 +146,9 @@ window.Pages['audit'] = {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
 
     try {
-      const [results, ignored, maintenanceHistoryResponse] = await Promise.all([
+      const [results, ignored] = await Promise.all([
         window.api.invoke('audit:run'),
-        window.api.invoke('warnings:listIgnored'),
-        window.api.invoke('maintenance:getHistory').catch(() => ({ ok: false, data: [] }))
+        window.api.invoke('warnings:listIgnored')
       ]);
       const ignoredIds = new Set((ignored || []).map((w) => w.id));
       if (!results || results.length === 0) {
@@ -204,7 +203,6 @@ window.Pages['audit'] = {
             <div class="history-item"><div><div class="history-title">${escapeHtml(w.title)}</div><div class="history-meta">${escapeHtml(w.detail || '')}</div></div>
             <button class="btn btn-sm audit-restore" data-id="${escapeHtml(w.id)}">${escapeHtml(this.t('audit.restore'))}</button></div>`).join('')}</div></div>`;
       }
-      html += this.renderMaintenanceHistory(maintenanceHistoryResponse?.data || []);
       content.innerHTML = html;
       content.querySelectorAll('.copy-command-btn').forEach((btn) => btn.addEventListener('click', async () => {
         const codeEl = content.querySelector(`#${btn.dataset.target}`);

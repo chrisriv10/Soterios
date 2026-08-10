@@ -92,6 +92,9 @@ window.Pages.reports = {
             <button class="btn btn-primary btn-sm" id="generateReport">${escapeHtml(t('reports.generateReport'))}</button>
           </div>
           <div id="reportHistory" class="history-list"><div class="empty-state">${escapeHtml(t('reports.loadingSavedReports'))}</div></div>
+
+          <div class="panel-title" style="margin-top:18px;">${escapeHtml(t('reports.maintenanceHistory'))}</div>
+          <div id="maintenanceHistory" class="history-list"><div class="empty-state">${escapeHtml(t('reports.loadingMaintenance'))}</div></div>
         </section>
 
         <section class="panel report-viewer">
@@ -118,6 +121,7 @@ window.Pages.reports = {
     container.querySelector('#exportReportCsv').addEventListener('click', () => this.exportCurrentReport(container, 'csv'));
     this.listScanReports(container);
     this.listReports(container);
+    this.listMaintenanceHistory(container);
   },
 
   clearViewer(container) {
@@ -403,6 +407,35 @@ window.Pages.reports = {
           this.listReports(container);
         });
       });
+    } catch (err) {
+      el.innerHTML = `<div class="empty-state">${escapeHtml(tFactory()('reports.errorPrefix', { error: err.message }))}</div>`;
+    }
+  },
+
+  async listMaintenanceHistory(container) {
+    const el = container.querySelector('#maintenanceHistory');
+    try {
+      const response = await window.api.invoke('maintenance:getHistory').catch(() => ({ ok: false, data: [] }));
+      const rows = response?.data || [];
+      if (!rows.length) {
+        el.innerHTML = `<div class="empty-state">${escapeHtml(tFactory()('reports.noMaintenance'))}</div>`;
+        return;
+      }
+      const t = tFactory();
+      const items = rows.map((row) => {
+        const when = row.started_at || row.timestamp;
+        const whenLabel = when ? new Date(when).toLocaleString() : t('common.unknown');
+        const mode = row.dry_run ? t('audit.dryRun') : t('audit.liveRun');
+        const detail = (row.results || []).map((r) => `${r.scriptId}: ${r.ok ? t('common.ok') : (r.error || t('common.failed'))}`).join('; ');
+        return `
+          <div class="history-item">
+            <div>
+              <div class="history-title">${escapeHtml(t('audit.maintenanceRun', { ok: row.ok_count || 0, total: row.total_count || 0, mode }))}</div>
+              <div class="history-meta">${escapeHtml(whenLabel)}${detail ? ` — ${escapeHtml(detail)}` : ''}</div>
+            </div>
+          </div>`;
+      }).join('');
+      el.innerHTML = `<div class="history-list">${items}</div>`;
     } catch (err) {
       el.innerHTML = `<div class="empty-state">${escapeHtml(tFactory()('reports.errorPrefix', { error: err.message }))}</div>`;
     }
