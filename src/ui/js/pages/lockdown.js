@@ -17,26 +17,24 @@ window.Pages['lockdown'] = {
       </div>
 
       <div class="grid grid-2" style="margin-top:16px;">
-        <div class="panel">
-          <div class="panel-title">${escapeHtml(t('lockdown.title'))}</div>
-          <div class="lockdown-status" id="lockdownStatus">
-            <div class="status-indicator" id="lockdownIndicator">
-              <div class="status-icon" id="lockdownIcon"></div>
-              <div class="status-text">
-                <div class="status-label" id="lockdownLabel">${escapeHtml(t('lockdown.checking'))}</div>
-                <div class="status-detail" id="lockdownDetail"></div>
-              </div>
+        <div class="card">
+          <div class="status-card">
+            <div class="status-icon" id="lockdownIcon"></div>
+            <div class="status-info">
+              <h3>${escapeHtml(t('lockdown.title'))}</h3>
+              <div class="value" id="lockdownLabel">${escapeHtml(t('lockdown.checking'))}</div>
+              <div id="lockdownDetail" style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;"></div>
             </div>
           </div>
-          <div class="lockdown-actions">
-            <button class="btn btn-danger" id="lockdownBtn" disabled style="width:100%;margin-top:12px;">
+          <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px;">
+            <button class="btn btn-danger" id="lockdownBtn" disabled style="width:100%;">
               <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
               ${escapeHtml(t('lockdown.activate'))}
             </button>
-            <button class="btn btn-primary" id="restoreBtn" disabled style="width:100%;margin-top:8px;">
+            <button class="btn btn-primary" id="restoreBtn" disabled style="width:100%;">
               <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
                 <path d="M3 3v5h5" />
@@ -126,7 +124,6 @@ window.Pages['lockdown'] = {
   _initLockdownPage() {
     const lockdownBtn = document.getElementById('lockdownBtn');
     const restoreBtn = document.getElementById('restoreBtn');
-    const lockdownIndicator = document.getElementById('lockdownIndicator');
     const lockdownIcon = document.getElementById('lockdownIcon');
     const lockdownLabel = document.getElementById('lockdownLabel');
     const lockdownDetail = document.getElementById('lockdownDetail');
@@ -357,7 +354,6 @@ window.Pages['lockdown'] = {
   },
 
   async _updateLockdownStatus() {
-    const lockdownIndicator = document.getElementById('lockdownIndicator');
     const lockdownIcon = document.getElementById('lockdownIcon');
     const lockdownLabel = document.getElementById('lockdownLabel');
     const lockdownDetail = document.getElementById('lockdownDetail');
@@ -369,7 +365,6 @@ window.Pages['lockdown'] = {
       if (result.ok) {
         const status = result.data;
         if (status.isLockedDown) {
-          lockdownIndicator.className = 'status-indicator';
           lockdownIcon.className = 'status-icon danger';
           lockdownIcon.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><path d="M12 17v2"/><path d="M12 11v2"/></svg>';
           lockdownLabel.textContent = window.I18n.t('lockdown.active');
@@ -377,7 +372,6 @@ window.Pages['lockdown'] = {
           lockdownBtn.disabled = true;
           restoreBtn.disabled = false;
         } else {
-          lockdownIndicator.className = 'status-indicator';
           lockdownIcon.className = 'status-icon safe';
           lockdownIcon.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
           lockdownLabel.textContent = window.I18n.t('lockdown.normal');
@@ -387,7 +381,6 @@ window.Pages['lockdown'] = {
         }
       } else {
         // Handle unsuccessful status response
-        lockdownIndicator.className = 'status-indicator';
         lockdownIcon.className = 'status-icon warning';
         lockdownIcon.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
         lockdownLabel.textContent = window.I18n.t('lockdown.error');
@@ -397,7 +390,6 @@ window.Pages['lockdown'] = {
         restoreBtn.disabled = true;
       }
     } catch (err) {
-      lockdownIndicator.className = 'status-indicator';
       lockdownIcon.className = 'status-icon warning';
       lockdownIcon.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
       lockdownLabel.textContent = window.I18n.t('lockdown.error');
