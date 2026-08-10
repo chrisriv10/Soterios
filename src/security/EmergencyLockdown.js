@@ -3,6 +3,7 @@
 const { execFileSync } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(require('child_process').exec);
+const os = require('os');
 
 /**
  * Emergency Lockdown Service
@@ -61,12 +62,50 @@ class EmergencyLockdown {
     if (!this.allowlist[type]) {
       this.allowlist[type] = [];
     }
-    const normalized = type === 'ips' ? value.trim() : value.trim().toLowerCase();
+    const raw = String(value || '').trim();
+    if (type === 'ips' && !this._isValidIp(raw)) {
+      throw new Error(`Invalid IP address: ${raw}`);
+    }
+    const normalized = type === 'ips' ? raw : raw.toLowerCase();
     if (!this.allowlist[type].includes(normalized)) {
       this.allowlist[type].push(normalized);
       this._saveAllowlist();
     }
     return this.allowlist;
+  }
+
+  /**
+   * Validate an IPv4 or IPv6 address (CIDR prefix optional for IPv4)
+   */
+  _isValidIp(value) {
+    const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(\/\d{1,2})?$/;
+    if (ipv4.test(value)) {
+      return value.split('/')[0].split('.').every(octet => {
+        const n = Number(octet);
+        return n >= 0 && n <= 255;
+      });
+    }
+    return /^[0-9a-fA-F:]+$/.test(value) && value.includes(':');
+  }
+
+  /**
+   * Get local IP addresses of this machine (non-internal interfaces)
+   */
+  getLocalIPs() {
+    const ips = [];
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      for (const entry of interfaces[name] || []) {
+        if (entry && !entry.internal) {
+          ips.push({
+            interface: name,
+            ip: entry.address,
+            family: entry.family === 'IPv6' ? 'IPv6' : 'IPv4'
+          });
+        }
+      }
+    }
+    return ips;
   }
 
   removeFromAllowlist(type, value) {

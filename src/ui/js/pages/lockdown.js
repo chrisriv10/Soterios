@@ -88,7 +88,7 @@ window.Pages['lockdown'] = {
           <div class="panel" style="margin:0;">
             <div class="panel-title" style="font-size:13px;">${escapeHtml(t('lockdown.allowlist.interfaces'))}</div>
             <div style="display:flex;gap:8px;margin-bottom:8px;">
-              <input type="text" id="allowlistInterfaceInput" placeholder="${escapeHtml(t('lockdown.allowlist.addPlaceholder'))}" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);color:var(--text);font-size:13px;">
+              <input type="text" id="allowlistInterfaceInput" list="interfacesDatalist" placeholder="${escapeHtml(t('lockdown.allowlist.addPlaceholder'))}" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);color:var(--text);font-size:13px;">
               <button class="btn btn-primary" id="addAllowlistInterfaceBtn" style="padding:6px 12px;font-size:12px;">${escapeHtml(t('lockdown.allowlist.add'))}</button>
             </div>
             <div class="lockdown-list" id="allowlistInterfacesList" style="max-height:150px;overflow-y:auto;"></div>
@@ -98,7 +98,7 @@ window.Pages['lockdown'] = {
           <div class="panel" style="margin:0;">
             <div class="panel-title" style="font-size:13px;">${escapeHtml(t('lockdown.allowlist.services'))}</div>
             <div style="display:flex;gap:8px;margin-bottom:8px;">
-              <input type="text" id="allowlistServiceInput" placeholder="${escapeHtml(t('lockdown.allowlist.addPlaceholder'))}" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);color:var(--text);font-size:13px;">
+              <input type="text" id="allowlistServiceInput" list="servicesDatalist" placeholder="${escapeHtml(t('lockdown.allowlist.addPlaceholder'))}" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);color:var(--text);font-size:13px;">
               <button class="btn btn-primary" id="addAllowlistServiceBtn" style="padding:6px 12px;font-size:12px;">${escapeHtml(t('lockdown.allowlist.add'))}</button>
             </div>
             <div class="lockdown-list" id="allowlistServicesList" style="max-height:150px;overflow-y:auto;"></div>
@@ -108,12 +108,16 @@ window.Pages['lockdown'] = {
           <div class="panel" style="margin:0;">
             <div class="panel-title" style="font-size:13px;">${escapeHtml(t('lockdown.allowlist.ips'))}</div>
             <div style="display:flex;gap:8px;margin-bottom:8px;">
-              <input type="text" id="allowlistIpInput" placeholder="${escapeHtml(t('lockdown.allowlist.ipPlaceholder'))}" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);color:var(--text);font-size:13px;">
+              <input type="text" id="allowlistIpInput" list="ipsDatalist" placeholder="${escapeHtml(t('lockdown.allowlist.ipPlaceholder'))}" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);color:var(--text);font-size:13px;">
               <button class="btn btn-primary" id="addAllowlistIpBtn" style="padding:6px 12px;font-size:12px;">${escapeHtml(t('lockdown.allowlist.add'))}</button>
             </div>
             <div class="lockdown-list" id="allowlistIpsList" style="max-height:150px;overflow-y:auto;"></div>
           </div>
         </div>
+
+        <datalist id="interfacesDatalist"></datalist>
+        <datalist id="servicesDatalist"></datalist>
+        <datalist id="ipsDatalist"></datalist>
       </div>
     `;
 
@@ -148,6 +152,7 @@ window.Pages['lockdown'] = {
     // Load initial status
     this._updateLockdownStatus();
     this._loadAllowlist();
+    this._loadSuggestions();
 
     // Allowlist event listeners
     addAllowlistInterfaceBtn.addEventListener('click', () => this._addToAllowlist('interfaces', allowlistInterfaceInput.value.trim()));
@@ -222,6 +227,49 @@ window.Pages['lockdown'] = {
     }
   },
 
+  async _loadSuggestions() {
+    const [ifacesRes, svcsRes, ipsRes] = await Promise.allSettled([
+      window.soterios.lockdown.getInterfaces(),
+      window.soterios.lockdown.getServices(),
+      window.soterios.lockdown.getLocalIPs()
+    ]);
+
+    const interfacesList = document.getElementById('interfacesDatalist');
+    if (interfacesList && ifacesRes.status === 'fulfilled' && ifacesRes.value.ok) {
+      const interfaces = ifacesRes.value.data || [];
+      interfacesList.innerHTML = interfaces.map(iface =>
+        `<option value="${escapeHtml(iface.name)}"></option>`
+      ).join('');
+    }
+
+    const servicesList = document.getElementById('servicesDatalist');
+    if (servicesList && svcsRes.status === 'fulfilled' && svcsRes.value.ok) {
+      const services = svcsRes.value.data || [];
+      servicesList.innerHTML = services.map(svc =>
+        `<option value="${escapeHtml(svc.name)}">${escapeHtml(svc.displayName || '')}</option>`
+      ).join('');
+    }
+
+    const ipsList = document.getElementById('ipsDatalist');
+    if (ipsList && ipsRes.status === 'fulfilled' && ipsRes.value.ok) {
+      const ips = ipsRes.value.data || [];
+      ipsList.innerHTML = ips.map(entry =>
+        `<option value="${escapeHtml(entry.ip)}"></option>`
+      ).join('');
+    }
+  },
+
+  _isValidIp(value) {
+    const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(\/\d{1,2})?$/;
+    if (ipv4.test(value)) {
+      return value.split('/')[0].split('.').every(octet => {
+        const n = Number(octet);
+        return n >= 0 && n <= 255;
+      });
+    }
+    return /^[0-9a-fA-F:]+$/.test(value) && value.includes(':');
+  },
+
   _renderAllowlist(allowlist) {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     
@@ -274,6 +322,10 @@ window.Pages['lockdown'] = {
 
   async _addToAllowlist(type, value) {
     if (!value) return;
+    if (type === 'ips' && !this._isValidIp(value)) {
+      alert(`Invalid IP address: ${value}`);
+      return;
+    }
     const inputMap = {
       interfaces: document.getElementById('allowlistInterfaceInput'),
       services: document.getElementById('allowlistServiceInput'),

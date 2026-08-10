@@ -551,6 +551,43 @@ function register(mainWindow, {
       return { ok: false, error: err.message };
     }
   });
+
+  // -- Emergency Lockdown Suggestions (quick-add) --
+  ipcMain.handle('lockdown:getInterfaces', async () => {
+    if (!emergencyLockdown) {
+      return { ok: false, error: 'Emergency lockdown service unavailable' };
+    }
+    try {
+      const interfaces = await emergencyLockdown.getNetworkInterfaces();
+      return { ok: true, data: interfaces };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('lockdown:getServices', async () => {
+    if (!emergencyLockdown) {
+      return { ok: false, error: 'Emergency lockdown service unavailable' };
+    }
+    try {
+      const services = await emergencyLockdown.getNonEssentialServices();
+      return { ok: true, data: services };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('lockdown:getLocalIPs', async () => {
+    if (!emergencyLockdown) {
+      return { ok: false, error: 'Emergency lockdown service unavailable' };
+    }
+    try {
+      const ips = emergencyLockdown.getLocalIPs();
+      return { ok: true, data: ips };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
 }
 
 module.exports = { register };

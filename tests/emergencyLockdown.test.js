@@ -109,6 +109,48 @@ describe('EmergencyLockdown', () => {
       assert.strictEqual(allowlist.interfaces.length, 1);
       assert.strictEqual(allowlist.interfaces[0], 'ethernet0');
     });
+
+    it('should reject invalid IP addresses', () => {
+      assert.throws(
+        () => lockdown.addToAllowlist('ips', '999.999.999.999'),
+        /Invalid IP address/
+      );
+      assert.throws(
+        () => lockdown.addToAllowlist('ips', 'not-an-ip'),
+        /Invalid IP address/
+      );
+      const allowlist = lockdown.getAllowlist();
+      assert.strictEqual(allowlist.ips.length, 0);
+    });
+
+    it('should accept valid IPv4, IPv4 with CIDR, and IPv6 addresses', () => {
+      lockdown.addToAllowlist('ips', '192.168.1.42');
+      lockdown.addToAllowlist('ips', '10.0.0.0/8');
+      lockdown.addToAllowlist('ips', 'fe80::1');
+      const allowlist = lockdown.getAllowlist();
+      assert.deepStrictEqual(allowlist.ips, ['192.168.1.42', '10.0.0.0/8', 'fe80::1']);
+    });
+
+    it('should validate IP format via _isValidIp', () => {
+      assert.strictEqual(lockdown._isValidIp('192.168.1.1'), true);
+      assert.strictEqual(lockdown._isValidIp('255.255.255.255'), true);
+      assert.strictEqual(lockdown._isValidIp('0.0.0.0'), true);
+      assert.strictEqual(lockdown._isValidIp('256.0.0.1'), false);
+      assert.strictEqual(lockdown._isValidIp('192.168.1'), false);
+      assert.strictEqual(lockdown._isValidIp('10.0.0.0/24'), true);
+      assert.strictEqual(lockdown._isValidIp('2001:db8::1'), true);
+      assert.strictEqual(lockdown._isValidIp('abc'), false);
+    });
+
+    it('should get local IPs (non-internal interfaces)', () => {
+      const ips = lockdown.getLocalIPs();
+      assert.ok(Array.isArray(ips));
+      for (const entry of ips) {
+        assert.ok(typeof entry.ip === 'string' && entry.ip.length > 0);
+        assert.ok(entry.family === 'IPv4' || entry.family === 'IPv6');
+        assert.ok(typeof entry.interface === 'string');
+      }
+    });
   });
 
   describe('Network interface operations', () => {
