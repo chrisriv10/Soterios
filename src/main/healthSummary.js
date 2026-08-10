@@ -42,7 +42,7 @@ async function getTrayHealthSummary(db, toolRegistry) {
   // Network traffic history (last 24h)
   let network = { rxKBs: 0, txKBs: 0, history: [], rx: [], tx: [] };
   try {
-    const history = db.getNetworkHistory ? db.getNetworkHistory(24) : []; // last 24h
+    const history = db.getNetworkStatsHistory ? db.getNetworkStatsHistory(24) : []; // last 24h
     if (history.length) {
       const latest = history[history.length - 1];
       network.rxKBs = Math.round(latest.rx_sec || 0);
