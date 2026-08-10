@@ -859,6 +859,7 @@ window.Pages['network'] = {
   },
 
   async paintHistoryChart(content) {
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const canvas = content.querySelector('#networkHistoryChart');
     const empty = content.querySelector('#networkHistoryEmpty');
     const legend = content.querySelector('#networkHistoryLegend');
