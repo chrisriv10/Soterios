@@ -219,7 +219,7 @@ window.Pages['audit'] = {
       }));
       content.querySelectorAll('.audit-open-settings').forEach((btn) => btn.addEventListener('click', async () => {
         try {
-          await window.api.shell.openExternal(btn.dataset.uri);
+          await window.soterios.shell.openExternal(btn.dataset.uri);
         } catch (err) {
           alert(err.message || t('audit.openSettingsError'));
         }
