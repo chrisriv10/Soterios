@@ -446,9 +446,15 @@ window.Pages['network'] = {
       html += '</div>';
 
       if (networkTrafficHistoryEnabled) {
-        html += '<div class="card" style="padding:14px 16px; margin-bottom:18px;">';
-        html += `<h3 style="margin-bottom:10px; font-size:1rem;">${escapeHtml(t('network.historyTitle'))}</h3>`;
-        html += '<canvas id="networkHistoryChart" width="900" height="180" style="width:100%; max-height:180px;"></canvas>';
+        html += '<div class="card" style="padding:16px 18px 14px; margin-bottom:18px;">';
+        html += '<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:12px;">';
+        html += `<h3 style="margin:0; font-size:1rem;">${escapeHtml(t('network.historyTitle'))}</h3>`;
+        html += '<div id="networkHistoryLegend" style="display:flex; align-items:center; gap:18px; font-size:0.78rem; color:var(--text-dim);"></div>';
+        html += '</div>';
+        html += '<div id="networkHistoryChartWrap" style="position:relative;">';
+        html += '<canvas id="networkHistoryChart" style="width:100%; height:190px; display:block; cursor:crosshair;"></canvas>';
+        html += '<div id="networkHistoryTooltip" style="position:absolute; top:0; left:0; display:none; pointer-events:none; transform:translate(-50%, -110%); background:var(--bg-base); border:1px solid var(--glass-border); border-radius:8px; padding:7px 10px; font-size:0.72rem; line-height:1.5; box-shadow:0 8px 24px rgba(0,0,0,0.35); white-space:nowrap; z-index:5;"></div>';
+        html += '</div>';
         html += `<div id="networkHistoryEmpty" class="empty-state" style="font-size:0.85rem; display:none;">${escapeHtml(t('network.historyEmpty'))}</div>`;
         html += '</div>';
       }
@@ -839,9 +845,24 @@ window.Pages['network'] = {
     }
   },
 
+  _niceAxisMax(value) {
+    if (!(value > 0)) return 1;
+    const exp = Math.floor(Math.log10(value));
+    const base = Math.pow(10, exp);
+    const norm = value / base;
+    let niceNorm;
+    if (norm <= 1) niceNorm = 1;
+    else if (norm <= 2) niceNorm = 2;
+    else if (norm <= 5) niceNorm = 5;
+    else niceNorm = 10;
+    return niceNorm * base;
+  },
+
   async paintHistoryChart(content) {
     const canvas = content.querySelector('#networkHistoryChart');
     const empty = content.querySelector('#networkHistoryEmpty');
+    const legend = content.querySelector('#networkHistoryLegend');
+    const tooltip = content.querySelector('#networkHistoryTooltip');
     if (!canvas) return;
     const networkTrafficHistoryEnabled = await window.api.invoke('db:getSetting', 'feature.networkTrafficHistory', true);
     if (!networkTrafficHistoryEnabled) return;
@@ -853,13 +874,13 @@ window.Pages['network'] = {
     }
     if (!rows.length) {
       if (empty) empty.style.display = '';
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-      }
+      canvas.style.display = 'none';
+      if (legend) legend.innerHTML = '';
+      if (tooltip) tooltip.style.display = 'none';
       return;
     }
     if (empty) empty.style.display = 'none';
+    canvas.style.display = 'block';
 
     const buckets = new Map();
     for (const row of rows) {
@@ -870,32 +891,220 @@ window.Pages['network'] = {
       buckets.set(key, cur);
     }
     const series = [...buckets.values()].sort((a, b) => a.t.localeCompare(b.t));
-    const maxY = Math.max(1, ...series.map((p) => Math.max(p.rx, p.tx)));
-    const ctx = canvas.getContext('2d');
-    const w = canvas.width;
-    const h = canvas.height;
-    const pad = 12;
-    ctx.clearRect(0, 0, w, h);
-    ctx.strokeStyle = 'rgba(127,127,127,0.25)';
-    ctx.beginPath();
-    ctx.moveTo(pad, h - pad);
-    ctx.lineTo(w - pad, h - pad);
-    ctx.stroke();
+    const maxRaw = Math.max(1, ...series.map((p) => Math.max(p.rx, p.tx)));
+    const maxY = this._niceAxisMax(maxRaw);
 
-    const plot = (key, color) => {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      series.forEach((p, i) => {
-        const x = pad + (i / Math.max(1, series.length - 1)) * (w - pad * 2);
-        const y = (h - pad) - (p[key] / maxY) * (h - pad * 2);
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.stroke();
+    // --- legend: current + 24h peak for each direction ---
+    const last = series[series.length - 1];
+    const peakRx = Math.max(...series.map((p) => p.rx));
+    const peakTx = Math.max(...series.map((p) => p.tx));
+    if (legend) {
+      const legendRow = (color, glow, label, current, peak) => `
+        <span style="display:flex; align-items:center; gap:6px;">
+          <span style="width:8px; height:8px; border-radius:50%; background:${color}; box-shadow:0 0 6px ${glow}; display:inline-block; flex-shrink:0;"></span>
+          ${escapeHtml(label)}
+          <strong style="color:var(--text-main); font-weight:600;">${escapeHtml(formatBytes(current))}/s</strong>
+          <span style="opacity:0.7;">${escapeHtml(t('network.historyPeak', { value: `${formatBytes(peak)}/s` }))}</span>
+        </span>`;
+      legend.innerHTML =
+        legendRow('var(--accent-primary)', 'var(--accent-primary-glow)', t('network.historyDownload'), last.rx, peakRx) +
+        legendRow('var(--ok)', 'var(--ok-glow)', t('network.historyUpload'), last.tx, peakTx);
+    }
+
+    // --- high-DPI canvas sizing ---
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const cssW = Math.max(1, Math.round(rect.width) || canvas.parentElement.clientWidth || 600);
+    const cssH = Math.max(1, Math.round(rect.height) || 190);
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const padL = 64, padR = 8, padT = 10, padB = 20;
+    const plotW = Math.max(1, cssW - padL - padR);
+    const plotH = Math.max(1, cssH - padT - padB);
+    const xAt = (i) => padL + (series.length > 1 ? (i / (series.length - 1)) * plotW : plotW / 2);
+    const yAt = (v) => padT + plotH - (Math.min(v, maxY) / maxY) * plotH;
+
+    const rootStyle = getComputedStyle(canvas);
+    const cssVar = (name, fallback) => {
+      const v = rootStyle.getPropertyValue(name).trim();
+      return v && !v.includes('var(') ? v : fallback;
     };
-    plot('rx', '#58A6FF');
-    plot('tx', '#3FB950');
+    const colorRx = cssVar('--accent-primary', '#58A6FF');
+    const colorTx = cssVar('--accent-success', '#3FB950');
+    const textDim = cssVar('--text-dim', cssVar('--text-muted', 'rgba(139,148,158,0.85)'));
+    const fontFamily = 'Inter, -apple-system, BlinkMacSystemFont, Arial, sans-serif';
+    const gridColor = 'rgba(127,135,150,0.14)';
+
+    const pathThrough = (pts) => {
+      const p = new Path2D();
+      if (!pts.length) return p;
+      p.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length - 1; i++) {
+        const xc = (pts[i].x + pts[i + 1].x) / 2;
+        const yc = (pts[i].y + pts[i + 1].y) / 2;
+        p.quadraticCurveTo(pts[i].x, pts[i].y, xc, yc);
+      }
+      if (pts.length > 1) {
+        const a = pts[pts.length - 2];
+        const b = pts[pts.length - 1];
+        p.quadraticCurveTo(a.x, a.y, b.x, b.y);
+      }
+      return p;
+    };
+
+    const draw = (hoverIdx) => {
+      ctx.clearRect(0, 0, cssW, cssH);
+      ctx.font = `11px ${fontFamily}`;
+      ctx.textBaseline = 'middle';
+
+      // horizontal grid + y-axis labels
+      const ySteps = [0, 0.5, 1];
+      ySteps.forEach((frac) => {
+        const y = padT + plotH - frac * plotH;
+        ctx.strokeStyle = gridColor;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padL, Math.round(y) + 0.5);
+        ctx.lineTo(padL + plotW, Math.round(y) + 0.5);
+        ctx.stroke();
+        ctx.fillStyle = textDim;
+        ctx.textAlign = 'right';
+        ctx.fillText(`${formatBytes(frac * maxY)}/s`, padL - 8, y);
+      });
+
+      // x-axis time labels
+      const tickCount = Math.min(5, series.length);
+      ctx.fillStyle = textDim;
+      ctx.textBaseline = 'alphabetic';
+      for (let i = 0; i < tickCount; i++) {
+        const idx = tickCount > 1 ? Math.round((i / (tickCount - 1)) * (series.length - 1)) : 0;
+        const label = new Date(series[idx].t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        ctx.textAlign = i === 0 ? 'left' : (i === tickCount - 1 ? 'right' : 'center');
+        ctx.fillText(label, xAt(idx), cssH - 4);
+      }
+      ctx.textBaseline = 'middle';
+
+      const rxPts = series.map((p, i) => ({ x: xAt(i), y: yAt(p.rx) }));
+      const txPts = series.map((p, i) => ({ x: xAt(i), y: yAt(p.tx) }));
+
+      const fillArea = (pts, color) => {
+        if (!pts.length) return;
+        const areaPath = new Path2D(pathThrough(pts));
+        areaPath.lineTo(pts[pts.length - 1].x, padT + plotH);
+        areaPath.lineTo(pts[0].x, padT + plotH);
+        areaPath.closePath();
+        const grad = ctx.createLinearGradient(0, padT, 0, padT + plotH);
+        grad.addColorStop(0, color.replace('__A__', '0.30'));
+        grad.addColorStop(1, color.replace('__A__', '0'));
+        ctx.fillStyle = grad;
+        ctx.fill(areaPath);
+      };
+      const strokeLine = (pts, color) => {
+        if (!pts.length) return;
+        ctx.save();
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 6;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.25;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.stroke(pathThrough(pts));
+        ctx.restore();
+      };
+      const toRgba = (hex, a) => {
+        const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        if (!m) return `rgba(88,166,255,${a})`;
+        return `rgba(${parseInt(m[1], 16)},${parseInt(m[2], 16)},${parseInt(m[3], 16)},${a})`;
+      };
+
+      fillArea(txPts, toRgba(colorTx, '__A__'));
+      fillArea(rxPts, toRgba(colorRx, '__A__'));
+      strokeLine(txPts, colorTx);
+      strokeLine(rxPts, colorRx);
+
+      // glowing marker on the latest sample of each series
+      [{ pts: rxPts, color: colorRx }, { pts: txPts, color: colorTx }].forEach(({ pts, color }) => {
+        const p = pts[pts.length - 1];
+        if (!p) return;
+        ctx.save();
+        ctx.fillStyle = toRgba(color, 0.25);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // hover crosshair + point markers
+      if (hoverIdx != null && series[hoverIdx]) {
+        const x = xAt(hoverIdx);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(200,205,215,0.35)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(x, padT);
+        ctx.lineTo(x, padT + plotH);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        [{ y: yAt(series[hoverIdx].rx), color: colorRx }, { y: yAt(series[hoverIdx].tx), color: colorTx }].forEach(({ y, color }) => {
+          ctx.beginPath();
+          ctx.arc(x, y, 4, 0, Math.PI * 2);
+          ctx.fillStyle = color;
+          ctx.fill();
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = '#0B0E14';
+          ctx.stroke();
+        });
+        ctx.restore();
+      }
+    };
+
+    draw(null);
+
+    // --- interactive tooltip ---
+    let rafPending = false;
+    const handleMove = (evt) => {
+      const r = canvas.getBoundingClientRect();
+      const x = evt.clientX - r.left;
+      let idx = 0;
+      let bestDist = Infinity;
+      for (let i = 0; i < series.length; i++) {
+        const d = Math.abs(xAt(i) - x);
+        if (d < bestDist) { bestDist = d; idx = i; }
+      }
+      if (rafPending) return;
+      rafPending = true;
+      requestAnimationFrame(() => {
+        rafPending = false;
+        draw(idx);
+        if (tooltip) {
+          const p = series[idx];
+          const timeLabel = new Date(p.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          tooltip.innerHTML = `
+            <div style="color:var(--text-dim); margin-bottom:3px;">${escapeHtml(timeLabel)}</div>
+            <div style="display:flex; align-items:center; gap:6px;"><span style="width:7px; height:7px; border-radius:50%; background:${colorRx}; display:inline-block;"></span>${escapeHtml(t('network.historyDownload'))} <strong>${escapeHtml(formatBytes(p.rx))}/s</strong></div>
+            <div style="display:flex; align-items:center; gap:6px;"><span style="width:7px; height:7px; border-radius:50%; background:${colorTx}; display:inline-block;"></span>${escapeHtml(t('network.historyUpload'))} <strong>${escapeHtml(formatBytes(p.tx))}/s</strong></div>`;
+          const px = xAt(idx);
+          const py = Math.min(yAt(p.rx), yAt(p.tx));
+          tooltip.style.left = `${Math.max(50, Math.min(cssW - 50, px))}px`;
+          tooltip.style.top = `${Math.max(46, py)}px`;
+          tooltip.style.display = 'block';
+        }
+      });
+    };
+    const handleLeave = () => {
+      draw(null);
+      if (tooltip) tooltip.style.display = 'none';
+    };
+    canvas.addEventListener('mousemove', handleMove);
+    canvas.addEventListener('mouseleave', handleLeave);
   },
 
   async renderAlertHits(content) {
