@@ -928,45 +928,6 @@ app.whenReady().then(async () => {
     return result;
   });
 
-  // Enable/disable a startup item
-  ipcMain.handle('startup:toggle', async (_event, item, enable) => {
-    try {
-      if (item.source === 'registry') {
-        const hive = item.scope === 'HKLM' ? 'HKLM' : 'HKCU';
-        const key = `${hive}\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`;
-        if (enable) {
-          execFileSync('reg', ['add', key, '/v', item.name, '/t', 'REG_SZ', '/d', item.command, '/f'], { timeout: 10000 });
-        } else {
-          execFileSync('reg', ['delete', key, '/v', item.name, '/f'], { timeout: 10000 });
-        }
-        return { ok: true };
-      } else if (item.source === 'startup-folder') {
-        const appData = process.env.APPDATA || '';
-        const programData = process.env.ProgramData || '';
-        const userStartup = path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
-        const allStartup = path.join(programData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
-        const startupDir = item.scope === 'user' ? userStartup : allStartup;
-        if (enable) {
-          const backup = path.join(startupDir, '.disabled', item.name);
-          if (fs.existsSync(backup)) {
-            fs.renameSync(backup, item.path);
-            return { ok: true };
-          }
-          return { ok: false, error: 'No backup found to restore' };
-        } else {
-          const disabledDir = path.join(startupDir, '.disabled');
-          fs.mkdirSync(disabledDir, { recursive: true });
-          const dest = path.join(disabledDir, item.name);
-          fs.renameSync(item.path, dest);
-          return { ok: true };
-        }
-      }
-      return { ok: false, error: 'Toggle not supported for this item type' };
-    } catch (err) {
-      return { ok: false, error: err.message };
-    }
-  });
-
   // Slow engine initialization (ClamAV definitions, real-time protection)
   // runs in the background after the window is already visible, instead of
   // blocking startup. scanEngine's scan handlers already check
