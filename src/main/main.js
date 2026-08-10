@@ -610,6 +610,18 @@ app.whenReady().then(async () => {
     app.setAsDefaultProtocolClient('soterios');
   }
 
+  // Register splash:progress handler early so it's ready when splash window sends progress
+  ipcMain.handle('splash:progress', (_event, data) => {
+    if (splashWindow && !splashWindow.isDestroyed()) {
+      splashWindow.webContents.send('splash:progress', data);
+    }
+  });
+
+  // Register app:ready handler early so renderer can dismiss splash
+  ipcMain.handle('app:ready', () => {
+    dismissSplash();
+  });
+
   const dbPath = path.join(app.getPath('userData'), 'soterios.db');
   // File logging is opt-in via SOTERIOS_LOG_FILE (path or "1" for the default log file).
   const logConfig = { level: process.env.SOTERIOS_LOG_LEVEL || 'info' };
@@ -761,7 +773,7 @@ app.whenReady().then(async () => {
   }
 
   // Auto-connect VPN on startup if enabled
-  if (featureFlags.getFlag(db, 'vpn.autoConnect', false)) {
+  if (featureFlags.getFlag(db, 'vpnAutoConnect', false)) {
     const lastProfile = db.getSetting('vpn.lastProfile');
     if (lastProfile) {
       logLine('info', 'Auto-connecting VPN', { profile: lastProfile });
@@ -872,62 +884,13 @@ app.whenReady().then(async () => {
 
   // 4. Expose legacy utilities
   // Note: tools:list and tools:run are now registered in system.js
-  // app:ready is registered here since it needs access to dismissSplash()
-  ipcMain.handle('app:ready', () => {
-    dismissSplash();
-  });
+  // Note: splash:progress and app:ready are registered early before splash window creation
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 
-  // Forward progress events from the dashboard (renderer) to the splash
-  ipcMain.handle('splash:progress', (_event, data) => {
-    if (splashWindow && !splashWindow.isDestroyed()) {
-      splashWindow.webContents.send('splash:progress', data);
-    }
-  });
-
   sendSplashProgress(15, t('splash.loadingDashboard'));
-
-  // Extract icons from executable paths for the startup items tool
-  const _startupIconCache = {};
-  ipcMain.handle('startup:getIcons', async (_event, exePaths) => {
-    const unique = [...new Set((exePaths || []).filter(Boolean))];
-    const result = {};
-    for (const exePath of unique) {
-      if (exePath in _startupIconCache) {
-        result[exePath] = _startupIconCache[exePath];
-        continue;
-      }
-      try {
-        // Expand environment variables like %SystemRoot%
-        const expandedPath = process.env.SystemRoot && exePath.includes('%SystemRoot%')
-          ? exePath.replace(/%SystemRoot%/gi, process.env.SystemRoot)
-          : exePath;
-        // Only attempt if file exists
-        if (!fs.existsSync(expandedPath)) {
-          _startupIconCache[exePath] = null;
-          result[exePath] = null;
-          continue;
-        }
-        const nativeImg = await app.getFileIcon(expandedPath);
-        const dataUrl = nativeImg.toDataURL();
-        // Validate data URL is substantial (not empty image)
-        if (dataUrl && dataUrl.length > 100) {
-          _startupIconCache[exePath] = dataUrl;
-          result[exePath] = dataUrl;
-        } else {
-          _startupIconCache[exePath] = null;
-          result[exePath] = null;
-        }
-      } catch (_) {
-        _startupIconCache[exePath] = null;
-        result[exePath] = null;
-      }
-    }
-    return result;
-  });
 
   // Extract icons from executable paths for the processes page
   const _processIconCache = {};

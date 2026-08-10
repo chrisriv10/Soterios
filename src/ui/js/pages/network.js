@@ -201,6 +201,14 @@ window.Pages['network'] = {
         } else if (e.target.closest('#vpnToggleBtn')) {
           const btn = e.target.closest('#vpnToggleBtn');
           window.Pages['network'].toggleVpn(container, btn.dataset.vpnName, btn.dataset.vpnAction);
+        } else if (e.target.closest('#vpnAddBtn')) {
+          if (window.VpnAddModal) {
+            window.VpnAddModal.open({
+              onSuccess: () => {
+                window.Pages['network'].load(container, false);
+              }
+            });
+          }
         }
       });
     }
@@ -330,11 +338,25 @@ window.Pages['network'] = {
         <div class="page-subtitle" style="font-size:0.8rem;">${escapeHtml(t('network.vpnSubtitle'))}</div>
       </div>`;
       if (vpns.length === 0) {
-        html += `<div style="font-size:0.8rem; color:var(--text-dim); flex:1 1 100%;">${escapeHtml(t('network.vpnNoProfiles'))}</div>`;
+        html += `<div style="font-size:0.8rem; color:var(--text-dim); flex:1 1 100%; display:flex; align-items:center; gap:8px;">
+          ${escapeHtml(t('network.vpnNoProfiles'))}
+          <button id="vpnAddBtn" class="btn btn-sm btn-secondary" data-i18n="network.vpn.addBtn">Add VPN</button>
+        </div>`;
       } else {
+        // Try to get last VPN profile from settings for pre-selection
+        let lastProfile = '';
+        try {
+          const lastProfileResult = await window.api.invoke('db:getSetting', 'vpn.lastProfile');
+          if (lastProfileResult && typeof lastProfileResult === 'string') {
+            lastProfile = lastProfileResult;
+          }
+        } catch (_) {}
+
         const selectedName = vpns.some((v) => v.name === this._vpnSelection)
           ? this._vpnSelection
-          : (vpns.find((v) => v.connected) || vpns[0]).name;
+          : (lastProfile && vpns.some(v => v.name === lastProfile)
+              ? lastProfile
+              : (vpns.find((v) => v.connected) || vpns[0]).name);
         const selVpn = vpns.find((v) => v.name === selectedName) || vpns[0];
         const busy = !!this._vpnPending;
         const connected = !!selVpn.connected && !busy;
@@ -365,6 +387,8 @@ window.Pages['network'] = {
           statusText = t('network.vpnDisconnected');
         }
         html += `<span id="vpnStatusText" style="font-size:0.8rem; color:${statusColor};">${escapeHtml(statusText)}</span>`;
+        // Add VPN button
+        html += `<button id="vpnAddBtn" class="btn btn-sm btn-secondary" style="margin-left:8px;" data-i18n="network.vpn.addBtn">Add VPN</button>`;
         html += '</div>';
       }
       html += '</div></div>';

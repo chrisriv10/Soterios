@@ -159,6 +159,14 @@ window.Pages.settings = {
             </div>
             <label class="toggle"><input type="checkbox" id="aiAssistantToggle" ${settings.features.aiAssistant !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
+
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">${escapeHtml(t('settings.vpn.autoConnect.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.vpn.autoConnect.desc'))}</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="vpnAutoConnectToggle" ${settings.features.vpnAutoConnect ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+          </div>
           <div id="featureToggleStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
         </div>
 
@@ -443,6 +451,7 @@ window.Pages.settings = {
     container.querySelector('#networkAlertsToggle').addEventListener('change', (event) => saveFeature('networkAlerts', event.target.checked, event.target));
     container.querySelector('#networkTrafficHistoryToggle').addEventListener('change', (event) => saveFeature('networkTrafficHistory', event.target.checked, event.target));
     container.querySelector('#aiAssistantToggle').addEventListener('change', (event) => saveFeature('aiAssistant', event.target.checked, event.target));
+    container.querySelector('#vpnAutoConnectToggle').addEventListener('change', (event) => saveFeature('vpnAutoConnect', event.target.checked, event.target));
     container.querySelector('#autoReportToggle').addEventListener('change', (event) => saveFeature('autoReports', event.target.checked, event.target));
     container.querySelector('#scanHistoryToggle').addEventListener('change', (event) => saveFeature('scanHistory', event.target.checked, event.target));
     container.querySelector('#externalLookupsToggle').addEventListener('change', (event) => saveFeature('externalLookups', event.target.checked, event.target));

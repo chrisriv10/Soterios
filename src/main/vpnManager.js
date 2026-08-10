@@ -8,9 +8,11 @@
 const { execFile } = require('child_process');
 const util = require('util');
 const execFilePromise = util.promisify(execFile);
+const { getEapConfigXml, getServerForProvider } = require('./vpnProviders');
 
 const LIST_TTL_MS = 4000;
 const CONNECT_TIMEOUT_MS = 90000;
+const ADD_TIMEOUT_MS = 60000;
 
 function powershellEscape(value) {
   return String(value || '').replace(/'/g, "''");
@@ -69,10 +71,39 @@ rasdial '${powershellEscape(name)}' /d
 exit $LASTEXITCODE`;
 }
 
+function addVpnScript(profileName, serverAddress, username, password) {
+  const eapXml = getEapConfigXml(username, password).replace(/'/g, "''");
+  return `
+$ErrorActionPreference = 'Stop'
+try {
+  $eapXml = '${eapXml}'
+  Add-VpnConnection -Name '${powershellEscape(profileName)}' -ServerAddress '${powershellEscape(serverAddress)}' -TunnelType IKEv2 -AuthenticationMethod EAP -EapConfigXmlStream $eapXml -RememberCredential -Force -ErrorAction Stop
+  Write-Output 'OK'
+} catch {
+  Write-Output ('FAIL|' + $_.Exception.Message)
+}`;
+}
+
+function getStatusScript(name) {
+  return `
+$ErrorActionPreference = 'SilentlyContinue'
+$vpn = Get-VpnConnection -Name '${powershellEscape(name)}' -ErrorAction SilentlyContinue
+if ($vpn) {
+  @{ Name = $vpn.Name; Connected = $vpn.ConnectionStatus -eq 'Connected'; ServerAddress = $vpn.ServerAddress; TunnelType = $vpn.TunnelType } | ConvertTo-Json -Compress
+} else {
+  Write-Output 'NOTFOUND'
+}`;
+}
+
 class VpnManager {
   constructor(options = {}) {
     this._run = options.runPowerShell || defaultRunPowerShell;
     this._listCache = { at: 0, result: null };
+    this._db = options.db || null;
+  }
+
+  setDb(db) {
+    this._db = db;
   }
 
   _clearCache() {
@@ -178,6 +209,113 @@ class VpnManager {
         : ((err && err.message) ? err.message : String(err));
       return { ok: false, error: `Could not disconnect "${name}": ${primaryError || detail}` };
     }
+  }
+
+  // Get connection status for a specific VPN profile
+  async getStatus(name) {
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return { ok: false, error: 'No VPN selected.' };
+    }
+    const trimmed = name.trim();
+    try {
+      const result = await this._run(getStatusScript(trimmed), 10000);
+      const stdout = String(result.stdout || '').trim();
+      if (stdout === 'NOTFOUND') {
+        return { ok: false, error: 'VPN profile not found.' };
+      }
+      const parsed = JSON.parse(stdout);
+      return {
+        ok: true,
+        name: parsed.Name,
+        connected: parsed.Connected === true,
+        serverAddress: parsed.ServerAddress || '',
+        tunnelType: parsed.TunnelType || '',
+      };
+    } catch (err) {
+      const error = (err && err.message) ? err.message : String(err);
+      return { ok: false, error: `Could not get VPN status: ${error}` };
+    }
+  }
+
+  // Connect to the last used VPN profile
+  async connectLast() {
+    if (!this._db) {
+      return { ok: false, error: 'Database not available for last profile lookup.' };
+    }
+    const lastProfile = this._db.getSetting('vpn.lastProfile');
+    if (!lastProfile) {
+      return { ok: false, error: 'No last VPN profile recorded.' };
+    }
+    return this.connect(lastProfile);
+  }
+
+  // Disconnect the last used VPN profile
+  async disconnectLast() {
+    if (!this._db) {
+      return { ok: false, error: 'Database not available for last profile lookup.' };
+    }
+    const lastProfile = this._db.getSetting('vpn.lastProfile');
+    if (!lastProfile) {
+      return { ok: false, error: 'No last VPN profile recorded.' };
+    }
+    return this.disconnect(lastProfile);
+  }
+
+  // Toggle last VPN profile (connect if disconnected, disconnect if connected)
+  async toggleLast() {
+    if (!this._db) {
+      return { ok: false, error: 'Database not available for last profile lookup.' };
+    }
+    const lastProfile = this._db.getSetting('vpn.lastProfile');
+    if (!lastProfile) {
+      return { ok: false, error: 'No last VPN profile recorded.' };
+    }
+    const status = await this.getStatus(lastProfile);
+    if (!status.ok) {
+      return status;
+    }
+    return status.connected ? this.disconnect(lastProfile) : this.connect(lastProfile);
+  }
+
+  // Add a new VPN profile from provider
+  async addFromProvider(providerId, serverId, username, password) {
+    if (!providerId || !serverId || !username || !password) {
+      return { ok: false, error: 'Missing required parameters.' };
+    }
+
+    const server = getServerForProvider(providerId, serverId);
+    if (!server) {
+      return { ok: false, error: 'Invalid server selected.' };
+    }
+
+    const provider = require('./vpnProviders').getProvider(providerId);
+    if (!provider) {
+      return { ok: false, error: 'Invalid provider.' };
+    }
+
+    const profileName = `Soterios - ${provider.name} - ${server.name}`;
+    const serverAddress = server.host;
+
+    this._clearCache();
+
+    try {
+      const result = await this._run(addVpnScript(profileName, serverAddress, username, password), ADD_TIMEOUT_MS);
+      const line = String(result.stdout || '').trim().split(/\r?\n/).pop() || '';
+      if (line === 'OK') {
+        // Store as last profile for future auto-connect
+        if (this._db) {
+          this._db.setSetting('vpn.lastProfile', profileName);
+        }
+        return { ok: true, profileName };
+      }
+      if (line.startsWith('FAIL|')) {
+        return { ok: false, error: line.slice(5) };
+      }
+    } catch (err) {
+      const error = (err && err.message) ? err.message : String(err);
+      return { ok: false, error: `Failed to add VPN profile: ${error}` };
+    }
+    return { ok: false, error: 'Failed to add VPN profile.' };
   }
 }
 

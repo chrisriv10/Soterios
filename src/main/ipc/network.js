@@ -214,6 +214,33 @@ function register(mainWindow, { db, eventBus, networkMonitor, networkEnricher, n
     if (!vpnManager) throw new Error('VPN manager is unavailable.');
     return vpnManager.disconnect(name);
   });
+
+  ipcMain.handle('network:vpn:add', async (_event, { providerId, serverId, username, password }) => {
+    if (!vpnManager) throw new Error('VPN manager is unavailable.');
+    return vpnManager.addFromProvider(providerId, serverId, username, password);
+  });
+
+  ipcMain.handle('network:vpn:status', async (_event, name) => {
+    if (!vpnManager) throw new Error('VPN manager is unavailable.');
+    return vpnManager.getStatus(name);
+  });
+
+  ipcMain.handle('network:vpn:toggleLast', async () => {
+    if (!vpnManager) throw new Error('VPN manager is unavailable.');
+    return vpnManager.toggleLast();
+  });
+
+  ipcMain.handle('network:vpn:getProviders', async () => {
+    const { getAllProviders } = require('../../main/vpnProviders');
+    return getAllProviders();
+  });
+
+  ipcMain.handle('network:vpn:getServers', async (_event, providerId) => {
+    const { getProvider } = require('../../main/vpnProviders');
+    const provider = getProvider(providerId);
+    if (!provider) return [];
+    return provider.servers;
+  });
 }
 
 module.exports = { register };
