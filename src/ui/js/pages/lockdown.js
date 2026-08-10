@@ -12,7 +12,11 @@ window.Pages['lockdown'] = {
         <div class="page-subtitle">${escapeHtml(t('lockdown.description'))}</div>
       </div>
 
-      <div class="grid grid-2">
+      <div class="panel" style="margin-top:16px;">
+        <div class="panel-title" style="color:var(--warning);font-size:16px;text-transform:uppercase;">${escapeHtml(t('lockdown.warning'))}</div>
+      </div>
+
+      <div class="grid grid-2" style="margin-top:16px;">
         <div class="panel">
           <div class="panel-title">${escapeHtml(t('lockdown.title'))}</div>
           <div class="lockdown-status" id="lockdownStatus">
@@ -74,11 +78,6 @@ window.Pages['lockdown'] = {
         </div>
       </div>
 
-      <div class="panel" style="margin-top:16px;">
-        <div class="panel-title" style="color:var(--warning);font-size:16px;text-transform:uppercase;">${escapeHtml(t('lockdown.warning'))}</div>
-      </div>
-
-      <!-- Allowlist Panel -->
       <div class="panel" style="margin-top:16px;">
         <div class="panel-title">${escapeHtml(t('lockdown.allowlist.title'))}</div>
         <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">${escapeHtml(t('lockdown.allowlist.description'))}</div>
