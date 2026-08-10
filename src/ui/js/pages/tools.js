@@ -320,6 +320,7 @@ async runScript(container, btn) {
       output.innerHTML = this.renderOutput(scriptId, result, when);
       if (outputStatus) outputStatus.textContent = this.t('tools.completedStatus', { script: scriptId, when });
       if (exportBtn) exportBtn.style.display = 'inline-flex';
+      showToast(this.t('tools.toastSuccess', { script: scriptId }), 'success');
 
       if (scriptId === 'uninstaller-report') {
         this._uninstallerApps = Array.isArray(result.apps) ? result.apps : [];
@@ -344,6 +345,7 @@ async runScript(container, btn) {
       if (statusEl) statusEl.textContent = this.t('tools.failed');
       if (outputStatus) outputStatus.textContent = this.t('tools.failedStatus', { script: scriptId });
       showToolError(output, err);
+      showToast(this.t('tools.toastFailed', { script: scriptId }), 'error');
       setButtonLoading(btn, false);
     } finally {
       if (typeof unsubscribeProgress === 'function') unsubscribeProgress();

@@ -91,6 +91,8 @@
   "tools.working": "Working",
   "tools.scanned": "scanned",
   "tools.selectFilesFirst": "Please select at least one file to shred using the \"Select Files to Shred\" button.",
+  "tools.toastSuccess": "Tool completed: {script}",
+  "tools.toastFailed": "Tool failed: {script}",
   "settings.appearance": "Appearance",
   "settings.language": "Language",
   "settings.languageHint": "Choose the UI language for supported pages.",
