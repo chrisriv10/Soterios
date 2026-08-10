@@ -35,6 +35,7 @@ function registerIpcHandlers(mainWindow, services) {
     networkEnricher: services.networkEnricher,
     networkAlertMonitor: services.networkAlertMonitor,
     geoLocationService: services.geoLocationService,
+    vpnManager: services.vpnManager,
     startNetworkStatsTimer: services.startNetworkStatsTimer,
     stopNetworkStatsTimer: services.stopNetworkStatsTimer,
   };
@@ -60,6 +61,7 @@ function registerIpcHandlers(mainWindow, services) {
     toolRegistry: services.toolRegistry,
     firewallManager: services.firewallManager,
     processInspector: services.processInspector,
+    scanEngine: services.scanEngine,
   };
 
   registerScan(mainWindow, servicesForScan);

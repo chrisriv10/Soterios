@@ -18,6 +18,7 @@ const { ProcessResolver } = require('../security/ProcessResolver');
 const { BlocklistService } = require('../security/BlocklistService');
 const { NetworkEnricher } = require('../security/NetworkEnricher');
 const { GeoLocationService } = require('../security/GeoLocationService');
+const { VpnManager } = require('./vpnManager');
 const toolRegistry = require('../core/toolRegistry');
 
 class ServiceRegistry {
@@ -75,6 +76,7 @@ class ServiceRegistry {
       notify
     });
     const emergencyLockdown = new EmergencyLockdown(db, eventBus, notify);
+    const vpnManager = new VpnManager();
 
     this._services = {
       db,
@@ -96,6 +98,7 @@ class ServiceRegistry {
       folderWatcher,
       networkAlertMonitor,
       emergencyLockdown,
+      vpnManager,
       toolRegistry
     };
     return this._services;

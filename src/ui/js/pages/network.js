@@ -8,6 +8,9 @@ window.Pages['network'] = {
   _groupByProcess: true,
   _simpleView: true,
   _expandedGroups: new Set(),
+  _vpnSelection: '',
+  _vpnPending: null,
+  _vpnError: '',
 
   _classificationLabel(classification) {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
@@ -167,6 +170,9 @@ window.Pages['network'] = {
         } else if (e.target && e.target.id === 'connectionStateFilter') {
           window.Pages['network']._connectionStateFilter = e.target.value;
           window.Pages['network'].applyConnectionFilter(container);
+        } else if (e.target && e.target.id === 'vpnSelect') {
+          window.Pages['network']._vpnSelection = e.target.value;
+          window.Pages['network'].load(container, false);
         }
       });
       content.addEventListener('change', (e) => {
@@ -192,6 +198,9 @@ window.Pages['network'] = {
             window.Pages['network']._expandedGroups.add(processName);
           }
           window.Pages['network'].load(container, false);
+        } else if (e.target.closest('#vpnToggleBtn')) {
+          const btn = e.target.closest('#vpnToggleBtn');
+          window.Pages['network'].toggleVpn(container, btn.dataset.vpnName, btn.dataset.vpnAction);
         }
       });
     }
@@ -216,10 +225,11 @@ window.Pages['network'] = {
     const searchSelectionStart = prevSearchEl ? prevSearchEl.selectionStart : null;
     const searchSelectionEnd = prevSearchEl ? prevSearchEl.selectionEnd : null;
     try {
-      const [statsResult, connectionsResult, settingsResult] = await Promise.allSettled([
+      const [statsResult, connectionsResult, settingsResult, vpnResult] = await Promise.allSettled([
         window.api.invoke('network:stats'),
         window.api.invoke('network:connections'),
-        window.api.invoke('db:getSetting', 'feature.networkTrafficHistory', true)
+        window.api.invoke('db:getSetting', 'feature.networkTrafficHistory', true),
+        window.api.invoke('network:vpn:list')
       ]);
 
       if (!document.body.contains(container)) {
@@ -229,6 +239,8 @@ window.Pages['network'] = {
       const stats = statsResult.status === 'fulfilled' ? statsResult.value : null;
       const connections = connectionsResult.status === 'fulfilled' ? connectionsResult.value : null;
       const networkTrafficHistoryEnabled = settingsResult.status === 'fulfilled' ? settingsResult.value : true;
+      const vpn = vpnResult.status === 'fulfilled' ? vpnResult.value : null;
+      const vpns = (vpn && Array.isArray(vpn.vpns)) ? vpn.vpns : [];
 
       let html = '';
 
@@ -310,6 +322,52 @@ window.Pages['network'] = {
           <div class="stat-tile"><div class="stat-label">${escapeHtml(t('network.closeWait'))}</div><div class="stat-value" style="color:var(--danger);">${c.closeWait}</div></div>
         </div>`;
       }
+
+      html += '<div class="card" style="padding:14px 16px; margin-bottom:18px;">';
+      html += '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">';
+      html += `<div>
+        <h3 style="margin:0 0 2px; font-size:1rem;">${escapeHtml(t('network.vpnTitle'))}</h3>
+        <div class="page-subtitle" style="font-size:0.8rem;">${escapeHtml(t('network.vpnSubtitle'))}</div>
+      </div>`;
+      if (vpns.length === 0) {
+        html += `<div style="font-size:0.8rem; color:var(--text-dim); flex:1 1 100%;">${escapeHtml(t('network.vpnNoProfiles'))}</div>`;
+      } else {
+        const selectedName = vpns.some((v) => v.name === this._vpnSelection)
+          ? this._vpnSelection
+          : (vpns.find((v) => v.connected) || vpns[0]).name;
+        const selVpn = vpns.find((v) => v.name === selectedName) || vpns[0];
+        const busy = !!this._vpnPending;
+        const connected = !!selVpn.connected && !busy;
+
+        html += '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">';
+        html += `<select id="vpnSelect" ${busy ? 'disabled' : ''} style="padding:6px 10px; border-radius:8px; border:1px solid var(--glass-border); background:var(--bg-surface); color:inherit; font-size:0.85rem; max-width:280px;">`;
+        for (const v of vpns) {
+          html += `<option value="${escapeHtml(v.name)}" ${v.name === selectedName ? 'selected' : ''}>${escapeHtml(v.name)}${v.connected ? ' \u2713' : ''}</option>`;
+        }
+        html += '</select>';
+        const btnClass = connected ? 'btn btn-sm btn-danger' : 'btn btn-sm btn-primary';
+        const btnLabel = busy ? t('network.vpnWorking') : (connected ? t('network.vpnDisconnect') : t('network.vpnConnect'));
+        html += `<button id="vpnToggleBtn" class="${btnClass}" data-vpn-action="${connected ? 'disconnect' : 'connect'}" data-vpn-name="${escapeHtml(selVpn.name)}" ${busy ? 'disabled' : ''}>${escapeHtml(btnLabel)}</button>`;
+
+        let statusText = '';
+        let statusColor = 'var(--text-dim)';
+        if (this._vpnError) {
+          statusText = this._vpnError;
+          statusColor = 'var(--danger)';
+        } else if (this._vpnPending) {
+          statusText = this._vpnPending.action === 'disconnect'
+            ? t('network.vpnDisconnecting', { name: this._vpnPending.name })
+            : t('network.vpnConnecting', { name: this._vpnPending.name });
+        } else if (connected) {
+          statusText = t('network.vpnConnected', { name: selVpn.name });
+          statusColor = 'var(--ok)';
+        } else {
+          statusText = t('network.vpnDisconnected');
+        }
+        html += `<span id="vpnStatusText" style="font-size:0.8rem; color:${statusColor};">${escapeHtml(statusText)}</span>`;
+        html += '</div>';
+      }
+      html += '</div></div>';
 
       html += '<div style="display:flex; gap:16px; margin-bottom:18px; flex-wrap:wrap; align-items:stretch;">';
 
@@ -951,6 +1009,46 @@ window.Pages['network'] = {
     });
   },
 
+  async toggleVpn(container, name, action) {
+    if (this._vpnPending || !name) return;
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+    this._vpnPending = { name, action: action === 'disconnect' ? 'disconnect' : 'connect' };
+    this._vpnError = '';
+
+    const btn = container.querySelector('#vpnToggleBtn');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = t('network.vpnWorking');
+    }
+    const status = container.querySelector('#vpnStatusText');
+    if (status) {
+      status.style.color = 'var(--text-dim)';
+      status.textContent = action === 'disconnect'
+        ? t('network.vpnDisconnecting', { name })
+        : t('network.vpnConnecting', { name });
+    }
+
+    try {
+      const res = await window.api.invoke(action === 'disconnect' ? 'network:vpn:disconnect' : 'network:vpn:connect', name);
+      if (!res || !res.ok) {
+        this._vpnError = (res && res.error) || 'VPN action failed';
+        if (status) {
+          status.style.color = 'var(--danger)';
+          status.textContent = this._vpnError;
+        }
+      }
+    } catch (err) {
+      this._vpnError = err.message || String(err);
+      if (status) {
+        status.style.color = 'var(--danger)';
+        status.textContent = this._vpnError;
+      }
+    } finally {
+      this._vpnPending = null;
+      this.load(container, false);
+    }
+  },
+
   destroy() {
     if (this._refreshTimer) {
       clearInterval(this._refreshTimer);
@@ -966,5 +1064,7 @@ window.Pages['network'] = {
     this._alertsPanelEl = null;
     this._alertsExpanded = false;
     this._lastAlertHitsKey = null;
+    this._vpnPending = null;
+    this._vpnError = '';
   }
 };

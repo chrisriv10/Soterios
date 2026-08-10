@@ -136,7 +136,7 @@ Write-Output "OK|$outBitsPerSec|$inBitsPerSec"
   };
 }
 
-function register(mainWindow, { db, eventBus, networkMonitor, networkEnricher, networkAlertMonitor, geoLocationService, startNetworkStatsTimer, stopNetworkStatsTimer }) {
+function register(mainWindow, { db, eventBus, networkMonitor, networkEnricher, networkAlertMonitor, geoLocationService, vpnManager, startNetworkStatsTimer, stopNetworkStatsTimer }) {
   // -- Network suspicious-connection alerts --
   ipcMain.handle('network-alerts:status', async () => {
     return (networkAlertMonitor && networkAlertMonitor.getStatus()) || { running: false };
@@ -197,6 +197,22 @@ function register(mainWindow, { db, eventBus, networkMonitor, networkEnricher, n
   // measureConnectionBandwidth's comment for why) --
   ipcMain.handle('network:measureBandwidth', async (_event, spec) => {
     return measureConnectionBandwidth(spec || {});
+  });
+
+  // -- Windows VPN control --
+  ipcMain.handle('network:vpn:list', async () => {
+    if (!vpnManager) throw new Error('VPN manager is unavailable.');
+    return vpnManager.list(false);
+  });
+
+  ipcMain.handle('network:vpn:connect', async (_event, name) => {
+    if (!vpnManager) throw new Error('VPN manager is unavailable.');
+    return vpnManager.connect(name);
+  });
+
+  ipcMain.handle('network:vpn:disconnect', async (_event, name) => {
+    if (!vpnManager) throw new Error('VPN manager is unavailable.');
+    return vpnManager.disconnect(name);
   });
 }
 
