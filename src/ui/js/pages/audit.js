@@ -193,6 +193,7 @@ window.Pages['audit'] = {
           </div>
           ${res.detail ? `<div style="font-size:0.85rem; color:var(--text-dim); padding:8px; background:var(--bg-surface); border-radius:6px; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; white-space:pre-wrap; word-break:break-word;">${escapeHtml(res.detail)}</div>` : ''}
           ${res.recommendation ? this.renderRecommendation(res.recommendation) : ''}
+          ${res.actionUri ? `<button class="btn btn-sm audit-open-settings" data-uri="${escapeHtml(res.actionUri)}">${escapeHtml(this.t('audit.openWindowsUpdate'))}</button>` : ''}
           ${res.status === 'warn' || res.status === 'fail' ? `<button class="btn btn-sm audit-ignore" data-id="${escapeHtml(this.warningId(res))}" data-title="${escapeHtml(res.name)}" data-detail="${escapeHtml(res.message || res.detail || '')}">${escapeHtml(this.t('audit.ignoreWarning'))}</button>` : ''}
         </div>`;
       }
@@ -214,6 +215,13 @@ window.Pages['audit'] = {
           setTimeout(() => { btn.textContent = original; }, 1500);
         } catch (err) {
           alert(t('audit.copyError'));
+        }
+      }));
+      content.querySelectorAll('.audit-open-settings').forEach((btn) => btn.addEventListener('click', async () => {
+        try {
+          await window.api.shell.openExternal(btn.dataset.uri);
+        } catch (err) {
+          alert(err.message || t('audit.openSettingsError'));
         }
       }));
       content.querySelectorAll('.audit-ignore').forEach((btn) => btn.addEventListener('click', async () => {

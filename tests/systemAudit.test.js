@@ -213,6 +213,7 @@ describe('SystemAudit', () => {
     const results = await audit.checkWindowsUpdate();
     assert.equal(results[0].status, 'warn');
     assert.ok(results[0].message.includes('5 update'));
+    assert.equal(results[0].actionUri, 'ms-settings:windowsupdate');
   });
 
   it('checkWindowsUpdate handles parse errors', async () => {

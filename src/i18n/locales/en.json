@@ -500,6 +500,8 @@
   "audit.copy": "Copy",
   "audit.copied": "Copied!",
   "audit.copyError": "Unable to copy to clipboard.",
+  "audit.openWindowsUpdate": "Open Windows Update",
+  "audit.openSettingsError": "Unable to open Windows Settings.",
   "audit.ignoreError": "Unable to ignore warning.",
   "audit.restoreError": "Unable to restore warning.",
   "audit.error": "Error running audit: {error}",
