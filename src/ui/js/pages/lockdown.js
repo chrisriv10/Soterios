@@ -369,14 +369,16 @@ window.Pages['lockdown'] = {
       if (result.ok) {
         const status = result.data;
         if (status.isLockedDown) {
-          lockdownIndicator.className = 'status-indicator status-danger';
+          lockdownIndicator.className = 'status-indicator';
+          lockdownIcon.className = 'status-icon danger';
           lockdownIcon.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><path d="M12 17v2"/><path d="M12 11v2"/></svg>';
           lockdownLabel.textContent = window.I18n.t('lockdown.active');
           lockdownDetail.textContent = window.I18n.t('lockdown.activeDetail');
           lockdownBtn.disabled = true;
           restoreBtn.disabled = false;
         } else {
-          lockdownIndicator.className = 'status-indicator status-success';
+          lockdownIndicator.className = 'status-indicator';
+          lockdownIcon.className = 'status-icon safe';
           lockdownIcon.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
           lockdownLabel.textContent = window.I18n.t('lockdown.normal');
           lockdownDetail.textContent = window.I18n.t('lockdown.normalDetail');
@@ -385,7 +387,8 @@ window.Pages['lockdown'] = {
         }
       } else {
         // Handle unsuccessful status response
-        lockdownIndicator.className = 'status-indicator status-warning';
+        lockdownIndicator.className = 'status-indicator';
+        lockdownIcon.className = 'status-icon warning';
         lockdownIcon.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
         lockdownLabel.textContent = window.I18n.t('lockdown.error');
         lockdownDetail.textContent = result.error || 'Failed to get lockdown status';
@@ -394,7 +397,8 @@ window.Pages['lockdown'] = {
         restoreBtn.disabled = true;
       }
     } catch (err) {
-      lockdownIndicator.className = 'status-indicator status-warning';
+      lockdownIndicator.className = 'status-indicator';
+      lockdownIcon.className = 'status-icon warning';
       lockdownIcon.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
       lockdownLabel.textContent = window.I18n.t('lockdown.error');
       lockdownDetail.textContent = err.message;
