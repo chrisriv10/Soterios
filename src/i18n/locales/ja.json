@@ -878,6 +878,7 @@
   "common.disable": "無効化",
   "common.enable": "有効化",
   "common.minimize": "最小化",
+  "common.maximize": "最大化",
   "common.expand": "展開",
   "common.unknownError": "不明なエラー",
   "common.errorUnknown": "不明なエラーが発生しました。",

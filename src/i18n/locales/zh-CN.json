@@ -878,6 +878,7 @@
   "common.disable": "禁用",
   "common.enable": "启用",
   "common.minimize": "最小化",
+  "common.maximize": "最大化",
   "common.expand": "展开",
   "common.unknownError": "未知错误",
   "common.errorUnknown": "发生未知错误。",

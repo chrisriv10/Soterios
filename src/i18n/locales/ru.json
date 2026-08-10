@@ -878,6 +878,7 @@
   "common.disable": "отключить",
   "common.enable": "включить",
   "common.minimize": "Свернуть",
+  "common.maximize": "Развернуть",
   "common.expand": "Развернуть",
   "common.unknownError": "Неизвестная ошибка",
   "common.errorUnknown": "Произошла неизвестная ошибка.",

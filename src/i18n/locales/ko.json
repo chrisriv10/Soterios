@@ -878,6 +878,7 @@
   "common.disable": "비활성화",
   "common.enable": "활성화",
   "common.minimize": "최소화",
+  "common.maximize": "최대화",
   "common.expand": "확장",
   "common.unknownError": "알 수 없는 오류",
   "common.errorUnknown": "알 수 없는 오류가 발생했습니다.",

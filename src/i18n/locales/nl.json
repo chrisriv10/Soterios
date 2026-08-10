@@ -878,6 +878,7 @@
   "common.disable": "uitschakelen",
   "common.enable": "inschakelen",
   "common.minimize": "Minimaliseren",
+  "common.maximize": "Maximaliseren",
   "common.expand": "Uitvouwen",
   "common.unknownError": "Onbekende fout",
   "common.errorUnknown": "Er is een onbekende fout opgetreden.",

@@ -912,6 +912,7 @@
   "common.disable": "disable",
   "common.enable": "enable",
   "common.minimize": "Minimize",
+  "common.maximize": "Maximize",
   "common.expand": "Expand",
   "common.unknownError": "Unknown error",
   "common.errorUnknown": "An unknown error occurred.",

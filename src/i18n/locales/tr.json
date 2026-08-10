@@ -878,6 +878,7 @@
   "common.disable": "devre dışı bırak",
   "common.enable": "etkinleştir",
   "common.minimize": "Simge Durumuna Küçült",
+  "common.maximize": "Simge Durumuna Büyült",
   "common.expand": "Genişlet",
   "common.unknownError": "Bilinmeyen hata",
   "common.errorUnknown": "Bilinmeyen bir hata oluştu.",

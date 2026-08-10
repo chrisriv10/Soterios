@@ -878,6 +878,7 @@
   "common.disable": "wyłącz",
   "common.enable": "włącz",
   "common.minimize": "Minimalizuj",
+  "common.maximize": "Maksymalizuj",
   "common.expand": "Rozwiń",
   "common.unknownError": "Nieznany błąd",
   "common.errorUnknown": "Wystąpił nieznany błąd.",

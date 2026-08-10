@@ -878,6 +878,7 @@
   "common.disable": "désactiver",
   "common.enable": "activer",
   "common.minimize": "Réduire",
+  "common.maximize": "Agrandir",
   "common.expand": "Agrandir",
   "common.unknownError": "Erreur inconnue",
   "common.errorUnknown": "Une erreur inconnue est survenue.",
