@@ -44,7 +44,7 @@ class SystemAudit {
       try {
         const s = JSON.parse(def.stdout);
         if (s.AntivirusEnabled) {
-          out.push({ name: 'Windows Defender Antivirus', status: 'pass', message: 'Defender antivirus is enabled and running.', detail: `Engine: ${s.AMEngineVersion || 'N/A'} | Signatures: ${s.AntivirusSignatureVersion || 'N/A'} (${s.AntivirusSignatureAge || 0} days old)`, recommendation: 'Keep Windows Update enabled for automatic definition updates.' });
+          out.push({ name: 'Windows Defender Antivirus', status: 'pass', message: 'Defender antivirus is enabled and running.', detail: `Engine: ${s.AMEngineVersion || 'N/A'} | Signatures: ${s.AntivirusSignatureVersion || 'N/A'} (${s.AntivirusSignatureAge || 0} days old)`, recommendation: '' });
         } else {
           out.push({ name: 'Windows Defender Antivirus', status: 'fail', message: 'Defender antivirus is disabled!', detail: 'Antivirus protection is turned off.', recommendation: 'Open Windows Security > Virus & threat protection and turn on real-time protection.' });
         }

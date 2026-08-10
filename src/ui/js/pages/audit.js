@@ -60,7 +60,6 @@ window.Pages['audit'] = {
     'Unable to query execution policy.': 'audit.check.execPolicy.error.detail',
     'Secure Boot status could not be determined.': 'audit.check.secureBoot.unknown.msg',
     'This check may not be supported on virtual machines or older hardware.': 'audit.check.secureBoot.unknown.detail',
-    'Keep Windows Update enabled for automatic definition updates.': 'audit.check.defender.rec',
     'Enable real-time protection in Windows Security settings.': 'audit.check.rtp.rec',
     'Enable UAC via Control Panel > User Accounts > Change User Account Control settings.': 'audit.check.uac.rec',
     'Open Settings > Windows Update and install pending updates.': 'audit.check.updates.rec',
