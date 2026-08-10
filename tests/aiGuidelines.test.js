@@ -20,6 +20,14 @@ describe('aiGuidelines', () => {
     assert.match(AI_GUIDELINES, /concise/i);
   });
 
+  it('documents the available actions and marker format', () => {
+    assert.match(AI_GUIDELINES, /Performing actions/i);
+    assert.match(AI_GUIDELINES, /\[\[action:scan-quick\]\]/);
+    assert.match(AI_GUIDELINES, /\[\[action:health-score\]\]/);
+    assert.match(AI_GUIDELINES, /own line/);
+    assert.match(AI_GUIDELINES, /never claim you performed an action/i);
+  });
+
   it('returns the guidelines alone when no context is given', () => {
     assert.equal(buildSystemPrompt(), AI_GUIDELINES);
     assert.equal(buildSystemPrompt(''), AI_GUIDELINES);

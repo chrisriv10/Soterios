@@ -11,6 +11,7 @@ const {
 } = require('./ollamaClient');
 const { buildSystemPrompt } = require('../aiGuidelines');
 const { buildContextSnapshot } = require('../aiContext');
+const { ActionMarkerStream, executeAction, extractActionMarkers } = require('../aiActions');
 
 const HOST_SETTING_KEY = 'ai.ollama.host';
 const MODEL_SETTING_KEY = 'ai.ollama.model';
@@ -42,7 +43,7 @@ function getConfig(db) {
   };
 }
 
-function register(mainWindow, { db, toolRegistry, firewallManager, processInspector }) {
+function register(mainWindow, { db, toolRegistry, firewallManager, processInspector, scanEngine }) {
   ipcMain.handle('ai:status', async () => {
     const { host } = getConfig(db);
     if (!isValidHost(host)) {
@@ -86,12 +87,47 @@ function register(mainWindow, { db, toolRegistry, firewallManager, processInspec
     const snapshot = await buildContextSnapshot({ db, toolRegistry, firewallManager, processInspector });
     const systemPrompt = buildSystemPrompt(snapshot);
 
+    const markerStream = new ActionMarkerStream();
+    let fullText = '';
+    const actionsCtx = {
+      db,
+      toolRegistry,
+      scanEngine,
+      onUpdate: (_actionCtx, payload) => {
+        sendChunk(event, { requestId, type: 'action-update', action: { ...payload } });
+      },
+    };
+
     streamChat(host, messages, model, {
       systemPrompt,
-      onDelta: (delta) => sendChunk(event, { requestId, type: 'delta', delta }),
-      onDone: () => {
+      onDelta: (delta) => {
+        fullText += delta;
+        const { text } = markerStream.push(delta);
+        if (text) sendChunk(event, { requestId, type: 'delta', delta: text });
+      },
+      onDone: async () => {
+        const tail = markerStream.flush();
+        if (tail) sendChunk(event, { requestId, type: 'delta', delta: tail });
         clearTimeout(timer);
         activeRequests.delete(requestId);
+        const markers = extractActionMarkers(fullText).markers;
+        for (const marker of markers) {
+          const id = (marker.match(/^\[\[action:([a-z0-9-]+)/) || [])[1];
+          if (!id) continue;
+          const result = await executeAction(id, actionsCtx);
+          sendChunk(event, {
+            requestId,
+            type: 'action',
+            action: {
+              id,
+              label: result.label || id,
+              ok: !!result.ok,
+              error: result.error || '',
+              summary: result.summary || '',
+              started: !!result.started,
+            },
+          });
+        }
         sendChunk(event, { requestId, type: 'done' });
       },
       signal: controller.signal

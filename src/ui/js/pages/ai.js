@@ -5,6 +5,7 @@ window.Pages.ai = {
   _messages: [],
   _requestId: null,
   _busy: false,
+  _pendingActions: {},
   _config: { host: '', model: '' },
   _container: null,
   _suggestions: [
@@ -193,8 +194,11 @@ window.Pages.ai = {
     msg.className = `ai-msg ai-msg-${role}`;
     const bubble = document.createElement('div');
     bubble.className = 'ai-bubble';
-    if (role === 'assistant') bubble.innerHTML = content ? formatAssistantText(content) : `<span class="ai-thinking">${escapeHtml(this.t('ai.thinking'))}</span>`;
-    else bubble.textContent = content;
+    if (role === 'assistant') {
+      bubble.innerHTML = `<div class="ai-text">${content ? formatAssistantText(content) : `<span class="ai-thinking">${escapeHtml(this.t('ai.thinking'))}</span>`}</div><div class="ai-actions"></div>`;
+    } else {
+      bubble.textContent = content;
+    }
     msg.appendChild(bubble);
     messagesEl.appendChild(msg);
     this.scrollToBottom();
@@ -202,8 +206,9 @@ window.Pages.ai = {
   },
 
   updateAssistantBubble(bubble, text) {
-    if (text.trim()) {
-      bubble.innerHTML = formatAssistantText(text);
+    const textEl = bubble.querySelector('.ai-text');
+    if (textEl && text.trim()) {
+      textEl.innerHTML = formatAssistantText(text);
     }
     this.scrollToBottom();
   },
@@ -282,11 +287,53 @@ window.Pages.ai = {
       if (this._currentBubble) {
         this.updateAssistantBubble(this._currentBubble, this._currentText);
       }
+    } else if (payload.type === 'action') {
+      this.onAction(payload);
+    } else if (payload.type === 'action-update') {
+      this.onActionUpdate(payload);
     } else if (payload.type === 'done') {
       this.finishStream();
     } else if (payload.type === 'error') {
       this.finishStream(payload.error, payload.error === 'cancelled');
     }
+  },
+
+  onAction(payload) {
+    const action = payload.action || {};
+    const id = action.id || 'action';
+    if (!this._currentBubble) return;
+    const container = this._currentBubble.querySelector('.ai-actions');
+    if (!container) return;
+    const card = document.createElement('div');
+    card.className = 'ai-action';
+    card.dataset.state = action.started ? 'running' : (action.ok ? 'completed' : 'failed');
+    card.innerHTML = `
+      <div class="ai-action-head">
+        <span class="ai-action-label">${escapeHtml(action.label || id)}</span>
+        <span class="ai-action-status">${escapeHtml(action.started ? 'Running…' : (action.ok ? 'Done' : 'Failed'))}</span>
+      </div>
+      <div class="ai-action-summary">${escapeHtml(action.summary || action.error || '')}</div>`;
+    container.appendChild(card);
+    if (action.started) {
+      this._pendingActions[`${payload.requestId}:${id}`] = card;
+    } else {
+      this._messages.push({ role: 'system', content: `[Action: ${action.label || id}] ${action.summary || action.error || 'no result'}` });
+    }
+    this.scrollToBottom();
+  },
+
+  onActionUpdate(payload) {
+    const action = payload.action || {};
+    const key = `${payload.requestId}:${action.id || 'action'}`;
+    const card = this._pendingActions[key];
+    if (!card) return;
+    delete this._pendingActions[key];
+    card.dataset.state = action.ok ? 'completed' : 'failed';
+    const statusEl = card.querySelector('.ai-action-status');
+    if (statusEl) statusEl.textContent = action.ok ? 'Done' : 'Failed';
+    const summaryEl = card.querySelector('.ai-action-summary');
+    if (summaryEl) summaryEl.textContent = action.summary || action.error || '';
+    this._messages.push({ role: 'system', content: `[Action: ${action.label || action.id || 'action'}] ${action.summary || action.error || 'no result'}` });
   }
 };
 
