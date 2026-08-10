@@ -277,6 +277,18 @@ window.Pages.settings = {
           </div>
           <button class="btn btn-primary" id="saveMaintenance" style="margin-top:12px;">${escapeHtml(t('settings.saveMaintenance'))}</button>
           <button class="btn btn-secondary" id="runMaintenanceNow" style="margin-top:12px; margin-left:8px;">${escapeHtml(t('settings.runNow'))}</button>
+          <div id="maintenanceOutput" style="margin-top:12px; display:none;">
+            <div class="output-panel" style="height:300px; border-radius:8px;">
+              <div class="output-header">
+                <span>${escapeHtml(t('tools.output'))}</span>
+                <div style="display:flex; gap:8px;">
+                  <button class="btn btn-sm btn-ghost" id="maximizeMaintenanceBtn">${escapeHtml(t('common.maximize'))}</button>
+                  <button class="btn btn-sm btn-ghost" id="clearMaintenanceBtn">${escapeHtml(t('tools.clear'))}</button>
+                </div>
+              </div>
+              <div class="output-body" id="maintenanceOutputBody"></div>
+            </div>
+          </div>
           <div id="maintenanceStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
         </div>
 
@@ -614,23 +626,47 @@ window.Pages.settings = {
     container.querySelector('#runMaintenanceNow').addEventListener('click', async () => {
       const status = container.querySelector('#maintenanceStatus');
       const btn = container.querySelector('#runMaintenanceNow');
+      const outputDiv = container.querySelector('#maintenanceOutput');
+      const outputBody = container.querySelector('#maintenanceOutputBody');
       setButtonLoading(btn, true, t('common.running'));
+      outputDiv.style.display = 'block';
+      outputBody.innerHTML = '<div class="empty-state"><span class="spinner"></span>&nbsp;Running...</div>';
       try {
         const response = await window.api.invoke('maintenance:runNow');
         if (!response || !response.ok) throw new Error(response?.error || t('settings.runFailed'));
         const result = response.data;
         if (result.skipped) {
           status.textContent = t('settings.maintenanceSkipped', { reason: result.reason || 'unknown' });
+          outputBody.innerHTML = `<div class="log-row"><span class="log-tag warn">${t('common.info')}</span><span class="log-path">${escapeHtml(t('settings.maintenanceSkipped', { reason: result.reason || 'unknown' }))}</span></div>`;
         } else {
           const okCount = (result.results || []).filter((row) => row.ok).length;
           const total = (result.results || []).length;
           status.textContent = t('settings.maintenanceCompleted', { ok: okCount, total });
+          
+          let html = `<div class="log-row"><span class="log-tag clean">${t('tools.done')}</span><span class="log-path">${t('settings.maintenanceCompleted', { ok: okCount, total })}</span></div>`;
+          (result.results || []).forEach((r) => {
+            html += `<div class="log-row"><span class="log-tag ${r.ok ? 'clean' : 'match'}">${escapeHtml(r.scriptId)}</span><span class="log-path">${r.ok ? t('common.ok') : (r.error || t('common.failed'))}</span></div>`;
+          });
+          outputBody.innerHTML = html;
         }
       } catch (err) {
         status.textContent = err.message || String(err);
+        outputBody.innerHTML = `<div class="log-row"><span class="log-tag match">${t('common.error')}</span><span class="log-path">${escapeHtml(err.message || String(err))}</span></div>`;
       } finally {
         setButtonLoading(btn, false);
       }
+    });
+
+    container.querySelector('#maximizeMaintenanceBtn').addEventListener('click', () => {
+      const outputPanel = container.querySelector('#maintenanceOutput .output-panel');
+      const btn = container.querySelector('#maximizeMaintenanceBtn');
+      const isMaximized = outputPanel.classList.toggle('maximized');
+      btn.textContent = isMaximized ? t('common.minimize') : t('common.maximize');
+    });
+
+    container.querySelector('#clearMaintenanceBtn').addEventListener('click', () => {
+      const outputBody = container.querySelector('#maintenanceOutputBody');
+      outputBody.innerHTML = '<div class="empty-state">Cleared.</div>';
     });
 
     const updateStatusEl = container.querySelector('#updateStatusText');

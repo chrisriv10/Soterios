@@ -823,6 +823,24 @@ body {
   align-self: center;
 }
 
+.output-panel.maximized {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  border-radius: 0;
+  margin: 0;
+  height: 100vh;
+  width: 100vw;
+  transition: all 0.3s ease;
+}
+
+.output-panel.maximized .output-body {
+  max-height: calc(100vh - 120px);
+}
+
 /* Log Rows */
 .log-row {
   display: flex;

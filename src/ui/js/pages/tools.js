@@ -54,7 +54,10 @@ window.Pages.tools = {
         <aside class="output-panel" id="outputPanel">
           <div class="output-header">
             <span>${escapeHtml(this.t('tools.output'))}</span>
-            <button class="btn btn-sm btn-ghost" id="clearOutputBtn" style="display:none;">${escapeHtml(this.t('tools.clear'))}</button>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-sm btn-ghost" id="maximizeOutputBtn">${escapeHtml(this.t('common.maximize'))}</button>
+              <button class="btn btn-sm btn-ghost" id="clearOutputBtn" style="display:none;">${escapeHtml(this.t('tools.clear'))}</button>
+            </div>
           </div>
           <div class="output-body" id="toolOutput">
             <div class="empty-state">${escapeHtml(this.t('tools.noOutput'))}</div>
@@ -85,6 +88,13 @@ window.Pages.tools = {
       container.querySelector('#toolOutput').innerHTML = '<div class="empty-state">Cleared.</div>';
       container.querySelector('#clearOutputBtn').style.display = 'none';
       container.querySelector('#exportLogBtn').style.display = 'none';
+    });
+
+    container.querySelector('#maximizeOutputBtn').addEventListener('click', () => {
+      const outputPanel = container.querySelector('#outputPanel');
+      const btn = container.querySelector('#maximizeOutputBtn');
+      const isMaximized = outputPanel.classList.toggle('maximized');
+      btn.textContent = isMaximized ? this.t('common.minimize') : this.t('common.maximize');
     });
 
     container.querySelector('#exportLogBtn').addEventListener('click', () => {
