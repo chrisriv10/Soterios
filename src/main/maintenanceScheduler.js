@@ -143,7 +143,7 @@ class MaintenanceScheduler {
       return { ok: false, skipped: true, reason: 'not-due' };
     }
 
-    return this.runNow({ dryRunCleanup: true });
+    return this.runNow({ dryRunCleanup: false });
   }
 
   async runNow(options = {}) {

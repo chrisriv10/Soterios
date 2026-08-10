@@ -66,7 +66,7 @@ describe('MaintenanceScheduler', () => {
     assert.ok(scheduler.loadConfig().lastRun);
   });
 
-  it('uses dry-run cleanup for scheduled runs', async () => {
+  it('uses live cleanup for scheduled runs', async () => {
     const db = createDb();
     let capturedArgs = null;
     const scheduler = new MaintenanceScheduler({
@@ -78,9 +78,10 @@ describe('MaintenanceScheduler', () => {
         }
       }
     });
-    scheduler.saveConfig({ enabled: true, scriptIds: ['large-files-report'] });
-    await scheduler.runNow({ dryRunCleanup: true });
-    assert.deepEqual(capturedArgs.scriptArgs, {});
+    scheduler.saveConfig({ enabled: true, scriptIds: ['clear-temp-files'] });
+    await scheduler.runIfDue();
+    assert.equal(capturedArgs.scriptId, 'clear-temp-files');
+    assert.deepEqual(capturedArgs.scriptArgs, { dryRun: false, maxAgeDays: 7 });
   });
 
   it('does not run again before interval elapses', async () => {
