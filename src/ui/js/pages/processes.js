@@ -200,6 +200,7 @@ window.Pages.processes = {
 
     if (!this._delegated) {
       listEl.addEventListener('click', (e) => this.handleEndProcessClick(e, container));
+      listEl.addEventListener('click', (e) => this.handleOptionsClick(e, container));
       listEl.addEventListener('contextmenu', (e) => this.handleContextMenu(e, container));
       document.addEventListener('click', (e) => this.closeContextMenu(e));
       this._delegated = true;
@@ -263,6 +264,7 @@ const locationBadge = locationSuspicious
           <div style="display:flex; align-items:center; gap:8px;">
             <span class="cpu-value" style="font-size:0.75rem; font-weight:500;">${p.cpu !== null ? p.cpu + '% CPU' : escapeHtml(this.t('processes.cpuNa'))}</span>
             <span class="memory-value" style="font-size:0.75rem; font-weight:500;">${p.memory !== null ? p.memory + '% RAM' : escapeHtml(this.t('processes.memoryNa'))}</span>
+            <button class="btn btn-sm process-options" data-pid="${escapeHtml(p.pid)}" data-process-name="${escapeHtml(p.name)}" data-file-path="${escapeHtml(rawPath)}" style="color: var(--text-muted); padding: 4px 8px;">⋮</button>
             <button class="btn btn-sm" style="color: var(--accent-danger);" data-end-process="${escapeHtml(p.pid)}" data-process-name="${escapeHtml(p.name)}">${escapeHtml(this.t('processes.endProcess'))}</button>
           </div>
         </div>`;
@@ -280,7 +282,10 @@ const locationBadge = locationSuspicious
               <div class="risk-score" style="font-weight:600; font-size:1.1rem; color:${isDanger ? 'var(--accent-danger)' : 'var(--accent-success)'}">${escapeHtml(p.risk.score)} ${escapeHtml(this.t('processes.riskScoreSuffix'))}</div>
               <div class="risk-level page-subtitle" style="font-size:0.8rem; text-transform:uppercase;">${escapeHtml(p.risk.level)}</div>
             </div>
-            <button class="btn btn-sm" style="color: var(--accent-danger);" data-end-process="${escapeHtml(p.pid)}" data-process-name="${escapeHtml(p.name)}">${escapeHtml(this.t('processes.endProcessFull'))}</button>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-sm process-options" data-pid="${escapeHtml(p.pid)}" data-process-name="${escapeHtml(p.name)}" data-file-path="${escapeHtml(rawPath)}" style="color: var(--text-muted); padding: 4px 8px;">⋮</button>
+              <button class="btn btn-sm" style="color: var(--accent-danger);" data-end-process="${escapeHtml(p.pid)}" data-process-name="${escapeHtml(p.name)}">${escapeHtml(this.t('processes.endProcessFull'))}</button>
+            </div>
           </div>
         </div>
         <div style="display:flex; justify-content:space-between; margin-top:8px; padding-top:8px; border-top:1px solid var(--glass-border); gap:12px; flex-wrap:wrap;">
@@ -368,6 +373,34 @@ const locationBadge = locationSuspicious
       if (res && res.success) this.load(container);
       else { alert(this.t('processes.failedEnd', { error: res && res.error ? res.error : this.t('common.unknownError') })); btn.disabled = false; btn.textContent = originalLabel; }
     } catch (err) { alert(this.t('processes.failedEnd', { error: err.message || String(err) })); btn.disabled = false; btn.textContent = originalLabel; }
+  },
+
+  handleOptionsClick(e, container) {
+    const btn = e.target.closest('.process-options');
+    if (!btn) return;
+    e.stopPropagation();
+    e.preventDefault();
+
+    const row = btn.closest('.list-row');
+    if (!row) return;
+
+    this._contextMenuTarget = row;
+
+    const pid = btn.dataset.pid;
+    const processName = btn.dataset.processName;
+    const filePath = btn.dataset.filePath || '';
+
+    this.closeContextMenu();
+
+    const rect = btn.getBoundingClientRect();
+    const mockEvent = {
+      clientX: rect.left,
+      clientY: rect.bottom + 2,
+      target: row,
+      preventDefault: () => {}
+    };
+
+    this.handleContextMenu(mockEvent, container);
   },
 
   applyFilter(container) {
@@ -521,15 +554,15 @@ const locationBadge = locationSuspicious
     `;
 
     content.innerHTML = `
-      <h2 style="margin: 0 0 16px 0; font-size: 1.2rem;">${escapeHtml(this.t('processes.runTaskTitle'))}</h2>
+      <h2 style="margin: 0 0 16px 0; font-size: 1.2rem; color: var(--text-main);">${escapeHtml(this.t('processes.runTaskTitle'))}</h2>
       <div style="display: flex; gap: 8px; margin-bottom: 16px;">
         <input type="text" id="runTaskInput" placeholder="${escapeHtml(this.t('processes.runTaskPlaceholder'))}"
-          style="flex: 1; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(255, 255, 255, 0.05); color: inherit; font-size: 0.95rem;">
+          style="flex: 1; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--glass-border); background: var(--glass-bg, rgba(255, 255, 255, 0.05)); color: var(--text-main); font-size: 0.95rem;">
         <button id="runTaskBrowse" class="btn btn-sm">${escapeHtml(this.t('processes.runTaskBrowse'))}</button>
       </div>
       <div style="display: flex; gap: 8px; justify-content: flex-end;">
         <button id="runTaskCancel" class="btn btn-sm">Cancel</button>
-        <button id="runTaskRun" class="btn btn-sm" style="background: var(--accent-success);">${escapeHtml(this.t('processes.runTaskRun'))}</button>
+        <button id="runTaskRun" class="btn btn-sm" style="background: var(--accent-success); color: var(--text-on-accent);">${escapeHtml(this.t('processes.runTaskRun'))}</button>
       </div>
     `;
 
