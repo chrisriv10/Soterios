@@ -204,6 +204,35 @@ window.Pages.tools = {
     }[id] || 'terminal';
   },
 
+  extractExeFromCommand(command) {
+    if (!command) return null;
+    const trimmed = String(command).trim();
+    const quoted = trimmed.match(/^"([^"]+)"/);
+    if (quoted) return quoted[1];
+    const exe = trimmed.match(/^(.+?\.exe)\b/i);
+    return exe ? exe[1] : trimmed.split(/\s+/)[0];
+  },
+
+  getFriendlyName(item, exePath) {
+    if (item.name && item.name !== item.raw && item.name !== item.command) {
+      return item.name;
+    }
+    if (item.displayName) {
+      return item.displayName;
+    }
+    if (exePath) {
+      const parts = exePath.split(/[\\/]/);
+      const filename = parts[parts.length - 1];
+      if (filename) {
+        const nameWithoutExt = filename.replace(/\.(exe|dll|bat|cmd|ps1|vbs|js)$/i, '');
+        if (nameWithoutExt.length > 0 && nameWithoutExt.length < 50) {
+          return nameWithoutExt;
+        }
+      }
+    }
+    return item.name || item.raw || 'Unknown';
+  },
+
   getTempAgeDays(container) {
     const input = container.querySelector('#tempAgeDaysInput');
     let val = input ? Number(input.value) : 7;
@@ -343,11 +372,12 @@ async runScript(container, btn) {
     } else if (scriptId === 'list-startup-items' && Array.isArray(result.items)) {
       html += `<div class="log-row"><span class="log-tag info">${result.itemCount || result.items.length}</span><span class="log-path">${this.t('tools.startupEntries')}</span></div>`;
       result.items.forEach((item, idx) => {
-        const name = item.name || item.raw || item.path || 'unknown';
         const cmd = item.command || item.path || item.raw || '';
-        const displayCmd = truncate(name + (cmd && cmd !== name ? ' — ' + cmd : ''), 200);
+        const exePath = item.exePath || item.path || this.extractExeFromCommand(cmd);
+        const friendlyName = this.getFriendlyName(item, exePath);
+        const displayCmd = truncate(friendlyName + (cmd && cmd !== friendlyName ? ' — ' + cmd : ''), 200);
         html += `<div class="log-row startup-row" data-idx="${idx}">
-          <img class="startup-icon" data-exe="${escapeHtml(item.exePath || '')}" src="" alt="" />
+          <img class="startup-icon" data-exe="${escapeHtml(exePath || '')}" src="" alt="" />
           <span class="log-tag info">${escapeHtml(item.source || 'unknown')}</span>
           <span class="log-path" style="flex:1;">${escapeHtml(displayCmd)}</span>
           <button class="btn btn-sm startup-toggle-btn" data-idx="${idx}">${this.t('tools.disable')}</button>
