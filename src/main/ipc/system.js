@@ -178,6 +178,13 @@ function register(mainWindow, {
 
   ipcMain.handle('maintenance:getHistory', () => ({ ok: true, data: db.getMaintenanceHistory(25) }));
 
+  ipcMain.handle('maintenance:deleteRun', (_event, id) => {
+    const runId = Number(id);
+    if (!Number.isInteger(runId) || runId <= 0) return { ok: false, error: 'Invalid maintenance run id.' };
+    const result = db.deleteMaintenanceRun(runId);
+    return { ok: true, changes: result.changes };
+  });
+
   ipcMain.handle('maintenance:runNow', async () => {
     if (!maintenanceScheduler) return { ok: false, error: 'Maintenance scheduler unavailable.' };
     const result = await maintenanceScheduler.runNow({ dryRunCleanup: false, manual: true });

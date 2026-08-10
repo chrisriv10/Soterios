@@ -307,6 +307,10 @@ class DatabaseService {
     }));
   }
 
+  deleteMaintenanceRun(id) {
+    return this.db.prepare('DELETE FROM maintenance_runs WHERE id = ?').run(id);
+  }
+
   pruneMaintenanceRuns(keepCount = 100) {
     const count = this.db.prepare('SELECT COUNT(*) AS total FROM maintenance_runs').get().total;
     if (count <= keepCount) return { changes: 0 };

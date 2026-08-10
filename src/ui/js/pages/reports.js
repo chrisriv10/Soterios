@@ -433,7 +433,10 @@ window.Pages.reports = {
               <div class="history-title">${escapeHtml(t('reports.maintenanceRun', { ok: row.ok_count || 0, total: row.total_count || 0, mode }))}</div>
               <div class="history-meta">${escapeHtml(whenLabel)}${detail ? ` — ${escapeHtml(detail)}` : ''}</div>
             </div>
-            <button class="btn btn-sm view-maintenance" data-index="${index}">${escapeHtml(t('reports.viewDetails'))}</button>
+            <div style="display:flex; gap:8px; flex-shrink:0;">
+              <button class="btn btn-sm view-maintenance" data-index="${index}">${escapeHtml(t('reports.viewDetails'))}</button>
+              <button class="btn btn-sm delete-maintenance" data-index="${index}" title="${escapeHtml(t('reports.deleteMaintenance'))}">${escapeHtml(t('reports.deleteMaintenance'))}</button>
+            </div>
           </div>`;
       }).join('');
       el.innerHTML = `<div class="history-list">${items}</div>`;
@@ -444,6 +447,24 @@ window.Pages.reports = {
           const row = rows[index];
           if (row) {
             this.showMaintenanceDetails(container, row);
+          }
+        });
+      });
+      el.querySelectorAll('.delete-maintenance').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const index = parseInt(btn.dataset.index, 10);
+          const row = rows[index];
+          if (!row) return;
+          if (!window.confirm(t('reports.deleteMaintenanceConfirm'))) return;
+          try {
+            const response = await window.api.invoke('maintenance:deleteRun', row.id);
+            if (!response?.ok) {
+              window.alert(response?.error || t('reports.failedDeleteMaintenance'));
+              return;
+            }
+            this.listMaintenanceHistory(container);
+          } catch (err) {
+            window.alert(t('reports.failedDeleteMaintenance'));
           }
         });
       });

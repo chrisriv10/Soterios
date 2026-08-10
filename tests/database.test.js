@@ -166,4 +166,24 @@ describe('DatabaseService maintenance_runs', () => {
     assert.equal(Object.prototype.hasOwnProperty.call(row, 'results_json'), false);
     service.db.close();
   });
+
+  it('deleteMaintenanceRun removes exactly the requested row', () => {
+    const service = new DatabaseService(tempDbPath());
+    const ids = [];
+    for (let i = 0; i < 3; i += 1) {
+      const result = service.addMaintenanceRun({
+        startedAt: new Date(Date.now() + i).toISOString(),
+        results: [{ scriptId: 'disk-space-report', ok: true }],
+        dryRunCleanup: false
+      });
+      ids.push(Number(result.lastInsertRowid));
+    }
+    const target = ids[1];
+    const deleted = service.deleteMaintenanceRun(target);
+    assert.equal(deleted.changes, 1);
+    const remaining = service.getMaintenanceHistory(10).map((row) => row.id);
+    assert.deepEqual([...remaining].sort((a, b) => a - b), [ids[0], ids[2]].sort((a, b) => a - b));
+    assert.equal(service.deleteMaintenanceRun(target).changes, 0);
+    service.db.close();
+  });
 });
