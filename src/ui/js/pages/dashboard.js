@@ -283,28 +283,6 @@ window.Pages['dashboard'] = {
               <button class="btn" id="btnViewQuarantine">${escapeHtml(t('dashboard.viewQuarantine'))}</button>
             </div>
           </div>
-
-          <!-- AI Assistant -->
-          <div class="card" id="aiCard" style="display:none;">
-            <div class="status-card">
-              <div class="status-icon info" id="aiIcon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 2a7 7 0 0 1 7 7c0 2.1-.9 3.9-2.3 5.2-.8.7-1.2 1.7-1.2 2.8h-7c0-1.1-.4-2.1-1.2-2.8A7 7 0 0 1 5 9a7 7 0 0 1 7-7z" />
-                  <path d="M9 21h6" />
-                  <path d="M10 17h4" />
-                </svg>
-              </div>
-              <div class="status-info">
-                <h3>${escapeHtml(t('nav.ai'))}</h3>
-                <div class="value" id="aiStatusText">${escapeHtml(t('dashboard.ai.checking'))}</div>
-              </div>
-            </div>
-            <div style="margin-top:16px; display:flex; gap:12px;">
-              <button class="btn btn-primary" id="btnOpenAiChat">${escapeHtml(t('dashboard.ai.openChat'))}</button>
-              <button class="btn" id="btnAiSetup">${escapeHtml(t('dashboard.ai.setup'))}</button>
-            </div>
-          </div>
         </div>
         <div class="card" style="margin-top:24px;">
           <div class="flex-between">
@@ -710,53 +688,6 @@ window.Pages['dashboard'] = {
       });
     }
 
-    // AI Assistant card
-    const aiCard = container.querySelector('#aiCard');
-    const btnOpenAiChat = container.querySelector('#btnOpenAiChat');
-    const btnAiSetup = container.querySelector('#btnAiSetup');
-    if (aiCard) {
-      try {
-        const aiEnabled = await window.api.invoke('db:getSetting', 'feature.aiAssistant', true);
-        aiCard.style.display = aiEnabled !== false ? '' : 'none';
-      } catch (_) {}
-      const loadAiStatus = async () => {
-        const statusText = container.querySelector('#aiStatusText');
-        const aiIcon = container.querySelector('#aiIcon');
-        if (!statusText) return;
-        statusText.textContent = t('dashboard.ai.checking');
-        try {
-          const result = await window.soterios.ai.status();
-          const config = await window.soterios.ai.getConfig();
-          if (result.ok) {
-            const model = config.model || (result.models && result.models[0] && result.models[0].name);
-            statusText.textContent = model
-              ? t('dashboard.ai.ready', { model })
-              : t('dashboard.ai.noModels');
-            if (aiIcon) aiIcon.className = 'status-icon safe';
-            if (btnAiSetup) btnAiSetup.style.display = 'none';
-          } else {
-            statusText.textContent = t('dashboard.ai.offline');
-            if (aiIcon) aiIcon.className = 'status-icon warning';
-            if (btnAiSetup) btnAiSetup.style.display = '';
-          }
-        } catch (_) {
-          statusText.textContent = t('dashboard.ai.offline');
-          if (aiIcon) aiIcon.className = 'status-icon warning';
-          if (btnAiSetup) btnAiSetup.style.display = '';
-        }
-      };
-      if (btnOpenAiChat) {
-        btnOpenAiChat.addEventListener('click', () => {
-          if (window.AppRouter) window.AppRouter.navigate('ai');
-        });
-      }
-      if (btnAiSetup) {
-        btnAiSetup.addEventListener('click', () => {
-          window.soterios.shell.openExternal('https://ollama.com/download');
-        });
-      }
-      loadAiStatus();
-    }
     await loadWarnings();
     window.api.invoke('splash:progress', { pct: 75, label: t('splash.loadingWarnings') });
 
