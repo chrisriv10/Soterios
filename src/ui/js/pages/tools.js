@@ -55,7 +55,7 @@ window.Pages.tools = {
           <div class="output-header">
             <span>${escapeHtml(this.t('tools.output'))}</span>
             <div style="display:flex; gap:8px;">
-              <button class="btn btn-sm btn-ghost" id="maximizeOutputBtn">${escapeHtml(this.t('common.maximize'))}</button>
+              <button class="btn btn-sm btn-ghost" id="maximizeOutputBtn">${escapeHtml(window.I18n?.t('common.maximize') ?? 'Maximize')}</button>
               <button class="btn btn-sm btn-ghost" id="clearOutputBtn" style="display:none;">${escapeHtml(this.t('tools.clear'))}</button>
             </div>
           </div>

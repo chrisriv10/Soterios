@@ -282,7 +282,7 @@ window.Pages.settings = {
               <div class="output-header">
                 <span>${escapeHtml(t('tools.output'))}</span>
                 <div style="display:flex; gap:8px;">
-                  <button class="btn btn-sm btn-ghost" id="maximizeMaintenanceBtn">${escapeHtml(t('common.maximize'))}</button>
+                  <button class="btn btn-sm btn-ghost" id="maximizeMaintenanceBtn">${escapeHtml(window.I18n?.t('common.maximize') ?? 'Maximize')}</button>
                   <button class="btn btn-sm btn-ghost" id="clearMaintenanceBtn">${escapeHtml(t('tools.clear'))}</button>
                 </div>
               </div>
