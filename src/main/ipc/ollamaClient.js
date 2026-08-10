@@ -57,15 +57,20 @@ function validateMessages(messages) {
   return true;
 }
 
-function buildChatPayload(messages, model) {
+function buildChatPayload(messages, model, systemPrompt) {
   if (typeof model !== 'string' || model.trim() === '') {
     throw new Error('No model selected');
   }
+  const payloadMessages = [];
+  if (typeof systemPrompt === 'string' && systemPrompt.trim() !== '') {
+    payloadMessages.push({ role: 'system', content: systemPrompt.slice(0, MAX_MESSAGE_CHARS) });
+  }
+  payloadMessages.push(...messages);
   return {
     model: model.trim(),
-    messages,
+    messages: payloadMessages,
     stream: true,
-    options: { temperature: 0.7 }
+    options: { temperature: 0.4 }
   };
 }
 
@@ -100,9 +105,9 @@ async function fetchModelTags(host, { timeoutMs = 5000, fetchImpl = fetch } = {}
  * Uses NDJSON from Ollama /api/chat. Resolves when the stream finishes
  * cleanly, rejects on transport/parse errors or abort.
  */
-async function streamChat(host, messages, model, { onDelta, onDone, signal, fetchImpl = fetch } = {}) {
+async function streamChat(host, messages, model, { systemPrompt, onDelta, onDone, signal, fetchImpl = fetch } = {}) {
   const base = normalizeHost(host);
-  const payload = buildChatPayload(messages, model);
+  const payload = buildChatPayload(messages, model, systemPrompt);
   let response = null;
   try {
     response = await fetchImpl(`${base}/api/chat`, {

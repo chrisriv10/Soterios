@@ -1641,6 +1641,30 @@ body {
   line-height: 1.6;
 }
 
+.ai-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 2px 2px;
+}
+
+.ai-chip {
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: var(--text-secondary, #C9D1D9);
+  background: var(--bg-surface, rgba(30, 38, 48, 0.6));
+  border: 1px solid rgba(128, 140, 160, 0.25);
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.ai-chip:hover {
+  color: var(--text-primary, #E6EDF3);
+  border-color: var(--accent-primary, rgba(88, 166, 255, 0.6));
+  background: var(--accent-primary-glow, rgba(88, 166, 255, 0.12));
+}
+
 .ai-msg {
   display: flex;
 }

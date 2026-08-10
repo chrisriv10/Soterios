@@ -57,6 +57,9 @@ function registerIpcHandlers(mainWindow, services) {
 
   const servicesForAi = {
     db: services.db,
+    toolRegistry: services.toolRegistry,
+    firewallManager: services.firewallManager,
+    processInspector: services.processInspector,
   };
 
   registerScan(mainWindow, servicesForScan);

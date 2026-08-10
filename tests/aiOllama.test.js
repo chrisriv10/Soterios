@@ -107,6 +107,20 @@ describe('ollamaClient buildChatPayload', () => {
     assert.throws(() => buildChatPayload([{ role: 'user', content: 'hi' }], ''), /model/i);
     assert.throws(() => buildChatPayload([{ role: 'user', content: 'hi' }], undefined), /model/i);
   });
+
+  it('prepends a system message when a system prompt is given', () => {
+    const payload = buildChatPayload([{ role: 'user', content: 'hi' }], 'llama3.2', 'You are strict.');
+    assert.equal(payload.messages.length, 2);
+    assert.equal(payload.messages[0].role, 'system');
+    assert.equal(payload.messages[0].content, 'You are strict.');
+    assert.equal(payload.messages[1].role, 'user');
+  });
+
+  it('does not prepend a system message for empty or missing prompts', () => {
+    assert.equal(buildChatPayload([{ role: 'user', content: 'hi' }], 'llama3.2').messages.length, 1);
+    assert.equal(buildChatPayload([{ role: 'user', content: 'hi' }], 'llama3.2', '').messages.length, 1);
+    assert.equal(buildChatPayload([{ role: 'user', content: 'hi' }], 'llama3.2', '   ').messages.length, 1);
+  });
 });
 
 describe('ollamaClient fetchModelTags', () => {
@@ -187,6 +201,37 @@ describe('ollamaClient streamChat', () => {
     );
     assert.deepEqual(received, deltas);
     assert.equal(done, true);
+  });
+
+  it('sends the system prompt as the first message', async () => {
+    let sentBody = null;
+    const captureServer = await startFakeOllama((req, res) => {
+      if (req.url === '/api/chat') {
+        let body = '';
+        req.on('data', (chunk) => { body += chunk; });
+        req.on('end', () => {
+          sentBody = JSON.parse(body);
+          ndjsonResponse(res, [{ message: { role: 'assistant', content: 'ok' }, done: true }]);
+        });
+        return;
+      }
+      res.writeHead(404);
+      res.end();
+    });
+    try {
+      await streamChat(
+        `http://127.0.0.1:${captureServer.port}`,
+        [{ role: 'user', content: 'hi' }],
+        'llama3.2',
+        { systemPrompt: 'You are strict.', fetchImpl: fetch }
+      );
+      assert.ok(sentBody, 'expected a request body');
+      assert.equal(sentBody.messages.length, 2);
+      assert.equal(sentBody.messages[0].role, 'system');
+      assert.equal(sentBody.messages[0].content, 'You are strict.');
+    } finally {
+      captureServer.server.close();
+    }
   });
 
   it('throws on an HTTP error status', async () => {

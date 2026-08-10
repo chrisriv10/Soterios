@@ -9,6 +9,8 @@ const {
   fetchModelTags,
   streamChat,
 } = require('./ollamaClient');
+const { buildSystemPrompt } = require('../aiGuidelines');
+const { buildContextSnapshot } = require('../aiContext');
 
 const HOST_SETTING_KEY = 'ai.ollama.host';
 const MODEL_SETTING_KEY = 'ai.ollama.model';
@@ -40,7 +42,7 @@ function getConfig(db) {
   };
 }
 
-function register(mainWindow, { db }) {
+function register(mainWindow, { db, toolRegistry, firewallManager, processInspector }) {
   ipcMain.handle('ai:status', async () => {
     const { host } = getConfig(db);
     if (!isValidHost(host)) {
@@ -81,7 +83,11 @@ function register(mainWindow, { db }) {
 
     sendChunk(event, { requestId, type: 'start' });
 
+    const snapshot = await buildContextSnapshot({ db, toolRegistry, firewallManager, processInspector });
+    const systemPrompt = buildSystemPrompt(snapshot);
+
     streamChat(host, messages, model, {
+      systemPrompt,
       onDelta: (delta) => sendChunk(event, { requestId, type: 'delta', delta }),
       onDone: () => {
         clearTimeout(timer);

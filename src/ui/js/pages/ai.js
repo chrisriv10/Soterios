@@ -7,6 +7,32 @@ window.Pages.ai = {
   _busy: false,
   _config: { host: '', model: '' },
   _container: null,
+  _suggestions: [
+    {
+      key: 'ai.suggest.health',
+      prompt: 'You are the assistant inside Soterios, a Windows security and maintenance app. The user tapped the quick question "Is my system healthy?". The system snapshot provided to you includes a health score, recent scans, and feature states. Answer from that snapshot: one or two sentences per area (disk, memory, CPU load, startup items, security protection) stating what the snapshot shows and what it means. Where the snapshot is missing an area, say it is not available and what to check in Soterios. End with a one-line verdict like "Your system looks healthy overall." Use short bold section headings with bullets, under 140 words.'
+    },
+    {
+      key: 'ai.suggest.scan',
+      prompt: 'You are the assistant inside Soterios, a Windows antivirus and maintenance app that uses ClamAV for full, quick, and custom scans, and moves detected threats to quarantine. The user tapped the quick question "Summarize my last scan". The snapshot provided to you includes their most recent scans (type, files scanned, threats found, duration). Summarize the latest scan from the snapshot: what was scanned, whether threats were found, and what that means. If threats were found, explain next steps (review quarantine, delete versus restore, rescan). If no scans are on record, say so and explain how to run a scan in Soterios and how often. Keep it under 140 words in 3-4 short sections.'
+    },
+    {
+      key: 'ai.suggest.processes',
+      prompt: 'You are the assistant inside Soterios, a Windows security and maintenance app. The user tapped the quick question "Which running processes should I worry about?". The snapshot provided to you includes the total number of running processes and how many were flagged suspicious. Answer from that: if suspicious processes are flagged, explain what makes them suspicious and how to review them in the process inspector. If none are flagged, say the process list looks clean and explain what signs to watch for: unusual names, high CPU or memory from unknown apps, unsigned executables, programs in odd locations, and PowerShell with encoded arguments. Teach them how to research a process before ending it, and that ending critical system processes is unsafe. Under 140 words, bullet format.'
+    },
+    {
+      key: 'ai.suggest.quarantine',
+      prompt: 'You are the assistant inside Soterios, a Windows antivirus app. Quarantined threats are moved to a safe, isolated location where they cannot run. The user tapped the quick question "What should I do about quarantined threats?". The snapshot provided to you includes their quarantined items (threat name, original path, reason, date). Review that list and explain each item in plain language where possible, what quarantine means, and the next step for each: delete (confirmed malware you do not need) or restore (likely false positive). If the list is empty, say so and explain what quarantine is for. Under 130 words in 3 short sections.'
+    },
+    {
+      key: 'ai.suggest.firewall',
+      prompt: 'You are the assistant inside Soterios, a Windows security app. The user tapped the quick question "Is my firewall protecting me?". The snapshot provided to you includes the state of each Windows firewall profile (Domain, Private, Public). Answer from that: list which profiles are enabled and which are disabled, what that means for protection, and what to do if any profile is off. Explain how to review rules on the Soterios firewall page. End with a clear "You are protected if..." summary. Under 140 words in bullet format.'
+    },
+    {
+      key: 'ai.suggest.cleanup',
+      prompt: 'You are the assistant inside Soterios, a Windows maintenance app. The user tapped the quick question "How can I free up disk space safely?". Use the snapshot provided to you where relevant (for example its disk health reason), then give a safe, ordered cleanup plan: clear temporary files, empty the Recycle Bin, uninstall unused apps, remove large files you recognize, clear browser caches, and use Storage Sense or Disk Cleanup. Mention Soterios tools like the disk space report, large files finder, temp file cleanup, and duplicate finder. Warn clearly against deleting Windows system files, Program Files content, or anything unrecognized. Under 150 words as numbered steps.'
+    }
+  ],
 
   t(key, vars) {
     return window.I18n?.t(key, vars) ?? key;
@@ -37,15 +63,15 @@ window.Pages.ai = {
           <span class="ai-config-saved" id="aiConfigSaved"></span>
         </div>
         <div class="ai-status-banner" id="aiStatusBanner" style="display:none;"></div>
-        <div class="ai-messages" id="aiMessages">
-          <div class="ai-empty" id="aiEmpty">${escapeHtml(this.t('ai.empty'))}</div>
-        </div>
+        <div class="ai-messages" id="aiMessages"></div>
+        <div class="ai-chips" id="aiChips"></div>
         <div class="ai-input-row">
           <textarea id="aiPrompt" class="ai-input ai-prompt" rows="2" placeholder="${escapeHtml(this.t('ai.placeholder'))}"></textarea>
           <button class="btn btn-primary" id="aiSendBtn">${escapeHtml(this.t('ai.send'))}</button>
           <button class="btn btn-danger" id="aiStopBtn" style="display:none;">${escapeHtml(this.t('ai.stop'))}</button>
         </div>
       </div>`;
+    this.appendMessage('assistant', this.t('ai.starter'));
     this.load(container);
   },
 
@@ -56,6 +82,18 @@ window.Pages.ai = {
     container.querySelector('#aiStopBtn').addEventListener('click', () => this.stop(container));
     container.querySelector('#aiRefreshBtn').addEventListener('click', () => this.refreshStatus(container, true));
     container.querySelector('#aiSaveConfigBtn').addEventListener('click', () => this.saveConfig(container));
+
+    const chipsEl = container.querySelector('#aiChips');
+    chipsEl.innerHTML = this._suggestions.map((s) =>
+      `<button type="button" class="ai-chip" data-suggest="${s.key}">${escapeHtml(this.t(s.key))}</button>`
+    ).join('');
+    chipsEl.querySelectorAll('.ai-chip').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        const suggestion = this._suggestions.find((s) => s.key === chip.dataset.suggest);
+        if (!suggestion) return;
+        this.send(container, { content: suggestion.prompt, display: this.t(suggestion.key) });
+      });
+    });
 
     const prompt = container.querySelector('#aiPrompt');
     prompt.addEventListener('keydown', (event) => {
@@ -175,18 +213,22 @@ window.Pages.ai = {
     messagesEl.scrollTop = messagesEl.scrollHeight;
   },
 
-  async send(container) {
+  async send(container, options = {}) {
     if (this._busy) return;
     const prompt = container.querySelector('#aiPrompt');
-    const content = prompt.value.trim();
+    const content = (options.content != null && options.content.trim()) ? options.content.trim() : prompt.value.trim();
     if (!content) return;
+    const display = (options.display != null && options.display.trim()) ? options.display.trim() : content;
 
     const messages = this._messages.slice(-19);
     messages.push({ role: 'user', content });
     this._messages.push({ role: 'user', content });
 
-    this.appendMessage('user', content);
+    this.appendMessage('user', display);
     const bubble = this.appendMessage('assistant', '');
+
+    const chips = container.querySelector('#aiChips');
+    if (chips) chips.style.display = 'none';
 
     const model = container.querySelector('#aiModelSelect').value;
     this._busy = true;
