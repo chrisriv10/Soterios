@@ -149,7 +149,7 @@ window.Pages.settings = {
               <div class="toggle-label">${escapeHtml(t('settings.emergencyLockdown.label'))}</div>
               <div class="toggle-desc">${escapeHtml(t('settings.emergencyLockdown.desc'))}</div>
             </div>
-            <label class="toggle"><input type="checkbox" id="emergencyLockdownToggle" ${settings.features.emergencyLockdown ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+            <label class="toggle"><input type="checkbox" id="emergencyLockdownToggle" ${settings.features.emergencyLockdown !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
 
           <div class="toggle-row">

@@ -81,6 +81,7 @@ const Api = {
     const networkPerimeterMap = await window.api.invoke('db:getSetting', 'feature.networkPerimeterMap', true);
     const notificationsEnabled = await window.api.invoke('db:getSetting', 'feature.notificationsEnabled', true);
     const scanNotifications = await window.api.invoke('db:getSetting', 'feature.scanNotifications', true);
+    const emergencyLockdown = await window.api.invoke('db:getSetting', 'feature.emergencyLockdown', false);
     // Cached fallback only -- settings.js queries 'app:getLaunchAtStartup'
     // directly for the real OS-level state and uses this purely as a
     // fallback if that IPC call fails.
@@ -132,7 +133,8 @@ const Api = {
         folderWatch,
         networkAlerts,
         networkTrafficHistory,
-        aiAssistant
+        aiAssistant,
+        emergencyLockdown
       },      ui: { theme, language }
     };
   },
@@ -177,6 +179,9 @@ const Api = {
       }
       if (Object.prototype.hasOwnProperty.call(f, 'aiAssistant')) {
         await window.api.invoke('db:setSetting', 'feature.aiAssistant', !!f.aiAssistant);
+      }
+      if (Object.prototype.hasOwnProperty.call(f, 'emergencyLockdown')) {
+        await window.api.invoke('db:setSetting', 'feature.emergencyLockdown', !!f.emergencyLockdown);
       }
     }
     if (patch.ui) {
