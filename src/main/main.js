@@ -737,10 +737,16 @@ app.whenReady().then(async () => {
   sendSplashProgress(12, t('splash.registeringServices'));
 
   try {
+    // Initialize VPN manager with database for last profile persistence
+    services.vpnManager.setDb(db);
+
     lifecycleRefs.trayController = initTrayDashboard({
       app,
       mainWindow,
-      getSummary: () => getTrayHealthSummary(db, toolRegistry)
+      getSummary: () => getTrayHealthSummary(db, toolRegistry),
+      vpnManager: services.vpnManager,
+      db,
+      i18n
     });
     services.trayController = lifecycleRefs.trayController;
 
@@ -752,6 +758,20 @@ app.whenReady().then(async () => {
     });
   } catch (err) {
     logLine('warn', 'Tray dashboard unavailable', { error: err.message });
+  }
+
+  // Auto-connect VPN on startup if enabled
+  if (featureFlags.getFlag(db, 'vpn.autoConnect', false)) {
+    const lastProfile = db.getSetting('vpn.lastProfile');
+    if (lastProfile) {
+      logLine('info', 'Auto-connecting VPN', { profile: lastProfile });
+      try {
+        await services.vpnManager.connect(lastProfile);
+        logLine('info', 'VPN auto-connect successful');
+      } catch (err) {
+        logLine('warn', 'VPN auto-connect failed', { error: err.message });
+      }
+    }
   }
 
   setTimeout(() => {
@@ -851,21 +871,8 @@ app.whenReady().then(async () => {
   registerScanProgressListeners();
 
   // 4. Expose legacy utilities
-  // Expose legacy utility running mechanism
-  ipcMain.handle('tools:list', () => toolRegistry.list());
-  ipcMain.handle('tools:run', async (event, toolId, args) => {
-    // Note: appStore is removed, so we mock it for utilities if needed
-    // or just let them use basic features.
-    return toolRegistry.run(toolId, args, {
-      toolRegistry,
-      db,
-      log: logLine,
-      sendProgress: (payload) => {
-        event.sender.send(`tools:progress:${toolId}`, payload);
-      }
-    });
-  });
-
+  // Note: tools:list and tools:run are now registered in system.js
+  // app:ready is registered here since it needs access to dismissSplash()
   ipcMain.handle('app:ready', () => {
     dismissSplash();
   });

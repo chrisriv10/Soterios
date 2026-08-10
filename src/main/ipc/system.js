@@ -595,6 +595,66 @@ function register(mainWindow, {
       return { ok: false, error: err.message };
     }
   });
+
+  // -- Tools --
+  ipcMain.handle('tools:list', async () => {
+    if (!toolRegistry) return { ok: false, error: 'Tool registry unavailable' };
+    const registry = loadRegistry();
+    return { ok: true, data: registry };
+  });
+
+  ipcMain.handle('tools:run', async (event, toolId, args) => {
+    if (!toolRegistry) return { ok: false, error: 'Tool registry unavailable' };
+    const result = await toolRegistry.run(toolId, args || {}, {
+      toolRegistry,
+      db,
+      log: (level, message, meta) => {
+        // Log to main process logger if available
+        if (typeof logLine === 'function') {
+          logLine(level, message, meta);
+        }
+      },
+      sendProgress: (payload) => {
+        if (event && event.sender && !event.sender.isDestroyed()) {
+          event.sender.send(`tools:progress:${toolId}`, payload);
+        }
+      }
+    });
+    return result;
+  });
+
+  // -- Startup Items --
+  ipcMain.handle('startup:getIcons', async (_event, exePaths) => {
+    if (!Array.isArray(exePaths)) return {};
+    const { nativeImage } = require('electron');
+    const icons = {};
+    for (const exePath of exePaths) {
+      try {
+        if (fs.existsSync(exePath)) {
+          const icon = nativeImage.createFromPath(exePath);
+          if (!icon.isEmpty()) {
+            icons[exePath] = icon.toDataURL();
+          }
+        }
+      } catch (_) {}
+    }
+    return icons;
+  });
+
+  ipcMain.handle('startup:toggle', async (_event, item, enable) => {
+    if (!item || typeof item !== 'object') return { ok: false, error: 'Invalid item' };
+    try {
+      const { execSync } = require('child_process');
+      if (enable) {
+        execSync(`reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "${item.name}" /t REG_SZ /d "${item.command}" /f`, { stdio: 'ignore' });
+      } else {
+        execSync(`reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "${item.name}" /f`, { stdio: 'ignore' });
+      }
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
 }
 
 module.exports = { register };
