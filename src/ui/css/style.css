@@ -835,7 +835,7 @@ body {
   height: 100vh;
   width: 100vw;
   transition: all 0.3s ease;
-  background: var(--bg-main);
+  background: var(--bg-base);
 }
 
 .output-panel.maximized .output-body {
