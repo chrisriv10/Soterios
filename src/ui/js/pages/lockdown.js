@@ -12,10 +12,6 @@ window.Pages['lockdown'] = {
         <div class="page-subtitle">${escapeHtml(t('lockdown.description'))}</div>
       </div>
 
-      <div class="panel" style="margin-top:16px;">
-        <div class="panel-title" style="color:var(--warning);font-size:16px;text-transform:uppercase;">${escapeHtml(t('lockdown.warning'))}</div>
-      </div>
-
       <div class="grid grid-2" style="margin-top:16px;">
         <div class="card">
           <div class="status-card">
