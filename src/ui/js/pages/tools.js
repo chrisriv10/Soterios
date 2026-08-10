@@ -214,12 +214,7 @@ window.Pages.tools = {
   },
 
   getFriendlyName(item, exePath) {
-    if (item.name && item.name !== item.raw && item.name !== item.command) {
-      return item.name;
-    }
-    if (item.displayName) {
-      return item.displayName;
-    }
+    // Always prefer extracting friendly name from executable path
     if (exePath) {
       const parts = exePath.split(/[\\/]/);
       const filename = parts[parts.length - 1];
@@ -230,6 +225,29 @@ window.Pages.tools = {
         }
       }
     }
+    // Try to extract from command if exePath not available
+    if (item.command) {
+      const extracted = this.extractExeFromCommand(item.command);
+      if (extracted) {
+        const parts = extracted.split(/[\\/]/);
+        const filename = parts[parts.length - 1];
+        if (filename) {
+          const nameWithoutExt = filename.replace(/\.(exe|dll|bat|cmd|ps1|vbs|js)$/i, '');
+          if (nameWithoutExt.length > 0 && nameWithoutExt.length < 50) {
+            return nameWithoutExt;
+          }
+        }
+      }
+    }
+    // Fallback to displayName if available
+    if (item.displayName) {
+      return item.displayName;
+    }
+    // Only use item.name if it's short and doesn't look like a path
+    if (item.name && !item.name.includes('\\') && item.name.length < 50) {
+      return item.name;
+    }
+    // Last resort: use name or raw
     return item.name || item.raw || 'Unknown';
   },
 
