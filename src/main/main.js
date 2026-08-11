@@ -600,9 +600,36 @@ app.on('second-instance', (_event, commandLine) => {
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.focus();
     const url = commandLine.find(arg => arg.startsWith('soterios://'));
-    if (url) mainWindow.webContents.send('protocol-url', url);
+    if (url) {
+      mainWindow.webContents.send('protocol-url', url);
+      handleCredentialLeakDeepLink(url);
+    }
   }
 });
+
+function handleCredentialLeakDeepLink(url) {
+  if (!url || !url.startsWith('soterios://credential-leak')) return;
+  if (!dbRef) {
+    logLine('warn', 'Deep link received before database ready', { url });
+    return;
+  }
+  try {
+    const parsed = new URL(url.replace('soterios:', 'soterios://'));
+    const count = parseInt(parsed.searchParams.get('count') || '1', 10);
+    dbRef.addAlert({
+      level: 'danger',
+      source: 'Browser Extension',
+      title: 'Credential Leak Detected',
+      message: `Password found in ${count} breach${count > 1 ? 'es' : ''} via browser extension`,
+      detail: `Breaches: ${count}`,
+      timestamp: new Date().toISOString(),
+      metadata: { source: 'browser-extension', count }
+    });
+    if (eventBus) eventBus.emit('alert:new', { level: 'danger', source: 'Browser Extension' });
+  } catch (e) {
+    logLine('warn', 'Failed to parse deep link URL:', { url, error: e.message });
+  }
+}
 
 app.whenReady().then(async () => {
   // Register custom protocol for browser extension communication
@@ -657,6 +684,12 @@ app.whenReady().then(async () => {
     const newVal = db.getSetting('feature.externalLookups', null);
     if (newVal === null) db.setSetting('feature.externalLookups', oldVal);
     db.setSetting('feature.systemMonitoring', null);
+  }
+
+  // Check for soterios:// deep link on first launch
+  const deepLinkArg = process.argv.find((arg) => typeof arg === 'string' && arg.startsWith('soterios://credential-leak'));
+  if (deepLinkArg) {
+    handleCredentialLeakDeepLink(deepLinkArg);
   }
 
   // 2. Security Engines (Dependency Injection)

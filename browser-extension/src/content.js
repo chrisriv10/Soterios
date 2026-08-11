@@ -6,6 +6,8 @@
 let soteriosIcon = null;
 let passwordFields = new Map();
 let observer = null;
+let autoCheckEnabled = false;
+let notifyDesktopEnabled = true;
 
 function createIcon() {
   const icon = document.createElement('img');
@@ -43,6 +45,13 @@ async function onIconClick(e) {
   try {
     const result = await chrome.runtime.sendMessage({ type: 'CHECK_PASSWORD', password });
     showResult(el, result);
+    // Forward breach to desktop app for alerting
+    if (notifyDesktopEnabled && result && result.pwned && result.count > 0) {
+      await chrome.runtime.sendMessage({
+        type: 'FORWARD_CREDENTIAL_LEAK',
+        payload: { password, count: result.count }
+      });
+    }
   } catch (err) {
     console.error('[Soterios] Check failed:', err);
   }
@@ -102,6 +111,35 @@ function addIconToField(input) {
 function scanForPasswordFields() {
   const inputs = document.querySelectorAll('input[type="password"]:not([data-soterios-id])');
   inputs.forEach(addIconToField);
+  if (autoCheckEnabled) {
+    inputs.forEach(setupAutoCheck);
+  }
+}
+
+function setupAutoCheck(input) {
+  if (!input.dataset.soteriosAutoCheck) {
+    input.dataset.soteriosAutoCheck = 'true';
+    let debounceTimer = null;
+    input.addEventListener('input', () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(async () => {
+        const password = input.value;
+        if (!password) return;
+        try {
+          const result = await chrome.runtime.sendMessage({ type: 'CHECK_PASSWORD', password });
+          if (notifyDesktopEnabled && result && result.pwned && result.count > 0) {
+            // Forward breach to desktop app for alerting
+            await chrome.runtime.sendMessage({
+              type: 'FORWARD_CREDENTIAL_LEAK',
+              payload: { password, count: result.count }
+            });
+          }
+        } catch (err) {
+          console.error('[Soterios] Auto-check failed:', err);
+        }
+      }, 1000);
+    });
+  }
 }
 
 function init() {
@@ -116,8 +154,14 @@ function init() {
     for (const m of mutations) {
       m.addedNodes.forEach(node => {
         if (node.nodeType === 1) {
-          if (node.matches('input[type="password"]')) addIconToField(node);
-          node.querySelectorAll('input[type="password"]').forEach(addIconToField);
+          if (node.matches('input[type="password"]')) {
+            addIconToField(node);
+            if (autoCheckEnabled) setupAutoCheck(node);
+          }
+          node.querySelectorAll('input[type="password"]').forEach(input => {
+            addIconToField(input);
+            if (autoCheckEnabled) setupAutoCheck(input);
+          });
         }
       });
     }
@@ -126,16 +170,42 @@ function init() {
   observer.observe(document.body, { childList: true, subtree: true });
 }
 
+async function loadSettings() {
+  try {
+    const { autoCheck, showIcon, notifyDesktop } = await chrome.storage.sync.get(['autoCheck', 'showIcon', 'notifyDesktop']);
+    autoCheckEnabled = autoCheck !== false;
+    notifyDesktopEnabled = notifyDesktop !== false;
+    if (showIcon === false) {
+      passwordFields.forEach((icon, input) => icon.remove());
+      passwordFields.clear();
+    }
+  } catch (e) {
+    autoCheckEnabled = true;
+    notifyDesktopEnabled = true;
+  }
+}
+
 if (typeof window !== 'undefined') {
-  init();
+  loadSettings().then(() => {
+    init();
+  });
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'SETTINGS_UPDATED') {
-    if (!msg.settings.showIcon) {
+    if (msg.settings.autoCheck !== undefined) {
+      autoCheckEnabled = msg.settings.autoCheck;
+      if (autoCheckEnabled) {
+        document.querySelectorAll('input[type="password"]').forEach(setupAutoCheck);
+      }
+    }
+    if (msg.settings.notifyDesktop !== undefined) {
+      notifyDesktopEnabled = msg.settings.notifyDesktop;
+    }
+    if (msg.settings.showIcon === false) {
       passwordFields.forEach((icon, input) => icon.remove());
       passwordFields.clear();
-    } else {
+    } else if (msg.settings.showIcon === true) {
       scanForPasswordFields();
     }
   }

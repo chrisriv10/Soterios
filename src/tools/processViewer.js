@@ -74,20 +74,37 @@ function recommendationForRisk(risk) {
   return 'Safe process';
 }
 
+async function getProcessIOStats() {
+  // For now, return empty maps since the PowerShell approach is having issues
+  // The feature is implemented in the UI but the backend I/O collection needs more work
+  // to handle the Windows Performance Counter execution properly
+  return { diskIOMap: new Map(), networkIOMap: new Map() };
+}
+
 module.exports = {
   id: 'process-viewer', name: 'Process Viewer',
   description: 'List running processes with CPU/memory and suspicious process scoring.',
   category: 'System', icon: 'list',
   run: async () => {
     try {
-      const [procData, loadData, memData] = await Promise.all([
+      const [procData, loadData, memData, ioStats] = await Promise.all([
         si.processes(),
         si.currentLoad(),
-        si.mem()
+        si.mem(),
+        getProcessIOStats()
       ]);
       const processList = procData.list || [];
+      const { diskIOMap, networkIOMap } = ioStats;
+
+      // Calculate total I/O for percentage calculation
+      const totalDiskIO = Array.from(diskIOMap.values()).reduce((sum, val) => sum + val, 0);
+      const totalNetworkIO = Array.from(networkIOMap.values()).reduce((sum, val) => sum + val, 0);
 
       const processes = processList.slice(0, 400).map((p) => {
+        const processName = (p.name || '').toLowerCase();
+        const diskIO = diskIOMap.get(processName) || 0;
+        const networkIO = networkIOMap.get(processName) || 0;
+        
         const item = {
           pid: p.pid,
           ppid: p.parentPid || null,
@@ -95,7 +112,9 @@ module.exports = {
           cmd: p.command || null,
           path: p.path || null,
           cpu: p.cpu !== undefined ? +(p.cpu).toFixed(1) : null,
-          memory: p.mem !== undefined ? +(p.mem).toFixed(1) : null
+          memory: p.mem !== undefined ? +(p.mem).toFixed(1) : null,
+          diskIo: totalDiskIO > 0 ? +((diskIO / totalDiskIO) * 100).toFixed(1) : null,
+          networkIo: totalNetworkIO > 0 ? +((networkIO / totalNetworkIO) * 100).toFixed(1) : null
         };
         item.risk = makeRisk(processSignals(item));
         item.locationReasons = (item.risk.signals || [])
@@ -118,11 +137,13 @@ module.exports = {
       return {
         totalCpu: loadData.currentLoad,
         totalMemory: +(totalMemory.toFixed(1)),
+        totalDiskIO: +(totalDiskIO.toFixed(0)),
+        totalNetworkIO: +(totalNetworkIO.toFixed(0)),
         processes
       };
     } catch (err) {
       console.error('Failed to get processes:', err);
-      return { totalCpu: 0, totalMemory: 0, processes: [] };
+      return { totalCpu: 0, totalMemory: 0, totalDiskIO: 0, totalNetworkIO: 0, processes: [] };
     }
   }
 };

@@ -1842,8 +1842,7 @@ body {
 .vpn-add-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.85);
   display: none;
   align-items: center;
   justify-content: center;
@@ -1862,7 +1861,7 @@ body {
 }
 
 .vpn-add-modal {
-  background: var(--bg-surface-hover);
+  background: var(--bg-surface);
   border: 1px solid var(--glass-border);
   border-radius: 16px;
   width: 100%;

@@ -49,6 +49,8 @@ window.Pages.processes = {
             <option value="risk-desc">${escapeHtml(this.t('processes.sortRisk'))}</option>
             <option value="cpu-desc">${escapeHtml(this.t('processes.sortCpu'))}</option>
             <option value="memory-desc">${escapeHtml(this.t('processes.sortMemory'))}</option>
+            <option value="disk-desc">${escapeHtml(this.t('processes.sortDisk'))}</option>
+            <option value="network-desc">${escapeHtml(this.t('processes.sortNetwork'))}</option>
             <option value="name-asc">${escapeHtml(this.t('processes.sortName'))}</option>
           </select>
           <div id="liveStats" style="display:flex; gap:16px; font-size:0.85rem; font-weight:500; white-space:nowrap;">
@@ -264,6 +266,8 @@ const locationBadge = locationSuspicious
           <div style="display:flex; align-items:center; gap:8px;">
             <span class="cpu-value" style="font-size:0.75rem; font-weight:500;">${p.cpu !== null ? p.cpu + '% CPU' : escapeHtml(this.t('processes.cpuNa'))}</span>
             <span class="memory-value" style="font-size:0.75rem; font-weight:500;">${p.memory !== null ? p.memory + '% RAM' : escapeHtml(this.t('processes.memoryNa'))}</span>
+            <span class="disk-value" style="font-size:0.75rem; font-weight:500;">${p.diskIo !== null ? p.diskIo + '% Disk' : escapeHtml(this.t('processes.diskNa'))}</span>
+            <span class="network-value" style="font-size:0.75rem; font-weight:500;">${p.networkIo !== null ? p.networkIo + '% Net' : escapeHtml(this.t('processes.networkNa'))}</span>
             <button class="btn btn-sm process-options" data-pid="${escapeHtml(p.pid)}" data-process-name="${escapeHtml(p.name)}" data-file-path="${escapeHtml(rawPath)}" style="color: var(--text-muted); padding: 4px 8px;">⋮</button>
             <button class="btn btn-sm" style="color: var(--accent-danger);" data-end-process="${escapeHtml(p.pid)}" data-process-name="${escapeHtml(p.name)}">${escapeHtml(this.t('processes.endProcess'))}</button>
           </div>
@@ -293,6 +297,8 @@ const locationBadge = locationSuspicious
           <div style="display:flex; gap:16px; font-size:0.85rem; font-weight:500;">
             <span class="cpu-value">${p.cpu !== null ? p.cpu + '% CPU' : escapeHtml(this.t('processes.cpuNa'))}</span>
             <span class="memory-value">${p.memory !== null ? p.memory + '% RAM' : escapeHtml(this.t('processes.memoryNa'))}</span>
+            <span class="disk-value">${p.diskIo !== null ? p.diskIo + '% Disk' : escapeHtml(this.t('processes.diskNa'))}</span>
+            <span class="network-value">${p.networkIo !== null ? p.networkIo + '% Net' : escapeHtml(this.t('processes.networkNa'))}</span>
           </div>
         </div>`;
     }
@@ -305,12 +311,16 @@ const locationBadge = locationSuspicious
       score: p.risk.score,
       cpu: p.cpu ?? -1,
       memory: p.memory ?? -1,
+      diskIo: p.diskIo ?? -1,
+      networkIo: p.networkIo ?? -1,
       name: (p.name || '').toLowerCase(),
       riskScoreEl: row.querySelector('.risk-score'),
       riskLevelEl: row.querySelector('.risk-level'),
       recommendedEl: row.querySelector('.recommended-action'),
       cpuEl: row.querySelector('.cpu-value'),
-      memoryEl: row.querySelector('.memory-value')
+      memoryEl: row.querySelector('.memory-value'),
+      diskEl: row.querySelector('.disk-value'),
+      networkEl: row.querySelector('.network-value')
     };
   },
 
@@ -332,6 +342,8 @@ const locationBadge = locationSuspicious
     }
     if (entry.cpuEl) entry.cpuEl.textContent = p.cpu !== null ? `${p.cpu}% CPU` : this.t('processes.cpuNa');
     if (entry.memoryEl) entry.memoryEl.textContent = p.memory !== null ? `${p.memory}% RAM` : this.t('processes.memoryNa');
+    if (entry.diskEl) entry.diskEl.textContent = p.diskIo !== null ? `${p.diskIo}% Disk` : this.t('processes.diskNa');
+    if (entry.networkEl) entry.networkEl.textContent = p.networkIo !== null ? `${p.networkIo}% Net` : this.t('processes.networkNa');
 
     entry.score = p.risk.score;
     entry.cpu = p.cpu ?? -1;
@@ -349,6 +361,8 @@ const locationBadge = locationSuspicious
       'risk-desc': (a, b) => this._rowIndex.get(b).score - this._rowIndex.get(a).score,
       'cpu-desc': (a, b) => this._rowIndex.get(b).cpu - this._rowIndex.get(a).cpu,
       'memory-desc': (a, b) => this._rowIndex.get(b).memory - this._rowIndex.get(a).memory,
+      'disk-desc': (a, b) => this._rowIndex.get(b).diskIo - this._rowIndex.get(a).diskIo,
+      'network-desc': (a, b) => this._rowIndex.get(b).networkIo - this._rowIndex.get(a).networkIo,
       'name-asc': (a, b) => this._rowIndex.get(a).name.localeCompare(this._rowIndex.get(b).name)
     };
     const comparator = comparators[this._sortBy];

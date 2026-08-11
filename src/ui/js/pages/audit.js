@@ -87,6 +87,7 @@ window.Pages['audit'] = {
     this.load(container);
   },
   async load(container) {
+    const self = this;
     const content = container.querySelector('#auditContent');
     const progressBar = content?.querySelector('.loading-progress-bar');
     let creepTimer = null;
@@ -157,6 +158,7 @@ window.Pages['audit'] = {
 
       // Translate audit results from backend
       const translatedResults = results.map(r => this.translateAuditResult(r));
+      self._currentTranslatedResults = translatedResults;
 
       let pass = 0, fail = 0, warn = 0, err = 0;
       const visibleResults = translatedResults.filter((r) => !ignoredIds.has(this.warningId(r)));
@@ -269,7 +271,7 @@ window.Pages['audit'] = {
     const resultsContainer = container.querySelector('#auditResultsContainer .dashboard-grid');
     if (!resultsContainer) return;
 
-    let resultsHtml = '';
+    resultsContainer.innerHTML = '';
     for (const res of visibleResults) {
       let iconClass = 'info';
       let iconSvg = '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>';

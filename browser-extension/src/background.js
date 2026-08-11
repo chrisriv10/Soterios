@@ -7,11 +7,25 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   }
 });
 
-// Handle CHECK_PASSWORD from content script
+// Handle messages from popup and content scripts
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'CHECK_PASSWORD' && msg.password) {
     checkPassword(msg.password).then(sendResponse);
     return true; // async response
+  }
+
+  if (msg.type === 'PING_DESKTOP') {
+    pingDesktopApp().then(sendResponse);
+    return true;
+  }
+
+  if (msg.type === 'FORWARD_CREDENTIAL_LEAK') {
+    notifyDesktopApp(msg.payload).then(sendResponse);
+    return true;
+  }
+
+  if (msg.type === 'SETTINGS_UPDATED') {
+    broadcastSettings(msg.settings);
   }
 });
 
@@ -36,7 +50,78 @@ function handleNativeMessage(msg) {
   // Handle responses from desktop app if needed
 }
 
+function pingDesktopApp() {
+  return new Promise((resolve) => {
+    if (!nativePort) {
+      connectNative();
+    }
+    if (!nativePort) {
+      return resolve({ ok: false, error: 'No native port' });
+    }
+
+    const timeout = setTimeout(() => {
+      resolve({ ok: false, error: 'Timeout' });
+    }, 1000);
+
+    const onMessage = (msg) => {
+      if (msg.type === 'PONG') {
+        clearTimeout(timeout);
+        resolve({ ok: true });
+      }
+    };
+
+    // Add temporary listener
+    nativePort.onMessage.addListener(onMessage);
+    nativePort.postMessage({ type: 'PING' });
+
+    // Cleanup after timeout
+    setTimeout(() => {
+      nativePort.onMessage.removeListener(onMessage);
+    }, 1000);
+  });
+}
+
+function notifyDesktopApp(payload) {
+  return new Promise((resolve) => {
+    if (!nativePort) {
+      connectNative();
+    }
+    if (!nativePort) {
+      return resolve({ ok: false, error: 'No native port' });
+    }
+
+    const timeout = setTimeout(() => {
+      resolve({ ok: false, error: 'No response from desktop app' });
+    }, 2000);
+
+    const onMessage = (msg) => {
+      if (msg.type === 'LEAK_NOTIFIED') {
+        clearTimeout(timeout);
+        nativePort.onMessage.removeListener(onMessage);
+        resolve({ ok: true });
+      }
+    };
+
+    nativePort.onMessage.addListener(onMessage);
+    nativePort.postMessage({ type: 'CREDENTIAL_LEAK', password: payload.password, count: payload.count });
+  });
+}
+
+function broadcastSettings(settings) {
+  chrome.tabs.query({}, (tabs) => {
+    for (const tab of tabs) {
+      chrome.tabs.sendMessage(tab.id, { type: 'SETTINGS_UPDATED', settings });
+    }
+  });
+}
+
 async function checkPassword(password) {
+  // Respect hibpEnabled setting
+  const { hibpEnabled } = await chrome.storage.sync.get('hibpEnabled');
+  if (hibpEnabled === false) {
+    return { error: 'HIBP checks disabled' };
+  }
+
   const HIBP_API = 'https://api.pwnedpasswords.com/range/';
   const encoder = new TextEncoder();
   const data = encoder.encode(password);

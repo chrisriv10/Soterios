@@ -56,7 +56,7 @@ let desktopProc = null;
 const pending = new Map();
 let msgId = 0;
 
-function launchDesktopApp() {
+function launchDesktopApp(deepLinkUrl) {
   if (desktopProc) return Promise.resolve();
 
   return new Promise((resolve, reject) => {
@@ -79,7 +79,13 @@ function launchDesktopApp() {
     }
 
     const isWin = process.platform === 'win32';
-    const args = isWin ? ['/c', 'start', '""', resolvedPath] : [resolvedPath];
+    const args = isWin
+      ? deepLinkUrl
+        ? ['/c', 'start', '""', resolvedPath, deepLinkUrl]
+        : ['/c', 'start', '""', resolvedPath]
+      : deepLinkUrl
+        ? [resolvedPath, deepLinkUrl]
+        : [resolvedPath];
     const cmd = isWin ? 'cmd' : resolvedPath;
     const options = { shell: false, detached: true };
 
@@ -100,7 +106,8 @@ async function handleMessage(msg) {
 
   switch (msg.type) {
     case 'CREDENTIAL_LEAK': {
-      await launchDesktopApp();
+      const deepLinkUrl = `soterios://credential-leak?count=${encodeURIComponent(msg.count || 1)}`;
+      await launchDesktopApp(deepLinkUrl);
       send({ type: 'LEAK_NOTIFIED', ok: true, original: msg });
       break;
     }

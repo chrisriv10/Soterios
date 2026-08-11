@@ -42,9 +42,10 @@ async function checkConnection() {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 1000);
-    const resp = await fetch('http://localhost:17234/api/health', { method: 'GET', signal: controller.signal });
+    // Use native messaging PING instead of HTTP health check
+    const result = await chrome.runtime.sendMessage({ type: 'PING_DESKTOP' });
     clearTimeout(timeout);
-    if (resp.ok) {
+    if (result && result.ok) {
       document.getElementById('statusDot').classList.remove('offline');
       document.getElementById('statusText').textContent = 'Soterios app connected';
     } else throw new Error();
