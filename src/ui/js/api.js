@@ -198,7 +198,7 @@ const Api = {
     }
   },
   async getHistory(kind, limit) { try { return await window.api.invoke('db:getScanHistory', limit || 10); } catch (e) { return []; } },
-  async getQuarantine() { try { return await window.api.invoke('db:getQuarantineList'); } catch (e) { return []; } },
+  async getQuarantine() { try { return await window.api.invoke('quarantine:list', 'quarantined'); } catch (e) { return []; } },
   async getAppInfo() { return window.soterios.app.info(); }
 };
 

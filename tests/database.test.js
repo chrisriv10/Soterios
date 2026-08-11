@@ -96,8 +96,28 @@ describe('DatabaseService quarantine_path migration', () => {
     const service = new DatabaseService(dbPath);
     const tables = service.db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map((r) => r.name);
     assert.ok(tables.includes('quarantine'));
+    assert.ok(tables.includes('trusted_hashes'));
     const columns = service.db.prepare('PRAGMA table_info(quarantine)').all().map((c) => c.name);
     assert.ok(columns.includes('quarantine_path'));
+    service.db.close();
+  });
+
+  it('add, list, and remove trusted hashes', () => {
+    const service = new DatabaseService(tempDbPath());
+    assert.equal(service.isHashTrusted('abc123'), false);
+    service.addTrustedHash('abc123', 'C:\\x\\fp.exe', 'Some-Signature');
+    service.addTrustedHash('abc123', 'C:\\x\\other.exe', 'ignored-dup');
+    assert.equal(service.isHashTrusted('abc123'), true);
+    assert.equal(service.isHashTrusted(''), false);
+
+    const list = service.getTrustedHashes();
+    assert.equal(list.length, 1);
+    assert.equal(list[0].hash, 'abc123');
+    assert.equal(list[0].original_path, 'C:\\x\\fp.exe');
+
+    service.removeTrustedHash('abc123');
+    assert.equal(service.isHashTrusted('abc123'), false);
+    assert.equal(service.getTrustedHashes().length, 0);
     service.db.close();
   });
 

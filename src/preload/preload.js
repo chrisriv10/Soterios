@@ -56,8 +56,9 @@ contextBridge.exposeInMainWorld('soterios', {
     getLocalIPs: () => ipcRenderer.invoke('lockdown:getLocalIPs')
   },
   browserExtension: {
-    installNativeHost: () => ipcRenderer.invoke('browserExtension:installNativeHost'),
-    setExtensionId: (extId) => ipcRenderer.invoke('browserExtension:setExtensionId', extId)
+    getState: () => ipcRenderer.invoke('browserExtension:getState'),
+    install: (browserId) => ipcRenderer.invoke('browserExtension:install', browserId),
+    openPage: (browserId) => ipcRenderer.invoke('browserExtension:openPage', browserId)
   },
   ai: {
     status: () => ipcRenderer.invoke('ai:status'),

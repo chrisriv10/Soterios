@@ -116,6 +116,29 @@ class QuarantineManager {
   }
 
   /**
+   * Decrypt a quarantined file back to its original path, mark the record
+   * restored, and add its hash to the trusted (false-positive) whitelist so
+   * future scans skip it.
+   * @param {number} id - Quarantine row id.
+   * @returns {Promise<{success:boolean, error?:string}>}
+   */
+  async restoreAndTrust(id) {
+    const res = await this.restore(id);
+    if (!res.success) return res;
+    try {
+      const stmt = this.db.db.prepare('SELECT hash, original_path, threat_name FROM quarantine WHERE id = ?');
+      const record = stmt.get(id);
+      if (record && record.hash) {
+        this.db.addTrustedHash(record.hash, record.original_path, record.threat_name);
+      }
+    } catch (err) {
+      // Restoring succeeded; whitelist failure should not undo the restore.
+      logger.error('Failed to trust hash after restore', { error: err.message || String(err) });
+    }
+    return { success: true };
+  }
+
+  /**
    * Permanently delete a quarantined file from disk and mark the record deleted.
    * @param {number} id - Quarantine row id.
    * @returns {Promise<{success:boolean, error?:string}>}

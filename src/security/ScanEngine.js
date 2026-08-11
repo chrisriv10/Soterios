@@ -279,7 +279,21 @@ class ScanEngine {
                 
                 const fileBuffer = fs.readFileSync(threat.path);
                 const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
-                
+
+                // Skip files the user explicitly trusted (false-positive whitelist)
+                // so they are not re-quarantined on every pass.
+                let hashTrusted = false;
+                try {
+                  hashTrusted = !!(this.db && typeof this.db.isHashTrusted === 'function' && this.db.isHashTrusted(hash));
+                } catch (_) {
+                  hashTrusted = false;
+                }
+                if (hashTrusted) {
+                  threat.trusted = true;
+                  scanState.notes.push(`Skipped trusted file: ${threat.path}`);
+                  continue;
+                }
+
                 const qResult = await this.quarantineManager.quarantine(
                   threat.path, hash, 'ClamAV', threat.name, 'Detected during ' + scanType + ' scan'
                 );

@@ -67,6 +67,17 @@ class DatabaseService {
       this.db.exec('ALTER TABLE quarantine ADD COLUMN quarantine_path TEXT');
     }
 
+    // Trusted (false-positive whitelist) hashes — restored by the user and
+    // skipped by future scans so they are not re-quarantined.
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS trusted_hashes (
+        hash TEXT PRIMARY KEY,
+        original_path TEXT,
+        threat_name TEXT,
+        added_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Alerts Table
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS alerts (
@@ -255,9 +266,44 @@ class DatabaseService {
     return this.db.prepare("SELECT * FROM quarantine WHERE status = 'quarantined' ORDER BY date_quarantined DESC").all();
   }
 
+  getQuarantineHistory(status = null) {
+    if (status) {
+      return this.db.prepare('SELECT * FROM quarantine WHERE status = ? ORDER BY date_quarantined DESC').all(status);
+    }
+    return this.db.prepare('SELECT * FROM quarantine ORDER BY date_quarantined DESC').all();
+  }
+
   updateQuarantineStatus(id, status) {
     const stmt = this.db.prepare('UPDATE quarantine SET status = ? WHERE id = ?');
     return stmt.run(status, id);
+  }
+
+  getQuarantineRecord(id) {
+    return this.db.prepare('SELECT * FROM quarantine WHERE id = ?').get(id);
+  }
+
+  // --- Trusted hash (false-positive whitelist) API ---
+  addTrustedHash(hash, originalPath, threatName) {
+    if (!hash) return { changes: 0 };
+    const stmt = this.db.prepare(`
+      INSERT OR IGNORE INTO trusted_hashes (hash, original_path, threat_name, added_at)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    `);
+    return stmt.run(hash, originalPath || null, threatName || null);
+  }
+
+  removeTrustedHash(hash) {
+    if (!hash) return { changes: 0 };
+    return this.db.prepare('DELETE FROM trusted_hashes WHERE hash = ?').run(hash);
+  }
+
+  isHashTrusted(hash) {
+    if (!hash) return false;
+    return !!this.db.prepare('SELECT hash FROM trusted_hashes WHERE hash = ?').get(hash);
+  }
+
+  getTrustedHashes() {
+    return this.db.prepare('SELECT * FROM trusted_hashes ORDER BY added_at DESC').all();
   }
 
   // --- Alerts API ---

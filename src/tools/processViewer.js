@@ -80,40 +80,38 @@ function recommendationForRisk(risk) {
 
 async function getProcessIOStats() {
   try {
-    // Use the permanent PowerShell script file
-    const scriptPath = path.join(__dirname, '../scripts/process-io-counter.ps1');
-    
-    const { stdout: ioStdout } = await execPromise(`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${scriptPath}"`, { timeout: 15000 });
-    
-    // Parse I/O data - using same data for both disk and network for now
-    // Windows Performance Counters don't easily separate disk vs network I/O per process
-    // without using more complex counters
-    const ioMap = new Map();
+    // Permanent PowerShell script file. In packaged builds the script is
+    // unpacked outside app.asar (see asarUnpack in package.json), so rewrite
+    // the path the same way Electron does at runtime.
+    const scriptPath = path.join(__dirname, '../scripts/process-io-counter.ps1')
+      .replace('app.asar', 'app.asar.unpacked');
+
+    const { stdout: ioStdout } = await execPromise(`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${scriptPath}"`, { timeout: 20000 });
+
+    // Each line is "pid|name|readBytesPerSec|writeBytesPerSec|otherBytesPerSec".
+    // Disk IO = read + write; "other" IO (named pipes, sockets, devices) is the
+    // closest per-process approximation of network traffic the perf counters
+    // expose. Keyed by PID so every process gets its own exact numbers.
+    const diskIOMap = new Map();
+    const networkIOMap = new Map();
     if (ioStdout) {
-      ioStdout.trim().split('\n').forEach(line => {
+      ioStdout.trim().split('\n').forEach((line) => {
         const parts = line.split('|');
-        if (parts.length >= 2) {
-          const fullPath = parts[0];
-          const value = parseFloat(parts[1]) || 0;
-          
-          // Extract process name from path like \\computername\process(name)\io data bytes/sec
-          const match = fullPath.match(/process\((.+?)\)\\io data bytes/i);
-          if (match) {
-            const processName = match[1].toLowerCase();
-            // Handle process instances (e.g., svchost#1)
-            const baseName = processName.split('#')[0];
-            ioMap.set(baseName, (ioMap.get(baseName) || 0) + value);
-          }
-        }
+        if (parts.length < 5) return;
+        const pid = parseInt(parts[0], 10);
+        const read = parseFloat(parts[2]) || 0;
+        const write = parseFloat(parts[3]) || 0;
+        const other = parseFloat(parts[4]) || 0;
+        if (!Number.isFinite(pid)) return;
+        diskIOMap.set(pid, read + write);
+        networkIOMap.set(pid, other);
       });
     }
 
-    // For now, use the same I/O data for both disk and network
-    // Windows Performance Counters don't easily separate disk vs network I/O per process
-    // without using more complex counters
-    return { diskIOMap: ioMap, networkIOMap: ioMap };
+    return { diskIOMap, networkIOMap };
   } catch (err) {
-    // Silently fail - I/O data is optional
+    // I/O data is optional -- never fail the whole tool because of it
+    console.warn('Failed to read per-process IO counters:', err.message || err);
     return { diskIOMap: new Map(), networkIOMap: new Map() };
   }
 }
@@ -145,15 +143,10 @@ module.exports = {
       const diskPercentage = Math.min(100, diskMBps);
       const networkPercentage = Math.min(100, networkMBps);
 
-      const processes = processList.slice(0, 400).map((p) => {
-        const processName = (p.name || '').toLowerCase().replace(/\.exe$/, '');
-        const diskIO = diskIOMap.get(processName) || 0;
-        const networkIO = networkIOMap.get(processName) || 0;
-        
-        // Convert to MB/sec and use as percentage-like value
-        const diskMBps = diskIO / (1024 * 1024);
-        const networkMBps = networkIO / (1024 * 1024);
-        
+      const processes = processList.map((p) => {
+        const diskIO = diskIOMap.get(p.pid) || 0;
+        const networkIO = networkIOMap.get(p.pid) || 0;
+
         const item = {
           pid: p.pid,
           ppid: p.parentPid || null,
@@ -162,8 +155,8 @@ module.exports = {
           path: p.path || null,
           cpu: p.cpu !== undefined ? +(p.cpu).toFixed(1) : null,
           memory: p.mem !== undefined ? +(p.mem).toFixed(1) : null,
-          diskIo: +diskMBps.toFixed(1),
-          networkIo: +networkMBps.toFixed(1)
+          diskIo: Math.round(diskIO),
+          networkIo: Math.round(networkIO)
         };
         item.risk = makeRisk(processSignals(item));
         item.locationReasons = (item.risk.signals || [])

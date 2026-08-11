@@ -1,6 +1,7 @@
 window.Pages = window.Pages || {};
 window.Pages['network'] = {
   REFRESH_INTERVAL_MS: 3000,
+  CHART_REFRESH_INTERVAL_MS: 30000,
   _connectionQuery: '',
   _connectionRiskFilter: 'all',
   _connectionStateFilter: 'all',

@@ -142,14 +142,6 @@ window.Pages.settings = {
 
           <div class="toggle-row">
             <div>
-              <div class="toggle-label">${escapeHtml(t('settings.browserExtension.label'))}</div>
-              <div class="toggle-desc">${escapeHtml(t('settings.browserExtension.desc'))}</div>
-            </div>
-            <label class="toggle"><input type="checkbox" id="browserExtensionToggle" ${settings.features.browserExtension ? 'checked' : ''} /><span class="toggle-slider"></span></label>
-          </div>
-
-          <div class="toggle-row">
-            <div>
               <div class="toggle-label">${escapeHtml(t('settings.emergencyLockdown.label'))}</div>
               <div class="toggle-desc">${escapeHtml(t('settings.emergencyLockdown.desc'))}</div>
             </div>
@@ -172,6 +164,12 @@ window.Pages.settings = {
             <label class="toggle"><input type="checkbox" id="vpnAutoConnectToggle" ${settings.features.vpnAutoConnect ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
           <div id="featureToggleStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
+        </div>
+
+        <div class="card">
+          <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.browserExtension.cardTitle'))}</div>
+          <div class="toggle-desc" style="margin-bottom:12px;">${escapeHtml(t('settings.browserExtension.explainer'))}</div>
+          <div id="browserExtensionBody">${escapeHtml(t('settings.browserExtension.checking'))}</div>
         </div>
 
         <div class="card">
@@ -461,81 +459,90 @@ window.Pages.settings = {
     container.querySelector('#externalLookupsToggle').addEventListener('change', (event) => saveFeature('externalLookups', event.target.checked, event.target));
     container.querySelector('#geoLookupToggle').addEventListener('change', (event) => saveFeature('geoLookup', event.target.checked, event.target));
     container.querySelector('#networkPerimeterMapToggle').addEventListener('change', (event) => saveFeature('networkPerimeterMap', event.target.checked, event.target));
-    container.querySelector('#browserExtensionToggle').addEventListener('change', async (event) => {
-      const checked = event.target.checked;
-      const statusEl = container.querySelector('#featureToggleStatus');
-      statusEl.textContent = '';
-      event.target.disabled = true;
+
+    async function renderBrowserExtensionSection(container) {
+      const body = container.querySelector('#browserExtensionBody');
+      if (!body) return;
       try {
-        await Api.updateSettings({ features: { browserExtension: checked } });
-        if (checked) {
-          statusEl.textContent = t('settings.browserExtension.installing');
-          const result = await window.api.invoke('browserExtension:installNativeHost');
-           if (result.ok) {
-             statusEl.innerHTML = `
-               <div>${escapeHtml(t('settings.browserExtension.installed'))}</div>
-               <div style="margin-top: 8px; padding: 12px; background: var(--info-bg, #e7f5ff); border-radius: 6px;">
-                 <div style="font-weight: 600; margin-bottom: 6px;">${escapeHtml(t('settings.browserExtension.loadSteps'))}</div>
-                 <ol style="margin: 0; padding-left: 20px; font-size: 0.9rem; line-height: 1.6;">
-                   <li>${escapeHtml(t('settings.browserExtension.step1'))}</li>
-                   <li>${escapeHtml(t('settings.browserExtension.step2'))}</li>
-                   <li>${escapeHtml(t('settings.browserExtension.step3'))} <code style="background: var(--surface-bg, #f0f0f0); padding: 2px 6px; border-radius: 3px;">${escapeHtml(result.extDir)}</code></li>
-                   <li>${escapeHtml(t('settings.browserExtension.step4'))}</li>
-                   <li>${escapeHtml(t('settings.browserExtension.step5'))}</li>
-                 </ol>
-               </div>
-               <div style="margin-top: 12px; font-size: 0.85rem; color: var(--text-muted);">
-                 ${escapeHtml(t('settings.browserExtension.step6'))}
-               </div>
-               <div style="margin-top: 12px; display: flex; gap: 8px; align-items: center;">
-                 <input type="text" id="extensionIdInput" placeholder="${escapeHtml(t('settings.browserExtension.idPlaceholder'))}" style="flex: 1; padding: 6px 10px; font-family: monospace;" />
-                 <button class="btn btn-sm btn-primary" id="saveExtensionIdBtn">${escapeHtml(t('settings.browserExtension.saveId'))}</button>
-               </div>
-               <div id="extensionIdStatus" style="margin-top: 6px; font-size: 0.85rem; color: var(--text-muted);"></div>
-             `;
-             statusEl.style.whiteSpace = 'normal';
-
-             const saveIdBtn = container.querySelector('#saveExtensionIdBtn');
-             const idInput = container.querySelector('#extensionIdInput');
-             const idStatus = container.querySelector('#extensionIdStatus');
-
-             saveIdBtn.addEventListener('click', async () => {
-               const id = idInput.value.trim();
-               if (!id) { idStatus.textContent = t('settings.browserExtension.enterId'); return; }
-               saveIdBtn.disabled = true;
-               idStatus.textContent = t('settings.browserExtension.savingId');
-               try {
-                 const r = await window.api.invoke('browserExtension:setExtensionId', id);
-                 if (r.ok) {
-                   idStatus.textContent = t('settings.browserExtension.idSaved');
-                   setTimeout(() => {
-                     idStatus.textContent = '';
-                     container.querySelector('#featureToggleStatus').textContent = t('settings.browserExtension.connected');
-                   }, 2000);
-                 } else {
-                   idStatus.textContent = r.error || t('settings.browserExtension.idFailed');
-                 }
-               } catch (err) {
-                 idStatus.textContent = err.message;
-               } finally {
-                 saveIdBtn.disabled = false;
-               }
-             });
-          } else {
-            event.target.checked = false;
-            await Api.updateSettings({ features: { browserExtension: false } });
-            statusEl.textContent = result.error || t('settings.browserExtension.installFailed');
-          }
-        } else {
-          statusEl.textContent = t('settings.featureSaved');
+        const state = await window.api.invoke('browserExtension:getState');
+        if (!state || !state.ok) throw new Error(state?.error || 'Failed to load browser extension state');
+        const detected = state.browsers.filter((b) => b.installed);
+        if (detected.length === 0) {
+          body.innerHTML = `<div class="toggle-desc">${escapeHtml(t('settings.browserExtension.noBrowser'))}</div>`;
+          return;
+        }
+        const rows = detected.map((b) => {
+          const status = b.loaded
+            ? `<span style="color:var(--success, #28a745);">&#9679; ${escapeHtml(t('settings.browserExtension.loaded'))}</span>`
+            : `<span style="color:var(--text-muted);">&#9675; ${escapeHtml(t('settings.browserExtension.notLoaded'))}</span>`;
+          return `
+          <div class="browser-ext-row" style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--border, rgba(128,128,128,0.2));">
+            <div style="min-width:0;">
+              <div class="toggle-label">${escapeHtml(b.name)} &nbsp; ${status}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.browserExtension.extensionId', { id: state.extensionId }))}</div>
+            </div>
+            <button class="btn btn-sm browser-ext-install" data-browser="${escapeHtml(b.id)}" style="flex-shrink:0;">${escapeHtml(t('settings.browserExtension.installBtn'))}</button>
+          </div>`;
+        }).join('');
+        body.innerHTML = `
+          ${rows}
+          <div id="browserExtSteps" style="display:none; margin-top:12px; padding:12px; background:var(--panel-bg-alt, rgba(128,128,128,0.08)); border-radius:6px;">
+            <div class="toggle-desc" style="margin-bottom:8px;">${escapeHtml(t('settings.browserExtension.stepsIntro'))}</div>
+            <ol style="margin:0 0 12px 18px; padding:0; font-size:0.85rem; line-height:1.8;">
+              <li>${escapeHtml(t('settings.browserExtension.stepDevMode'))}</li>
+              <li>${escapeHtml(t('settings.browserExtension.stepLoadUnpacked'))}</li>
+            </ol>
+            <div style="font-size:0.85rem; word-break:break-all; margin-bottom:12px;"><code id="browserExtFolder" style="background:var(--panel-bg, rgba(128,128,128,0.12)); padding:2px 6px; border-radius:4px;"></code></div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn btn-sm" id="browserExtOpenFolder">${escapeHtml(t('settings.browserExtension.openFolder'))}</button>
+              <button class="btn btn-sm" id="browserExtOpenPage">${escapeHtml(t('settings.browserExtension.openPage'))}</button>
+            </div>
+            <div class="toggle-desc" style="margin-top:12px;">${escapeHtml(t('settings.browserExtension.stepNote'))}</div>
+          </div>
+          <div id="browserExtStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
+        `;
+        body.querySelectorAll('.browser-ext-install').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            const browserId = btn.dataset.browser;
+            const status = body.querySelector('#browserExtStatus');
+            const steps = body.querySelector('#browserExtSteps');
+            setButtonLoading(btn, true, t('settings.browserExtension.installing'));
+            status.textContent = '';
+            try {
+              const result = await window.api.invoke('browserExtension:install', browserId);
+              if (!result.ok) throw new Error(result.error);
+              const folder = body.querySelector('#browserExtFolder');
+              if (folder) folder.textContent = result.extDir;
+              if (steps) steps.style.display = 'block';
+              renderBrowserExtensionSection(container);
+            } catch (err) {
+              status.textContent = err.message || String(err);
+              if (showToast) showToast(t('settings.browserExtension.error'), 'error');
+            } finally {
+              setButtonLoading(btn, false);
+            }
+          });
+        });
+        const openFolderBtn = body.querySelector('#browserExtOpenFolder');
+        if (openFolderBtn) {
+          openFolderBtn.addEventListener('click', async () => {
+            const folder = body.querySelector('#browserExtFolder')?.textContent;
+            if (folder) await Api.openPath(folder);
+          });
+        }
+        const openPageBtn = body.querySelector('#browserExtOpenPage');
+        if (openPageBtn) {
+          openPageBtn.addEventListener('click', async () => {
+            const current = detected.find((b) => b.id);
+            if (!current) return;
+            await window.api.invoke('browserExtension:openPage', current.id);
+          });
         }
       } catch (err) {
-        event.target.checked = !checked;
-        statusEl.textContent = err.message || String(err);
-      } finally {
-        event.target.disabled = false;
+        body.innerHTML = `<div class="toggle-desc">${escapeHtml(err.message || String(err))}</div>`;
       }
-    });
+    }
+    renderBrowserExtensionSection(container);
     container.querySelector('#emergencyLockdownToggle').addEventListener('change', async (event) => {
       const checked = event.target.checked;
       const statusEl = container.querySelector('#featureToggleStatus');

@@ -252,6 +252,41 @@ describe('ScanEngine', () => {
     assert.equal(result.threats.length, 1);
   });
 
+  it('runScan skips quarantining files whose hash is trusted', async () => {
+    const testFile = path.join(tmp, 'falsepositive.bin');
+    fs.writeFileSync(testFile, 'benign-ish content');
+    let quarantineCalls = 0;
+
+    mockDb.isHashTrusted = () => true;
+    mockQuarantineManager.quarantine = async () => {
+      quarantineCalls += 1;
+      return { success: true };
+    };
+    mockClamEngine.scanFile = async () => ({
+      success: true,
+      threatsFound: 1,
+      filesScanned: 1,
+      threats: [{ path: testFile, name: 'Some-Signature' }],
+      output: ''
+    });
+
+    const engine = new ScanEngine(
+      mockDb,
+      mockEventBus,
+      mockClamEngine,
+      mockHeuristicEngine,
+      mockReputationEngine,
+      mockQuarantineManager
+    );
+
+    const result = await engine.runScan('quick', [tmp], 'Starting...');
+    assert.equal(result.success, true);
+    assert.equal(quarantineCalls, 0);
+    assert.equal(result.threats.length, 1);
+    assert.equal(result.threats[0].trusted, true);
+    assert.equal(fs.existsSync(testFile), true);
+  });
+
   it('runScan handles scan errors', async () => {
     mockClamEngine.scanFile = async () => ({
       success: false,

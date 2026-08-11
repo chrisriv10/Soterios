@@ -17,6 +17,14 @@ window.Pages.processes = {
     return window.I18n?.t(key, vars) ?? key;
   },
 
+  formatIo(bytesPerSec) {
+    const value = Number(bytesPerSec) || 0;
+    if (value <= 0) return '0 B/s';
+    if (value < 1024) return value.toFixed(0) + ' B/s';
+    if (value < 1024 * 1024) return (value / 1024).toFixed(1) + ' KB/s';
+    return (value / (1024 * 1024)).toFixed(2) + ' MB/s';
+  },
+
   render(container) {
     if (this._refreshTimer) {
       clearInterval(this._refreshTimer);
@@ -292,8 +300,8 @@ const locationBadge = locationSuspicious
           <div style="display:flex; align-items:center; gap:8px;">
             <span class="cpu-value" style="font-size:0.75rem; font-weight:500;">${p.cpu !== null ? p.cpu + '% CPU' : escapeHtml(this.t('processes.cpuNa'))}</span>
             <span class="memory-value" style="font-size:0.75rem; font-weight:500;">${p.memory !== null ? p.memory + '% RAM' : escapeHtml(this.t('processes.memoryNa'))}</span>
-            <span class="disk-value" style="font-size:0.75rem; font-weight:500;">${p.diskIo !== null ? p.diskIo + ' MB/s Disk' : '0 MB/s Disk'}</span>
-            <span class="network-value" style="font-size:0.75rem; font-weight:500;">${p.networkIo !== null ? p.networkIo + ' MB/s Net' : '0 MB/s Net'}</span>
+            <span class="disk-value" style="font-size:0.75rem; font-weight:500;">${this.formatIo(p.diskIo)} Disk</span>
+            <span class="network-value" style="font-size:0.75rem; font-weight:500;">${this.formatIo(p.networkIo)} Net</span>
             <button class="btn btn-sm process-options" data-pid="${escapeHtml(p.pid)}" data-process-name="${escapeHtml(p.name)}" data-file-path="${escapeHtml(rawPath)}" style="color: var(--text-muted); padding: 4px 8px;">⋮</button>
             <button class="btn btn-sm" style="color: var(--accent-danger);" data-end-process="${escapeHtml(p.pid)}" data-process-name="${escapeHtml(p.name)}">${escapeHtml(this.t('processes.endProcess'))}</button>
           </div>
@@ -323,8 +331,8 @@ const locationBadge = locationSuspicious
           <div style="display:flex; gap:16px; font-size:0.85rem; font-weight:500;">
             <span class="cpu-value">${p.cpu !== null ? p.cpu + '% CPU' : escapeHtml(this.t('processes.cpuNa'))}</span>
             <span class="memory-value">${p.memory !== null ? p.memory + '% RAM' : escapeHtml(this.t('processes.memoryNa'))}</span>
-            <span class="disk-value">${p.diskIo !== null ? p.diskIo + ' MB/s Disk' : '0 MB/s Disk'}</span>
-            <span class="network-value">${p.networkIo !== null ? p.networkIo + ' MB/s Net' : '0 MB/s Net'}</span>
+            <span class="disk-value">${this.formatIo(p.diskIo)} Disk</span>
+            <span class="network-value">${this.formatIo(p.networkIo)} Net</span>
           </div>
         </div>`;
     }
@@ -368,8 +376,8 @@ const locationBadge = locationSuspicious
     }
     if (entry.cpuEl) entry.cpuEl.textContent = p.cpu !== null ? `${p.cpu}% CPU` : this.t('processes.cpuNa');
     if (entry.memoryEl) entry.memoryEl.textContent = p.memory !== null ? `${p.memory}% RAM` : this.t('processes.memoryNa');
-    if (entry.diskEl) entry.diskEl.textContent = `${p.diskIo} MB/s Disk`;
-    if (entry.networkEl) entry.networkEl.textContent = `${p.networkIo} MB/s Net`;
+    if (entry.diskEl) entry.diskEl.textContent = `${this.formatIo(p.diskIo)} Disk`;
+    if (entry.networkEl) entry.networkEl.textContent = `${this.formatIo(p.networkIo)} Net`;
 
     entry.score = p.risk.score;
     entry.cpu = p.cpu ?? -1;

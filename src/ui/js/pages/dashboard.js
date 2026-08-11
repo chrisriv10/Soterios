@@ -756,7 +756,7 @@ window.Pages['dashboard'] = {
       await loadLastScan();
       window.api.invoke('splash:progress', { pct: 85, label: t('dashboard.lastScan') });
 
-      const quarantineList = await window.api.invoke('db:getQuarantineList');
+      const quarantineList = await window.api.invoke('quarantine:list', 'quarantined');
       if (quarantineList) {
         const threatsCountEl = container.querySelector('#threatsCount');
         if (threatsCountEl) {

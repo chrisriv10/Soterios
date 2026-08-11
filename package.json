@@ -22,7 +22,11 @@
     "prepack": "node tools/download-clamav.js",
     "test": "node tests/node-test-runner.js && jest tests/passwordTools.test.js tests/reportExport.test.js",
     "sync-wiki": "node tools/sync-wiki.js",
+    "extension:install": "node tools/install-native-host.js",
+    "extension:crx": "node tools/build-extension-crx.js",
+    "extension:policy": "node tools/install-native-host.js policy",
     "smoke:integration": "node tests/smoke/integration-smoke.js",
+    "smoke:alerts": "node tests/smoke/network-alerts-smoke.js",
     "capture:screenshots": "node tests/smoke/capture-pr-screenshots.js"
   },
   "dependencies": {
@@ -56,6 +60,8 @@
     "npmRebuild": false,
     "asarUnpack": [
       "assets/clamav/**",
+      "browser-extension/**",
+      "src/scripts/*.ps1",
       "node_modules/better-sqlite3/**"
     ],
     "files": [

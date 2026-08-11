@@ -17,6 +17,7 @@ function registerIpcHandlers(mainWindow, services) {
 
   const servicesForQuarantine = {
     quarantineManager: services.quarantineManager,
+    db: services.db,
   };
 
   const servicesForProcess = {

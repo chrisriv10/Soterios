@@ -98,4 +98,27 @@ describe('QuarantineManager workflow', () => {
       fs.readFileSync = originalReadFileSync;
     }
   });
+
+  it('restoreAndTrust restores the file and adds its hash to the whitelist', async () => {
+    const created = await manager.quarantine(originalPath, 'trustedhash1', 'test', 'Threat', 'trust-test');
+    const result = await manager.restoreAndTrust(created.id);
+    assert.equal(result.success, true);
+    assert.equal(fs.readFileSync(originalPath, 'utf8'), 'hello-quarantine-payload');
+
+    const row = db.db.prepare('SELECT * FROM quarantine WHERE id = ?').get(created.id);
+    assert.equal(row.status, 'restored');
+    assert.equal(db.isHashTrusted('trustedhash1'), true);
+
+    const trusted = db.getTrustedHashes();
+    assert.ok(trusted.some((h) => h.hash === 'trustedhash1'));
+    assert.equal(trusted.find((h) => h.hash === 'trustedhash1').original_path, originalPath);
+  });
+
+  it('restoreAndTrust reports failure when restore fails', async () => {
+    const created = await manager.quarantine(originalPath, 'trustedhash2', 'test', 'Threat', 'trust-fail');
+    await manager.delete(created.id);
+    const result = await manager.restoreAndTrust(created.id);
+    assert.equal(result.success, false);
+    assert.equal(db.isHashTrusted('trustedhash2'), false);
+  });
 });

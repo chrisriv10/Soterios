@@ -1,12 +1,44 @@
+const fs = require('fs');
 const { ipcMain } = require('electron');
 
-function register(mainWindow, { quarantineManager }) {
+function enrichSizes(records) {
+  return (records || []).map((r) => {
+    let sizeBytes = null;
+    if (r.quarantine_path) {
+      try {
+        sizeBytes = fs.statSync(r.quarantine_path).size;
+      } catch (_) {
+        sizeBytes = null;
+      }
+    }
+    return { ...r, size_bytes: sizeBytes };
+  });
+}
+
+function register(mainWindow, { quarantineManager, db }) {
   ipcMain.handle('quarantine:restore', async (_event, id) => {
     return quarantineManager.restore(id);
   });
 
+  ipcMain.handle('quarantine:restoreAndTrust', async (_event, id) => {
+    return quarantineManager.restoreAndTrust(id);
+  });
+
   ipcMain.handle('quarantine:delete', async (_event, id) => {
     return quarantineManager.delete(id);
+  });
+
+  ipcMain.handle('quarantine:list', async (_event, status) => {
+    return enrichSizes(db.getQuarantineHistory(status || null));
+  });
+
+  ipcMain.handle('quarantine:getTrusted', async () => {
+    return db.getTrustedHashes();
+  });
+
+  ipcMain.handle('quarantine:removeTrusted', async (_event, hash) => {
+    db.removeTrustedHash(hash);
+    return { success: true };
   });
 }
 
