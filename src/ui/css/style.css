@@ -613,6 +613,7 @@ body {
   align-items: start;
   height: calc(100vh - 160px);
   min-height: 600px;
+  position: relative;
 }
 
 .tools-page.stacked {
@@ -824,7 +825,7 @@ body {
 }
 
 .output-panel.maximized {
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
   right: 0;
@@ -832,14 +833,14 @@ body {
   z-index: 9999;
   border-radius: 0;
   margin: 0;
-  height: 100vh;
-  width: 100vw;
+  height: 100%;
+  width: 100%;
   transition: all 0.3s ease;
   background: var(--bg-base);
 }
 
 .output-panel.maximized .output-body {
-  max-height: calc(100vh - 120px);
+  max-height: calc(100% - 120px);
 }
 
 /* Log Rows */
@@ -1835,4 +1836,282 @@ body {
 
 [dir="rtl"] .ai-msg-assistant {
   justify-content: flex-end;
+}
+
+/* VPN Add Modal */
+.vpn-add-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 24px;
+  animation: vpn-modal-fade-in 0.2s ease-out;
+}
+
+.vpn-add-modal-overlay.visible {
+  display: flex;
+}
+
+@keyframes vpn-modal-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.vpn-add-modal {
+  background: var(--bg-surface-hover);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
+  animation: vpn-modal-slide-up 0.25s ease-out;
+}
+
+@keyframes vpn-modal-slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.vpn-add-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--glass-border);
+  flex-shrink: 0;
+}
+
+.vpn-add-modal-header h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.vpn-add-modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+  border-radius: 8px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.vpn-add-modal-close:hover {
+  color: var(--text-main);
+  background: var(--bg-surface-hover);
+}
+
+.vpn-add-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.vpn-add-step {
+  display: none;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.vpn-add-step:not(.hidden) {
+  display: flex;
+}
+
+.vpn-add-step h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.vpn-add-step p {
+  margin: 0 0 16px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.vpn-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.vpn-provider-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+  text-align: center;
+}
+
+.vpn-provider-card:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-surface-hover);
+  transform: translateY(-2px);
+}
+
+.vpn-provider-card:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.vpn-provider-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-main);
+}
+
+.vpn-provider-protocol {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.vpn-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vpn-field label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.vpn-select, .vpn-input {
+  padding: 10px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--bg-base);
+  color: var(--text-main);
+  font-size: 0.9rem;
+  font-family: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.vpn-select:focus, .vpn-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-primary-glow);
+}
+
+.vpn-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.vpn-add-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--glass-border);
+  flex-shrink: 0;
+}
+
+.vpn-btn {
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  border: 1px solid transparent;
+}
+
+.vpn-btn:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.vpn-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.vpn-btn-primary {
+  background: var(--accent-primary);
+  color: white;
+  border-color: var(--accent-primary);
+}
+
+.vpn-btn-primary:hover:not(:disabled) {
+  background: var(--accent-primary-dark);
+}
+
+.vpn-btn-secondary {
+  background: var(--bg-surface);
+  color: var(--text-main);
+  border-color: var(--glass-border);
+}
+
+.vpn-btn-secondary:hover:not(:disabled) {
+  background: var(--bg-surface-hover);
+  border-color: var(--accent-primary);
+}
+
+.vpn-spinner {
+  width: 40px;
+  height: 40px;
+  margin: 20px auto 12px;
+  border: 3px solid var(--glass-border);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: vpn-spin 0.8s linear infinite;
+}
+
+@keyframes vpn-spin {
+  to { transform: rotate(360deg); }
+}
+
+.vpn-success-icon, .vpn-error-icon {
+  width: 56px;
+  height: 56px;
+  margin: 16px auto 12px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.vpn-success-icon {
+  background: var(--ok-glow);
+  color: var(--ok);
+}
+
+.vpn-error-icon {
+  background: var(--danger-glow);
+  color: var(--danger);
+}
+
+.vpn-hint {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-align: center;
 }

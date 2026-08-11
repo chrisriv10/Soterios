@@ -229,7 +229,8 @@ window.Pages['audit'] = {
         try {
           await window.api.invoke('warnings:ignore', { id: btn.dataset.id, title: btn.dataset.title, detail: btn.dataset.detail });
           if (card) card.remove();
-          await this.load(container);
+          // Update ignored warnings section immediately without re-running audit
+          self.updateIgnoredWarningsSection(container);
         } catch (err) {
           btn.disabled = false;
           alert(err.message || t('audit.ignoreError'));
@@ -241,7 +242,13 @@ window.Pages['audit'] = {
         try {
           await window.api.invoke('warnings:unignore', btn.dataset.id);
           if (item) item.remove();
-          await this.load(container);
+          // Update UI immediately without re-running full audit
+          const ignored = await window.api.invoke('warnings:listIgnored');
+          const ignoredIds = new Set((ignored || []).map((w) => w.id));
+          self._currentTranslatedResults = self._currentTranslatedResults || [];
+          const visibleResults = self._currentTranslatedResults.filter((r) => !ignoredIds.has(self.warningId(r)));
+          self.renderResults(container, visibleResults);
+          self.updateIgnoredWarningsSection(container);
         } catch (err) {
           btn.disabled = false;
           alert(err.message || t('audit.restoreError'));
@@ -253,6 +260,97 @@ window.Pages['audit'] = {
       if (typeof unsubscribeProgress === 'function') unsubscribeProgress();
       setLoadingState(false);
     }
+  },
+
+  // Render audit results into the container (incremental update)
+  renderResults(container, visibleResults) {
+    const self = this;
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+    const resultsContainer = container.querySelector('#auditResultsContainer .dashboard-grid');
+    if (!resultsContainer) return;
+
+    let resultsHtml = '';
+    for (const res of visibleResults) {
+      let iconClass = 'info';
+      let iconSvg = '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>';
+      let statusLabel = self.t('common.info');
+      if (res.status === 'pass') { iconClass = 'safe'; iconSvg = '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>'; statusLabel = self.t('audit.statusPassed'); }
+      else if (res.status === 'fail') { iconClass = 'danger'; iconSvg = '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>'; statusLabel = self.t('audit.statusFailed'); }
+      else if (res.status === 'warn') { iconClass = 'warning'; iconSvg = '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="13"/><circle cx="12" cy="16.5" r="1" fill="currentColor" stroke="none"/>'; statusLabel = self.t('audit.statusWarning'); }
+      else if (res.status === 'error') { iconClass = 'danger'; iconSvg = '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>'; statusLabel = self.t('audit.statusError'); }
+
+      let resultsHtml = `<div class="card" style="display:flex; flex-direction:column; gap:12px;">
+        <div style="display:flex; align-items:center; gap:16px;">
+          <div class="status-icon ${iconClass}" style="width:40px;height:40px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">${iconSvg}</svg>
+          </div>
+          <div style="flex:1;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-weight:600; font-size:1.1rem;">${escapeHtml(res.name)}</div>
+              <span style="font-size:0.8rem; font-weight:600; text-transform:uppercase; color:${iconClass === 'safe' ? 'var(--ok)' : iconClass === 'danger' ? 'var(--danger)' : 'var(--warn)'};">${statusLabel}</span>
+            </div>
+            <div class="page-subtitle" style="font-size:0.9rem; margin-top:4px;">${escapeHtml(res.message)}</div>
+          </div>
+        </div>
+        ${res.detail ? `<div style="font-size:0.85rem; color:var(--text-dim); padding:8px; background:var(--bg-surface); border-radius:6px; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; white-space:pre-wrap; word-break:break-word;">${escapeHtml(res.detail)}</div>` : ''}
+        ${res.recommendation ? self.renderRecommendation(res.recommendation) : ''}
+        ${res.actionUri ? `<button class="btn btn-sm audit-open-settings" data-uri="${escapeHtml(res.actionUri)}">${escapeHtml(self.t('audit.openWindowsUpdate'))}</button>` : ''}
+        ${res.status === 'warn' || res.status === 'fail' ? `<button class="btn btn-sm audit-ignore" data-id="${escapeHtml(self.warningId(res))}" data-title="${escapeHtml(res.name)}" data-detail="${escapeHtml(res.message || res.detail || '')}">${escapeHtml(self.t('audit.ignoreWarning'))}</button>` : ''}
+      </div>`;
+      resultsContainer.innerHTML += resultsHtml;
+    }
+
+    // Re-bind event listeners for newly added ignore buttons
+    resultsContainer.querySelectorAll('.audit-ignore').forEach((btn) => btn.addEventListener('click', async () => {
+      const card = btn.closest('.card');
+      btn.disabled = true;
+      try {
+        await window.api.invoke('warnings:ignore', { id: btn.dataset.id, title: btn.dataset.title, detail: btn.dataset.detail });
+        if (card) card.remove();
+        self.updateIgnoredWarningsSection(container);
+      } catch (err) {
+        btn.disabled = false;
+        alert(err.message || t('audit.ignoreError'));
+      }
+    }));
+  },
+
+  // Update the ignored warnings section at the bottom of the audit page
+  updateIgnoredWarningsSection(container) {
+    const self = this;
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+    const content = container.querySelector('#auditContent');
+    if (!content) return;
+
+    // Re-fetch ignored warnings and update the section
+    window.api.invoke('warnings:listIgnored').then(ignored => {
+      const ignoredSection = content.querySelector('.panel');
+      if (ignoredSection && (ignored || []).some((w) => String(w.id || '').startsWith('audit:'))) {
+        ignoredSection.querySelector('.history-list').innerHTML = ignored.filter((w) => String(w.id || '').startsWith('audit:')).map((w) => `
+          <div class="history-item"><div><div class="history-title">${escapeHtml(w.title)}</div><div class="history-meta">${escapeHtml(w.detail || '')}</div></div>
+          <button class="btn btn-sm audit-restore" data-id="${escapeHtml(w.id)}">${escapeHtml(self.t('audit.restore'))}</button></div>`).join('');
+
+        // Re-bind restore buttons for the ignored section
+        ignoredSection.querySelectorAll('.audit-restore').forEach((btn) => btn.addEventListener('click', async () => {
+          const item = btn.closest('.history-item');
+          btn.disabled = true;
+          try {
+            await window.api.invoke('warnings:unignore', btn.dataset.id);
+            if (item) item.remove();
+            const ignored = await window.api.invoke('warnings:listIgnored');
+            const ignoredIds = new Set((ignored || []).map((w) => w.id));
+            const visibleResults = self._currentTranslatedResults.filter((r) => !ignoredIds.has(self.warningId(r)));
+            self.renderResults(container, visibleResults);
+            self.updateIgnoredWarningsSection(container);
+          } catch (err) {
+            btn.disabled = false;
+            alert(err.message || self.t('audit.restoreError'));
+          }
+        }));
+      } else if (ignoredSection) {
+        ignoredSection.remove();
+      }
+    });
   },
 
   warningId(result) {

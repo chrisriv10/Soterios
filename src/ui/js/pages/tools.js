@@ -15,6 +15,23 @@ window.Pages.tools = {
     'file-shredder'
   ],
 
+  scriptNameKeys: {
+    'clear-temp-files': 'tools.script.clearTempFiles.name',
+    'large-files-report': 'tools.script.largeFilesReport.name',
+    'list-startup-items': 'tools.script.listStartupItems.name',
+    'browser-cache-report': 'tools.script.browserCacheReport.name',
+    'disk-space-report': 'tools.script.diskSpaceReport.name',
+    'windows-services-report': 'tools.script.windowsServicesReport.name',
+    'uninstaller-report': 'tools.script.uninstallerReport.name',
+    'duplicate-finder': 'tools.script.duplicateFinder.name',
+    'file-shredder': 'tools.script.fileShredder.name'
+  },
+
+  getScriptName(scriptId) {
+    const key = this.scriptNameKeys[scriptId];
+    return key ? this.t(key) : scriptId;
+  },
+
   toolCategories: [
     {
       id: 'cleanup',
@@ -305,7 +322,7 @@ async runScript(container, btn) {
       ? '<div class="empty-state"><span class="spinner"></span>&nbsp;<span id="scriptProgressLabel">Starting...</span></div>'
       : '<div class="empty-state"><span class="spinner"></span>&nbsp;Running...</div>';
     if (statusEl) statusEl.textContent = this.t('tools.running');
-    if (outputStatus) outputStatus.textContent = this.t('tools.runningStatus', { script: scriptId });
+    if (outputStatus) outputStatus.textContent = this.t('tools.runningStatus', { script: this.getScriptName(scriptId) });
 
     let unsubscribeProgress = null;
     if (reportsProgress) {
@@ -328,9 +345,9 @@ async runScript(container, btn) {
       const when = new Date().toLocaleString();
       if (statusEl) statusEl.textContent = `${this.t('tools.completed')} ${when}`;
       output.innerHTML = this.renderOutput(scriptId, result, when);
-      if (outputStatus) outputStatus.textContent = this.t('tools.completedStatus', { script: scriptId, when });
+      if (outputStatus) outputStatus.textContent = this.t('tools.completedStatus', { script: this.getScriptName(scriptId), when });
       if (exportBtn) exportBtn.style.display = 'inline-flex';
-      showToast(this.t('tools.toastSuccess', { script: scriptId }), 'success');
+      showToast(this.t('tools.toastSuccess', { script: this.getScriptName(scriptId) }), 'success');
 
       if (scriptId === 'uninstaller-report') {
         this._uninstallerApps = Array.isArray(result.apps) ? result.apps : [];
@@ -353,9 +370,9 @@ async runScript(container, btn) {
       }, 2000);
     } catch (err) {
       if (statusEl) statusEl.textContent = this.t('tools.failed');
-      if (outputStatus) outputStatus.textContent = this.t('tools.failedStatus', { script: scriptId });
+      if (outputStatus) outputStatus.textContent = this.t('tools.failedStatus', { script: this.getScriptName(scriptId) });
       showToolError(output, err);
-      showToast(this.t('tools.toastFailed', { script: scriptId }), 'error');
+      showToast(this.t('tools.toastFailed', { script: this.getScriptName(scriptId) }), 'error');
       setButtonLoading(btn, false);
     } finally {
       if (typeof unsubscribeProgress === 'function') unsubscribeProgress();
@@ -369,7 +386,7 @@ async runScript(container, btn) {
     let html = `<div class="log-row" style="background:var(--panel-raised);"><span class="log-tag clean">${this.t('tools.done')}</span><span class="log-path">${this.t('tools.completedAt', { when: escapeHtml(when) })}</span></div>`;
     const truncate = (s, n = 80) => (typeof s === 'string' && s.length > n) ? s.slice(0, n - 1) + '…' : (s || '');
     if (scriptId === 'clear-temp-files') {
-      html += `<div class="log-row"><span class="log-tag clean">${this.t('tools.cleared')}</span><span class="log-path">${result.deletedCount || 0} ${this.t('tools.files')} ${this.t('tools.comma')} ${result.freedMB || 0} MB ${this.t('tools.freed')} (${this.t('tools.olderThan')} ${result.maxAgeDays ?? '?'} ${this.t('tools.daysShort')})</span></div>`;
+      html += `<div class="log-row"><span class="log-tag clean">${this.t('tools.cleared')}</span><span class="log-path">${result.deletedCount || 0} ${this.t('tools.files')} ${this.t('tools.comma')} ${this.t('tools.freed', { mb: result.freedMB || 0 })} (${this.t('tools.olderThan')} ${result.maxAgeDays ?? '?'} ${this.t('tools.daysShort')})</span></div>`;
       if (result.skippedCount) html += `<div class="log-row"><span class="log-tag warn">${this.t('tools.skipped')}</span><span class="log-path">${result.skippedCount} ${this.t('tools.items')} (${this.t('tools.lockedDenied')})</span></div>`;
       const logs = (result.log || []).filter(Boolean).slice(0, 15);
       if (logs.length) html += logs.map(line => `<div class="log-row"><span class="log-path">${escapeHtml(truncate(line, 200))}</span></div>`).join('');

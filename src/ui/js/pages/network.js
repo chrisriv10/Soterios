@@ -202,12 +202,16 @@ window.Pages['network'] = {
           const btn = e.target.closest('#vpnToggleBtn');
           window.Pages['network'].toggleVpn(container, btn.dataset.vpnName, btn.dataset.vpnAction);
         } else if (e.target.closest('#vpnAddBtn')) {
+          console.log('[Network] Add VPN button clicked');
           if (window.VpnAddModal) {
+            console.log('[Network] VpnAddModal found, opening...');
             window.VpnAddModal.open({
               onSuccess: () => {
                 window.Pages['network'].load(container, false);
               }
             });
+          } else {
+            console.error('[Network] VpnAddModal NOT found on window');
           }
         }
       });
@@ -765,7 +769,7 @@ window.Pages['network'] = {
           this._alertsPanelEl = document.createElement('div');
           this._alertsPanelEl.id = 'networkAlertsPanel';
           this._alertsPanelEl.className = 'card';
-          this._alertsPanelEl.style.cssText = 'padding:10px 12px; margin-bottom:18px;';
+          this._alertsPanelEl.style.cssText = 'padding:10px 12px; margin-bottom:18px; display:none;';
           this._alertsPanelEl.innerHTML = `
             <h3 style="margin-bottom:6px; font-size:0.9rem;">${escapeHtml(t('network.alertsTitle'))}</h3>
             <div id="networkAlertsList" class="empty-state" style="font-size:0.8rem;">${escapeHtml(t('network.alertsLoading'))}</div>
@@ -916,8 +920,11 @@ window.Pages['network'] = {
       buckets.set(key, cur);
     }
     const series = [...buckets.values()].sort((a, b) => a.t.localeCompare(b.t));
-    const maxRaw = Math.max(1, ...series.map((p) => Math.max(p.rx, p.tx)));
-    const maxY = this._niceAxisMax(maxRaw);
+
+    const allValues = series.flatMap((p) => [p.rx, p.tx]);
+    const dataMin = allValues.length ? Math.min(...allValues, 0) : 0;
+    const dataMax = allValues.length ? Math.max(...allValues, 0.1) : 0.1;
+    const dataRange = dataMax - dataMin || 0.1;
 
     // --- legend: current + 24h peak for each direction ---
     const last = series[series.length - 1];
@@ -950,7 +957,10 @@ window.Pages['network'] = {
     const plotW = Math.max(1, cssW - padL - padR);
     const plotH = Math.max(1, cssH - padT - padB);
     const xAt = (i) => padL + (series.length > 1 ? (i / (series.length - 1)) * plotW : plotW / 2);
-    const yAt = (v) => padT + plotH - (Math.min(v, maxY) / maxY) * plotH;
+    const yAt = (v) => {
+      const norm = (v - dataMin) / dataRange;
+      return padT + plotH - plotH * 0.075 - norm * plotH * 0.85;
+    };
 
     const rootStyle = getComputedStyle(canvas);
     const cssVar = (name, fallback) => {
@@ -997,7 +1007,8 @@ window.Pages['network'] = {
         ctx.stroke();
         ctx.fillStyle = textDim;
         ctx.textAlign = 'right';
-        ctx.fillText(`${formatBytes(frac * maxY)}/s`, padL - 8, y);
+        const labelVal = dataMin + frac * dataRange;
+        ctx.fillText(`${formatBytes(labelVal)}/s`, padL - 8, y);
       });
 
       // x-axis time labels
@@ -1012,8 +1023,22 @@ window.Pages['network'] = {
       }
       ctx.textBaseline = 'middle';
 
-      const rxPts = series.map((p, i) => ({ x: xAt(i), y: yAt(p.rx) }));
-      const txPts = series.map((p, i) => ({ x: xAt(i), y: yAt(p.tx) }));
+      const movingAvg = (arr, window = 7) => {
+        const result = [];
+        for (let i = 0; i < arr.length; i++) {
+          let sum = 0, count = 0;
+          for (let j = Math.max(0, i - window + 1); j <= Math.min(arr.length - 1, i + window - 1); j++) {
+            sum += arr[j];
+            count++;
+          }
+          result.push(sum / count);
+        }
+        return result;
+      };
+      const rxSmoothed = movingAvg(series.map((p) => p.rx));
+      const txSmoothed = movingAvg(series.map((p) => p.tx));
+      const rxPts = series.map((p, i) => ({ x: xAt(i), y: yAt(rxSmoothed[i]) }));
+      const txPts = series.map((p, i) => ({ x: xAt(i), y: yAt(txSmoothed[i]) }));
 
       const fillArea = (pts, color) => {
         if (!pts.length) return;
@@ -1148,12 +1173,11 @@ window.Pages['network'] = {
     this._lastAlertHitsKey = hitsKey;
 
     if (!hits.length) {
-      list.className = 'empty-state';
-      list.style.fontSize = '0.8rem';
-      list.textContent = t('network.alertsNone');
+      this._alertsPanelEl.style.display = 'none';
       return;
     }
 
+    this._alertsPanelEl.style.display = 'block';
     list.className = '';
     list.style.fontSize = '';
 

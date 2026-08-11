@@ -116,7 +116,7 @@
 
   function translateModal() {
     if (!modalEl) return;
-    const t = window.I18n?.t ?? ((key) => key);
+    const t = window.I18n?.t.bind(window.I18n) ?? ((key) => key);
     modalEl.querySelectorAll('[data-i18n]').forEach(el => {
       const key = el.getAttribute('data-i18n');
       if (el.tagName === 'INPUT' && el.getAttribute('data-i18n-placeholder')) {
@@ -160,36 +160,55 @@
     }
   }
 
-  async function loadProviders() {
-    try {
-      const result = await window.api.invoke('network:vpn:getProviders');
-      if (result && Array.isArray(result)) {
-        providers = result;
-        renderProviders();
-      }
-    } catch (err) {
-      console.error('Failed to load VPN providers:', err);
-    }
-  }
+   async function loadProviders() {
+     try {
+       const result = await window.api.invoke('network:vpn:getProviders');
+       if (result && Array.isArray(result)) {
+         providers = result;
+         renderProviders();
+       }
+     } catch (err) {
+       console.error('Failed to load VPN providers:', err);
+     }
+   }
 
-  function renderProviders() {
-    const grid = modalEl.querySelector('#providerGrid');
-    if (!grid) return;
+   function openWindowsVpnSettings() {
+     window.api.invoke('shell:openExternal', 'ms-settings:network-vpn');
+   }
 
-    grid.innerHTML = providers.map(p => `
-      <button class="vpn-provider-card" data-provider="${p.id}" tabindex="0">
-        <span class="vpn-provider-name">${p.name}</span>
-        <span class="vpn-provider-protocol">${p.protocol}</span>
-      </button>
-    `).join('');
+   function renderProviders() {
+     const grid = modalEl.querySelector('#providerGrid');
+     if (!grid) return;
 
-    grid.querySelectorAll('.vpn-provider-card').forEach(btn => {
-      btn.onclick = () => selectProvider(btn.getAttribute('data-provider'));
-      btn.onkeydown = (e) => {
-        if (e.key === 'Enter' || e.key === ' ') selectProvider(btn.getAttribute('data-provider'));
-      };
-    });
-  }
+     const providerButtons = providers.map(p => `
+       <button class="vpn-provider-card" data-provider="${p.id}" tabindex="0">
+         <span class="vpn-provider-name">${p.name}</span>
+         <span class="vpn-provider-protocol">${p.protocol}</span>
+       </button>
+     `).join('');
+
+     grid.innerHTML = providerButtons + `
+       <button class="vpn-provider-card vpn-provider-settings" data-action="open-windows-settings" tabindex="0">
+         <span class="vpn-provider-name" data-i18n="network.vpn.openWindowsSettings">Windows Settings</span>
+         <span class="vpn-provider-protocol">VPN</span>
+       </button>
+     `;
+
+     grid.querySelectorAll('.vpn-provider-card[data-provider]').forEach(btn => {
+       btn.onclick = () => selectProvider(btn.getAttribute('data-provider'));
+       btn.onkeydown = (e) => {
+         if (e.key === 'Enter' || e.key === ' ') selectProvider(btn.getAttribute('data-provider'));
+       };
+     });
+
+     const settingsBtn = grid.querySelector('.vpn-provider-card[data-action="open-windows-settings"]');
+     if (settingsBtn) {
+       settingsBtn.onclick = openWindowsVpnSettings;
+       settingsBtn.onkeydown = (e) => {
+         if (e.key === 'Enter' || e.key === ' ') openWindowsVpnSettings();
+       };
+     }
+   }
 
   async function selectProvider(providerId) {
     currentProvider = providers.find(p => p.id === providerId);
@@ -319,18 +338,21 @@
   }
 
   function open(options = {}) {
+    console.log('[VpnAddModal] open() called', options);
     onCloseCallback = options.onClose || null;
     onSuccessCallback = options.onSuccess || null;
     currentProvider = null;
     currentServer = null;
 
     createModal();
+    console.log('[VpnAddModal] modalEl created:', modalEl);
     translateModal();
     showStep('provider');
     loadProviders();
 
     modalEl.classList.add('visible');
     document.body.style.overflow = 'hidden';
+    console.log('[VpnAddModal] modal visible, classes:', modalEl.className);
   }
 
   function close() {
