@@ -122,6 +122,13 @@
         </div>
       </div>
     </div>
+    <div class="rtp-row" id="vpnRow" style="display: none; justify-content: space-between;">
+      <span class="rtp-label">VPN Connection</span>
+      <span class="status-badge" id="vpnBadge">
+        <span class="status-dot" id="vpnDot"></span>
+        <span id="vpnText">Disconnected</span>
+      </span>
+    </div>
 
     <div class="actions">
       <button class="primary" id="quickScan">Quick Scan</button>
@@ -217,6 +224,23 @@
       // Network sparkline
       if (summary.network?.rx?.length || summary.network?.tx?.length) {
         drawSparkline(summary.network.rx, summary.network.tx);
+      }
+
+      // VPN status
+      const vpnRow = document.getElementById('vpnRow');
+      if (summary.vpn && summary.vpn.hasProfiles) {
+        vpnRow.style.display = 'flex';
+        const vpnBadge = document.getElementById('vpnBadge');
+        const vpnText = document.getElementById('vpnText');
+        if (summary.vpn.active) {
+          vpnBadge.className = 'status-badge active';
+          vpnText.textContent = summary.vpn.active.name;
+        } else {
+          vpnBadge.className = 'status-badge inactive';
+          vpnText.textContent = 'Disconnected';
+        }
+      } else {
+        vpnRow.style.display = 'none';
       }
 
       // Last scan

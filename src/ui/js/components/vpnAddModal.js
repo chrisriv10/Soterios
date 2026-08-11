@@ -34,6 +34,7 @@
           <div class="vpn-add-step hidden" data-step="server">
             <h3 data-i18n="network.vpn.stepServer">Choose Server</h3>
             <p data-i18n="network.vpn.stepServerDesc">Select a server location for your VPN connection.</p>
+            <div id="providerHint" class="vpn-hint hidden"></div>
             <div class="vpn-field">
               <label for="serverSelect" data-i18n="network.vpn.serverLabel">Server</label>
               <select id="serverSelect" class="vpn-select">
@@ -216,6 +217,7 @@
 
     const serverSelect = modalEl.querySelector('#serverSelect');
     const customServerInput = modalEl.querySelector('#customServer');
+    const providerHint = modalEl.querySelector('#providerHint');
 
     if (currentProvider.servers && currentProvider.servers.length > 0) {
       // Predefined servers
@@ -223,10 +225,18 @@
         currentProvider.servers.map(s => `<option value="${s.id}">${s.name}</option>`).join('') +
         '<option value="__custom__" data-i18n="network.vpn.customServerOption">Custom server&hellip;</option>';
       customServerInput.classList.add('hidden');
+      providerHint.classList.add('hidden');
     } else {
-      // Custom only
+      // Custom only — helper text tells the user where to find a hostname
       serverSelect.innerHTML = '<option value="__custom__" selected data-i18n="network.vpn.customServerOption">Custom server&hellip;</option>';
       customServerInput.classList.remove('hidden');
+      if (currentProvider.id !== 'custom') {
+        providerHint.textContent = (window.I18n?.t('network.vpn.builtInServerHint') || 'Soterios no longer ships built-in server lists for {provider} because their hostnames change often and stale entries fail to connect. Paste an IKEv2 server hostname from your {provider} account/setup page instead.')
+          .replaceAll('{provider}', currentProvider.name);
+        providerHint.classList.remove('hidden');
+      } else {
+        providerHint.classList.add('hidden');
+      }
       customServerInput.focus();
     }
 

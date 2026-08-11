@@ -1,4 +1,4 @@
-{
+﻿{
   "app.name": "Soterios",
   "tools.title": "الأدوات والصيانة",
   "tools.subtitle": "تشغيل فحوصات الصيانة المركّزة.",
@@ -453,6 +453,8 @@
   "processes.sortName": "الاسم (أ-ي)",
   "processes.liveCpu": "CPU: {cpu}%",
   "processes.liveMemory": "الذاكرة: {mem}%",
+  "processes.liveDisk": "القرص: {disk} ميجابايت/ثانية",
+  "processes.liveNetwork": "الشبكة: {net} ميجابايت/ثانية",
   "processes.loading": "جاري تحميل العمليات...",
   "processes.noResults": "لا توجد عمليات تطابق بحثك.",
   "processes.noProcesses": "لم يتم إرجاع عمليات.",
@@ -1110,6 +1112,7 @@
   "network.vpn.customServerLabel": "Custom Server Address",
   "network.vpn.customServerPlaceholder": "vpn.example.com",
   "network.vpn.customServerOption": "Custom server…",
+  "network.vpn.builtInServerHint": "Soterios no longer ships built-in server lists for {provider} because their hostnames change often and stale entries fail to connect. Paste an IKEv2 server hostname from your {provider} account/setup page instead.",
   "network.vpn.enterCustomServer": "Please enter a custom server address",
   "network.vpn.selectProviderFirst": "Please select a provider first",
   "network.vpn.selectServerFirst": "Please select a server first",
@@ -1128,5 +1131,19 @@
   "network.vpn.createFailed": "Failed to create VPN profile",
   "network.vpn.createError": "An error occurred",
   "settings.vpn.autoConnect.label": "Auto-connect VPN",
-  "settings.vpn.autoConnect.desc": "Automatically connect to the last used VPN profile when Soterios starts"
+  "settings.vpn.autoConnect.desc": "Automatically connect to the last used VPN profile when Soterios starts",
+  "settings.browserExtension.loadSteps": "Load the extension in Chrome:",
+  "settings.browserExtension.step1": "1. Open chrome://extensions",
+  "settings.browserExtension.step2": "2. Enable Developer mode (top-right toggle)",
+  "settings.browserExtension.step3": "3. Click \"Load unpacked\" and select this folder:",
+  "settings.browserExtension.step4": "4. Load the extension - note the ID assigned to it",
+  "settings.browserExtension.step5": "5. Paste the extension ID below",
+  "settings.browserExtension.step6": "After pasting the ID, click Save. Then reload the extension in chrome://extensions.",
+  "settings.browserExtension.idPlaceholder": "Paste extension ID here (32 characters)",
+  "settings.browserExtension.saveId": "Save ID",
+  "settings.browserExtension.enterId": "Please enter an extension ID",
+  "settings.browserExtension.savingId": "Saving...",
+  "settings.browserExtension.idSaved": "Extension ID saved! Reload the extension in chrome://extensions for changes to take effect.",
+  "settings.browserExtension.idFailed": "Failed to save extension ID",
+  "settings.browserExtension.connected": "Browser extension is now connected to Soterios!"
 }

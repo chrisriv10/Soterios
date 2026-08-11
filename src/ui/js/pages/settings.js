@@ -111,6 +111,10 @@ window.Pages.settings = {
             </div>
             <label class="toggle"><input type="checkbox" id="scanHistoryToggle" ${settings.features.scanHistory ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
+        </div>
+
+        <div class="card">
+          <div class="panel-title" style="margin-bottom:16px;">Privacy, UI & Connectivity</div>
 
           <div class="toggle-row">
             <div>
@@ -467,8 +471,56 @@ window.Pages.settings = {
         if (checked) {
           statusEl.textContent = t('settings.browserExtension.installing');
           const result = await window.api.invoke('browserExtension:installNativeHost');
-          if (result.ok) {
-            statusEl.textContent = t('settings.browserExtension.installed');
+           if (result.ok) {
+             statusEl.innerHTML = `
+               <div>${escapeHtml(t('settings.browserExtension.installed'))}</div>
+               <div style="margin-top: 8px; padding: 12px; background: var(--info-bg, #e7f5ff); border-radius: 6px;">
+                 <div style="font-weight: 600; margin-bottom: 6px;">${escapeHtml(t('settings.browserExtension.loadSteps'))}</div>
+                 <ol style="margin: 0; padding-left: 20px; font-size: 0.9rem; line-height: 1.6;">
+                   <li>${escapeHtml(t('settings.browserExtension.step1'))}</li>
+                   <li>${escapeHtml(t('settings.browserExtension.step2'))}</li>
+                   <li>${escapeHtml(t('settings.browserExtension.step3'))} <code style="background: var(--surface-bg, #f0f0f0); padding: 2px 6px; border-radius: 3px;">${escapeHtml(result.extDir)}</code></li>
+                   <li>${escapeHtml(t('settings.browserExtension.step4'))}</li>
+                   <li>${escapeHtml(t('settings.browserExtension.step5'))}</li>
+                 </ol>
+               </div>
+               <div style="margin-top: 12px; font-size: 0.85rem; color: var(--text-muted);">
+                 ${escapeHtml(t('settings.browserExtension.step6'))}
+               </div>
+               <div style="margin-top: 12px; display: flex; gap: 8px; align-items: center;">
+                 <input type="text" id="extensionIdInput" placeholder="${escapeHtml(t('settings.browserExtension.idPlaceholder'))}" style="flex: 1; padding: 6px 10px; font-family: monospace;" />
+                 <button class="btn btn-sm btn-primary" id="saveExtensionIdBtn">${escapeHtml(t('settings.browserExtension.saveId'))}</button>
+               </div>
+               <div id="extensionIdStatus" style="margin-top: 6px; font-size: 0.85rem; color: var(--text-muted);"></div>
+             `;
+             statusEl.style.whiteSpace = 'normal';
+
+             const saveIdBtn = container.querySelector('#saveExtensionIdBtn');
+             const idInput = container.querySelector('#extensionIdInput');
+             const idStatus = container.querySelector('#extensionIdStatus');
+
+             saveIdBtn.addEventListener('click', async () => {
+               const id = idInput.value.trim();
+               if (!id) { idStatus.textContent = t('settings.browserExtension.enterId'); return; }
+               saveIdBtn.disabled = true;
+               idStatus.textContent = t('settings.browserExtension.savingId');
+               try {
+                 const r = await window.api.invoke('browserExtension:setExtensionId', id);
+                 if (r.ok) {
+                   idStatus.textContent = t('settings.browserExtension.idSaved');
+                   setTimeout(() => {
+                     idStatus.textContent = '';
+                     container.querySelector('#featureToggleStatus').textContent = t('settings.browserExtension.connected');
+                   }, 2000);
+                 } else {
+                   idStatus.textContent = r.error || t('settings.browserExtension.idFailed');
+                 }
+               } catch (err) {
+                 idStatus.textContent = err.message;
+               } finally {
+                 saveIdBtn.disabled = false;
+               }
+             });
           } else {
             event.target.checked = false;
             await Api.updateSettings({ features: { browserExtension: false } });

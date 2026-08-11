@@ -1,6 +1,10 @@
 const si = require('systeminformation');
 const { makeRisk } = require('../security/riskEngine');
 const { suspiciousPathSignals } = require('../security/windowsChecks');
+const { exec } = require('child_process');
+const util = require('util');
+const execPromise = util.promisify(exec);
+const path = require('path');
 
 // Well-known Windows system process names that should only ever run from a
 // specific expected system directory. A process using one of these names
@@ -75,10 +79,43 @@ function recommendationForRisk(risk) {
 }
 
 async function getProcessIOStats() {
-  // For now, return empty maps since the PowerShell approach is having issues
-  // The feature is implemented in the UI but the backend I/O collection needs more work
-  // to handle the Windows Performance Counter execution properly
-  return { diskIOMap: new Map(), networkIOMap: new Map() };
+  try {
+    // Use the permanent PowerShell script file
+    const scriptPath = path.join(__dirname, '../scripts/process-io-counter.ps1');
+    
+    const { stdout: ioStdout } = await execPromise(`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${scriptPath}"`, { timeout: 15000 });
+    
+    // Parse I/O data - using same data for both disk and network for now
+    // Windows Performance Counters don't easily separate disk vs network I/O per process
+    // without using more complex counters
+    const ioMap = new Map();
+    if (ioStdout) {
+      ioStdout.trim().split('\n').forEach(line => {
+        const parts = line.split('|');
+        if (parts.length >= 2) {
+          const fullPath = parts[0];
+          const value = parseFloat(parts[1]) || 0;
+          
+          // Extract process name from path like \\computername\process(name)\io data bytes/sec
+          const match = fullPath.match(/process\((.+?)\)\\io data bytes/i);
+          if (match) {
+            const processName = match[1].toLowerCase();
+            // Handle process instances (e.g., svchost#1)
+            const baseName = processName.split('#')[0];
+            ioMap.set(baseName, (ioMap.get(baseName) || 0) + value);
+          }
+        }
+      });
+    }
+
+    // For now, use the same I/O data for both disk and network
+    // Windows Performance Counters don't easily separate disk vs network I/O per process
+    // without using more complex counters
+    return { diskIOMap: ioMap, networkIOMap: ioMap };
+  } catch (err) {
+    // Silently fail - I/O data is optional
+    return { diskIOMap: new Map(), networkIOMap: new Map() };
+  }
 }
 
 module.exports = {
@@ -99,11 +136,23 @@ module.exports = {
       // Calculate total I/O for percentage calculation
       const totalDiskIO = Array.from(diskIOMap.values()).reduce((sum, val) => sum + val, 0);
       const totalNetworkIO = Array.from(networkIOMap.values()).reduce((sum, val) => sum + val, 0);
+      
+      // Convert I/O bytes/sec to MB/sec for display
+      const diskMBps = totalDiskIO / (1024 * 1024);
+      const networkMBps = totalNetworkIO / (1024 * 1024);
+      
+      // Use MB/sec as a percentage-like value (0-100 scale where 100 = 100 MB/sec)
+      const diskPercentage = Math.min(100, diskMBps);
+      const networkPercentage = Math.min(100, networkMBps);
 
       const processes = processList.slice(0, 400).map((p) => {
-        const processName = (p.name || '').toLowerCase();
+        const processName = (p.name || '').toLowerCase().replace(/\.exe$/, '');
         const diskIO = diskIOMap.get(processName) || 0;
         const networkIO = networkIOMap.get(processName) || 0;
+        
+        // Convert to MB/sec and use as percentage-like value
+        const diskMBps = diskIO / (1024 * 1024);
+        const networkMBps = networkIO / (1024 * 1024);
         
         const item = {
           pid: p.pid,
@@ -113,8 +162,8 @@ module.exports = {
           path: p.path || null,
           cpu: p.cpu !== undefined ? +(p.cpu).toFixed(1) : null,
           memory: p.mem !== undefined ? +(p.mem).toFixed(1) : null,
-          diskIo: totalDiskIO > 0 ? +((diskIO / totalDiskIO) * 100).toFixed(1) : null,
-          networkIo: totalNetworkIO > 0 ? +((networkIO / totalNetworkIO) * 100).toFixed(1) : null
+          diskIo: +diskMBps.toFixed(1),
+          networkIo: +networkMBps.toFixed(1)
         };
         item.risk = makeRisk(processSignals(item));
         item.locationReasons = (item.risk.signals || [])
@@ -137,8 +186,8 @@ module.exports = {
       return {
         totalCpu: loadData.currentLoad,
         totalMemory: +(totalMemory.toFixed(1)),
-        totalDiskIO: +(totalDiskIO.toFixed(0)),
-        totalNetworkIO: +(totalNetworkIO.toFixed(0)),
+        totalDiskIO: diskPercentage,
+        totalNetworkIO: networkPercentage,
         processes
       };
     } catch (err) {

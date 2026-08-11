@@ -43,6 +43,7 @@ function register(mainWindow, {
   startNetworkStatsTimer,
   stopNetworkStatsTimer,
   emergencyLockdown,
+  vpnManager,
 }) {
   // -- System --
   ipcMain.handle('app:info', () => ({
@@ -206,7 +207,7 @@ function register(mainWindow, {
   ipcMain.handle('update:install', () => updater.quitAndInstall());
 
   // -- System tray mini dashboard (#67) --
-  ipcMain.handle('tray:getSummary', async () => getTrayHealthSummary(db, toolRegistry));
+  ipcMain.handle('tray:getSummary', async () => getTrayHealthSummary(db, toolRegistry, vpnManager));
 
   ipcMain.handle('tray:openMain', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -408,17 +409,83 @@ function register(mainWindow, {
       return { ok: false, error: 'Native host install only supported on Windows' };
     }
     const { execSync } = require('child_process');
-    const extDir = path.join(__dirname, '..', '..', 'browser-extension');
+    const { net } = require('electron');
+    const extDir = path.join(process.env.LOCALAPPDATA || os.homedir(), 'Soterios', 'browser-extension');
     const manifestPath = path.join(extDir, 'native-host-manifest.json');
     const batPath = path.join(extDir, 'src', 'native-host.bat');
     const jsPath = path.join(extDir, 'src', 'native-host.js');
+
+    // Download extension files if not present
     if (!fs.existsSync(manifestPath) || !fs.existsSync(batPath) || !fs.existsSync(jsPath)) {
-      return { ok: false, error: 'Extension files not found. Reinstall Soterios.' };
+      try {
+        fs.mkdirSync(path.join(extDir, 'src', 'icons'), { recursive: true });
+        const files = [
+          { src: 'https://raw.githubusercontent.com/chrisriv10/Soterios/main/browser-extension/manifest.json', dest: 'manifest.json' },
+          { src: 'https://raw.githubusercontent.com/chrisriv10/Soterios/main/browser-extension/native-host-manifest.json', dest: 'native-host-manifest.json' },
+          { src: 'https://raw.githubusercontent.com/chrisriv10/Soterios/main/browser-extension/src/native-host.js', dest: 'src/native-host.js' },
+          { src: 'https://raw.githubusercontent.com/chrisriv10/Soterios/main/browser-extension/src/background.js', dest: 'src/background.js' },
+          { src: 'https://raw.githubusercontent.com/chrisriv10/Soterios/main/browser-extension/src/content.js', dest: 'src/content.js' },
+          { src: 'https://raw.githubusercontent.com/chrisriv10/Soterios/main/browser-extension/src/popup.js', dest: 'src/popup.js' },
+          { src: 'https://raw.githubusercontent.com/chrisriv10/Soterios/main/browser-extension/src/popup.html', dest: 'src/popup.html' },
+          { src: 'https://raw.githubusercontent.com/chrisriv10/Soterios/main/browser-extension/src/native-host.bat', dest: 'src/native-host.bat' },
+          { src: 'https://raw.githubusercontent.com/chrisriv10/Soterios/main/browser-extension/src/options.js', dest: 'src/options.js' },
+          { src: 'https://raw.githubusercontent.com/chrisriv10/Soterios/main/browser-extension/options.html', dest: 'options.html' },
+        ];
+        for (const { src, dest } of files) {
+          const destPath = path.join(extDir, dest);
+          await new Promise((resolve, reject) => {
+            const req = net.request(src);
+            req.on('response', (res) => {
+              if (res.statusCode !== 200) { reject(new Error(`HTTP ${res.statusCode} for ${src}`)); return; }
+              const chunks = [];
+              res.on('data', (chunk) => chunks.push(chunk));
+              res.on('end', () => { fs.writeFileSync(destPath, Buffer.concat(chunks)); resolve(); });
+            });
+            req.on('error', reject);
+            req.end();
+          });
+        }
+        // Download icons
+        const iconSizes = [16, 32, 48, 128];
+        for (const size of iconSizes) {
+          await new Promise((resolve, reject) => {
+            const url = `https://raw.githubusercontent.com/chrisriv10/Soterios/main/browser-extension/icons/icon${size}.png`;
+            const destPath = path.join(extDir, 'icons', `icon${size}.png`);
+            const req = net.request(url);
+            req.on('response', (res) => {
+              const chunks = [];
+              res.on('data', (c) => chunks.push(c));
+              res.on('end', () => { fs.writeFileSync(destPath, Buffer.concat(chunks)); resolve(); });
+            });
+            req.on('error', reject);
+            req.end();
+          });
+        }
+      } catch (e) {
+        return { ok: false, error: `Failed to download extension files: ${e.message}` };
+      }
     }
+
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-    const extId = process.env.SOTERIOS_EXT_ID || 'YOUR_EXTENSION_ID_HERE';
-    manifest.allowed_origins = [manifest.allowed_origins[0].replace('<EXTENSION_ID>', extId)];
+    const extId = process.env.SOTERIOS_EXT_ID || manifest.allowed_origins[0].match(/chrome-extension:\/\/([a-z]{32})\//)?.[1];
+    if (extId && /^[a-z]{32}$/.test(extId)) {
+      manifest.allowed_origins = [`chrome-extension://${extId}/`];
+    } else {
+      manifest.allowed_origins = ['chrome-extension://__REPLACE_WITH_EXTENSION_ID__/'];
+    }
+    // Fix the path in manifest to be absolute
+    manifest.path = batPath.replace(/\\/g, '\\\\');
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+    // Fix native-host.bat to point to the correct app path
+    const batContent = `@echo off
+REM Soterios Native Messaging Host
+set SOTERIOS_APP_PATH=${app.isPackaged ? path.join(path.dirname(process.execPath), 'Soterios.exe') : 'auto'}
+set NODE_PATH=%~dp0..\\node_modules
+node "%~dp0native-host.js" %*
+`;
+    fs.writeFileSync(batPath, batContent);
+
     const regPath = `HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${manifest.name}`;
     const regCmd = `reg add "${regPath}" /ve /t REG_SZ /d "${manifestPath.replace(/\\/g, '\\\\')}" /f`;
     try {
@@ -426,10 +493,26 @@ function register(mainWindow, {
       const regPathEdge = `HKCU\\Software\\Microsoft\\Edge\\NativeMessagingHosts\\${manifest.name}`;
       const regCmdEdge = `reg add "${regPathEdge}" /ve /t REG_SZ /d "${manifestPath.replace(/\\/g, '\\\\')}" /f`;
       try { execSync(regCmdEdge, { stdio: 'ignore' }); } catch (_) {}
-      return { ok: true };
+      return { ok: true, extDir };
     } catch (e) {
       return { ok: false, error: e.message || String(e) };
     }
+  });
+
+  ipcMain.handle('browserExtension:setExtensionId', async (_event, extId) => {
+    if (!/^[a-z]{32}$/.test(extId)) {
+      return { ok: false, error: 'Invalid extension ID. Must be 32 lowercase letters.' };
+    }
+    const extDir = path.join(process.env.LOCALAPPDATA || os.homedir(), 'Soterios', 'browser-extension');
+    const manifestPath = path.join(extDir, 'native-host-manifest.json');
+    if (!fs.existsSync(manifestPath)) {
+      return { ok: false, error: 'Extension not installed. Enable it in settings first.' };
+    }
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    manifest.allowed_origins = [`chrome-extension://${extId}/`];
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    console.log('[Soterios] Updated extension ID for native host:', extId);
+    return { ok: true };
   });
 
   // -- Dialogs & Shell --

@@ -20,7 +20,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.type === 'FORWARD_CREDENTIAL_LEAK') {
-    notifyDesktopApp(msg.payload).then(sendResponse);
+    chrome.storage.sync.get('notifyDesktop').then(prefs => {
+      if (prefs.notifyDesktop === false) {
+        sendResponse({ ok: false, error: 'Desktop notifications disabled' });
+        return;
+      }
+      notifyDesktopApp(msg.payload).then(sendResponse);
+    });
     return true;
   }
 

@@ -56,6 +56,8 @@ window.Pages.processes = {
           <div id="liveStats" style="display:flex; gap:16px; font-size:0.85rem; font-weight:500; white-space:nowrap;">
             <span id="liveCpu">${escapeHtml(this.t('processes.liveCpu', { cpu: '--' }))}</span>
             <span id="liveMemory">${escapeHtml(this.t('processes.liveMemory', { mem: '--' }))}</span>
+            <span id="liveDisk">${escapeHtml(this.t('processes.liveDisk', { disk: '--' }))}</span>
+            <span id="liveNetwork">${escapeHtml(this.t('processes.liveNetwork', { net: '--' }))}</span>
           </div>
           <span class="page-subtitle" id="processCount" style="font-size:0.85rem; white-space:nowrap; margin-left:auto;"></span>
         </div>
@@ -118,7 +120,7 @@ window.Pages.processes = {
       const data = await Api.runTool('process-viewer', {});
       if (!document.body.contains(container)) return;
       this._all = data.processes || [];
-      this.updateLiveStats(container, data.totalCpu, data.totalMemory);
+      this.updateLiveStats(container, data.totalCpu, data.totalMemory, data.totalDiskIO, data.totalNetworkIO);
       this.buildRows(container);
       this.sortRows(container);
       this.applyFilter(container);
@@ -130,10 +132,14 @@ window.Pages.processes = {
   },
 
   _cpuHistory: [],
+  _diskHistory: [],
+  _networkHistory: [],
 
-  updateLiveStats(container, totalCpuReading, totalMemoryReading) {
+  updateLiveStats(container, totalCpuReading, totalMemoryReading, totalDiskReading, totalNetworkReading) {
     const cpuEl = container.querySelector('#liveCpu');
     const memEl = container.querySelector('#liveMemory');
+    const diskEl = container.querySelector('#liveDisk');
+    const networkEl = container.querySelector('#liveNetwork');
     if (!cpuEl || !memEl) return;
 
     const rawCpu = typeof totalCpuReading === 'number' && !Number.isNaN(totalCpuReading) ? totalCpuReading : 0;
@@ -147,12 +153,32 @@ window.Pages.processes = {
       ? Math.min(100, Math.max(0, totalMemoryReading))
       : 0;
 
+    const totalDisk = typeof totalDiskReading === 'number' && !Number.isNaN(totalDiskReading) ? totalDiskReading : 0;
+    this._diskHistory.push(totalDisk);
+    if (this._diskHistory.length > 3) this._diskHistory.shift();
+    const smoothedDisk = this._diskHistory.reduce((a, b) => a + b, 0) / this._diskHistory.length;
+
+    const totalNetwork = typeof totalNetworkReading === 'number' && !Number.isNaN(totalNetworkReading) ? totalNetworkReading : 0;
+    this._networkHistory.push(totalNetwork);
+    if (this._networkHistory.length > 3) this._networkHistory.shift();
+    const smoothedNetwork = this._networkHistory.reduce((a, b) => a + b, 0) / this._networkHistory.length;
+
     const colorFor = (pct) => pct >= 80 ? 'var(--accent-danger)' : pct >= 50 ? 'var(--accent-warning)' : 'var(--accent-success)';
 
     cpuEl.textContent = this.t('processes.liveCpu', { cpu: totalCpu.toFixed(1) + '%' });
     cpuEl.style.color = colorFor(totalCpu);
     memEl.textContent = this.t('processes.liveMemory', { mem: totalMemory.toFixed(1) + '%' });
     memEl.style.color = colorFor(totalMemory);
+    
+    if (diskEl) {
+      diskEl.textContent = this.t('processes.liveDisk', { disk: smoothedDisk.toFixed(1) + '%' });
+      diskEl.style.color = colorFor(smoothedDisk);
+    }
+    
+    if (networkEl) {
+      networkEl.textContent = this.t('processes.liveNetwork', { net: smoothedNetwork.toFixed(1) + '%' });
+      networkEl.style.color = colorFor(smoothedNetwork);
+    }
   },
 
   buildRows(container) {
@@ -266,8 +292,8 @@ const locationBadge = locationSuspicious
           <div style="display:flex; align-items:center; gap:8px;">
             <span class="cpu-value" style="font-size:0.75rem; font-weight:500;">${p.cpu !== null ? p.cpu + '% CPU' : escapeHtml(this.t('processes.cpuNa'))}</span>
             <span class="memory-value" style="font-size:0.75rem; font-weight:500;">${p.memory !== null ? p.memory + '% RAM' : escapeHtml(this.t('processes.memoryNa'))}</span>
-            <span class="disk-value" style="font-size:0.75rem; font-weight:500;">${p.diskIo !== null ? p.diskIo + '% Disk' : escapeHtml(this.t('processes.diskNa'))}</span>
-            <span class="network-value" style="font-size:0.75rem; font-weight:500;">${p.networkIo !== null ? p.networkIo + '% Net' : escapeHtml(this.t('processes.networkNa'))}</span>
+            <span class="disk-value" style="font-size:0.75rem; font-weight:500;">${p.diskIo !== null ? p.diskIo + ' MB/s Disk' : '0 MB/s Disk'}</span>
+            <span class="network-value" style="font-size:0.75rem; font-weight:500;">${p.networkIo !== null ? p.networkIo + ' MB/s Net' : '0 MB/s Net'}</span>
             <button class="btn btn-sm process-options" data-pid="${escapeHtml(p.pid)}" data-process-name="${escapeHtml(p.name)}" data-file-path="${escapeHtml(rawPath)}" style="color: var(--text-muted); padding: 4px 8px;">⋮</button>
             <button class="btn btn-sm" style="color: var(--accent-danger);" data-end-process="${escapeHtml(p.pid)}" data-process-name="${escapeHtml(p.name)}">${escapeHtml(this.t('processes.endProcess'))}</button>
           </div>
@@ -297,8 +323,8 @@ const locationBadge = locationSuspicious
           <div style="display:flex; gap:16px; font-size:0.85rem; font-weight:500;">
             <span class="cpu-value">${p.cpu !== null ? p.cpu + '% CPU' : escapeHtml(this.t('processes.cpuNa'))}</span>
             <span class="memory-value">${p.memory !== null ? p.memory + '% RAM' : escapeHtml(this.t('processes.memoryNa'))}</span>
-            <span class="disk-value">${p.diskIo !== null ? p.diskIo + '% Disk' : escapeHtml(this.t('processes.diskNa'))}</span>
-            <span class="network-value">${p.networkIo !== null ? p.networkIo + '% Net' : escapeHtml(this.t('processes.networkNa'))}</span>
+            <span class="disk-value">${p.diskIo !== null ? p.diskIo + ' MB/s Disk' : '0 MB/s Disk'}</span>
+            <span class="network-value">${p.networkIo !== null ? p.networkIo + ' MB/s Net' : '0 MB/s Net'}</span>
           </div>
         </div>`;
     }
@@ -342,8 +368,8 @@ const locationBadge = locationSuspicious
     }
     if (entry.cpuEl) entry.cpuEl.textContent = p.cpu !== null ? `${p.cpu}% CPU` : this.t('processes.cpuNa');
     if (entry.memoryEl) entry.memoryEl.textContent = p.memory !== null ? `${p.memory}% RAM` : this.t('processes.memoryNa');
-    if (entry.diskEl) entry.diskEl.textContent = p.diskIo !== null ? `${p.diskIo}% Disk` : this.t('processes.diskNa');
-    if (entry.networkEl) entry.networkEl.textContent = p.networkIo !== null ? `${p.networkIo}% Net` : this.t('processes.networkNa');
+    if (entry.diskEl) entry.diskEl.textContent = `${p.diskIo} MB/s Disk`;
+    if (entry.networkEl) entry.networkEl.textContent = `${p.networkIo} MB/s Net`;
 
     entry.score = p.risk.score;
     entry.cpu = p.cpu ?? -1;
@@ -460,6 +486,7 @@ const locationBadge = locationSuspicious
     this._all = []; this._query = ''; this._riskFilter = 'all'; this._sortBy = 'default';
     this._rowIndex = null; this._order = []; this._delegated = false;
     this._listWrapper = null; this._noResultsEl = null; this._cpuHistory = [];
+    this._diskHistory = []; this._networkHistory = [];
     this.closeContextMenu();
   },
 

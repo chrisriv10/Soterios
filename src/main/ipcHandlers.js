@@ -54,6 +54,7 @@ function registerIpcHandlers(mainWindow, services) {
     startNetworkStatsTimer: services.startNetworkStatsTimer,
     stopNetworkStatsTimer: services.stopNetworkStatsTimer,
     emergencyLockdown: services.emergencyLockdown,
+    vpnManager: services.vpnManager,
   };
 
   const servicesForAi = {

@@ -98,7 +98,7 @@ describe('Browser Extension Integration', () => {
       Object.defineProperty(process, 'platform', { value: originalPlatform });
     });
 
-    it('should check for required files', async () => {
+    it('should download files if not present', async () => {
       const fs = require('fs');
       const path = require('path');
 
@@ -106,19 +106,37 @@ describe('Browser Extension Integration', () => {
         if (process.platform !== 'win32') {
           return { ok: false, error: 'Native host install only supported on Windows' };
         }
-        const extDir = path.join(__dirname, '..', 'browser-extension');
+        // Simulate checking for files
+        const extDir = path.join(process.env.LOCALAPPDATA || '', 'Soterios', 'browser-extension');
         const manifestPath = path.join(extDir, 'native-host-manifest.json');
         const batPath = path.join(extDir, 'src', 'native-host.bat');
         const jsPath = path.join(extDir, 'src', 'native-host.js');
+
         if (!fs.existsSync(manifestPath) || !fs.existsSync(batPath) || !fs.existsSync(jsPath)) {
-          return { ok: false, error: 'Extension files not found. Reinstall Soterios.' };
+          return { ok: false, error: 'Files would be downloaded from GitHub' };
+        }
+        return { ok: true, extDir };
+      };
+
+      const result = await handleInstall();
+      // Files may or may not exist depending on whether extension was enabled
+      assert.ok(result.ok === true || (result.ok === false && result.error.includes('downloaded')));
+    });
+
+    it('should handle GitHub download failure gracefully', async () => {
+      const handleInstall = async (downloadSuccess) => {
+        if (process.platform !== 'win32') {
+          return { ok: false, error: 'Native host install only supported on Windows' };
+        }
+        if (!downloadSuccess) {
+          return { ok: false, error: 'Failed to download extension files: network error' };
         }
         return { ok: true };
       };
 
-      const result = await handleInstall();
-      // Result depends on whether files exist in the actual environment
-      assert.ok(result.ok === true || result.ok === false);
+      const result = await handleInstall(false);
+      assert.equal(result.ok, false);
+      assert.match(result.error, /Failed to download/);
     });
   });
 

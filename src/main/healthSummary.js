@@ -4,8 +4,9 @@
  * Shared health summary for tray popup and IPC handlers.
  * @param {import('../core/database')} db
  * @param {{ run: Function }} toolRegistry
+ * @param {import('./vpnManager').VpnManager} [vpnManager]
  */
-async function getTrayHealthSummary(db, toolRegistry) {
+async function getTrayHealthSummary(db, toolRegistry, vpnManager) {
   const latest = db.getLatestScanReport();
   const passwordScore = db.getSetting('feature.lastPasswordScore', null);
   const result = await toolRegistry.run('health-score', {
@@ -65,13 +66,28 @@ async function getTrayHealthSummary(db, toolRegistry) {
     };
   }
 
+  // VPN status
+  let vpn = null;
+  if (vpnManager) {
+    try {
+      const vpnList = await vpnManager.list(false);
+      if (vpnList && vpnList.length > 0) {
+        vpn = {
+          hasProfiles: true,
+          active: vpnList.find(v => v.connected) || null
+        };
+      }
+    } catch (_) {}
+  }
+
   return {
     score: result.data.score,
     detail: disk?.reason || 'Protection and resource summary ready.',
     rtp,
     firewall,
     network,
-    lastScan
+    lastScan,
+    vpn
   };
 }
 

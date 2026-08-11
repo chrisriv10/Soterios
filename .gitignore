@@ -13,3 +13,4 @@ assets/clamav/*.pdb
 assets/clamav/*.lib
 assets/clamav/
 tests/fixtures/screenshots/*.png
+*.zip

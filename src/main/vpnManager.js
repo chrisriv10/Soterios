@@ -72,12 +72,13 @@ exit $LASTEXITCODE`;
 }
 
 function addVpnScript(profileName, serverAddress, username, password) {
-  const eapXml = getEapConfigXml(username, password).replace(/'/g, "''");
+  const eapXml = getEapConfigXml().replace(/'/g, "''");
   return `
 $ErrorActionPreference = 'Stop'
 try {
-  $eapXml = '${eapXml}'
-  Add-VpnConnection -Name '${powershellEscape(profileName)}' -ServerAddress '${powershellEscape(serverAddress)}' -TunnelType IKEv2 -AuthenticationMethod EAP -EapConfigXmlStream $eapXml -RememberCredential -Force -ErrorAction Stop
+  [xml]$eapXml = '${eapXml}'
+  Add-VpnConnection -Name '${powershellEscape(profileName)}' -ServerAddress '${powershellEscape(serverAddress)}' -TunnelType IKEv2 -AuthenticationMethod Eap -EapConfigXmlStream $eapXml -RememberCredential -Force -ErrorAction Stop
+  cmdkey /generic:"LegacyGeneric:target=${powershellEscape(profileName)}" /user:"${powershellEscape(username)}" /pass:"${powershellEscape(password)}" | Out-Null
   Write-Output 'OK'
 } catch {
   Write-Output ('FAIL|' + $_.Exception.Message)
@@ -284,17 +285,17 @@ class VpnManager {
     }
 
     const server = getServerForProvider(providerId, serverId);
-    if (!server) {
-      return { ok: false, error: 'Invalid server selected.' };
-    }
-
     const provider = require('./vpnProviders').getProvider(providerId);
     if (!provider) {
       return { ok: false, error: 'Invalid provider.' };
     }
 
-    const profileName = `Soterios - ${provider.name} - ${server.name}`;
-    const serverAddress = server.host;
+    // Built-in providers ship no server lists; the UI sends a pasted hostname
+    // as serverId. Fall back to using it directly as the server address.
+    const useServer = server || { id: serverId, name: serverId, host: serverId };
+
+    const profileName = `Soterios - ${provider.name} - ${useServer.name}`;
+    const serverAddress = useServer.host;
 
     this._clearCache();
 

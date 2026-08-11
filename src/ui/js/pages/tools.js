@@ -472,8 +472,8 @@ async runScript(container, btn) {
               <div class="log-row" style="display:flex; align-items:center; gap:8px; ${this.lazyRowStyle}">
                 ${fIdx === 0
                   ? `<span class="log-tag clean">${this.t('tools.original')}</span>`
-                  : `<input type="checkbox" class="duplicate-checkbox" data-file-path="${escapeHtml(f.path)}" />`}
-                <span class="log-path" style="flex:1; cursor:pointer;" title="${escapeHtml(f.path)}">${escapeHtml(truncate(f.path, 60))}</span>
+                  : `<input type="checkbox" class="duplicate-checkbox" data-file-path="${escapeHtml(f.path)}" style="flex-shrink:0;"/>`}
+                <span class="log-path" style="flex:1; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;" title="${escapeHtml(f.path)}">${escapeHtml(f.path)}</span>
               </div>`).join('')}
           </div>`).join('');
       }

@@ -8,6 +8,7 @@ window.Pages['network'] = {
   _groupByProcess: true,
   _simpleView: true,
   _expandedGroups: new Set(),
+  _minimized: new Set(),
   _vpnSelection: '',
   _vpnPending: null,
   _vpnError: '',
@@ -189,6 +190,17 @@ window.Pages['network'] = {
         }
       });
       content.addEventListener('click', (e) => {
+        const minimizeBtn = e.target.closest('.card-minimize-btn');
+        if (minimizeBtn) {
+          const cardId = minimizeBtn.dataset.cardId;
+          if (window.Pages['network']._minimized.has(cardId)) {
+            window.Pages['network']._minimized.delete(cardId);
+          } else {
+            window.Pages['network']._minimized.add(cardId);
+          }
+          window.Pages['network'].load(container, false);
+          return;
+        }
         if (e.target.closest('.process-group-header')) {
           const header = e.target.closest('.process-group-header');
           const processName = header.dataset.process;
@@ -336,12 +348,17 @@ window.Pages['network'] = {
       }
 
       html += '<div class="card" style="padding:14px 16px; margin-bottom:18px;">';
-      html += '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">';
+      const vpnMin = this._minimized.has('vpn');
+      html += `<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">`;
       html += `<div>
-        <h3 style="margin:0 0 2px; font-size:1rem;">${escapeHtml(t('network.vpnTitle'))}</h3>
+        <h3 style="margin:0 0 2px; font-size:1rem; display:flex; align-items:center; gap:8px;">
+          ${escapeHtml(t('network.vpnTitle'))}
+          <button class="card-minimize-btn" data-card-id="vpn" title="${vpnMin ? 'Restore' : 'Minimize'}" style="background:none; border:none; cursor:pointer; color:var(--text-dim); font-size:1rem; padding:0 4px; line-height:1; transition:transform 0.2s;" aria-label="${vpnMin ? 'Restore' : 'Minimize'}">${vpnMin ? '&#9660;' : '&#9650;'}</button>
+        </h3>
         <div class="page-subtitle" style="font-size:0.8rem;">${escapeHtml(t('network.vpnSubtitle'))}</div>
       </div>`;
-      if (vpns.length === 0) {
+      if (!vpnMin) {
+        if (vpns.length === 0) {
         html += `<div style="font-size:0.8rem; color:var(--text-dim); flex:1 1 100%; display:flex; align-items:center; gap:8px;">
           ${escapeHtml(t('network.vpnNoProfiles'))}
           <button id="vpnAddBtn" class="btn btn-sm btn-secondary" data-i18n="network.vpn.addBtn">Add VPN</button>
@@ -395,95 +412,105 @@ window.Pages['network'] = {
         html += `<button id="vpnAddBtn" class="btn btn-sm btn-secondary" style="margin-left:8px;" data-i18n="network.vpn.addBtn">Add VPN</button>`;
         html += '</div>';
       }
+      }
       html += '</div></div>';
 
       html += '<div style="display:flex; gap:16px; margin-bottom:18px; flex-wrap:wrap; align-items:stretch;">';
 
       html += '<div style="flex:1 1 0; min-width:260px; display:flex; flex-direction:column;">';
       html += '<div class="card" style="padding:14px 16px; flex:1;">';
-      html += `<h3 style="margin-bottom:10px; font-size:1rem;">${escapeHtml(t('network.bandwidth'))}</h3>`;
-      if (stats && stats.interfaces && stats.interfaces.length > 0) {
-        html += '<div style="display:flex; flex-direction:column; gap:8px;">';
-        for (const iface of stats.interfaces) {
-          html += `<div class="stat-tile">
-            <div class="stat-label">${escapeHtml(iface.iface)}</div>
-            <div class="stat-value" style="font-size:0.85rem;">
-              \u25B2 ${iface.txSec} KB/s &nbsp; \u25BC ${iface.rxSec} KB/s
-            </div>
-            <div style="font-size:0.7rem; color:var(--text-dim);">
-              ${escapeHtml(t('network.totalStats', { txTotal: iface.txTotal, rxTotal: iface.rxTotal }))}
-            </div>
-          </div>`;
+      const bwMin = this._minimized.has('bandwidth');
+      html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:${bwMin ? '0' : '10px'};"><h3 style="margin:0; font-size:1rem;">${escapeHtml(t('network.bandwidth'))}</h3><button class="card-minimize-btn" data-card-id="bandwidth" title="${bwMin ? 'Restore' : 'Minimize'}" style="background:none; border:none; cursor:pointer; color:var(--text-dim); font-size:1rem; padding:0 4px; line-height:1; transition:transform 0.2s;" aria-label="${bwMin ? 'Restore' : 'Minimize'}">${bwMin ? '&#9660;' : '&#9650;'}</button></div>`;
+      if (!bwMin) {
+        if (stats && stats.interfaces && stats.interfaces.length > 0) {
+          html += '<div style="display:flex; flex-direction:column; gap:8px;">';
+          for (const iface of stats.interfaces) {
+            html += `<div class="stat-tile">
+              <div class="stat-label">${escapeHtml(iface.iface)}</div>
+              <div class="stat-value" style="font-size:0.85rem;">
+                \u25B2 ${iface.txSec} KB/s &nbsp; \u25BC ${iface.rxSec} KB/s
+              </div>
+              <div style="font-size:0.7rem; color:var(--text-dim);">
+                ${escapeHtml(t('network.totalStats', { txTotal: iface.txTotal, rxTotal: iface.rxTotal }))}
+              </div>
+            </div>`;
+          }
+          html += '</div>';
+        } else {
+          html += `<div class="empty-state" style="font-size:0.85rem;">${escapeHtml(t('network.noInterfaceData'))}</div>`;
         }
-        html += '</div>';
-      } else {
-        html += `<div class="empty-state" style="font-size:0.85rem;">${escapeHtml(t('network.noInterfaceData'))}</div>`;
       }
       html += '</div></div>';
 
       html += '<div style="flex:1 1 0; min-width:260px; display:flex; flex-direction:column;">';
       html += '<div class="card" style="padding:14px 16px; flex:1;">';
-      html += `<h3 style="margin-bottom:10px; font-size:1rem;">${escapeHtml(t('network.connectionStates'))}</h3>`;
-      if (stateTotal === 0) {
-        html += `<div class="empty-state" style="font-size:0.85rem;">${escapeHtml(t('network.noConnectionData'))}</div>`;
-      } else {
-        let cumulative = 0;
-        const gradientStops = stateEntries.map(([name, count]) => {
-          const color = stateColorFor(name);
-          const start = (cumulative / stateTotal) * 360;
-          cumulative += count;
-          const end = (cumulative / stateTotal) * 360;
-          return `${color} ${start}deg ${end}deg`;
-        }).join(', ');
+      const csMin = this._minimized.has('connStates');
+      html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:${csMin ? '0' : '10px'};"><h3 style="margin:0; font-size:1rem;">${escapeHtml(t('network.connectionStates'))}</h3><button class="card-minimize-btn" data-card-id="connStates" title="${csMin ? 'Restore' : 'Minimize'}" style="background:none; border:none; cursor:pointer; color:var(--text-dim); font-size:1rem; padding:0 4px; line-height:1; transition:transform 0.2s;" aria-label="${csMin ? 'Restore' : 'Minimize'}">${csMin ? '&#9660;' : '&#9650;'}</button></div>`;
+      if (!csMin) {
+        if (stateTotal === 0) {
+          html += `<div class="empty-state" style="font-size:0.85rem;">${escapeHtml(t('network.noConnectionData'))}</div>`;
+        } else {
+          let cumulative = 0;
+          const gradientStops = stateEntries.map(([name, count]) => {
+            const color = stateColorFor(name);
+            const start = (cumulative / stateTotal) * 360;
+            cumulative += count;
+            const end = (cumulative / stateTotal) * 360;
+            return `${color} ${start}deg ${end}deg`;
+          }).join(', ');
 
-        html += '<div style="display:flex; align-items:center; gap:16px;">';
-        html += `<div style="flex-shrink:0; width:96px; height:96px; border-radius:50%; background: conic-gradient(${gradientStops});"></div>`;
-        html += '<div style="display:flex; flex-direction:column; gap:6px; font-size:0.78rem;">';
-        paletteIdx = 0;
-        for (const [name, count] of stateEntries) {
-          const color = STATE_COLORS[name] || fallbackPalette[paletteIdx++ % fallbackPalette.length];
-          const pct = Math.round((count / stateTotal) * 100);
-          html += `<div style="display:flex; align-items:center; gap:6px;">
-            <span style="width:9px; height:9px; border-radius:50%; background:${color}; display:inline-block;"></span>
-            <span>${escapeHtml(name)}: ${count} (${pct}%)</span>
-          </div>`;
+          html += '<div style="display:flex; align-items:center; gap:16px;">';
+          html += `<div style="flex-shrink:0; width:96px; height:96px; border-radius:50%; background: conic-gradient(${gradientStops});"></div>`;
+          html += '<div style="display:flex; flex-direction:column; gap:6px; font-size:0.78rem;">';
+          paletteIdx = 0;
+          for (const [name, count] of stateEntries) {
+            const color = STATE_COLORS[name] || fallbackPalette[paletteIdx++ % fallbackPalette.length];
+            const pct = Math.round((count / stateTotal) * 100);
+            html += `<div style="display:flex; align-items:center; gap:6px;">
+              <span style="width:9px; height:9px; border-radius:50%; background:${color}; display:inline-block;"></span>
+              <span>${escapeHtml(name)}: ${count} (${pct}%)</span>
+            </div>`;
+          }
+          html += '</div></div>';
         }
-        html += '</div></div>';
       }
       html += '</div></div>';
 
       html += '<div style="flex:1 1 0; min-width:260px; display:flex; flex-direction:column;">';
       html += '<div class="card" style="padding:14px 16px; flex:1;">';
-      html += `<h3 style="margin-bottom:10px; font-size:1rem;">${escapeHtml(t('network.securityFlags'))}</h3>`;
-      html += `<div style="display:flex; flex-direction:column; gap:8px; font-size:0.85rem;">
-        <div style="display:flex; align-items:center; justify-content:space-between;">
-          <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:50%; background:var(--ok); display:inline-block;"></span>${escapeHtml(t('network.flagSafe'))}</span>
-          <span style="font-weight:600; color:var(--ok);">${safeCount}</span>
-        </div>
-        <div style="display:flex; align-items:center; justify-content:space-between;">
-          <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:50%; background:var(--warn); display:inline-block;"></span>${escapeHtml(t('network.flagUnverified'))}</span>
-          <span style="font-weight:600; color:var(--warn);">${unknownCount}</span>
-        </div>
-        <div style="display:flex; align-items:center; justify-content:space-between;">
-          <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:50%; background:var(--danger); display:inline-block;"></span>${escapeHtml(t('network.flagMalicious'))}</span>
-          <span style="font-weight:600; color:var(--danger);">${maliciousCount}</span>
-        </div>
-      </div>`;
+      const sfMin = this._minimized.has('secFlags');
+      html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:${sfMin ? '0' : '10px'};"><h3 style="margin:0; font-size:1rem;">${escapeHtml(t('network.securityFlags'))}</h3><button class="card-minimize-btn" data-card-id="secFlags" title="${sfMin ? 'Restore' : 'Minimize'}" style="background:none; border:none; cursor:pointer; color:var(--text-dim); font-size:1rem; padding:0 4px; line-height:1; transition:transform 0.2s;" aria-label="${sfMin ? 'Restore' : 'Minimize'}">${sfMin ? '&#9660;' : '&#9650;'}</button></div>`;
+      if (!sfMin) {
+        html += `<div style="display:flex; flex-direction:column; gap:8px; font-size:0.85rem;">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:50%; background:var(--ok); display:inline-block;"></span>${escapeHtml(t('network.flagSafe'))}</span>
+            <span style="font-weight:600; color:var(--ok);">${safeCount}</span>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:50%; background:var(--warn); display:inline-block;"></span>${escapeHtml(t('network.flagUnverified'))}</span>
+            <span style="font-weight:600; color:var(--warn);">${unknownCount}</span>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:50%; background:var(--danger); display:inline-block;"></span>${escapeHtml(t('network.flagMalicious'))}</span>
+            <span style="font-weight:600; color:var(--danger);">${maliciousCount}</span>
+          </div>
+        </div>`;
+      }
       html += '</div></div>';
 
       html += '</div>';
 
       if (networkTrafficHistoryEnabled) {
+        const histMin = this._minimized.has('history');
         html += '<div class="card" style="padding:16px 18px 14px; margin-bottom:18px;">';
-        html += '<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:12px;">';
-        html += `<h3 style="margin:0; font-size:1rem;">${escapeHtml(t('network.historyTitle'))}</h3>`;
-        html += '<div id="networkHistoryLegend" style="display:flex; align-items:center; gap:18px; font-size:0.78rem; color:var(--text-dim);"></div>';
-        html += '</div>';
-        html += '<div id="networkHistoryChartWrap" style="position:relative;">';
-        html += '<canvas id="networkHistoryChart" style="width:100%; height:190px; display:block; cursor:crosshair;"></canvas>';
-        html += '<div id="networkHistoryTooltip" style="position:absolute; top:0; left:0; display:none; pointer-events:none; transform:translate(-50%, -110%); background:var(--bg-base); border:1px solid var(--glass-border); border-radius:8px; padding:7px 10px; font-size:0.72rem; line-height:1.5; box-shadow:0 8px 24px rgba(0,0,0,0.35); white-space:nowrap; z-index:5;"></div>';
-        html += '</div>';
-        html += `<div id="networkHistoryEmpty" class="empty-state" style="font-size:0.85rem; display:none;">${escapeHtml(t('network.historyEmpty'))}</div>`;
+        html += `<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:${histMin ? '0' : '12px'};"><div style="display:flex; align-items:center; gap:18px; flex-wrap:wrap;"><h3 style="margin:0; font-size:1rem;">${escapeHtml(t('network.historyTitle'))}</h3><div id="networkHistoryLegend" style="display:${histMin ? 'none' : 'flex'}; align-items:center; gap:18px; font-size:0.78rem; color:var(--text-dim);"></div></div><button class="card-minimize-btn" data-card-id="history" title="${histMin ? 'Restore' : 'Minimize'}" style="background:none; border:none; cursor:pointer; color:var(--text-dim); font-size:1rem; padding:0 4px; line-height:1; transition:transform 0.2s;" aria-label="${histMin ? 'Restore' : 'Minimize'}">${histMin ? '&#9660;' : '&#9650;'}</button></div>`;
+        if (!histMin) {
+          html += '<div id="networkHistoryChartWrap" style="position:relative;">';
+          html += '<canvas id="networkHistoryChart" style="width:100%; height:190px; display:block; cursor:crosshair;"></canvas>';
+          html += '<div id="networkHistoryTooltip" style="position:absolute; top:0; left:0; display:none; pointer-events:none; transform:translate(-50%, -110%); background:var(--bg-base); border:1px solid var(--glass-border); border-radius:8px; padding:7px 10px; font-size:0.72rem; line-height:1.5; box-shadow:0 8px 24px rgba(0,0,0,0.35); white-space:nowrap; z-index:5;"></div>';
+          html += '</div>';
+          html += `<div id="networkHistoryEmpty" class="empty-state" style="font-size:0.85rem; display:none;">${escapeHtml(t('network.historyEmpty'))}</div>`;
+        }
         html += '</div>';
       }
 
@@ -518,20 +545,27 @@ window.Pages['network'] = {
       }).length;
 
       if (Object.keys(geoData).length > 0) {
-        html += '<div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px; flex-wrap:wrap; gap:8px;">';
+        const hmMin = this._minimized.has('heatmap');
+        html += `<div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:${hmMin ? '0' : '10px'}; flex-wrap:wrap; gap:8px;">`;
         html += `<div>
-          <h3 style="margin:0; font-size:1rem;">${escapeHtml(t('network.heatmapTitle'))}</h3>
+          <h3 style="margin:0; font-size:1rem; display:flex; align-items:center; gap:8px;">
+            ${escapeHtml(t('network.heatmapTitle'))}
+            <button class="card-minimize-btn" data-card-id="heatmap" title="${hmMin ? 'Restore' : 'Minimize'}" style="background:none; border:none; cursor:pointer; color:var(--text-dim); font-size:1rem; padding:0 4px; line-height:1; transition:transform 0.2s;" aria-label="${hmMin ? 'Restore' : 'Minimize'}">${hmMin ? '&#9660;' : '&#9650;'}</button>
+          </h3>
           <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">${escapeHtml(t('network.heatmapCounts', { total: totalConnectionsCount, filtered: filteredConnectionsCount, mapped: mappedCount }))}</div>
         </div>`;
-        html += `<div style="display:flex; gap:12px; font-size:0.75rem; font-weight:600;">
-          <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--ok);"></span> ${escapeHtml(t('network.heatmapLegendSafe'))}</span>
-          <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--warn);"></span> ${escapeHtml(t('network.heatmapLegendUnverified'))}</span>
-          <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--danger);"></span> ${escapeHtml(t('network.heatmapLegendMalicious'))}</span>
-        </div>`;
+        if (!hmMin) {
+          html += `<div style="display:flex; gap:12px; font-size:0.75rem; font-weight:600;">
+            <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--ok);"></span> ${escapeHtml(t('network.heatmapLegendSafe'))}</span>
+            <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--warn);"></span> ${escapeHtml(t('network.heatmapLegendUnverified'))}</span>
+            <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--danger);"></span> ${escapeHtml(t('network.heatmapLegendMalicious'))}</span>
+          </div>`;
+        }
         html += '</div>';
 
-        html += `<div class="card" style="padding:0; margin-bottom:18px; position:relative; background-color:var(--bg-panel); overflow:hidden; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
-          <div id="heatmapMapBgMount"></div>
+        if (!hmMin) {
+          html += `<div class="card" style="padding:0; margin-bottom:18px; position:relative; background-color:var(--bg-panel); overflow:hidden; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
+            <div id="heatmapMapBgMount"></div>
           <div style="position:absolute; top:0; left:0; bottom:0; right:0; pointer-events:none; z-index:2;">`;
 
         if (mappedCount === 0) {
@@ -641,6 +675,7 @@ window.Pages['network'] = {
         }
 
         html += `</div></div>`;
+        }
       }
 
       html += `<div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px; flex-wrap:wrap;">
