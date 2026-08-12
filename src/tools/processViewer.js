@@ -102,7 +102,7 @@ async function getProcessIOStats() {
       .replace('app.asar', 'app.asar.unpacked');
     // Verify script exists before executing to avoid unnecessary errors
     let scriptExists = false;
-    try { require('fs').accessSync(scriptPath); scriptExists = true; } catch (_) {}
+    try { fs.accessSync(scriptPath); scriptExists = true; } catch (_) {}
     if (!scriptExists) {
       console.warn('process-io-counter.ps1 not found at', scriptPath);
       return { diskIOMap: new Map(), networkIOMap: new Map() };

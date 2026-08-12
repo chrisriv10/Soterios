@@ -722,7 +722,9 @@ const trustedBadge = p.trusted
 
   async handleTrustProcess(filePath, container) {
     this.closeContextMenu();
-    if (!filePath) {
+    
+    // Input validation
+    if (!filePath || typeof filePath !== 'string') {
       alert('File path not available for this process');
       return;
     }
@@ -748,7 +750,9 @@ const trustedBadge = p.trusted
 
   async handleUntrustProcess(filePath, container) {
     this.closeContextMenu();
-    if (!filePath) {
+    
+    // Input validation
+    if (!filePath || typeof filePath !== 'string') {
       alert('File path not available for this process');
       return;
     }

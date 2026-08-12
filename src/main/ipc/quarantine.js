@@ -1,5 +1,6 @@
 const fs = require('fs');
 const crypto = require('crypto');
+const path = require('path');
 const { ipcMain } = require('electron');
 
 function enrichSizes(records) {
@@ -49,16 +50,30 @@ function register(mainWindow, { quarantineManager, db }) {
 
   ipcMain.handle('quarantine:calculateAndTrustHash', async (_event, filePath, reason) => {
     try {
-      if (!fs.existsSync(filePath)) {
+      // Input validation
+      if (!filePath || typeof filePath !== 'string') {
+        return { success: false, error: 'Invalid file path' };
+      }
+      
+      // Sanitize path
+      const normalizedPath = path.normalize(filePath);
+      
+      if (!fs.existsSync(normalizedPath)) {
         return { success: false, error: 'File does not exist' };
       }
       
+      // Check file size to prevent memory issues (limit to 100MB)
+      const stats = fs.statSync(normalizedPath);
+      if (stats.size > 100 * 1024 * 1024) {
+        return { success: false, error: 'File too large for hash calculation (max 100MB)' };
+      }
+      
       const hash = crypto.createHash('sha256');
-      const data = fs.readFileSync(filePath);
+      const data = fs.readFileSync(normalizedPath);
       hash.update(data);
       const hashValue = hash.digest('hex');
       
-      db.addTrustedHash(hashValue, filePath, reason);
+      db.addTrustedHash(hashValue, normalizedPath, reason);
       return { success: true, hash: hashValue };
     } catch (err) {
       return { success: false, error: err.message || 'Failed to calculate hash' };
@@ -67,12 +82,26 @@ function register(mainWindow, { quarantineManager, db }) {
 
   ipcMain.handle('quarantine:calculateAndUntrustHash', async (_event, filePath) => {
     try {
-      if (!fs.existsSync(filePath)) {
+      // Input validation
+      if (!filePath || typeof filePath !== 'string') {
+        return { success: false, error: 'Invalid file path' };
+      }
+      
+      // Sanitize path
+      const normalizedPath = path.normalize(filePath);
+      
+      if (!fs.existsSync(normalizedPath)) {
         return { success: false, error: 'File does not exist' };
       }
       
+      // Check file size to prevent memory issues (limit to 100MB)
+      const stats = fs.statSync(normalizedPath);
+      if (stats.size > 100 * 1024 * 1024) {
+        return { success: false, error: 'File too large for hash calculation (max 100MB)' };
+      }
+      
       const hash = crypto.createHash('sha256');
-      const data = fs.readFileSync(filePath);
+      const data = fs.readFileSync(normalizedPath);
       hash.update(data);
       const hashValue = hash.digest('hex');
       
