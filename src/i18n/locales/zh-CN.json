@@ -1098,6 +1098,7 @@
   "splash.loadingEngines": "正在加载安全引擎...",
   "splash.loadingQuarantine": "正在加载隔离区...",
   "splash.loadingWarnings": "正在加载警告...",
+  "splash.finalizing": "正在完成仪表盘...",
   "splash.ready": "就绪",
   "splash.registeringServices": "正在注册服务...",
   "splash.starting": "正在启动 Soterios...",

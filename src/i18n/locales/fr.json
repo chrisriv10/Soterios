@@ -1098,6 +1098,7 @@
   "splash.loadingEngines": "Chargement des moteurs de sécurité...",
   "splash.loadingQuarantine": "Chargement de la quarantaine...",
   "splash.loadingWarnings": "Chargement des avertissements...",
+  "splash.finalizing": "Finalisation du tableau de bord...",
   "splash.ready": "Prêt",
   "splash.registeringServices": "Enregistrement des services...",
   "splash.starting": "Démarrage de Soterios...",

@@ -64,6 +64,8 @@ const featureFlags = require('../core/featureFlags');
 let mainWindow;
 let splashWindow;
 let splashTimeoutId;
+let splashProgressBuffer = [];
+let splashProgressReady = false;
 let dbRef; // set once the database is created in app.whenReady() below, so
 // showNotification (defined before that point) can check settings
 let currentUiTheme = 'dark';
@@ -390,8 +392,26 @@ function createSplashWindow(themeName = 'dark') {
 }
 
 function sendSplashProgress(pct, label) {
-  if (splashWindow && !splashWindow.isDestroyed()) {
-    splashWindow.webContents.send('splash:progress', { pct, label });
+  const msg = { pct, label };
+  // If the splash renderer is ready, send immediately. Otherwise buffer
+  // the message and flush later when the splash page finishes loading.
+  if (splashProgressReady && splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.webContents.send('splash:progress', msg);
+  } else {
+    splashProgressBuffer.push(msg);
+    // Keep buffer bounded to avoid unbounded growth in pathological cases
+    if (splashProgressBuffer.length > 200) splashProgressBuffer.shift();
+  }
+}
+
+function flushSplashProgressBuffer() {
+  if (!splashWindow || splashWindow.isDestroyed()) {
+    splashProgressBuffer = [];
+    return;
+  }
+  while (splashProgressBuffer.length) {
+    const m = splashProgressBuffer.shift();
+    try { splashWindow.webContents.send('splash:progress', m); } catch (_) { /* ignore */ }
   }
 }
 
@@ -532,11 +552,9 @@ function createWindow() {
 
   // Intentionally no auto-show on 'ready-to-show' here -- the window stays
   // hidden until the renderer signals it has actually finished loading data
-  // (see the 'app:ready' handler below), so the splash screen covers the
-  // whole load instead of just the initial blank-page flash. A fallback
-  // timeout guarantees the window still appears even if that signal is
-  // delayed or never arrives (e.g. an unexpected renderer error).
-  splashTimeoutId = setTimeout(dismissSplash, 30000);
+  // (see the 'app:ready' handler below). Do not auto-dismiss the splash on a
+  // timer: showing partially loaded dashboard cards is worse than continuing
+  // to show loading progress while a slow initial read completes.
 
   if ((process.argv.includes('--dev') || process.env.NODE_ENV === 'development') && !isScreenshotCaptureMode()) {
     mainWindow.webContents.once('did-finish-load', () => {
@@ -667,6 +685,20 @@ app.whenReady().then(async () => {
   startupLocale = i18n.normalizeLocale(peekUiLanguage(dbPath));
   if (!isScreenshotCaptureMode()) {
     createSplashWindow(currentUiTheme);
+  }
+
+  // When the splash window finishes loading, mark it ready and flush any
+  // progress messages that were buffered while the renderer initialized.
+  if (splashWindow) {
+    splashWindow.webContents.once('did-finish-load', () => {
+      splashProgressReady = true;
+      try { flushSplashProgressBuffer(); } catch (_) {}
+    });
+    // Also ensure we mark ready on ready-to-show as a fallback
+    splashWindow.once('ready-to-show', () => {
+      splashProgressReady = true;
+      try { flushSplashProgressBuffer(); } catch (_) {}
+    });
   }
 
   logLine('info', 'App starting', { theme: currentUiTheme });

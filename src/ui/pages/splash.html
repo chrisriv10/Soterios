@@ -218,12 +218,80 @@
       var label = document.getElementById('progressLabel');
 
       if (window.api && window.api.on) {
+        // Ensure splash labels are visible for a short minimum duration
+        // so quick successive updates don't make them appear skipped.
+        // Increase slightly to avoid rapid "fly-through" on fast machines.
+        var minLabelMs = 500;
+        var lastLabelSetAt = 0;
+        // Queue entries are objects: { text, pct }
+        var pendingQueue = [];
+        var pendingTimer = null;
+
+        function flushNextLabel() {
+          if (!pendingQueue.length) {
+            pendingTimer = null;
+            return;
+          }
+          var next = pendingQueue.shift();
+          if (label) label.textContent = next.text;
+          // Update progress fill when the label actually becomes visible.
+          if (next.pct !== undefined && fill) {
+            fill.style.width = Math.min(100, Math.max(0, next.pct)) + '%';
+          }
+          lastLabelSetAt = Date.now();
+          // Schedule next flush after min display time
+          pendingTimer = setTimeout(flushNextLabel, minLabelMs);
+        }
+
+        function setLabel(text, force, pct) {
+          if (!label) return;
+          var now = Date.now();
+          if (force || (now - lastLabelSetAt) >= minLabelMs) {
+            // Show immediately and reset queue
+            label.textContent = text;
+            // Update progress immediately when forced or shown now
+            if (pct !== undefined && fill) {
+              fill.style.width = Math.min(100, Math.max(0, pct)) + '%';
+            }
+            lastLabelSetAt = Date.now();
+            pendingQueue = [];
+            if (pendingTimer) { clearTimeout(pendingTimer); pendingTimer = null; }
+          } else {
+            // Queue labels (with pct) to be shown in order
+            pendingQueue.push({ text: text, pct: pct });
+            if (!pendingTimer) {
+              // Schedule first flush for the remaining time
+              pendingTimer = setTimeout(flushNextLabel, minLabelMs - (now - lastLabelSetAt));
+            }
+          }
+        }
+
         window.api.on('splash:progress', function (data) {
-          if (data.pct !== undefined && fill) {
+          // If there's no label, update fill immediately (best-effort).
+          if ((!data.label || data.label === '') && data.pct !== undefined && fill) {
             fill.style.width = Math.min(100, Math.max(0, data.pct)) + '%';
+            return;
           }
           if (data.label && label) {
-            label.textContent = data.label;
+            var pct = (typeof data.pct === 'number') ? data.pct : undefined;
+            var isFinalReady = (pct === 100) || /ready/i.test(data.label);
+            var hasQueuedProgress = pendingQueue.length > 0 || !!pendingTimer;
+
+            // Never skip queued startup labels with the final ready state.
+            // Wait until earlier messages have flushed, then show Ready last.
+            if (isFinalReady && hasQueuedProgress) {
+              if (pct !== undefined && fill) {
+                fill.style.width = Math.min(100, Math.max(0, pct)) + '%';
+              }
+              pendingQueue.push({ text: data.label, pct: pct });
+              if (!pendingTimer) {
+                pendingTimer = setTimeout(flushNextLabel, Math.max(0, minLabelMs - (Date.now() - lastLabelSetAt)));
+              }
+              return;
+            }
+
+            var force = isFinalReady && !hasQueuedProgress;
+            setLabel(data.label, force, pct);
           }
         });
       }

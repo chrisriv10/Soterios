@@ -1098,6 +1098,7 @@
   "splash.loadingEngines": "Loading security engines...",
   "splash.loadingQuarantine": "Loading quarantine...",
   "splash.loadingWarnings": "Loading warnings...",
+  "splash.finalizing": "Finalizing dashboard...",
   "splash.ready": "Ready",
   "splash.registeringServices": "Registering services...",
   "splash.starting": "Starting Soterios...",

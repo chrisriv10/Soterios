@@ -66,7 +66,10 @@ function register(mainWindow, {
   // -- Real-Time Protection --
   ipcMain.handle('rtp:status', async () => {
     const result = await realtimeWatcher.getStatus();
-    return result.ok ? result.enabled : false;
+    // If Defender is not available or check failed, return null to indicate unknown state
+    // The dashboard should handle this as "unknown" rather than assuming disabled
+    if (!result.ok) return null;
+    return result.enabled;
   });
 
   ipcMain.handle('rtp:toggle', async (_event, enable) => {
@@ -130,8 +133,8 @@ function register(mainWindow, {
 
   // -- Audit --
   ipcMain.handle('audit:run', async (event) => {
-    return systemAudit.runAudit((label) => {
-      event.sender.send('audit:progress', label);
+    return systemAudit.runAudit((progress) => {
+      event.sender.send('audit:progress', progress);
     });
   });
 

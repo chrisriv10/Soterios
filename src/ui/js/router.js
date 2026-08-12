@@ -20,29 +20,26 @@
     const pageModule = isKnownPage(pageId) ? window.Pages[pageId] : null;
     if (!pageModule) { showUnknownPage(pageId); return; }
 
+    // If showing the already-visible page, just return.
+    if (currentContainer && currentPage === pageId) return;
+
     // Clean up previous page container (destroy event listeners)
     if (currentContainer) {
-      try { currentContainer.destroy?.(); } catch (_) {}
+      try { window.Pages[currentPage]?.destroy?.(); } catch (_) {}
     }
 
     // Update navigation indicators
     navItems.forEach((item) => { item.classList.toggle('active', item.dataset.page === pageId); });
-
-    // If showing the already-visible page, just return
-    if (currentContainer && currentPage === pageId) {
-      currentPage = pageId;
-      return;
-    }
 
     currentPage = pageId;
 
     // Render new page into a fresh container
     const newContainer = document.createElement('div');
     newContainer.style.cssText = 'width:100%; display:block;';
-    pageModule.render(newContainer);
     mainContent.innerHTML = '';
     mainContent.appendChild(newContainer);
     currentContainer = newContainer;
+    pageModule.render(newContainer);
 
     // Re-translate UI after page render
     if (window.I18n && window.I18n.translateUI) {

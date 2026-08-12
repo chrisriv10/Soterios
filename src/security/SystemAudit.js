@@ -19,20 +19,27 @@ class SystemAudit {
     return i18n.t(key, this.locale, vars);
   }
 
-  async runPowerShell(script, timeoutMs = 15000) {
+  async runPowerShell(script, timeoutMs = 30000) {
     try {
+      // Try both -Command and -ExecutionPolicy Bypass to ensure execution
       const { stdout, stderr } = await execPromise(
-        `powershell.exe -NoProfile -NonInteractive -Command "${script}"`,
+        `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "${script}"`,
         { timeout: timeoutMs, maxBuffer: 1024 * 1024 * 10 }
       );
+      if (stderr && stderr.trim()) {
+        console.warn(`PowerShell stderr for script: ${script.substring(0, 80)}...`, stderr);
+      }
       return { ok: true, stdout, stderr };
     } catch (e) {
       const timedOut = e.killed && e.signal === 'SIGTERM';
+      const errorDetails = (e.stderr && e.stderr.trim()) || e.message || String(e);
+      console.error(`PowerShell execution failed for script: ${script.substring(0, 100)}... Error:`, errorDetails);
+      console.error('Full error object:', e);
       return {
         ok: false,
         error: timedOut
           ? `Query timed out after ${timeoutMs}ms (Windows Update search can be slow — try again or check manually in Settings).`
-          : (e.stderr && e.stderr.trim()) || e.message
+          : errorDetails
       };
     }
   }

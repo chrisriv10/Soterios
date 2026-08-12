@@ -38,7 +38,7 @@ function friendlyFirewallError(e, fallback) {
 
 class FirewallManager {
   async runPowerShell(command) {
-    const { stdout } = await execFilePromise('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], {
+    const { stdout } = await execFilePromise('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command], {
       timeout: 15000,
       windowsHide: true
     });

@@ -95,41 +95,40 @@ function processSignals(proc, isTrusted = false) {
 
 async function getProcessIOStats() {
   try {
-    // Permanent PowerShell script file. In packaged builds the script is
-    // unpacked outside app.asar (see asarUnpack in package.json), so rewrite
-    // the path the same way Electron does at runtime.
+    // Use Windows Performance Counters for reliable per-process IO data
     const scriptPath = path.join(__dirname, '../scripts/process-io-counter.ps1')
       .replace('app.asar', 'app.asar.unpacked');
-    // Verify script exists before executing to avoid unnecessary errors
+    
+    // Verify script exists before executing
     let scriptExists = false;
     try { fs.accessSync(scriptPath); scriptExists = true; } catch (_) {}
     if (!scriptExists) {
       console.warn('process-io-counter.ps1 not found at', scriptPath);
       return { diskIOMap: new Map(), networkIOMap: new Map() };
     }
+    
     const { stdout: ioStdout } = await execPromise(`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${scriptPath}"`, { timeout: 20000 });
 
-    // Each line is "pid|name|readBytesPerSec|writeBytesPerSec|otherBytesPerSec".
-    // Disk IO = read + write; "other" IO (named pipes, sockets, devices) is the
-    // closest per-process approximation of network traffic the perf counters
-    // expose. Keyed by PID so every process gets its own exact numbers.
-    const diskIOMap = new Map();
-    const networkIOMap = new Map();
+    // Parse I/O data - each line is "processName|ioBytesPerSec"
+    // Performance counters don't provide PID, so we match by process name
+    // Process instances like "svchost#1", "svchost#2" are summed under the base name
+    const ioMap = new Map();
     if (ioStdout) {
       ioStdout.trim().split('\n').forEach((line) => {
         const parts = line.split('|');
-        if (parts.length < 5) return;
-        const pid = parseInt(parts[0], 10);
-        const read = parseFloat(parts[2]) || 0;
-        const write = parseFloat(parts[3]) || 0;
-        const other = parseFloat(parts[4]) || 0;
-        if (!Number.isFinite(pid)) return;
-        diskIOMap.set(pid, read + write);
-        networkIOMap.set(pid, other);
+        if (parts.length >= 2) {
+          const processName = parts[0].toLowerCase();
+          const value = parseFloat(parts[1]) || 0;
+          // Remove instance suffix (e.g., svchost#1 -> svchost) and .exe extension
+          const baseName = processName.split('#')[0].replace('.exe', '');
+          ioMap.set(baseName, (ioMap.get(baseName) || 0) + value);
+        }
       });
     }
 
-    return { diskIOMap, networkIOMap };
+    // Use the same I/O data for both disk and network since performance counters
+    // provide combined IO Data Bytes/sec which includes disk, network, and other I/O
+    return { diskIOMap: ioMap, networkIOMap: ioMap };
   } catch (err) {
     // I/O data is optional -- never fail the whole tool because of it
     console.warn('Failed to read per-process IO counters:', err.message || err);
@@ -179,8 +178,11 @@ module.exports = {
       const networkPercentage = Math.min(100, networkMBps);
 
       const processes = processList.map((p) => {
-        const diskIO = diskIOMap.get(p.pid) || 0;
-        const networkIO = networkIOMap.get(p.pid) || 0;
+        // Match by process name since performance counters don't provide PID
+        // Normalize: remove .exe extension and convert to lowercase
+        const processName = (p.name || '').toLowerCase().replace('.exe', '');
+        const diskIO = diskIOMap.get(processName) || 0;
+        const networkIO = networkIOMap.get(processName) || 0;
 
         const item = {
           pid: p.pid,

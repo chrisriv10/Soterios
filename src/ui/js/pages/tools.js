@@ -3,6 +3,7 @@ window.Pages.tools = {
   _startupItems: [],
   _uninstallerApps: [],
   _selectedShredFiles: [],
+  _largeFilesScanPath: null, // Store selected scan path for large files report
   _duplicateState: {
     filter: 'all',
     search: '',
@@ -410,8 +411,8 @@ window.Pages.tools = {
           try {
             const folder = await Api.pickFolder();
             if (folder) {
-              const input = container.querySelector('#largeFilesScanPathInput');
-              if (input) input.value = folder;
+              this._largeFilesScanPath = folder;
+              largeFilesBrowseBtn.textContent = this.t('tools.changeFolder');
             }
           } catch (err) {
             console.error('Folder picker error:', err);
@@ -445,11 +446,7 @@ window.Pages.tools = {
         </label>
       </div>
       <div class="tool-input-inline">
-        <label style="display:flex; align-items:center; gap:8px; font-size:0.8rem; color:var(--text-muted); cursor:pointer;">
-          ${escapeHtml(this.t('tools.scanPath'))}
-          <input type="text" id="largeFilesScanPathInput" class="large-files-scan-path-input" placeholder="${escapeHtml(this.t('tools.scanPathPlaceholder'))}" style="flex:1; min-width:200px; padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--panel-bg); color:var(--text); font-size:0.85rem;" />
-        </label>
-        <button class="btn btn-sm" id="largeFilesBrowseBtn" style="padding:4px 10px;">${escapeHtml(this.t('tools.browse'))}</button>
+        <button class="btn btn-sm" id="largeFilesBrowseBtn" style="padding:4px 10px;">${this._largeFilesScanPath ? escapeHtml(this.t('tools.changeFolder')) : escapeHtml(this.t('tools.selectFolder'))}</button>
       </div>` : s.id === 'duplicate-finder' ? `
 <div class="tool-input-inline">
   <button class="btn btn-sm" id="browseFilesBtn" style="flex:1;">${escapeHtml(this.t('tools.browse'))}</button>
@@ -571,10 +568,7 @@ window.Pages.tools = {
   },
 
   getLargeFilesScanPath(container) {
-    const input = container.querySelector('#largeFilesScanPathInput');
-    if (!input) return undefined;
-    const val = input.value.trim();
-    return val.length > 0 ? val : undefined;
+    return this._largeFilesScanPath;
   },
 
 async runScript(container, btn) {
@@ -586,7 +580,7 @@ async runScript(container, btn) {
     let scriptArgs = scriptId === 'clear-temp-files'
       ? { dryRun: false, maxAgeDays: this.getTempAgeDays(container) }
       : scriptId === 'large-files-report'
-      ? { minSizeMB: this.getMinSizeMB(container), scanPath: this.getLargeFilesScanPath(container) }
+      ? { minSizeMB: this.getMinSizeMB(container), scanPath: this._largeFilesScanPath }
       : scriptId === 'duplicate-finder'
       ? { scanPath: this.getScanPath(container) }
       : {};
@@ -878,7 +872,7 @@ async runScript(container, btn) {
         const result = await Api.runTool('run-script', { scriptId: 'delete-files', scriptArgs: { paths } });
         alert(`${this.t('tools.deleted', { count: result.deletedCount })} ${this.t('tools.freed', { mb: result.freedMB })}${result.skippedCount ? ` ${this.t('tools.skipped', { count: result.skippedCount })}` : ''}`);
 
-        const refreshed = await Api.runTool('run-script', { scriptId: 'large-files-report', scriptArgs: { minSizeMB: this.getMinSizeMB(container), scanPath: this.getLargeFilesScanPath(container) } });
+        const refreshed = await Api.runTool('run-script', { scriptId: 'large-files-report', scriptArgs: { minSizeMB: this.getMinSizeMB(container), scanPath: this._largeFilesScanPath } });
         output.innerHTML = this.renderOutput('large-files-report', refreshed, new Date().toLocaleString());
         this.wireLargeFilesActions(container);
       } catch (err) {
