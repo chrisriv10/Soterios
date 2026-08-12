@@ -122,7 +122,7 @@ async function getProcessIOStats() {
     const scriptPath = path.join(__dirname, '../scripts/process-io-counter.ps1')
       .replace('app.asar', 'app.asar.unpacked');
 
-    const { stdout: ioStdout } = await execPromise(`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${scriptPath}"`, { timeout: 20000 });
+    const { stdout: ioStdout } = await execPromise(`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${scriptPath}"`, { timeout: 30000 });
 
     // Each line is "pid|name|readBytesPerSec|writeBytesPerSec|otherBytesPerSec".
     // Disk IO = read + write; "other" IO (named pipes, sockets, devices) is the
@@ -184,29 +184,6 @@ module.exports = {
         const diskIO = diskIOMap.get(p.pid) || 0;
         const networkIO = networkIOMap.get(p.pid) || 0;
 
-        // Calculate file hash for trust checking
-        let fileHash = null;
-        let isTrusted = false;
-        if (p.path && fs.existsSync(p.path)) {
-          try {
-            const hash = crypto.createHash('sha256');
-            const stream = fs.createReadStream(p.path);
-            stream.on('data', (chunk) => hash.update(chunk));
-            await new Promise((resolve, reject) => {
-              stream.on('end', () => {
-                fileHash = hash.digest('hex');
-                resolve();
-              });
-              stream.on('error', reject);
-            });
-            if (db && typeof db.isHashTrusted === 'function') {
-              isTrusted = db.isHashTrusted(fileHash);
-            }
-          } catch (err) {
-            // Ignore hash calculation errors
-          }
-        }
-
         const item = {
           pid: p.pid,
           ppid: p.parentPid || null,
@@ -217,16 +194,46 @@ module.exports = {
           memory: p.mem !== undefined ? +(p.mem).toFixed(1) : null,
           diskIo: Math.round(diskIO),
           networkIo: Math.round(networkIO),
-          hash: fileHash,
-          trusted: isTrusted
+          hash: null,
+          trusted: false
         };
-        item.risk = makeRisk(processSignals(item, isTrusted));
+        
+        // First calculate risk signals without hash check
+        item.risk = makeRisk(processSignals(item, false));
         item.locationReasons = (item.risk.signals || [])
           .map((s) => s.message)
           .filter((msg) => /appdata|temporary|recycle bin|writable windows location|double extension/i.test(msg || ''));
         item.suspicious = item.locationReasons.length > 0;
         item.suspiciousReasons = (item.risk.signals || []).map((s) => s.message).filter(Boolean);
         item.recommendedAction = recommendationForRisk(item.risk, 'process');
+        
+        // Only calculate hash for processes that have risk signals
+        // This avoids expensive file reads for all processes
+        if (item.risk.score > 0 && p.path && fs.existsSync(p.path)) {
+          try {
+            const hash = crypto.createHash('sha256');
+            const stream = fs.createReadStream(p.path);
+            stream.on('data', (chunk) => hash.update(chunk));
+            await new Promise((resolve, reject) => {
+              stream.on('end', () => {
+                item.hash = hash.digest('hex');
+                resolve();
+              });
+              stream.on('error', reject);
+            });
+            if (db && typeof db.isHashTrusted === 'function') {
+              item.trusted = db.isHashTrusted(item.hash);
+            }
+            // Recalculate risk with trust status
+            if (item.trusted) {
+              item.risk = makeRisk(processSignals(item, true));
+              item.recommendedAction = recommendationForRisk(item.risk, 'process');
+            }
+          } catch (err) {
+            // Ignore hash calculation errors
+          }
+        }
+        
         return item;
       }));
       processes.sort((a, b) => {

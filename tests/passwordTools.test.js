@@ -1,3 +1,4 @@
+import { test, expect } from 'node:test';
 //All functions imported
 const tests = require('../src/tools/passwordTools').helpers;
 

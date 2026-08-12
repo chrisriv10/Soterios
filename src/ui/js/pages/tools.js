@@ -451,12 +451,9 @@ window.Pages.tools = {
         </label>
         <button class="btn btn-sm" id="largeFilesBrowseBtn" style="padding:4px 10px;">${escapeHtml(this.t('tools.browse'))}</button>
       </div>` : s.id === 'duplicate-finder' ? `
-      <div class="tool-input-inline">
-        <label style="display:flex; align-items:center; gap:8px; font-size:0.8rem; color:var(--text-muted); cursor:pointer;">
-          ${escapeHtml(this.t('tools.scanPath'))}
-          <input type="text" id="scanPathInput" class="scan-path-input" placeholder="${escapeHtml(this.t('tools.scanPathPlaceholder'))}" style="width:240px; max-width:100%; padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--panel-bg); color:var(--text); font-size:0.85rem;" />
-        </label>
-      </div>` : '';
+<div class="tool-input-inline">
+  <button class="btn btn-sm" id="browseFilesBtn" style="flex:1;">${escapeHtml(this.t('tools.browse'))}</button>
+</div>` : '';
 
     // Translate tool names and descriptions
     const toolTranslations = {
