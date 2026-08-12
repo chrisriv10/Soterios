@@ -1,8 +1,19 @@
 window.Pages = window.Pages || {};
 
 window.Pages['dashboard'] = {
+  cleanups: [],
+  destroy() {
+    this.cleanups.forEach(fn => fn());
+    this.cleanups = [];
+  },
   async render(container) {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+    let alive = true;
+    this.cleanups.push(() => { alive = false; });
+
+    function hasView() {
+      return alive && document.body.contains(container);
+    }
 
     // Warning title/detail translation map for security-overview tool
     const warningTranslations = {
@@ -663,6 +674,22 @@ window.Pages['dashboard'] = {
     const btnViewQuarantine = document.getElementById('btnViewQuarantine');
     const originalQuickLabel = btnQuickScan ? btnQuickScan.textContent : t('dashboard.quickScan');
     const originalFullLabel = btnFullScan ? btnFullScan.textContent : t('dashboard.fullScan');
+
+    function setScanButtonsState(scanning) {
+      if (!hasView()) return;
+      if (btnQuickScan) {
+        btnQuickScan.disabled = scanning;
+        btnQuickScan.textContent = scanning ? t('scanner.statusScanning') : originalQuickLabel;
+      }
+      if (btnFullScan) {
+        btnFullScan.disabled = scanning;
+        btnFullScan.textContent = scanning ? t('scanner.statusScanning') : originalFullLabel;
+      }
+      const lastScanEl = container.querySelector('#lastScanTime');
+      if (lastScanEl && scanning) {
+        lastScanEl.textContent = t('scanner.statusScanning');
+      }
+    }
     if (btnRefreshWarnings) btnRefreshWarnings.addEventListener('click', loadWarnings);
     if (btnUpdateDb) {
       btnUpdateDb.addEventListener('click', async () => {
@@ -710,10 +737,7 @@ window.Pages['dashboard'] = {
 
     if (btnQuickScan) {
       btnQuickScan.addEventListener('click', async () => {
-        const lastScanEl = container.querySelector('#lastScanTime');
-        if (lastScanEl) lastScanEl.textContent = t('scanner.statusScanning');
-        btnQuickScan.disabled = true;
-        btnQuickScan.textContent = t('scanner.statusScanning');
+        setScanButtonsState(true);
         try {
           const res = await window.api.invoke('scan:quick');
           if (res.error) {
@@ -724,18 +748,14 @@ window.Pages['dashboard'] = {
         } catch (e) {
           alert(t('scanner.scanFailed', { error: e }));
         } finally {
-          btnQuickScan.disabled = false;
-          btnQuickScan.textContent = originalQuickLabel;
+          setScanButtonsState(false);
         }
       });
     }
 
     if (btnFullScan) {
       btnFullScan.addEventListener('click', async () => {
-        const lastScanEl = container.querySelector('#lastScanTime');
-        if (lastScanEl) lastScanEl.textContent = t('scanner.statusScanning');
-        btnFullScan.disabled = true;
-        btnFullScan.textContent = t('scanner.statusScanning');
+        setScanButtonsState(true);
         try {
           const res = await window.api.invoke('scan:full');
           if (res.error) {
@@ -746,11 +766,29 @@ window.Pages['dashboard'] = {
         } catch (e) {
           alert(t('scanner.scanFailed', { error: e }));
         } finally {
-          btnFullScan.disabled = false;
-          btnFullScan.textContent = originalFullLabel;
+          setScanButtonsState(false);
         }
       });
     }
+
+    // Listen for scan progress events from other sources (scanner page, tray, etc.)
+    this.cleanups.push(window.api.on('scan:progress', (data) => {
+      if (!hasView()) return;
+      if (data?.scanType === 'folderwatch') return;
+      if (data && data.pct !== undefined) {
+        setScanButtonsState(true);
+      }
+    }));
+
+    // Listen for scan complete events to reset button state
+    this.cleanups.push(window.api.on('scan:complete', async (data) => {
+      if (!hasView()) return;
+      if (data?.scanType === 'folderwatch') return;
+      setScanButtonsState(false);
+      if (container.querySelector('#lastScanTime')) {
+        await loadLastScan();
+      }
+    }));
 
     try {
       await loadLastScan();

@@ -3,6 +3,7 @@ window.Pages['network'] = {
   REFRESH_INTERVAL_MS: 3000,
   CHART_REFRESH_INTERVAL_MS: 30000,
   _connectionQuery: '',
+  _lastChartSeries: null,
   _connectionRiskFilter: 'all',
   _connectionStateFilter: 'all',
   _geoCache: {},
@@ -97,6 +98,10 @@ window.Pages['network'] = {
     }
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
 
+    this._renderAsync(container, t);
+  },
+
+  async _renderAsync(container, t) {
     container.innerHTML = `
       <style>
         @keyframes heatmapPulseMalicious {
@@ -142,7 +147,13 @@ window.Pages['network'] = {
         <div class="empty-state"><span class="spinner"></span>&nbsp;${escapeHtml(t('network.loading'))}</div>
       </div>
     `;
-    this.load(container, true);
+    await this.load(container, true);
+
+    // Initial paint of traffic history chart
+    const initialContent = container.querySelector('#networkContent');
+    if (initialContent) {
+      await this.paintHistoryChart(initialContent);
+    }
 
     const content = container.querySelector('#networkContent');
     if (content) {
@@ -183,7 +194,6 @@ window.Pages['network'] = {
           window.Pages['network'].load(container, false);
         } else if (e.target && e.target.id === 'groupToggle') {
           window.Pages['network']._groupByProcess = e.target.value === 'grouped';
-          // Clear expanded groups when switching to grouped view to ensure auto-expand works
           if (window.Pages['network']._groupByProcess) {
             window.Pages['network']._expandedGroups = new Set();
           }
@@ -238,7 +248,19 @@ window.Pages['network'] = {
       }
       this.load(container, false);
     }, this.REFRESH_INTERVAL_MS);
+
+    // Separate timer for traffic history chart (data updates every ~30s)
+    this._chartRefreshTimer = setInterval(() => {
+      if (!document.body.contains(container)) {
+        clearInterval(this._chartRefreshTimer);
+        this._chartRefreshTimer = null;
+        return;
+      }
+      const content = container.querySelector('#networkContent');
+if (content) this.paintHistoryChart(content).catch(() => {});
+    }, this.CHART_REFRESH_INTERVAL_MS);
   },
+
   async load(container, isInitial) {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const content = container.querySelector('#networkContent');
@@ -785,7 +807,6 @@ window.Pages['network'] = {
       }
 
       content.innerHTML = html;
-      this.paintHistoryChart(content).catch(() => {});
 
       const mapBgMount = content.querySelector('#heatmapMapBgMount');
       if (mapBgMount) {
@@ -937,13 +958,20 @@ window.Pages['network'] = {
     } catch (_) {
       rows = [];
     }
+
+    // Use cached data if fetch returns empty but we have previous data
     if (!rows.length) {
-      if (empty) empty.style.display = '';
-      canvas.style.display = 'none';
-      if (legend) legend.innerHTML = '';
-      if (tooltip) tooltip.style.display = 'none';
-      return;
+      if (this._lastChartSeries && this._lastChartSeries.length) {
+        rows = this._lastChartSeries; // use cached series format
+      } else {
+        if (empty) empty.style.display = '';
+        canvas.style.display = 'none';
+        if (legend) legend.innerHTML = '';
+        if (tooltip) tooltip.style.display = 'none';
+        return;
+      }
     }
+
     if (empty) empty.style.display = 'none';
     canvas.style.display = 'block';
 
@@ -956,6 +984,9 @@ window.Pages['network'] = {
       buckets.set(key, cur);
     }
     const series = [...buckets.values()].sort((a, b) => a.t.localeCompare(b.t));
+
+    // Cache successful data for timer refreshes
+    this._lastChartSeries = rows;
 
     const allValues = series.flatMap((p) => [p.rx, p.tx]);
     const dataMin = allValues.length ? Math.min(...allValues, 0) : 0;
@@ -1347,6 +1378,10 @@ window.Pages['network'] = {
     if (this._refreshTimer) {
       clearInterval(this._refreshTimer);
       this._refreshTimer = null;
+    }
+    if (this._chartRefreshTimer) {
+      clearInterval(this._chartRefreshTimer);
+      this._chartRefreshTimer = null;
     }
     this._connectionQuery = '';
     this._connectionRiskFilter = 'all';

@@ -3,6 +3,16 @@ window.Pages.tools = {
   _startupItems: [],
   _uninstallerApps: [],
   _selectedShredFiles: [],
+  _duplicateState: {
+    filter: 'all',
+    search: '',
+    sortBy: 'wasted',
+    expandedGroups: new Set(),
+    groups: [],
+    allGroups: [],
+    groupHashes: [], // store hash for each group to persist expansion
+    scannedFiles: 0
+  },
   allowedScripts: [
     'clear-temp-files',
     'large-files-report',
@@ -30,6 +40,240 @@ window.Pages.tools = {
   getScriptName(scriptId) {
     const key = this.scriptNameKeys[scriptId];
     return key ? this.t(key) : scriptId;
+  },
+
+  getFileCategory(path) {
+    const ext = path.split('.').pop()?.toLowerCase();
+    if (!ext) return 'other';
+    const cats = {
+      images: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff', 'heic', 'svg'],
+      videos: ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'm4v'],
+      documents: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'md', 'rtf', 'odt'],
+      archives: ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'iso']
+    };
+    for (const [cat, exts] of Object.entries(cats)) {
+      if (exts.includes(ext)) return cat;
+    }
+    return 'other';
+  },
+
+  applyDuplicateFilters() {
+    const state = this._duplicateState;
+    let groups = [...state.allGroups];
+
+    // Filter by category
+    if (state.filter !== 'all') {
+      groups = groups.filter(g => this.getFileCategory(g.files[0]?.path) === state.filter);
+    }
+
+    // Filter by search
+    if (state.search) {
+      const q = state.search.toLowerCase();
+      groups = groups.filter(g => g.files.some(f => f.path.toLowerCase().includes(q)));
+    }
+
+    // Sort
+    groups.sort((a, b) => {
+      switch (state.sortBy) {
+        case 'count': return b.files.length - a.files.length;
+        case 'size': return b.size - a.size;
+        case 'name': return a.files[0].path.localeCompare(b.files[0].path);
+        case 'wasted':
+        default: return (b.size * (b.files.length - 1)) - (a.size * (a.files.length - 1));
+      }
+    });
+
+    state.groups = groups;
+    return groups;
+  },
+
+  updateDuplicateSummary(output) {
+    const state = this._duplicateState;
+    const visible = state.groups.length;
+    const total = state.allGroups.length;
+    const showing = output.querySelector('#duplicateShowing');
+    if (showing) showing.textContent = this.t('tools.duplicateShowing', { visible, total });
+
+    const selected = output.querySelectorAll('.duplicate-checkbox:checked');
+    const selectedCount = output.querySelector('#duplicateSelectedCount');
+    if (selectedCount) selectedCount.textContent = this.t('tools.duplicateSelectedCount', { count: selected.length, total: state.totalDuplicates || 0 });
+
+    // Calculate recoverable space from selected
+    let recoverable = 0;
+    selected.forEach(cb => {
+      const groupIdx = parseInt(cb.dataset.group, 10);
+      const group = state.groups[groupIdx];
+      if (group) recoverable += group.size;
+    });
+    const recoverableEl = output.querySelector('#duplicateRecoverable');
+    if (recoverableEl) recoverableEl.textContent = this.t('tools.duplicateRecoverable', { mb: (recoverable / 1024 / 1024).toFixed(1) });
+  },
+
+  toggleGroup(gIdx) {
+    const state = this._duplicateState;
+    if (state.expandedGroups.has(gIdx)) {
+      state.expandedGroups.delete(gIdx);
+    } else {
+      state.expandedGroups.add(gIdx);
+    }
+    const output = document.querySelector('#toolOutput');
+    if (output) this.renderDuplicateGroups(output);
+  },
+
+  expandAllGroups() {
+    const state = this._duplicateState;
+    state.groups.forEach((_, idx) => state.expandedGroups.add(idx));
+    const output = document.querySelector('#toolOutput');
+    if (output) this.renderDuplicateGroups(output);
+  },
+
+  collapseAllGroups() {
+    this._duplicateState.expandedGroups.clear();
+    const output = document.querySelector('#toolOutput');
+    if (output) this.renderDuplicateGroups(output);
+  },
+
+  renderDuplicateGroups(outputOrGroups) {
+    // Support both old usage (HTMLElement) and new usage (groups array returning HTML string)
+    const isHTMLElement = outputOrGroups && typeof outputOrGroups === 'object' && outputOrGroups.nodeType === 1;
+    const state = this._duplicateState;
+    const groups = isHTMLElement ? state.groups : outputOrGroups;
+    const expanded = state.expandedGroups;
+
+    if (groups.length === 0) {
+      const state = this._duplicateState;
+      const scannedFiles = state.scannedFiles || 0;
+      const allGroupsCount = state.allGroups.length || 0;
+      let message = '';
+      if (scannedFiles === 0) {
+        message = this.t('tools.duplicateNoFilesScanned');
+      } else if (allGroupsCount === 0) {
+        message = this.t('tools.duplicateNoDuplicatesFound');
+      } else {
+        message = this.t('tools.duplicateNoMatches');
+      }
+      const emptyHtml = `
+        <div class="log-row" style="padding:24px; text-align:center; color:var(--text-muted);">
+          ${message}
+          ${scannedFiles > 0 ? `<div style="font-size:0.8rem; margin-top:8px;">${this.t('tools.duplicateScannedFiles', { count: scannedFiles })}</div>` : ''}
+        </div>`;
+      if (isHTMLElement) {
+        outputOrGroups.querySelector('#duplicateGroupsContainer').innerHTML = emptyHtml;
+      }
+      return emptyHtml;
+    }
+
+    const html = groups.map((group, gIdx) => {
+      const isExpanded = expanded.has(gIdx);
+      const category = this.getFileCategory(group.files[0]?.path);
+      const wastedMB = ((group.size * (group.files.length - 1)) / 1024 / 1024).toFixed(1);
+
+      return `
+      <div class="duplicate-group" data-group="${gIdx}" data-category="${category}">
+        <div class="duplicate-group-header" style="display:flex; align-items:center; gap:12px; padding:10px; background:var(--panel-raised); border-radius:6px; cursor:pointer;" onclick="window.Pages.tools.toggleGroup(${gIdx})">
+          <span class="duplicate-toggle" style="font-size:10px; transition:transform 0.15s; display:inline-block; width:12px; text-align:center; ${isExpanded ? 'transform:rotate(90deg)' : ''}">▶</span>
+          <span class="duplicate-group-title" style="font-weight:600; flex:1;">${this.t('tools.group')} ${gIdx + 1}</span>
+          <span class="log-tag warn">${group.files.length} ${this.t('tools.copies')}</span>
+          <span class="log-tag clean">${(group.size / 1024).toFixed(1)} KB ${this.t('tools.each')}</span>
+          <span class="log-tag match">${wastedMB} MB ${this.t('tools.wastedSpace')}</span>
+          <span class="log-tag info">${category}</span>
+          <div style="display:flex; gap:4px; margin-left:auto;">
+            <button class="btn btn-xs duplicate-group-select-all" data-group="${gIdx}" title="${this.t('tools.duplicateGroupSelectAll')}">${this.t('tools.duplicateGroupSelectAll')}</button>
+            <button class="btn btn-xs duplicate-group-deselect-all" data-group="${gIdx}" title="${this.t('tools.duplicateGroupDeselectAll')}">${this.t('tools.duplicateGroupDeselectAll')}</button>
+            <select class="duplicate-group-smart" data-group="${gIdx}" style="padding:2px 6px; font-size:0.75rem; border-radius:4px; border:1px solid var(--border); background:var(--panel-bg); color:var(--text);">="${gIdx}" style="padding:2px 6px; font-size:0.75rem; border-radius:4px; border:1px solid var(--border); background:var(--panel-bg); color:var(--text);">
+              <option value="">${this.t('tools.duplicateSmartSelect')}…</option>
+              <option value="newest">${this.t('tools.duplicateGroupKeepNewest')}</option>
+              <option value="oldest">${this.t('tools.duplicateGroupKeepOldest')}</option>
+              <option value="shortest">${this.t('tools.duplicateGroupKeepShortest')}</option>
+            </select>
+          </div>
+        </div>
+        <div class="duplicate-group-files" style="${isExpanded ? '' : 'display:none;'}; margin-top:8px; padding-left:24px;">
+          ${group.files.map((f, fIdx) => `
+            <div class="log-row" style="display:flex; align-items:center; gap:8px; padding:4px 0; ${this.lazyRowStyle}">
+              ${fIdx === 0
+                ? `<span class="log-tag clean">${this.t('tools.original')}</span>`
+                : `<input type="checkbox" class="duplicate-checkbox" data-file-path="${escapeHtml(f.path)}" data-group="${gIdx}" style="flex-shrink:0;"/>`}
+              <span class="log-path" style="flex:1; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;" title="${escapeHtml(f.path)}">${escapeHtml(f.path)}</span>
+              <span style="font-size:0.75rem; color:var(--text-muted);">${(f.size / 1024).toFixed(1)} KB</span>
+              ${f.modified ? `<span style="font-size:0.75rem; color:var(--text-muted);">${new Date(f.modified).toLocaleDateString()}</span>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>`;
+    }).join('');
+
+    if (isHTMLElement) {
+      outputOrGroups.querySelector('#duplicateGroupsContainer').innerHTML = html;
+    }
+    return html;
+  },
+
+  applySmartSelection(strategy, groupIdx = null) {
+    const state = this._duplicateState;
+    const output = document.querySelector('#toolOutput');
+    if (!output) return;
+
+    const groups = groupIdx !== null ? [state.groups[groupIdx]].filter(Boolean) : state.groups;
+
+    groups.forEach((group, idx) => {
+      const actualIdx = groupIdx !== null ? groupIdx : state.groups.indexOf(group);
+      if (actualIdx < 0) return;
+
+      const files = group.files;
+      if (files.length <= 1) return;
+
+      let keepIdx = 0;
+      switch (strategy) {
+        case 'newest':
+          keepIdx = files.reduce((max, f, i) => (f.modified && files[max].modified && new Date(f.modified) > new Date(files[max].modified) ? i : max), 0);
+          break;
+        case 'oldest':
+          keepIdx = files.reduce((min, f, i) => (f.modified && files[min].modified && new Date(f.modified) < new Date(files[min].modified) ? i : min), 0);
+          break;
+        case 'shortest':
+          keepIdx = files.reduce((min, f, i) => (f.path.length < files[min].path.length ? i : min), 0);
+          break;
+        case 'perFolder':
+          // Group by parent folder, keep one per folder (shortest path)
+          const byFolder = new Map();
+          files.forEach((f, i) => {
+            const folder = f.parentFolder || path.dirname(f.path);
+            if (!byFolder.has(folder) || f.path.length < byFolder.get(folder).path.length) {
+              byFolder.set(folder, { path: f.path, index: i });
+            }
+          });
+          const keepIndices = new Set(Array.from(byFolder.values()).map(v => v.index));
+          files.forEach((f, i) => {
+            const cb = output.querySelector(`.duplicate-checkbox[data-file-path="${escapeHtml(f.path)}"][data-group="${actualIdx}"]`);
+            if (cb) cb.checked = !keepIndices.has(i);
+          });
+          this.updateDuplicateSummary(output);
+          return;
+      }
+
+      // For newest/oldest/shortest: check all except keepIdx
+      files.forEach((f, i) => {
+        const cb = output.querySelector(`.duplicate-checkbox[data-file-path="${escapeHtml(f.path)}"][data-group="${actualIdx}"]`);
+        if (cb) cb.checked = (i !== keepIdx);
+      });
+    });
+
+    this.updateDuplicateSummary(output);
+  },
+
+  selectAllDuplicates() {
+    const output = document.querySelector('#toolOutput');
+    if (!output) return;
+    output.querySelectorAll('.duplicate-checkbox').forEach(cb => cb.checked = true);
+    this.updateDuplicateSummary(output);
+  },
+
+  deselectAllDuplicates() {
+    const output = document.querySelector('#toolOutput');
+    if (!output) return;
+    output.querySelectorAll('.duplicate-checkbox').forEach(cb => cb.checked = false);
+    this.updateDuplicateSummary(output);
   },
 
   toolCategories: [
@@ -165,7 +409,7 @@ window.Pages.tools = {
   },
 
   renderToolRow(s) {
-    const hasInput = s.id === 'clear-temp-files' || s.id === 'file-shredder' || s.id === 'large-files-report';
+    const hasInput = s.id === 'clear-temp-files' || s.id === 'file-shredder' || s.id === 'large-files-report' || s.id === 'duplicate-finder';
     const inputHtml = s.id === 'clear-temp-files' ? `
       <div class="tool-input-inline">
         <label style="display:flex; align-items:center; gap:8px; font-size:0.8rem; color:var(--text-muted); cursor:pointer;">
@@ -183,6 +427,12 @@ window.Pages.tools = {
           ${escapeHtml(this.t('tools.filesLargerThan'))}
           <input type="number" min="1" max="10000" value="100" id="minSizeMBInput" class="min-size-input" style="width:56px;" />
           ${escapeHtml(this.t('tools.megabytes'))}
+        </label>
+      </div>` : s.id === 'duplicate-finder' ? `
+      <div class="tool-input-inline">
+        <label style="display:flex; align-items:center; gap:8px; font-size:0.8rem; color:var(--text-muted); cursor:pointer;">
+          ${escapeHtml(this.t('tools.scanPath'))}
+          <input type="text" id="scanPathInput" class="scan-path-input" placeholder="${escapeHtml(this.t('tools.scanPathPlaceholder'))}" style="flex:1; min-width:200px; padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--panel-bg); color:var(--text); font-size:0.85rem;" />
         </label>
       </div>` : '';
 
@@ -294,6 +544,13 @@ window.Pages.tools = {
     return val;
   },
 
+  getScanPath(container) {
+    const input = container.querySelector('#scanPathInput');
+    if (!input) return undefined;
+    const val = input.value.trim();
+    return val.length > 0 ? val : undefined;
+  },
+
 async runScript(container, btn) {
     const scriptId = btn.dataset.scriptId;
     const output = container.querySelector('#toolOutput');
@@ -304,6 +561,8 @@ async runScript(container, btn) {
       ? { dryRun: false, maxAgeDays: this.getTempAgeDays(container) }
       : scriptId === 'large-files-report'
       ? { minSizeMB: this.getMinSizeMB(container) }
+      : scriptId === 'duplicate-finder'
+      ? { scanPath: this.getScanPath(container) }
       : {};
 
     if (scriptId === 'file-shredder') {
@@ -422,11 +681,11 @@ async runScript(container, btn) {
         const cmd = item.command || item.path || item.raw || '';
         const exePath = item.exePath || item.path || this.extractExeFromCommand(cmd);
         const friendlyName = this.getFriendlyName(item, exePath);
-        const displayCmd = truncate(friendlyName + (cmd && cmd !== friendlyName ? ' — ' + cmd : ''), 200);
+        const displayCmd = friendlyName;
         html += `<div class="log-row startup-row" data-idx="${idx}">
           <img class="startup-icon" data-exe="${escapeHtml(exePath || '')}" src="" alt="" />
           <span class="log-tag info">${escapeHtml(item.source || 'unknown')}</span>
-          <span class="log-path" style="flex:1;">${escapeHtml(displayCmd)}</span>
+          <span class="log-path" style="flex:1;" title="${escapeHtml(cmd)}">${escapeHtml(displayCmd)}</span>
           <button class="btn btn-sm startup-toggle-btn" data-idx="${idx}">${this.t('tools.disable')}</button>
         </div>`;
       });
@@ -458,24 +717,81 @@ async runScript(container, btn) {
             <button class="btn btn-sm uninstaller-launch-btn" data-app-idx="${idx}" ${app.uninstallString ? '' : 'disabled'}>${escapeHtml(this.t('uninstaller.uninstall'))}</button>
           </div>`).join('');
       }
-    } else if (scriptId === 'duplicate-finder' && Array.isArray(result.duplicateGroups)) {
-      html += `<div class="log-row"><span class="log-tag info">${result.totalFilesScanned || 0}</span><span class="log-path">${this.t('tools.filesScanned')}</span></div>`;
-      html += `<div class="log-row"><span class="log-tag warn">${result.duplicateGroups.length}</span><span class="log-path">${this.t('tools.duplicateGroups')}</span></div>`;
-      html += `<div class="log-row"><span class="log-tag match">${result.totalDuplicates || 0}</span><span class="log-path">${this.t('tools.totalDuplicates')}</span></div>`;
-      html += `<div class="log-row"><span class="log-tag clean">${((result.totalWastedSpace || 0) / 1024 / 1024).toFixed(1)} MB</span><span class="log-path">${this.t('tools.wastedSpace')}</span></div>`;
-      if (result.duplicateGroups.length) {
-        html += `<div style="display:flex; justify-content:flex-end; margin:8px 0;"><button class="btn btn-sm" style="color:var(--accent-danger);" id="deleteDuplicatesBtn" disabled>${this.t('tools.deleteSelected', { count: 0 })}</button></div>`;
-        html += result.duplicateGroups.slice(0, 50).map((group, gIdx) => `
-          <div class="log-row" style="background:var(--panel-raised); padding:8px; margin:4px 0;">
-            <div style="font-weight:600; margin-bottom:4px;">${this.t('tools.group')} ${gIdx + 1} — ${group.files.length} ${this.t('tools.copies')}, ${((group.size || 0) / 1024).toFixed(1)} KB ${this.t('tools.each')}</div>
-            ${group.files.map((f, fIdx) => `
-              <div class="log-row" style="display:flex; align-items:center; gap:8px; ${this.lazyRowStyle}">
-                ${fIdx === 0
-                  ? `<span class="log-tag clean">${this.t('tools.original')}</span>`
-                  : `<input type="checkbox" class="duplicate-checkbox" data-file-path="${escapeHtml(f.path)}" style="flex-shrink:0;"/>`}
-                <span class="log-path" style="flex:1; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;" title="${escapeHtml(f.path)}">${escapeHtml(f.path)}</span>
-              </div>`).join('')}
-          </div>`).join('');
+    } else if (scriptId === 'duplicate-finder') {
+      // Initialize state on first render
+      const state = this._duplicateState;
+      const duplicateGroups = Array.isArray(result.duplicateGroups) ? result.duplicateGroups : [];
+      state.allGroups = duplicateGroups;
+      state.groupHashes = duplicateGroups.map(g => g.hash);
+      state.totalDuplicates = result.totalDuplicates || 0;
+      state.totalWastedSpace = result.totalWastedSpace || 0;
+      state.scannedFiles = result.totalFilesScanned || 0;
+      // Persist expanded groups by hash
+      const newExpanded = new Set();
+      state.expandedGroups.forEach(idx => {
+        const hash = state.groupHashes[idx];
+        const newIdx = state.groupHashes.indexOf(hash);
+        if (newIdx >= 0) newExpanded.add(newIdx);
+      });
+      state.expandedGroups = newExpanded;
+      this.applyDuplicateFilters();
+
+      html += `<div class="log-row"><span class="log-tag info">${state.scannedFiles}</span><span class="log-path">${this.t('tools.filesScanned')}</span></div>`;
+      html += `<div class="log-row"><span class="log-tag warn">${state.allGroups.length}</span><span class="log-path">${this.t('tools.duplicateGroups')}</span></div>`;
+      html += `<div class="log-row"><span class="log-tag match">${state.totalDuplicates}</span><span class="log-path">${this.t('tools.totalDuplicates')}</span></div>`;
+      html += `<div class="log-row"><span class="log-tag clean">${((state.totalWastedSpace) / 1024 / 1024).toFixed(1)} MB</span><span class="log-path">${this.t('tools.wastedSpace')}</span></div>`;
+
+      // Only show toolbar and groups if we have scanned files
+      if (state.scannedFiles > 0) {
+        // Filter toolbar
+        html += `
+      <div class="duplicate-toolbar" style="display:flex; gap:8px; flex-wrap:wrap; margin:12px 0; padding:10px; background:var(--panel-bg-alt, rgba(128,128,128,0.08)); border-radius:6px; flex-wrap:wrap;">
+        <div style="display:flex; gap:4px; flex-wrap:wrap; align-items:center;">
+          <span style="font-size:0.8rem; color:var(--text-muted); margin-right:4px;">${this.t('tools.duplicateFilter')}:</span>
+          <button class="btn btn-xs duplicate-filter-btn${state.filter === 'all' ? ' active' : ''}" data-filter="all" style="padding:4px 10px;">${this.t('tools.duplicateFilterAll')}</button>
+          <button class="btn btn-xs duplicate-filter-btn${state.filter === 'images' ? ' active' : ''}" data-filter="images" style="padding:4px 10px;">${this.t('tools.duplicateFilterImages')}</button>
+          <button class="btn btn-xs duplicate-filter-btn${state.filter === 'videos' ? ' active' : ''}" data-filter="videos" style="padding:4px 10px;">${this.t('tools.duplicateFilterVideos')}</button>
+          <button class="btn btn-xs duplicate-filter-btn${state.filter === 'documents' ? ' active' : ''}" data-filter="documents" style="padding:4px 10px;">${this.t('tools.duplicateFilterDocuments')}</button>
+          <button class="btn btn-xs duplicate-filter-btn${state.filter === 'archives' ? ' active' : ''}" data-filter="archives" style="padding:4px 10px;">${this.t('tools.duplicateFilterArchives')}</button>
+          <button class="btn btn-xs duplicate-filter-btn${state.filter === 'other' ? ' active' : ''}" data-filter="other" style="padding:4px 10px;">${this.t('tools.duplicateFilterOther')}</button>
+        </div>
+        <div style="flex:1; min-width:180px; max-width:300px;">
+          <input type="search" class="duplicate-search" placeholder="${this.t('tools.duplicateSearch')}" value="${escapeHtml(state.search)}" style="width:100%; padding:4px 10px; border-radius:4px; border:1px solid var(--border); background:var(--panel-bg); color:var(--text); font-size:0.85rem;" />
+        </div>
+        <div style="display:flex; gap:4px; align-items:center;">
+          <select class="duplicate-sort" style="padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--panel-bg); color:var(--text); font-size:0.85rem;">
+            <option value="wasted"${state.sortBy === 'wasted' ? ' selected' : ''}>${this.t('tools.duplicateSortWasted')}</option>
+            <option value="count"${state.sortBy === 'count' ? ' selected' : ''}>${this.t('tools.duplicateSortCount')}</option>
+            <option value="size"${state.sortBy === 'size' ? ' selected' : ''}>${this.t('tools.duplicateSortSize')}</option>
+            <option value="name"${state.sortBy === 'name' ? ' selected' : ''}>${this.t('tools.duplicateSortName')}</option>
+          </select>
+        </div>
+        <div style="display:flex; gap:4px; margin-left:auto; flex-wrap:wrap;">
+          <button class="btn btn-xs" id="duplicateExpandAll" style="padding:4px 10px;">${this.t('tools.duplicateExpandAll')}</button>
+          <button class="btn btn-xs" id="duplicateCollapseAll" style="padding:4px 10px;">${this.t('tools.duplicateCollapseAll')}</button>
+          <button class="btn btn-xs" id="duplicateSelectAll" style="padding:4px 10px;">${this.t('tools.duplicateSelectAll')}</button>
+          <button class="btn btn-xs" id="duplicateDeselectAll" style="padding:4px 10px;">${this.t('tools.duplicateDeselectAll')}</button>
+          <select class="duplicate-smart-select" style="padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--panel-bg); color:var(--text); font-size:0.85rem;">
+            <option value="">${this.t('tools.duplicateSmartSelect')}…</option>
+            <option value="shortest">${this.t('tools.duplicateKeepShortest')}</option>
+            <option value="newest">${this.t('tools.duplicateKeepNewest')}</option>
+            <option value="oldest">${this.t('tools.duplicateKeepOldest')}</option>
+            <option value="perFolder">${this.t('tools.duplicateKeepPerFolder')}</option>
+          </select>
+        </div>
+      </div>
+      <div class="duplicate-summary" style="display:flex; gap:16px; align-items:center; margin-bottom:8px; font-size:0.85rem; color:var(--text-muted); flex-wrap:wrap;">
+        <span id="duplicateShowing">${this.t('tools.duplicateShowing', { visible: state.groups.length, total: state.allGroups.length })}</span>
+        <span id="duplicateSelectedCount">${this.t('tools.duplicateSelectedCount', { count: 0, total: state.totalDuplicates })}</span>
+        <span id="duplicateRecoverable" style="color:var(--accent-success);">${this.t('tools.duplicateRecoverable', { mb: '0.0' })}</span>
+      </div>
+      <div id="duplicateGroupsContainer">
+        ${this.renderDuplicateGroups(state.groups)}
+      </div>`;
+
+        if (state.allGroups.length) {
+          html += `<div style="display:flex; justify-content:flex-end; margin:12px 0;"><button class="btn btn-sm" style="color:var(--accent-danger);" id="deleteDuplicatesBtn" disabled>${this.t('tools.deleteSelected', { count: 0 })}</button></div>`;
+        }
       }
     } else if (scriptId === 'file-shredder') {
       if (result.success === false) {

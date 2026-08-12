@@ -73,20 +73,21 @@ class SystemAudit {
   }
 
   async checkWindowsUpdate() {
-    // Primary: COM query (comprehensive but may include driver/optional updates)
-    const up = await this.runPowerShell(`$session = New-Object -ComObject Microsoft.Update.Session -ErrorAction Stop; $searcher = $session.CreateUpdateSearcher(); $pending = $searcher.Search('IsInstalled=0 and IsHidden=0 and Type=\'Software\''); $pending.Updates.Count`, 90000);
+    // Primary: COM query - filter to MANDATORY updates only (matching Windows Settings behavior)
+    // Windows Settings only shows mandatory updates by default; optional/driver/preview updates are hidden
+    const up = await this.runPowerShell(`$session = New-Object -ComObject Microsoft.Update.Session -ErrorAction Stop; $searcher = $session.CreateUpdateSearcher(); $pending = $searcher.Search('IsInstalled=0 and IsHidden=0'); $mandatory = $pending.Updates | Where-Object { $_.IsMandatory -eq \$true }; $mandatory.Count`, 90000);
     if (up.ok) {
       const raw = up.stdout.trim();
       const count = /^[0-9]+$/.test(raw) ? Number(raw) : null;
       if (count === null) {
         return [{ name: 'Windows Updates', status: 'warn', message: 'Could not parse update status.', detail: raw || 'Unexpected response from Windows Update query.', recommendation: 'Check Windows Update in Settings manually.', actionUri: 'ms-settings:windowsupdate' }];
       } else if (count === 0) {
-        return [{ name: 'Windows Updates', status: 'pass', message: 'No pending updates.', detail: 'All available updates are installed.', recommendation: 'Keep automatic updates enabled.' }];
+        return [{ name: 'Windows Updates', status: 'pass', message: 'No pending updates.', detail: 'All mandatory updates are installed.', recommendation: 'Keep automatic updates enabled.' }];
       }
-      return [{ name: 'Windows Updates', status: 'warn', message: `${count} update(s) pending.`, detail: `${count} update(s) are waiting to be installed.`, recommendation: 'Open Settings > Windows Update and install pending updates.', actionUri: 'ms-settings:windowsupdate' }];
+      return [{ name: 'Windows Updates', status: 'warn', message: `${count} mandatory update(s) pending.`, detail: `${count} mandatory update(s) are waiting to be installed.`, recommendation: 'Open Settings > Windows Update and install pending updates.', actionUri: 'ms-settings:windowsupdate' }];
     }
     // Fallback: Try WU API via UsoClient for basic status
-    const fallback = await this.runPowerShell(`try { $session = New-Object -ComObject Microsoft.Update.Session -ErrorAction Stop; $searcher = $session.CreateUpdateSearcher(); $result = $searcher.Search('IsInstalled=0 and IsHidden=0'); $result.Updates.Count } catch { '_ERROR_' }`, 30000);
+    const fallback = await this.runPowerShell(`try { $session = New-Object -ComObject Microsoft.Update.Session -ErrorAction Stop; $searcher = $session.CreateUpdateSearcher(); $result = $searcher.Search('IsInstalled=0 and IsHidden=0'); $mandatory = $result.Updates | Where-Object { $_.IsMandatory -eq \$true }; $mandatory.Count } catch { '_ERROR_' }`, 30000);
     if (fallback.ok) {
       const raw = fallback.stdout.trim();
       if (raw === '_ERROR_') {
@@ -94,13 +95,28 @@ class SystemAudit {
       } else {
         const count = /^[0-9]+$/.test(raw) ? Number(raw) : null;
         if (count !== null && count === 0) {
-          return [{ name: 'Windows Updates', status: 'pass', message: 'No pending updates.', detail: 'All available updates are installed.', recommendation: 'Keep automatic updates enabled.' }];
+          return [{ name: 'Windows Updates', status: 'pass', message: 'No pending updates.', detail: 'All mandatory updates are installed.', recommendation: 'Keep automatic updates enabled.' }];
         } else if (count !== null && count > 0) {
-          return [{ name: 'Windows Updates', status: 'warn', message: `${count} update(s) pending.`, detail: `${count} update(s) are waiting to be installed.`, recommendation: 'Open Settings > Windows Update and install pending updates.', actionUri: 'ms-settings:windowsupdate' }];
+          return [{ name: 'Windows Updates', status: 'warn', message: `${count} mandatory update(s) pending.`, detail: `${count} mandatory update(s) are waiting to be installed.`, recommendation: 'Open Settings > Windows Update and install pending updates.', actionUri: 'ms-settings:windowsupdate' }];
         }
       }
     }
-    return [{ name: 'Windows Updates', status: 'warn', message: 'Could not query update status.', detail: up.error || 'Windows Update may be disabled or the COM query timed out.', recommendation: 'Check Windows Update in Settings manually.', actionUri: 'ms-settings:windowsupdate' }];
+    // Sanitize error - don't expose raw PowerShell/COM errors to user
+    const friendlyError = this.sanitizeWindowsUpdateError(up.error);
+    return [{ name: 'Windows Updates', status: 'warn', message: 'Could not query update status.', detail: friendlyError, recommendation: 'Check Windows Update in Settings manually.', actionUri: 'ms-settings:windowsupdate' }];
+  }
+
+  sanitizeWindowsUpdateError(rawError) {
+    if (!rawError) return 'Windows Update may be disabled or the COM query timed out.';
+    const err = String(rawError);
+    // PowerShell parser errors
+    if (err.includes('At line') && err.includes('char:')) return 'Windows Update query failed — the update service may be busy or temporarily unavailable.';
+    // COM errors
+    if (err.includes('0x8007') || err.includes('0x8024') || err.includes('HRESULT')) return 'Windows Update service returned an error. The service may be disabled or corrupted.';
+    if (err.includes('Microsoft.Update.Session') || err.includes('CreateUpdateSearcher')) return 'Could not connect to Windows Update service. It may be disabled or not running.';
+    if (err.includes('timeout') || err.includes('timed out')) return 'Windows Update query timed out. The service may be busy.';
+    // Generic fallback
+    return 'Unable to check Windows Update status. Please check manually in Settings > Windows Update.';
   }
 
   async checkBitLocker() {

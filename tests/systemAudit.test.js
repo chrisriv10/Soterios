@@ -212,7 +212,7 @@ describe('SystemAudit', () => {
     const audit = new SystemAudit();
     const results = await audit.checkWindowsUpdate();
     assert.equal(results[0].status, 'warn');
-    assert.ok(results[0].message.includes('5 update'));
+    assert.ok(results[0].message.includes('5 mandatory update'));
     assert.equal(results[0].actionUri, 'ms-settings:windowsupdate');
   });
 

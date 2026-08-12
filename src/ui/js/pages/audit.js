@@ -1,5 +1,8 @@
 window.Pages = window.Pages || {};
 window.Pages['audit'] = {
+  _cachedResults: null,
+  _cacheTimestamp: null,
+  CACHE_TTL_MS: 5 * 60 * 1000, // 5 minutes
   t(key, vars) {
     return window.I18n?.t(key, vars) ?? key;
   },
@@ -73,8 +76,15 @@ window.Pages['audit'] = {
   render(container) {
     container.innerHTML = `
       <header class="page-header">
-        <h1 class="page-title">${escapeHtml(this.t('audit.title'))}</h1>
-        <p class="page-subtitle">${escapeHtml(this.t('audit.subtitle'))}</p>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+          <div>
+            <h1 class="page-title">${escapeHtml(this.t('audit.title'))}</h1>
+            <p class="page-subtitle">${escapeHtml(this.t('audit.subtitle'))}</p>
+          </div>
+          <button id="auditRefreshBtn" class="btn btn-secondary" style="font-size:0.85rem; padding:6px 12px;" title="${escapeHtml(this.t('audit.refreshTooltip'))}">
+            ${escapeHtml(this.t('audit.refresh'))}
+          </button>
+        </div>
       </header>
       <div id="auditContent">
         <div class="empty-state">${escapeHtml(this.t('audit.running'))}</div>
@@ -84,9 +94,13 @@ window.Pages['audit'] = {
         <div id="auditProgressLabel" class="page-subtitle" style="margin-top:6px; font-size:0.8rem; opacity:0.85;"></div>
       </div>
     `;
-    this.load(container);
+    const refreshBtn = container.querySelector('#auditRefreshBtn');
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => this.load(container, true));
+    }
+    this.load(container, false);
   },
-  async load(container) {
+  async load(container, forceRefresh = false) {
     const self = this;
     const content = container.querySelector('#auditContent');
     const progressBar = content?.querySelector('.loading-progress-bar');
@@ -94,6 +108,18 @@ window.Pages['audit'] = {
     let currentPct = 0;
     let ceilingPct = 4;
     let unsubscribeProgress = null;
+
+    // Check cache first (unless forced)
+    const now = Date.now();
+    const cacheFresh = self._cachedResults && self._cacheTimestamp && (now - self._cacheTimestamp) < self.CACHE_TTL_MS;
+    if (!forceRefresh && cacheFresh) {
+      // Use cached results directly
+      const ignored = await window.api.invoke('warnings:listIgnored');
+      const ignoredIds = new Set((ignored || []).map((w) => w.id));
+      self._currentTranslatedResults = self._cachedResults;
+      self.renderCachedResults(container, self._cachedResults, ignoredIds);
+      return;
+    }
 
     const stopCreeping = () => {
       if (creepTimer) {
@@ -159,6 +185,9 @@ window.Pages['audit'] = {
       // Translate audit results from backend
       const translatedResults = results.map(r => this.translateAuditResult(r));
       self._currentTranslatedResults = translatedResults;
+      // Cache the results
+      self._cachedResults = translatedResults;
+      self._cacheTimestamp = Date.now();
 
       let pass = 0, fail = 0, warn = 0, err = 0;
       const visibleResults = translatedResults.filter((r) => !ignoredIds.has(this.warningId(r)));
@@ -264,6 +293,103 @@ window.Pages['audit'] = {
     }
   },
 
+  // Render cached results without loading state
+  renderCachedResults(container, translatedResults, ignoredIds) {
+    const self = this;
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+    const content = container.querySelector('#auditContent');
+    if (!content) return;
+
+    self._currentTranslatedResults = translatedResults;
+
+    let pass = 0, fail = 0, warn = 0, err = 0;
+    const visibleResults = translatedResults.filter((r) => !ignoredIds.has(this.warningId(r)));
+    visibleResults.forEach(r => { if (r.status === 'pass') pass++; else if (r.status === 'fail') fail++; else if (r.status === 'warn') warn++; else if (r.status === 'error') err++; });
+
+    let html = `<div class="grid grid-4" style="margin-bottom:18px;">
+      <div class="stat-tile"><div class="stat-label">${escapeHtml(this.t('audit.passed'))}</div><div class="stat-value" style="color:var(--ok);">${pass}</div></div>
+      <div class="stat-tile"><div class="stat-label">${escapeHtml(this.t('audit.failed'))}</div><div class="stat-value" style="color:var(--danger);">${fail}</div></div>
+      <div class="stat-tile"><div class="stat-label">${escapeHtml(this.t('audit.warnings'))}</div><div class="stat-value" style="color:var(--warn);">${warn}</div></div>
+      <div class="stat-tile"><div class="stat-label">${escapeHtml(this.t('audit.errors'))}</div><div class="stat-value" style="color:var(--text-dim);">${err}</div></div>
+    </div>`;
+    html += '<div id="auditResultsContainer" style="max-height:calc(100vh - 260px); overflow-y:auto; padding-right:8px; display:flex; flex-direction:column; gap:12px;">';
+    html += '<div class="dashboard-grid">';
+    for (const res of visibleResults) {
+      let iconClass = 'info';
+      let iconSvg = '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>';
+      let statusLabel = this.t('common.info');
+      if (res.status === 'pass') { iconClass = 'safe'; iconSvg = '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>'; statusLabel = this.t('audit.statusPassed'); }
+      else if (res.status === 'fail') { iconClass = 'danger'; iconSvg = '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>'; statusLabel = this.t('audit.statusFailed'); }
+      else if (res.status === 'warn') { iconClass = 'warning'; iconSvg = '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="13"/><circle cx="12" cy="16.5" r="1" fill="currentColor" stroke="none"/>'; statusLabel = this.t('audit.statusWarning'); }
+      else if (res.status === 'error') { iconClass = 'danger'; iconSvg = '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>'; statusLabel = this.t('audit.statusError'); }
+      html += `<div class="card" style="display:flex; flex-direction:column; gap:12px;">
+        <div style="display:flex; align-items:center; gap:16px;">
+          <div class="status-icon ${iconClass}" style="width:40px;height:40px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">${iconSvg}</svg>
+          </div>
+          <div style="flex:1;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-weight:600; font-size:1.1rem;">${escapeHtml(res.name)}</div>
+              <span style="font-size:0.8rem; font-weight:600; text-transform:uppercase; color:${iconClass === 'safe' ? 'var(--ok)' : iconClass === 'danger' ? 'var(--danger)' : 'var(--warn)'};">${statusLabel}</span>
+            </div>
+            <div class="page-subtitle" style="font-size:0.9rem; margin-top:4px;">${escapeHtml(res.message)}</div>
+          </div>
+        </div>
+        ${res.detail ? `<div style="font-size:0.85rem; color:var(--text-dim); padding:8px; background:var(--bg-surface); border-radius:6px; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; white-space:pre-wrap; word-break:break-word;">${escapeHtml(res.detail)}</div>` : ''}
+        ${res.recommendation ? this.renderRecommendation(res.recommendation) : ''}
+        ${res.actionUri ? `<button class="btn btn-sm audit-open-settings" data-uri="${escapeHtml(res.actionUri)}">${escapeHtml(this.t('audit.openWindowsUpdate'))}</button>` : ''}
+        ${res.status === 'warn' || res.status === 'fail' ? `<button class="btn btn-sm audit-ignore" data-id="${escapeHtml(this.warningId(res))}" data-title="${escapeHtml(res.name)}" data-detail="${escapeHtml(res.message || res.detail || '')}">${escapeHtml(this.t('audit.ignoreWarning'))}</button>` : ''}
+      </div>`;
+    }
+    html += '</div></div>';
+
+    // Ignored warnings section
+    if ((ignoredIds && ignoredIds.size > 0)) {
+      // Note: we don't have the full ignored objects here, just IDs
+      // We'll let updateIgnoredWarningsSection handle fetching and rendering
+      html += `<div class="panel" style="margin-top:18px;"><div class="panel-title">${escapeHtml(this.t('audit.ignoredWarnings'))}</div>
+        <div class="history-list" id="ignoredWarningsList"></div></div>`;
+    }
+
+    content.innerHTML = html;
+
+    // Bind event listeners for the rendered content
+    content.querySelectorAll('.copy-command-btn').forEach((btn) => btn.addEventListener('click', async () => {
+      const codeEl = content.querySelector(`#${btn.dataset.target}`);
+      if (!codeEl) return;
+      try {
+        await navigator.clipboard.writeText(codeEl.textContent);
+        const original = btn.textContent;
+        btn.textContent = t('audit.copied');
+        setTimeout(() => { btn.textContent = original; }, 1500);
+      } catch (err) {
+        alert(t('audit.copyError'));
+      }
+    }));
+    content.querySelectorAll('.audit-open-settings').forEach((btn) => btn.addEventListener('click', async () => {
+      try {
+        await window.soterios.shell.openExternal(btn.dataset.uri);
+      } catch (err) {
+        alert(err.message || t('audit.openSettingsError'));
+      }
+    }));
+    content.querySelectorAll('.audit-ignore').forEach((btn) => btn.addEventListener('click', async () => {
+      const card = btn.closest('.card');
+      btn.disabled = true;
+      try {
+        await window.api.invoke('warnings:ignore', { id: btn.dataset.id, title: btn.dataset.title, detail: btn.dataset.detail });
+        if (card) card.remove();
+        self.updateIgnoredWarningsSection(container);
+      } catch (err) {
+        btn.disabled = false;
+        alert(err.message || t('audit.ignoreError'));
+      }
+    }));
+
+    // Load and render ignored warnings section
+    self.updateIgnoredWarningsSection(container);
+  },
+
   // Render audit results into the container (incremental update)
   renderResults(container, visibleResults) {
     const self = this;
@@ -326,11 +452,23 @@ window.Pages['audit'] = {
 
     // Re-fetch ignored warnings and update the section
     window.api.invoke('warnings:listIgnored').then(ignored => {
-      const ignoredSection = content.querySelector('.panel');
-      if (ignoredSection && (ignored || []).some((w) => String(w.id || '').startsWith('audit:'))) {
-        ignoredSection.querySelector('.history-list').innerHTML = ignored.filter((w) => String(w.id || '').startsWith('audit:')).map((w) => `
-          <div class="history-item"><div><div class="history-title">${escapeHtml(w.title)}</div><div class="history-meta">${escapeHtml(w.detail || '')}</div></div>
-          <button class="btn btn-sm audit-restore" data-id="${escapeHtml(w.id)}">${escapeHtml(self.t('audit.restore'))}</button></div>`).join('');
+      const auditIgnored = (ignored || []).filter((w) => String(w.id || '').startsWith('audit:'));
+      let ignoredSection = content.querySelector('.panel:has(.history-list)'); // more specific selector
+
+      if (auditIgnored.length > 0) {
+        // Create the section if it doesn't exist
+        if (!ignoredSection) {
+          ignoredSection = document.createElement('div');
+          ignoredSection.className = 'panel';
+          ignoredSection.style.marginTop = '18px';
+          content.appendChild(ignoredSection);
+        }
+        ignoredSection.innerHTML = `
+          <div class="panel-title">${escapeHtml(self.t('audit.ignoredWarnings'))}</div>
+          <div class="history-list">${auditIgnored.map((w) => `
+            <div class="history-item"><div><div class="history-title">${escapeHtml(w.title)}</div><div class="history-meta">${escapeHtml(w.detail || '')}</div></div>
+            <button class="btn btn-sm audit-restore" data-id="${escapeHtml(w.id)}">${escapeHtml(self.t('audit.restore'))}</button></div>`).join('')}
+          `;
 
         // Re-bind restore buttons for the ignored section
         ignoredSection.querySelectorAll('.audit-restore').forEach((btn) => btn.addEventListener('click', async () => {

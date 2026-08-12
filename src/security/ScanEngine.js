@@ -202,7 +202,7 @@ class ScanEngine {
       // Pre-count total files for accurate progress calculation (skip for full scans to avoid long delays)
       let totalFilesToScan = 0;
       if (scanType !== 'full' && paths.length < 10) {
-        emitProgress(5, 'Counting files...');
+        emitProgress(5, 'Preparing scan');
         totalFilesToScan = countFilesInPaths(paths);
         console.log(`[ScanEngine] Pre-counted ${totalFilesToScan} files in ${paths.length} paths`);
       }

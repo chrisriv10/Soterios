@@ -600,7 +600,7 @@ body {
 
 .stat-tile { background: var(--bg-surface); border: 1px solid var(--glass-border); border-radius: 10px; padding: 14px 16px; }
 .stat-tile .stat-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 4px; }
-.stat-tile .stat-value { font-size: 1.2rem; font-weight: 700; }
+.stat-tile .stat-value { font-size: 1.2rem; font-weight: 700; overflow-wrap: break-word; word-wrap: break-word; }
 .stat-tile .stat-value.ok { color: var(--ok); }
 .stat-tile .stat-value.warn { color: var(--warn); }
 .stat-tile .stat-value.danger { color: var(--danger); }
