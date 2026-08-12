@@ -14,6 +14,75 @@ window.Pages['network'] = {
   _vpnSelection: '',
   _vpnPending: null,
   _vpnError: '',
+  _heatmapZoom: 1,
+  _heatmapPan: { x: 0, y: 0 },
+  _heatmapShowArcs: true,
+  _heatmapPulseRaf: null,
+  _heatmapDrag: null,
+  _heatmapSuppressClick: false,
+  _heatmapWindowMouseMove: null,
+  _heatmapWindowMouseUp: null,
+  _heatmapKeydownHandler: null,
+  _selectedClusterIps: null,
+  _selectedClusterLoc: null,
+
+  _startHeatmapPulses(content) {
+    if (this._heatmapPulseRaf) {
+      cancelAnimationFrame(this._heatmapPulseRaf);
+      this._heatmapPulseRaf = null;
+    }
+    const dots = content.querySelectorAll('.heatmap-pulse-dot');
+    if (!dots.length) return;
+    const items = Array.from(dots).map((el) => ({
+      el,
+      hx: parseFloat(el.dataset.hx), hy: parseFloat(el.dataset.hy),
+      cx0: parseFloat(el.dataset.cx0), cy0: parseFloat(el.dataset.cy0),
+      tx: parseFloat(el.dataset.tx), ty: parseFloat(el.dataset.ty),
+      dur: parseFloat(el.dataset.dur) || 2,
+      delay: parseFloat(el.dataset.delay) || 0
+    }));
+    const start = performance.now();
+    const tick = (now) => {
+      const elapsed = (now - start) / 1000;
+      for (const it of items) {
+        if (!it.el.isConnected) continue;
+        const t = (((elapsed + it.delay) % it.dur) / it.dur);
+        const mt = 1 - t;
+        const x = mt * mt * it.hx + 2 * mt * t * it.cx0 + t * t * it.tx;
+        const y = mt * mt * it.hy + 2 * mt * t * it.cy0 + t * t * it.ty;
+        it.el.setAttribute('cx', x.toFixed(3));
+        it.el.setAttribute('cy', y.toFixed(3));
+        const fade = Math.min(1, t * 6, (1 - t) * 6);
+        it.el.style.opacity = Math.max(0.15, fade).toFixed(2);
+      }
+      this._heatmapPulseRaf = requestAnimationFrame(tick);
+    };
+    this._heatmapPulseRaf = requestAnimationFrame(tick);
+  },
+
+  _clampHeatmapPan(zoom, pan, viewportW, viewportH) {
+    const minX = viewportW - viewportW * zoom;
+    const minY = viewportH - viewportH * zoom;
+    return {
+      x: Math.min(0, Math.max(minX, pan.x)),
+      y: Math.min(0, Math.max(minY, pan.y))
+    };
+  },
+
+  _applyHeatmapTransform(content) {
+    const world = content.querySelector('#heatmapWorld');
+    if (world) {
+      world.style.transform = `translate(${this._heatmapPan.x}px, ${this._heatmapPan.y}px) scale(${this._heatmapZoom})`;
+    }
+    const viewport = content.querySelector('#heatmapViewport');
+    if (viewport) {
+      viewport.style.cursor = this._heatmapZoom > 1.001 ? 'grab' : 'default';
+    }
+    const label = content.querySelector('#heatmapZoomLabel');
+    if (label) label.textContent = `${Math.round(this._heatmapZoom * 100)}%`;
+    const resetBtn = content.querySelector('#heatmapZoomReset');
+    if (resetBtn) resetBtn.style.display = this._heatmapZoom > 1.001 ? 'flex' : 'none';
+  },
 
   _classificationLabel(classification) {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
@@ -138,6 +207,41 @@ window.Pages['network'] = {
           z-index: 10;
           transform: translate(-50%, -50%) scale(1.2) !important;
         }
+        #heatmapViewport.panning {
+          cursor: grabbing !important;
+        }
+        .heatmap-arc {
+          fill: none;
+          opacity: 0.22;
+        }
+        @keyframes heatmapHomePulse {
+          0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.8; }
+          100% { transform: translate(-50%, -50%) scale(2.6); opacity: 0; }
+        }
+        .heatmap-home::after {
+          content: '';
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: 100%;
+          height: 100%;
+          border-radius: 50%;
+          background: var(--accent-primary);
+          animation: heatmapHomePulse 2.2s ease-out infinite;
+          pointer-events: none;
+        }
+        .heatmap-zoom-btn {
+          width: 26px; height: 26px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);
+          background: rgba(20,26,33,0.85); color: var(--text-main); cursor: pointer; font-size: 0.9rem;
+          display: flex; align-items: center; justify-content: center; line-height: 1; transition: background 0.15s ease;
+        }
+        .heatmap-zoom-btn:hover { background: rgba(40,48,58,0.95); }
+        #heatmapTooltip {
+          position: absolute; pointer-events: none; z-index: 30; display: none;
+          background: rgba(18, 23, 29, 0.96); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+          padding: 8px 11px; font-size: 0.75rem; line-height: 1.5; box-shadow: 0 6px 20px rgba(0,0,0,0.45);
+          white-space: normal; max-width: 260px;
+        }
       </style>
       <header class="page-header">
         <h1 class="page-title">${escapeHtml(t('network.title'))}</h1>
@@ -158,6 +262,46 @@ window.Pages['network'] = {
     const content = container.querySelector('#networkContent');
     if (content) {
       content.addEventListener('click', (e) => {
+        if (window.Pages['network']._heatmapSuppressClick) {
+          window.Pages['network']._heatmapSuppressClick = false;
+          return;
+        }
+        const zoomIn = e.target.closest('#heatmapZoomIn');
+        const zoomOut = e.target.closest('#heatmapZoomOut');
+        const zoomReset = e.target.closest('#heatmapZoomReset');
+        const arcsToggle = e.target.closest('#heatmapArcsToggle');
+        if (zoomIn || zoomOut || zoomReset) {
+          const viewport = content.querySelector('#heatmapViewport');
+          const rect = viewport ? viewport.getBoundingClientRect() : { width: 0, height: 0 };
+          if (zoomReset) {
+            window.Pages['network']._heatmapZoom = 1;
+            window.Pages['network']._heatmapPan = { x: 0, y: 0 };
+          } else {
+            const factor = zoomIn ? 1.5 : 1 / 1.5;
+            const oldZoom = window.Pages['network']._heatmapZoom;
+            const newZoom = Math.max(1, Math.min(6, Math.round(oldZoom * factor * 100) / 100));
+            const cx = rect.width / 2, cy = rect.height / 2;
+            const pan = window.Pages['network']._heatmapPan;
+            const worldX = (cx - pan.x) / oldZoom;
+            const worldY = (cy - pan.y) / oldZoom;
+            let newPan = { x: cx - worldX * newZoom, y: cy - worldY * newZoom };
+            newPan = window.Pages['network']._clampHeatmapPan(newZoom, newPan, rect.width, rect.height);
+            window.Pages['network']._heatmapZoom = newZoom;
+            window.Pages['network']._heatmapPan = newPan;
+          }
+          window.Pages['network']._applyHeatmapTransform(content);
+          return;
+        }
+        if (arcsToggle) {
+          window.Pages['network']._heatmapShowArcs = !window.Pages['network']._heatmapShowArcs;
+          const arcsSvg = content.querySelector('#heatmapArcs');
+          if (arcsSvg) arcsSvg.style.display = window.Pages['network']._heatmapShowArcs ? 'block' : 'none';
+          const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+          arcsToggle.title = window.Pages['network']._heatmapShowArcs ? t('network.heatmapArcsOn') : t('network.heatmapArcsOff');
+          const icon = arcsToggle.querySelector('span');
+          if (icon) icon.style.opacity = window.Pages['network']._heatmapShowArcs ? '1' : '0.45';
+          return;
+        }
         const marker = e.target.closest('.heatmap-marker');
         if (marker) {
           const ips = marker.dataset.ips.split(',');
@@ -167,8 +311,133 @@ window.Pages['network'] = {
         } else if (e.target.closest('.heatmap-infobox-close')) {
           window.Pages['network']._selectedClusterIps = null;
           window.Pages['network'].load(container, false);
+        } else if (e.target.closest('#heatmapViewport') && !e.target.closest('#heatmapClusterPanel') && window.Pages['network']._selectedClusterIps) {
+          // click on empty map background closes the open cluster panel
+          window.Pages['network']._selectedClusterIps = null;
+          window.Pages['network'].load(container, false);
         }
       });
+
+      content.addEventListener('wheel', (e) => {
+        const viewport = e.target.closest('#heatmapViewport');
+        if (!viewport) return;
+        e.preventDefault();
+        const page = window.Pages['network'];
+        const rect = viewport.getBoundingClientRect();
+        const localX = e.clientX - rect.left;
+        const localY = e.clientY - rect.top;
+        const oldZoom = page._heatmapZoom;
+        const dir = e.deltaY > 0 ? -1 : 1;
+        let newZoom = Math.round((oldZoom + dir * oldZoom * 0.2) * 100) / 100;
+        newZoom = Math.max(1, Math.min(6, newZoom));
+        if (newZoom === oldZoom) return;
+        const worldX = (localX - page._heatmapPan.x) / oldZoom;
+        const worldY = (localY - page._heatmapPan.y) / oldZoom;
+        let newPan = { x: localX - worldX * newZoom, y: localY - worldY * newZoom };
+        newPan = page._clampHeatmapPan(newZoom, newPan, rect.width, rect.height);
+        page._heatmapZoom = newZoom;
+        page._heatmapPan = newPan;
+        page._applyHeatmapTransform(content);
+      }, { passive: false });
+
+      content.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        const viewport = e.target.closest('#heatmapViewport');
+        if (!viewport) return;
+        if (e.target.closest('.heatmap-marker') || e.target.closest('.heatmap-zoom-btn') || e.target.closest('#heatmapClusterPanel')) return;
+        const page = window.Pages['network'];
+        page._heatmapDrag = {
+          startX: e.clientX,
+          startY: e.clientY,
+          startPan: { x: page._heatmapPan.x, y: page._heatmapPan.y },
+          moved: false,
+          rect: viewport.getBoundingClientRect()
+        };
+        viewport.classList.add('panning');
+      });
+
+      window.removeEventListener('mousemove', this._heatmapWindowMouseMove || (() => {}));
+      window.removeEventListener('mouseup', this._heatmapWindowMouseUp || (() => {}));
+      document.removeEventListener('keydown', this._heatmapKeydownHandler || (() => {}));
+
+      this._heatmapWindowMouseMove = (e) => {
+        const page = window.Pages['network'];
+        if (!page._heatmapDrag || !document.body.contains(container)) return;
+        const st = page._heatmapDrag;
+        const dx = e.clientX - st.startX;
+        const dy = e.clientY - st.startY;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) st.moved = true;
+        if (page._heatmapZoom <= 1.001) return;
+        let newPan = { x: st.startPan.x + dx, y: st.startPan.y + dy };
+        newPan = page._clampHeatmapPan(page._heatmapZoom, newPan, st.rect.width, st.rect.height);
+        page._heatmapPan = newPan;
+        page._applyHeatmapTransform(content);
+      };
+      this._heatmapWindowMouseUp = () => {
+        const page = window.Pages['network'];
+        const viewport = content.querySelector('#heatmapViewport');
+        if (viewport) viewport.classList.remove('panning');
+        if (page._heatmapDrag) {
+          if (page._heatmapDrag.moved) page._heatmapSuppressClick = true;
+          page._heatmapDrag = null;
+        }
+      };
+      this._heatmapKeydownHandler = (e) => {
+        if (e.key !== 'Escape') return;
+        if (!document.body.contains(container)) {
+          document.removeEventListener('keydown', window.Pages['network']._heatmapKeydownHandler);
+          return;
+        }
+        if (window.Pages['network']._selectedClusterIps) {
+          window.Pages['network']._selectedClusterIps = null;
+          window.Pages['network'].load(container, false);
+        }
+      };
+      window.addEventListener('mousemove', this._heatmapWindowMouseMove);
+      window.addEventListener('mouseup', this._heatmapWindowMouseUp);
+      document.addEventListener('keydown', this._heatmapKeydownHandler);
+
+      content.addEventListener('mousemove', (e) => {
+        const page = window.Pages['network'];
+        const tooltip = content.querySelector('#heatmapTooltip');
+        const viewport = content.querySelector('#heatmapViewport');
+        if (!tooltip || !viewport) return;
+        const marker = e.target.closest('.heatmap-marker');
+        if (!marker) {
+          if (tooltip.style.display !== 'none') tooltip.style.display = 'none';
+          return;
+        }
+        const vpRect = viewport.getBoundingClientRect();
+        const localX = e.clientX - vpRect.left;
+        const localY = e.clientY - vpRect.top;
+        if (tooltip.dataset.forIps !== marker.dataset.ips) {
+          tooltip.dataset.forIps = marker.dataset.ips;
+          const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+          let classColor = 'var(--ok)';
+          if (marker.dataset.classification === 'MALICIOUS') classColor = 'var(--danger)';
+          else if (marker.dataset.classification === 'UNKNOWN') classColor = 'var(--warn)';
+          tooltip.innerHTML = `
+            <div style="font-weight:600; color:var(--text-main); margin-bottom:3px;">${escapeHtml(marker.dataset.loc)}</div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:14px;">
+              <span style="color:var(--text-dim);">${escapeHtml(t('network.heatmapTooltipConnections', { count: marker.dataset.count }))}</span>
+              <span style="font-weight:600; color:${classColor};">${escapeHtml(marker.dataset.classLabel)}</span>
+            </div>`;
+        }
+        tooltip.style.display = 'block';
+        let left = localX + 14;
+        let top = localY + 14;
+        if (left > vpRect.width - 200) left = localX - 214;
+        if (top > vpRect.height - 70) top = localY - 60;
+        tooltip.style.left = `${Math.max(4, left)}px`;
+        tooltip.style.top = `${Math.max(4, top)}px`;
+      });
+
+      content.addEventListener('mouseleave', (e) => {
+        if (e.target && e.target.id === 'networkContent') {
+          const tooltip = content.querySelector('#heatmapTooltip');
+          if (tooltip) tooltip.style.display = 'none';
+        }
+      }, true);
 
       content.addEventListener('input', (e) => {
         if (e.target && e.target.id === 'connectionSearch') {
@@ -569,16 +838,22 @@ if (content) this.paintHistoryChart(content).catch(() => {});
 
       if (Object.keys(geoData).length > 0) {
         const hmMin = this._minimized.has('heatmap');
+        let safeCount = 0, unknownCount = 0, maliciousCount = 0;
+        for (const c of filteredConnections) {
+          if (c.classification === 'SAFE') safeCount++;
+          else if (c.classification === 'UNKNOWN') unknownCount++;
+          else if (c.classification === 'MALICIOUS') maliciousCount++;
+        }
         html += `<div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:${hmMin ? '0' : '10px'}; flex-wrap:wrap; gap:8px;">`;
         html += `<div>
           <h3 style="margin:0; font-size:1rem; display:flex; align-items:center; gap:8px;">
             ${escapeHtml(t('network.heatmapTitle'))}
             <button class="card-minimize-btn" data-card-id="heatmap" title="${hmMin ? 'Restore' : 'Minimize'}" style="background:none; border:none; cursor:pointer; color:var(--text-dim); font-size:1rem; padding:0 4px; line-height:1; transition:transform 0.2s;" aria-label="${hmMin ? 'Restore' : 'Minimize'}">${hmMin ? '&#9660;' : '&#9650;'}</button>
           </h3>
-          <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">${escapeHtml(t('network.heatmapCounts', { total: totalConnectionsCount, filtered: filteredConnectionsCount, mapped: mappedCount }))}</div>
+          <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">${escapeHtml(t('network.heatmapCounts', { total: totalConnectionsCount, filtered: filteredConnectionsCount, mapped: mappedCount }))} &nbsp;·&nbsp; <span style="color:var(--ok); font-weight:600;">${safeCount}</span> ${escapeHtml(t('network.heatmapLegendSafe'))} &nbsp;<span style="color:var(--warn); font-weight:600;">${unknownCount}</span> ${escapeHtml(t('network.heatmapLegendUnverified'))} &nbsp;<span style="color:var(--danger); font-weight:600;">${maliciousCount}</span> ${escapeHtml(t('network.heatmapLegendMalicious'))}</div>
         </div>`;
         if (!hmMin) {
-          html += `<div style="display:flex; gap:12px; font-size:0.75rem; font-weight:600;">
+          html += `<div style="display:flex; gap:12px; font-size:0.75rem; font-weight:600; align-items:center;">
             <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--ok);"></span> ${escapeHtml(t('network.heatmapLegendSafe'))}</span>
             <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--warn);"></span> ${escapeHtml(t('network.heatmapLegendUnverified'))}</span>
             <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--danger);"></span> ${escapeHtml(t('network.heatmapLegendMalicious'))}</span>
@@ -588,116 +863,165 @@ if (content) this.paintHistoryChart(content).catch(() => {});
 
         if (!hmMin) {
           html += `<div class="card" style="padding:0; margin-bottom:18px; position:relative; background-color:var(--bg-panel); overflow:hidden; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
-            <div id="heatmapMapBgMount"></div>
-          <div style="position:absolute; top:0; left:0; bottom:0; right:0; pointer-events:none; z-index:2;">`;
+            <div id="heatmapViewport" style="position:relative; width:100%; aspect-ratio:950/620; overflow:hidden; cursor:${this._heatmapZoom > 1.001 ? 'grab' : 'default'};">
+              <div id="heatmapWorld" style="position:absolute; inset:0; transform-origin:0 0; transform:translate(${this._heatmapPan.x}px, ${this._heatmapPan.y}px) scale(${this._heatmapZoom}); will-change:transform;">
+                <div id="heatmapMapBgMount"></div>
+                <div style="position:absolute; inset:0; z-index:3;">`;
 
-        if (mappedCount === 0) {
-          html += `<div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; font-size:0.85rem; color:var(--text-dim); white-space:nowrap;">${escapeHtml(t('network.heatmapNoMatches'))}</div>`;
-        }
-
-        const clusters = {};
-        for (const c of filteredConnections) {
-          const ip = firstDefined(c.remoteAddress, c.RemoteAddress);
-          const geo = geoData[ip];
-          if (!geo || geo.lat === undefined || geo.lon === undefined) continue;
-
-          const clusterX = Math.round(geo.lon / 2.5) * 2.5;
-          const clusterY = Math.round(geo.lat / 2.5) * 2.5;
-          const key = `${clusterX},${clusterY}`;
-
-          if (!clusters[key]) {
-            clusters[key] = {
-              lat: clusterY, lon: clusterX,
-              count: 0,
-              ips: new Set(),
-              classification: 'SAFE',
-              locations: new Set()
-            };
+          if (mappedCount === 0) {
+            html += `<div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; font-size:0.85rem; color:var(--text-dim); white-space:nowrap;">${escapeHtml(t('network.heatmapNoMatches'))}</div>`;
           }
 
-          clusters[key].count++;
-          clusters[key].ips.add(ip);
-          if (geo.city && geo.country) clusters[key].locations.add(`${geo.city}, ${geo.country}`);
-
-          if (c.classification === 'MALICIOUS') {
-            clusters[key].classification = 'MALICIOUS';
-          } else if (c.classification === 'UNKNOWN' && clusters[key].classification === 'SAFE') {
-            clusters[key].classification = 'UNKNOWN';
-          }
-        }
-
-        for (const key in clusters) {
-          const c = clusters[key];
-          const x = ((c.lon + 180) / 360) * 100;
-          const y = ((90 - c.lat) / 180) * 100;
-
-          let color = 'var(--ok)';
-          let glow = 'var(--ok)';
-          let pulseClass = '';
-
-          if (c.classification === 'MALICIOUS') {
-            color = 'var(--danger)';
-            glow = 'var(--danger)';
-            pulseClass = 'heatmap-pulse-malicious';
-          } else if (c.classification === 'UNKNOWN') {
-            color = 'var(--warn)';
-            glow = 'var(--warn)';
-          }
-
-          const size = Math.max(8, 6 + Math.log(c.count) * 4);
-          const ipList = Array.from(c.ips).join(',');
-          const locList = Array.from(c.locations).join(' | ') || t('common.unverifiedLocation');
-          const classificationDisplay = this._classificationLabel(c.classification);
-
-          html += `<div class="heatmap-marker ${pulseClass}" data-ips="${ipList}" data-loc="${escapeHtml(locList)}"
-            title="${escapeHtml(locList)}\\nIPs: ${ipList}\\nConnections: ${c.count}\\nClassification: ${escapeHtml(classificationDisplay)}"
-            style="position:absolute; left:${x}%; top:${y}%; width:${size}px; height:${size}px;
-            background-color:${color}; border-radius:50%; transform:translate(-50%, -50%);
-            box-shadow:0 0 10px ${glow}; cursor:pointer; pointer-events:auto; display:flex;
-            align-items:center; justify-content:center; color:#fff; font-size:9px; font-weight:bold; transition: transform 0.15s ease-out;">
-            ${c.count > 1 ? c.count : ''}
-          </div>`;
-        }
-
-        if (window.Pages['network']._selectedClusterIps) {
-          const selectedIps = window.Pages['network']._selectedClusterIps;
-          const loc = window.Pages['network']._selectedClusterLoc;
-          const matchingConns = filteredConnections.filter(c => {
-             const ip = firstDefined(c.remoteAddress, c.RemoteAddress);
-             return selectedIps.includes(ip);
-          });
-
-          html += `<div style="position:absolute; top:10px; right:10px; width:320px; max-height:calc(100% - 20px); background:rgba(20, 26, 33, 0.95); border:1px solid rgba(255,255,255,0.1); border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,0.5); z-index:20; display:flex; flex-direction:column; backdrop-filter:blur(4px); pointer-events:auto;">
-            <div style="padding:10px 14px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;">
-              <div style="font-weight:600; font-size:0.9rem;">${escapeHtml(loc || t('network.clusterDetails'))}</div>
-              <div class="heatmap-infobox-close" style="cursor:pointer; opacity:0.7; font-size:1.4rem; line-height:1;">&times;</div>
-            </div>
-            <div style="padding:10px 14px; overflow-y:auto; font-size:0.8rem; display:flex; flex-direction:column; gap:12px;">`;
-
-          for (const c of matchingConns) {
-            const proc = c.processName ? `(${escapeHtml(c.processName)})` : (c.pid ? `(PID: ${escapeHtml(c.pid)})` : '');
+          const clusters = {};
+          for (const c of filteredConnections) {
             const ip = firstDefined(c.remoteAddress, c.RemoteAddress);
-            const port = firstDefined(c.remotePort, c.RemotePort);
-            const state = getState(c);
-            let stateColor = 'var(--text-dim)';
-            if (state === 'ESTABLISHED') stateColor = 'var(--ok)';
-            else if (state === 'LISTEN' || state === 'LISTENING') stateColor = 'var(--accent-primary)';
-            else if (state === 'TIME_WAIT') stateColor = 'var(--warn)';
-            else if (state === 'CLOSE_WAIT') stateColor = 'var(--danger)';
+            const geo = geoData[ip];
+            if (!geo || geo.lat === undefined || geo.lon === undefined) continue;
 
-            html += `<div>
-              <div style="font-family:monospace; color:var(--text-primary); font-size:0.85rem;">${escapeHtml(ip)}:${escapeHtml(port)}</div>
-              <div style="color:var(--text-dim); display:flex; justify-content:space-between; margin-top:4px;">
-                <span>${proc}</span>
-                <span style="color:${stateColor}; font-weight:600; font-size:0.7rem; background:${stateColor}15; padding:2px 4px; border-radius:4px;">${escapeHtml(state)}</span>
-              </div>
-            </div>`;
+            const clusterX = Math.round(geo.lon / 2.5) * 2.5;
+            const clusterY = Math.round(geo.lat / 2.5) * 2.5;
+            const key = `${clusterX},${clusterY}`;
+
+            if (!clusters[key]) {
+              clusters[key] = {
+                lat: clusterY, lon: clusterX,
+                count: 0,
+                ips: new Set(),
+                classification: 'SAFE',
+                locations: new Set()
+              };
+            }
+
+            clusters[key].count++;
+            clusters[key].ips.add(ip);
+            if (geo.city && geo.country) clusters[key].locations.add(`${geo.city}, ${geo.country}`);
+
+            if (c.classification === 'MALICIOUS') {
+              clusters[key].classification = 'MALICIOUS';
+            } else if (c.classification === 'UNKNOWN' && clusters[key].classification === 'SAFE') {
+              clusters[key].classification = 'UNKNOWN';
+            }
           }
 
-          html += `</div></div>`;
-        }
+          // Home anchor point (bottom-center) used as the origin for connection-path arcs.
+          const homeX = 50, homeY = 94;
+          let arcSvg = '';
 
-        html += `</div></div>`;
+          for (const key in clusters) {
+            const c = clusters[key];
+            const x = ((c.lon + 180) / 360) * 100;
+            const y = ((90 - c.lat) / 180) * 100;
+
+            let color = 'var(--ok)';
+            let colorHex = '#3FB950';
+            let glow = 'var(--ok)';
+            let pulseClass = '';
+
+            if (c.classification === 'MALICIOUS') {
+              color = 'var(--danger)';
+              colorHex = '#F85149';
+              glow = 'var(--danger)';
+              pulseClass = 'heatmap-pulse-malicious';
+            } else if (c.classification === 'UNKNOWN') {
+              color = 'var(--warn)';
+              colorHex = '#D29922';
+              glow = 'var(--warn)';
+            }
+
+            const size = Math.max(8, 6 + Math.log(c.count) * 4);
+            const ipList = Array.from(c.ips).join(',');
+            const locList = Array.from(c.locations).join(' | ') || t('common.unverifiedLocation');
+            const classificationDisplay = this._classificationLabel(c.classification);
+
+            html += `<div class="heatmap-marker ${pulseClass}" data-ips="${ipList}" data-loc="${escapeHtml(locList)}"
+              data-count="${c.count}" data-classification="${escapeHtml(c.classification)}" data-class-label="${escapeHtml(classificationDisplay)}"
+              title="${escapeHtml(locList)}\\nIPs: ${ipList}\\nConnections: ${c.count}\\nClassification: ${escapeHtml(classificationDisplay)}"
+              style="position:absolute; left:${x}%; top:${y}%; width:${size}px; height:${size}px;
+              background-color:${color}; border-radius:50%; transform:translate(-50%, -50%);
+              box-shadow:0 0 10px ${glow}; cursor:pointer; pointer-events:auto; display:flex;
+              align-items:center; justify-content:center; color:#fff; font-size:9px; font-weight:bold; transition: transform 0.15s ease-out;">
+              ${c.count > 1 ? c.count : ''}
+            </div>`;
+
+            // Bowed "signal" path from the home anchor to this cluster, with a
+            // faint static guide line plus a small pulse that travels along it
+            // (animated via a JS rAF loop for reliable cross-platform motion).
+            const midX = (homeX + x) / 2;
+            const midY = (homeY + y) / 2;
+            const dist = Math.hypot(x - homeX, y - homeY);
+            const bow = Math.min(28, dist * 0.28);
+            const ctrlX = midX;
+            const ctrlY = midY - bow;
+            const strokeW = c.classification === 'MALICIOUS' ? 0.45 : 0.28;
+            const dotR = c.classification === 'MALICIOUS' ? 1.05 : 0.75;
+            const dur = Math.max(1.4, Math.min(3.4, 1 + dist / 32)).toFixed(2);
+            const pathD = `M ${homeX} ${homeY} Q ${ctrlX} ${ctrlY} ${x} ${y}`;
+            arcSvg += `<path class="heatmap-arc" d="${pathD}" stroke="${colorHex}" stroke-width="${strokeW}"></path>`;
+            arcSvg += `<circle class="heatmap-pulse-dot" r="${dotR}" fill="${colorHex}"
+              data-hx="${homeX}" data-hy="${homeY}" data-cx0="${ctrlX}" data-cy0="${ctrlY}" data-tx="${x}" data-ty="${y}"
+              data-dur="${dur}" data-delay="${(Math.random() * dur).toFixed(2)}"
+              style="filter:drop-shadow(0 0 2px ${colorHex});" cx="${homeX}" cy="${homeY}"></circle>`;
+          }
+
+          html += `</div>`;
+          html += `<svg id="heatmapArcs" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute; inset:0; width:100%; height:100%; z-index:1; pointer-events:none; display:${this._heatmapShowArcs ? 'block' : 'none'};">${arcSvg}</svg>`;
+          html += `<div class="heatmap-home" title="${escapeHtml(t('network.heatmapHomeLabel'))}" style="position:absolute; left:${homeX}%; top:${homeY}%; width:9px; height:9px; border-radius:50%; background:var(--accent-primary); transform:translate(-50%,-50%); box-shadow:0 0 8px var(--accent-primary); z-index:3;"></div>`;
+          html += `<div style="position:absolute; bottom:6px; left:8px; z-index:4; font-size:0.68rem; color:var(--text-dim); opacity:0.7; pointer-events:none; background:rgba(11,14,20,0.4); padding:2px 6px; border-radius:4px;">${escapeHtml(t('network.heatmapPanHint'))}</div>`;
+
+          if (window.Pages['network']._selectedClusterIps) {
+            const selectedIps = window.Pages['network']._selectedClusterIps;
+            const loc = window.Pages['network']._selectedClusterLoc;
+            const matchingConns = filteredConnections.filter(c => {
+               const ip = firstDefined(c.remoteAddress, c.RemoteAddress);
+               return selectedIps.includes(ip);
+            });
+
+            html += `<div id="heatmapClusterPanel" style="position:absolute; top:10px; right:10px; width:320px; max-height:calc(100% - 20px); background:rgba(20, 26, 33, 0.95); border:1px solid rgba(255,255,255,0.1); border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,0.5); z-index:20; display:flex; flex-direction:column; backdrop-filter:blur(4px); pointer-events:auto;">
+              <div style="padding:10px 14px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;">
+                <div style="font-weight:600; font-size:0.9rem;">${escapeHtml(loc || t('network.clusterDetails'))}</div>
+                <div class="heatmap-infobox-close" style="cursor:pointer; opacity:0.7; font-size:1.4rem; line-height:1;">&times;</div>
+              </div>
+              <div style="padding:10px 14px; overflow-y:auto; font-size:0.8rem; display:flex; flex-direction:column; gap:12px;">`;
+
+            for (const c of matchingConns) {
+              const proc = c.processName ? `(${escapeHtml(c.processName)})` : (c.pid ? `(PID: ${escapeHtml(c.pid)})` : '');
+              const ip = firstDefined(c.remoteAddress, c.RemoteAddress);
+              const port = firstDefined(c.remotePort, c.RemotePort);
+              const state = getState(c);
+              let stateColor = 'var(--text-dim)';
+              if (state === 'ESTABLISHED') stateColor = 'var(--ok)';
+              else if (state === 'LISTEN' || state === 'LISTENING') stateColor = 'var(--accent-primary)';
+              else if (state === 'TIME_WAIT') stateColor = 'var(--warn)';
+              else if (state === 'CLOSE_WAIT') stateColor = 'var(--danger)';
+
+              html += `<div>
+                <div style="font-family:monospace; color:var(--text-primary); font-size:0.85rem;">${escapeHtml(ip)}:${escapeHtml(port)}</div>
+                <div style="color:var(--text-dim); display:flex; justify-content:space-between; margin-top:4px;">
+                  <span>${proc}</span>
+                  <span style="color:${stateColor}; font-weight:600; font-size:0.7rem; background:${stateColor}15; padding:2px 4px; border-radius:4px;">${escapeHtml(state)}</span>
+                </div>
+              </div>`;
+            }
+
+            html += `</div></div>`;
+          }
+
+          html += `</div>`; // #heatmapWorld
+          html += `<div id="heatmapTooltip"></div>`;
+          html += `<div style="position:absolute; top:8px; right:8px; z-index:25; display:flex; flex-direction:column; gap:6px; align-items:flex-end;">
+            <div style="display:flex; gap:4px;">
+              <button type="button" id="heatmapArcsToggle" class="heatmap-zoom-btn" style="width:auto; padding:0 8px; gap:5px; font-size:0.72rem;" title="${this._heatmapShowArcs ? escapeHtml(t('network.heatmapArcsOn')) : escapeHtml(t('network.heatmapArcsOff'))}">
+                <span style="opacity:${this._heatmapShowArcs ? '1' : '0.45'};">&#10022;</span><span>${escapeHtml(t('network.heatmapArcsLabel'))}</span>
+              </button>
+              <button type="button" id="heatmapZoomOut" class="heatmap-zoom-btn" title="${escapeHtml(t('network.heatmapZoomOut'))}">&minus;</button>
+              <button type="button" id="heatmapZoomIn" class="heatmap-zoom-btn" title="${escapeHtml(t('network.heatmapZoomIn'))}">+</button>
+            </div>
+            <button type="button" id="heatmapZoomReset" class="heatmap-zoom-btn" style="width:auto; padding:0 8px; font-size:0.7rem; display:${this._heatmapZoom > 1.001 ? 'flex' : 'none'};" title="${escapeHtml(t('network.heatmapZoomReset'))}">
+              <span id="heatmapZoomLabel">${Math.round(this._heatmapZoom * 100)}%</span>&nbsp;&#8635;
+            </button>
+          </div>`;
+          html += `</div>`; // #heatmapViewport
+          html += `</div>`; // .card
         }
       }
 
@@ -807,6 +1131,7 @@ if (content) this.paintHistoryChart(content).catch(() => {});
       }
 
       content.innerHTML = html;
+      this._startHeatmapPulses(content);
 
       const mapBgMount = content.querySelector('#heatmapMapBgMount');
       if (mapBgMount) {
@@ -1383,6 +1708,20 @@ if (content) this.paintHistoryChart(content).catch(() => {});
       clearInterval(this._chartRefreshTimer);
       this._chartRefreshTimer = null;
     }
+    if (this._heatmapPulseRaf) {
+      cancelAnimationFrame(this._heatmapPulseRaf);
+      this._heatmapPulseRaf = null;
+    }
+    if (this._heatmapWindowMouseMove) window.removeEventListener('mousemove', this._heatmapWindowMouseMove);
+    if (this._heatmapWindowMouseUp) window.removeEventListener('mouseup', this._heatmapWindowMouseUp);
+    if (this._heatmapKeydownHandler) document.removeEventListener('keydown', this._heatmapKeydownHandler);
+    this._heatmapWindowMouseMove = null;
+    this._heatmapWindowMouseUp = null;
+    this._heatmapKeydownHandler = null;
+    this._heatmapDrag = null;
+    this._heatmapSuppressClick = false;
+    this._heatmapZoom = 1;
+    this._heatmapPan = { x: 0, y: 0 };
     this._connectionQuery = '';
     this._connectionRiskFilter = 'all';
     this._connectionStateFilter = 'all';
