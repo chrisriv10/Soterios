@@ -403,6 +403,21 @@ window.Pages.tools = {
           }
         });
       }
+
+      const largeFilesBrowseBtn = container.querySelector('#largeFilesBrowseBtn');
+      if (largeFilesBrowseBtn) {
+        largeFilesBrowseBtn.addEventListener('click', async () => {
+          try {
+            const folder = await Api.pickFolder();
+            if (folder) {
+              const input = container.querySelector('#largeFilesScanPathInput');
+              if (input) input.value = folder;
+            }
+          } catch (err) {
+            console.error('Folder picker error:', err);
+          }
+        });
+      }
     } catch (err) {
       showToolError(container.querySelector('#toolsColumn'), err);
     }
@@ -428,11 +443,18 @@ window.Pages.tools = {
           <input type="number" min="1" max="10000" value="100" id="minSizeMBInput" class="min-size-input" style="width:56px;" />
           ${escapeHtml(this.t('tools.megabytes'))}
         </label>
+      </div>
+      <div class="tool-input-inline">
+        <label style="display:flex; align-items:center; gap:8px; font-size:0.8rem; color:var(--text-muted); cursor:pointer;">
+          ${escapeHtml(this.t('tools.scanPath'))}
+          <input type="text" id="largeFilesScanPathInput" class="large-files-scan-path-input" placeholder="${escapeHtml(this.t('tools.scanPathPlaceholder'))}" style="flex:1; min-width:200px; padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--panel-bg); color:var(--text); font-size:0.85rem;" />
+        </label>
+        <button class="btn btn-sm" id="largeFilesBrowseBtn" style="padding:4px 10px;">${escapeHtml(this.t('tools.browse'))}</button>
       </div>` : s.id === 'duplicate-finder' ? `
       <div class="tool-input-inline">
         <label style="display:flex; align-items:center; gap:8px; font-size:0.8rem; color:var(--text-muted); cursor:pointer;">
           ${escapeHtml(this.t('tools.scanPath'))}
-          <input type="text" id="scanPathInput" class="scan-path-input" placeholder="${escapeHtml(this.t('tools.scanPathPlaceholder'))}" style="flex:1; min-width:200px; padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--panel-bg); color:var(--text); font-size:0.85rem;" />
+          <input type="text" id="scanPathInput" class="scan-path-input" placeholder="${escapeHtml(this.t('tools.scanPathPlaceholder'))}" style="width:240px; max-width:100%; padding:4px 8px; border-radius:4px; border:1px solid var(--border); background:var(--panel-bg); color:var(--text); font-size:0.85rem;" />
         </label>
       </div>` : '';
 
@@ -551,6 +573,13 @@ window.Pages.tools = {
     return val.length > 0 ? val : undefined;
   },
 
+  getLargeFilesScanPath(container) {
+    const input = container.querySelector('#largeFilesScanPathInput');
+    if (!input) return undefined;
+    const val = input.value.trim();
+    return val.length > 0 ? val : undefined;
+  },
+
 async runScript(container, btn) {
     const scriptId = btn.dataset.scriptId;
     const output = container.querySelector('#toolOutput');
@@ -560,7 +589,7 @@ async runScript(container, btn) {
     let scriptArgs = scriptId === 'clear-temp-files'
       ? { dryRun: false, maxAgeDays: this.getTempAgeDays(container) }
       : scriptId === 'large-files-report'
-      ? { minSizeMB: this.getMinSizeMB(container) }
+      ? { minSizeMB: this.getMinSizeMB(container), scanPath: this.getLargeFilesScanPath(container) }
       : scriptId === 'duplicate-finder'
       ? { scanPath: this.getScanPath(container) }
       : {};
@@ -570,7 +599,10 @@ async runScript(container, btn) {
         alert(this.t('tools.selectFilesFirst'));
         return;
       }
-      scriptArgs = { filePaths: this._selectedShredFiles, passes: 3 };
+      if (!window.confirm(this.t('tools.confirmShred', { count: String(this._selectedShredFiles.length) }))) {
+        return;
+      }
+      scriptArgs = { targets: this._selectedShredFiles, method: 'dod', confirm: true };
     }
 
     const originalLabel = btn.textContent;
@@ -796,21 +828,26 @@ async runScript(container, btn) {
     } else if (scriptId === 'file-shredder') {
       if (result.success === false) {
         html += `<div class="log-row"><span class="log-tag match">${this.t('tools.error')}</span><span class="log-path">${escapeHtml(result.error || this.t('tools.shreddingFailed'))}</span></div>`;
-      } else if (result.results && Array.isArray(result.results)) {
-        html += `<div class="log-row"><span class="log-tag info">${result.total || 0}</span><span class="log-path">${this.t('tools.filesProcessed')}</span></div>`;
-        html += `<div class="log-row"><span class="log-tag clean">${result.successful || 0}</span><span class="log-path">${this.t('tools.successfullyShredded')}</span></div>`;
-        html += `<div class="log-row"><span class="log-tag match">${result.failed || 0}</span><span class="log-path">${this.t('tools.failed')}</span></div>`;
-        html += `<div class="log-row"><span class="log-tag clean">${((result.totalBytesShredded || 0) / 1024 / 1024).toFixed(2)} MB</span><span class="log-path">${this.t('tools.totalDataShredded')}</span></div>`;
-        html += result.results.map(r => `
+      } else {
+        const shredded = Array.isArray(result.shredded) ? result.shredded : [];
+        const errors = Array.isArray(result.errors) ? result.errors : [];
+        html += `<div class="log-row"><span class="log-tag info">${result.fileCount ?? shredded.length}</span><span class="log-path">${this.t('tools.filesProcessed')}</span></div>`;
+        html += `<div class="log-row"><span class="log-tag clean">${shredded.length}</span><span class="log-path">${this.t('tools.successfullyShredded')}</span></div>`;
+        if (errors.length) {
+          html += `<div class="log-row"><span class="log-tag match">${errors.length}</span><span class="log-path">${this.t('tools.failed')}</span></div>`;
+          html += errors.map(r => `
+            <div class="log-row" style="${this.lazyRowStyle}">
+              <span class="log-tag match">${this.t('tools.failed')}</span>
+              <span class="log-path" style="flex:1;">${escapeHtml(r.path || 'unknown')}</span>
+              ${r.error ? `<span class="log-tag warn">${escapeHtml(r.error)}</span>` : ''}
+            </div>`).join('');
+        }
+        html += `<div class="log-row"><span class="log-tag clean">${((result.estimatedOverwriteBytes || 0) / 1024 / 1024).toFixed(2)} MB</span><span class="log-path">${this.t('tools.totalDataShredded')}</span></div>`;
+        html += shredded.map(p => `
           <div class="log-row" style="${this.lazyRowStyle}">
-            <span class="log-tag ${r.success ? 'clean' : 'match'}">${r.success ? this.t('tools.shredded') : this.t('tools.failed')}</span>
-            <span class="log-path" style="flex:1;">${escapeHtml(r.originalPath || r.path || 'unknown')}</span>
-            ${r.error ? `<span class="log-tag warn">${escapeHtml(r.error)}</span>` : ''}
+            <span class="log-tag clean">${this.t('tools.shredded')}</span>
+            <span class="log-path" style="flex:1;">${escapeHtml(p)}</span>
           </div>`).join('');
-      } else if (result.success) {
-        html += `<div class="log-row"><span class="log-tag clean">${this.t('tools.shredded')}</span><span class="log-path">${escapeHtml(result.originalPath)}</span></div>`;
-        html += `<div class="log-row"><span class="log-tag clean">${((result.sizeBytes || 0) / 1024).toFixed(1)} KB</span><span class="log-path">${this.t('tools.size')}</span></div>`;
-        html += `<div class="log-row"><span class="log-tag info">${result.passes || 3}</span><span class="log-path">${this.t('tools.passesCompleted')}</span></div>`;
       }
     } else {
       html += `<pre class="log-path" style="white-space:pre-wrap;">${escapeHtml(JSON.stringify(result, null, 2))}</pre>`;
@@ -844,7 +881,7 @@ async runScript(container, btn) {
         const result = await Api.runTool('run-script', { scriptId: 'delete-files', scriptArgs: { paths } });
         alert(`${this.t('tools.deleted', { count: result.deletedCount })} ${this.t('tools.freed', { mb: result.freedMB })}${result.skippedCount ? ` ${this.t('tools.skipped', { count: result.skippedCount })}` : ''}`);
 
-        const refreshed = await Api.runTool('run-script', { scriptId: 'large-files-report', scriptArgs: { minSizeMB: this.getMinSizeMB(container) } });
+        const refreshed = await Api.runTool('run-script', { scriptId: 'large-files-report', scriptArgs: { minSizeMB: this.getMinSizeMB(container), scanPath: this.getLargeFilesScanPath(container) } });
         output.innerHTML = this.renderOutput('large-files-report', refreshed, new Date().toLocaleString());
         this.wireLargeFilesActions(container);
       } catch (err) {

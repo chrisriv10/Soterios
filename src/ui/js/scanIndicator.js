@@ -11,6 +11,7 @@
 
   let doneTimer = null;
   let progressTimer = null;
+  let currentScanType = null;
   const PROGRESS_THROTTLE_MS = 500;
 
   function show() {
@@ -29,10 +30,11 @@
     if (message) msg.textContent = message;
   }
 
-  function markDone(status, threatsFound = 0) {
+  function markDone(status, threatsFound = 0, scanType = null) {
     clearTimeout(doneTimer);
     clearTimeout(progressTimer);
     el.classList.add('scan-indicator--done');
+    const isDefs = scanType === 'definitions';
     if (status === 'canceled') {
       fill.style.width = pct.textContent;
       label.textContent = t('scanIndicator.canceled');
@@ -44,7 +46,7 @@
     } else if (status === 'failed') {
       fill.style.width = '100%';
       pct.textContent = '100%';
-      label.textContent = t('scanIndicator.failed');
+      label.textContent = isDefs ? t('scanIndicator.defsUpdateFailed') : t('scanIndicator.failed');
       el.style.borderColor = 'rgba(239,68,68,0.35)';
       el.style.background = 'rgba(239,68,68,0.07)';
       if (dot) dot.style.background = '#ef4444';
@@ -59,7 +61,7 @@
     } else {
       fill.style.width = '100%';
       pct.textContent = '100%';
-      label.textContent = t('scanIndicator.complete');
+      label.textContent = isDefs ? t('scanIndicator.defsUpdated') : t('scanIndicator.complete');
       msg.textContent = '';
     }
     doneTimer = setTimeout(() => {
@@ -75,12 +77,17 @@
   }
 
   window.api.on('scan:progress', (data) => {
+    // Folder-watch scans run in the background and must not show the bar.
+    if (data && data.scanType === 'folderwatch') return;
     clearTimeout(doneTimer);
     el.classList.remove('scan-indicator--done');
     el.style.borderColor = '';
     el.style.background = '';
     if (dot) dot.style.background = '';
-    label.textContent = t('scanIndicator.scanning');
+    currentScanType = (data && data.scanType) || null;
+    label.textContent = currentScanType === 'definitions'
+      ? t('scanIndicator.updatingDefs')
+      : t('scanIndicator.scanning');
     show();
     
     clearTimeout(progressTimer);
@@ -90,7 +97,9 @@
   });
 
   window.api.on('scan:complete', (data) => {
-    markDone(data && data.status, data && data.threatsFound);
+    // Folder-watch scans run in the background and must not touch the bar.
+    if (data && data.scanType === 'folderwatch') return;
+    markDone(data && data.status, data && data.threatsFound, data && data.scanType);
   });
 
   el.addEventListener('click', () => {

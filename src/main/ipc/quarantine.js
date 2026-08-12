@@ -40,6 +40,15 @@ function register(mainWindow, { quarantineManager, db }) {
     db.removeTrustedHash(hash);
     return { success: true };
   });
+
+  ipcMain.handle('quarantine:addTrustedHash', async (_event, hash, path, reason) => {
+    db.addTrustedHash(hash, path, reason);
+    return { success: true };
+  });
+
+  ipcMain.handle('quarantine:isHashTrusted', async (_event, hash) => {
+    return db.isHashTrusted(hash);
+  });
 }
 
 module.exports = { register };

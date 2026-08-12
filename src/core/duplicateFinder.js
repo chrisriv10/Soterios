@@ -205,8 +205,8 @@ async function findDuplicates(options = {}) {
   const customPathsProvided = roots || paths || singlePath || scanPath;
   const resolvedRoots = roots
     || paths
-    || (singlePath ? [singlePath] : [])
-    || (scanPath ? [scanPath] : [])
+    || (singlePath ? [singlePath] : null)
+    || (scanPath ? [scanPath] : null)
     || SAFE_ROOTS.filter(p => fs.existsSync(p));
 
   // When custom paths are explicitly provided, don't enforce safe-path restrictions

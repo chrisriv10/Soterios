@@ -93,7 +93,8 @@ window.Pages['dashboard'] = {
       'ClamAV definitions are outdated': {
         label: 'dashboard.action.updateDefinitions',
         handler: async () => {
-          await window.api.invoke('scan:updateDefinitions');
+          const res = await window.api.invoke('scan:updateDefinitions');
+          if (res && !res.success) throw new Error(res.error || t('scanner.defsUpdateFailed'));
         }
       },
       'Windows Firewall is disabled': {
@@ -596,37 +597,37 @@ window.Pages['dashboard'] = {
       rtpIcon.className = 'status-icon ' + (isRtpActive ? 'safe' : 'danger');
     }
 
-    try {
-      isRtpActive = await window.api.invoke('rtp:status');
-      setRtpState(isRtpActive);
-    } catch (_) {
-      setRtpState(false);
-    }
     window.api.invoke('splash:progress', { pct: 35, label: t('splash.checkingProtection') });
 
+    // Fetch the independent dashboard reads concurrently instead of one at a
+    // time so the splash doesn't linger on the slowest sequential call.
+    const [rtpResult, fwResult, scanResult, quarantineResult] = await Promise.allSettled([
+      window.api.invoke('rtp:status'),
+      window.api.invoke('firewall:status'),
+      window.api.invoke('scanReports:latest'),
+      window.api.invoke('quarantine:list', 'quarantined')
+    ]);
+
+    isRtpActive = rtpResult.status === 'fulfilled' ? !!rtpResult.value : false;
+    setRtpState(isRtpActive);
+    window.api.invoke('splash:progress', { pct: 40, label: t('splash.checkingProtection') });
+
     let fwEnabled = null;
-    try {
-      fwEnabled = await window.api.invoke('firewall:status');
-      const fwIcon = document.getElementById('fwIcon');
-      const fwStatusText = document.getElementById('fwStatusText');
-      if (fwStatusText) fwStatusText.textContent = fwEnabled ? t('dashboard.firewallActive') : t('dashboard.firewallDisabled');
-      if (fwIcon) fwIcon.className = 'status-icon ' + (fwEnabled ? 'safe' : 'danger');
-    } catch (_) {
-      fwEnabled = null;
-      const fwIcon = document.getElementById('fwIcon');
-      const fwStatusText = document.getElementById('fwStatusText');
+    if (fwResult.status === 'fulfilled') {
+      fwEnabled = fwResult.value;
+    }
+    const fwIcon = document.getElementById('fwIcon');
+    const fwStatusText = document.getElementById('fwStatusText');
+    if (fwEnabled === null) {
       if (fwStatusText) fwStatusText.textContent = t('common.unknown');
       if (fwIcon) fwIcon.className = 'status-icon warning';
+    } else {
+      if (fwStatusText) fwStatusText.textContent = fwEnabled ? t('dashboard.firewallActive') : t('dashboard.firewallDisabled');
+      if (fwIcon) fwIcon.className = 'status-icon ' + (fwEnabled ? 'safe' : 'danger');
     }
     window.api.invoke('splash:progress', { pct: 50, label: t('splash.verifyingFirewall') });
 
-    let latestScanForHealth = null;
-    try {
-      latestScanForHealth = await window.api.invoke('scanReports:latest');
-    } catch (_) {
-      latestScanForHealth = null;
-    }
-
+    const latestScanForHealth = scanResult.status === 'fulfilled' ? scanResult.value : null;
     const lastScanEl = container.querySelector('#lastScanTime');
     if (lastScanEl) {
       lastScanEl.textContent = latestScanForHealth
@@ -634,24 +635,42 @@ window.Pages['dashboard'] = {
         : t('dashboard.lastScanNever');
     }
 
-    try {
-      const health = await window.api.invoke('health:score', {
+    if (quarantineResult.status === 'fulfilled' && quarantineResult.value) {
+      const threatsCountEl = container.querySelector('#threatsCount');
+      if (threatsCountEl) {
+        threatsCountEl.textContent = quarantineResult.value.length;
+      }
+    }
+      window.api.invoke('splash:progress', { pct: 55, label: t('splash.loadingQuarantine') });
+
+    // health:score depends on the reads above; warnings (security-overview,
+    // the slowest call) is independent, so run both concurrently.
+    const [healthResult, warningsResult] = await Promise.allSettled([
+      window.api.invoke('health:score', {
         lastScanMatches: latestScanForHealth ? (latestScanForHealth.threats_found ?? null) : null,
         lastScanDate: latestScanForHealth ? latestScanForHealth.timestamp : null,
         rtpActive: isRtpActive,
         firewallActive: fwEnabled === null ? undefined : fwEnabled
-      });
-      lastHealthResult = health;
-      healthScore.textContent = String(health.score);
-      const level = health.score >= 80 ? 'safe' : health.score >= 60 ? 'warning' : 'danger';
+      }),
+      loadWarnings()
+    ]);
+
+    if (healthResult.status === 'fulfilled') {
+      lastHealthResult = healthResult.value;
+      healthScore.textContent = String(healthResult.value.score);
+      const level = healthResult.value.score >= 80 ? 'safe' : healthResult.value.score >= 60 ? 'warning' : 'danger';
       healthIcon.className = 'status-icon ' + level;
-      healthDetail.textContent = summarizeHealth(health);
-    } catch (e) {
+      healthDetail.textContent = summarizeHealth(healthResult.value);
+    } else {
       healthScore.textContent = t('common.notAvailable');
-      healthDetail.textContent = e.message || t('common.failed');
+      healthDetail.textContent = (healthResult.reason && healthResult.reason.message) || t('common.failed');
       healthIcon.className = 'status-icon warning';
     }
     window.api.invoke('splash:progress', { pct: 65, label: t('splash.calculatingHealth') });
+    if (warningsResult.status === 'rejected') {
+      console.warn('Failed to load dashboard warnings:', warningsResult.reason);
+    }
+    window.api.invoke('splash:progress', { pct: 75, label: t('splash.loadingWarnings') });
 
     const btnManageFirewall = document.getElementById('btnManageFirewall');
     if (btnManageFirewall) {
@@ -689,7 +708,24 @@ window.Pages['dashboard'] = {
       if (lastScanEl && scanning) {
         lastScanEl.textContent = t('scanner.statusScanning');
       }
+      if (btnUpdateDb) {
+        btnUpdateDb.disabled = scanning;
+      }
     }
+
+    async function restoreScanRunningState() {
+      if (!hasView()) return;
+      try {
+        const status = await window.api.invoke('scan:status');
+        if (!hasView()) return;
+        if (status.scan && status.scan.isScanning) {
+          setScanButtonsState(true);
+        }
+      } catch (_) {
+        // Status query must never break dashboard rendering.
+      }
+    }
+
     if (btnRefreshWarnings) btnRefreshWarnings.addEventListener('click', loadWarnings);
     if (btnUpdateDb) {
       btnUpdateDb.addEventListener('click', async () => {
@@ -714,9 +750,6 @@ window.Pages['dashboard'] = {
         if (window.AppRouter) window.AppRouter.navigate('quarantine');
       });
     }
-
-    await loadWarnings();
-    window.api.invoke('splash:progress', { pct: 75, label: t('splash.loadingWarnings') });
 
     btnToggleRtp.addEventListener('click', async () => {
       const previous = isRtpActive;
@@ -790,21 +823,12 @@ window.Pages['dashboard'] = {
       }
     }));
 
-    try {
-      await loadLastScan();
-      window.api.invoke('splash:progress', { pct: 85, label: t('dashboard.lastScan') });
+    // Restore "Scanning..." state if a scan is already in progress
+    // (e.g. page reloaded while a scan is still running).
+    restoreScanRunningState();
 
-      const quarantineList = await window.api.invoke('quarantine:list', 'quarantined');
-      if (quarantineList) {
-        const threatsCountEl = container.querySelector('#threatsCount');
-        if (threatsCountEl) {
-          threatsCountEl.textContent = quarantineList.length;
-        }
-      }
-      window.api.invoke('splash:progress', { pct: 90, label: t('nav.quarantine') });
-    } catch (e) {
-      console.warn('Failed to load dashboard data:', e);
-    }
+    window.api.invoke('splash:progress', { pct: 85, label: t('dashboard.lastScan') });
+    window.api.invoke('splash:progress', { pct: 90, label: t('splash.loadingQuarantine') });
 
     try {
       window.api.invoke('splash:progress', { pct: 100, label: t('splash.ready') });

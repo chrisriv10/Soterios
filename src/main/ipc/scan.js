@@ -13,20 +13,18 @@ const DEFAULT_SCHEDULE = {
 function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputationEngine }) {
   // -- Scanning Engine --
   ipcMain.handle('scan:status', () => {
-    const scanStatus = scanEngine.getStatus();
-    if (scanStatus.currentScan && scanStatus.currentScan.scanType === 'folderwatch') {
-      return {
-        engine: clamEngine.getStatus(),
-        scan: { isScanning: false, currentScan: null },
-      };
-    }
     return {
       engine: clamEngine.getStatus(),
-      scan: scanStatus,
+      scan: scanEngine.getStatus(),
     };
   });
 
   ipcMain.handle('scan:updateDefinitions', async () => {
+    const status = scanEngine.getStatus();
+    if (status && (status.isScanning || status.isFolderWatchScanning)) {
+      const locale = db.getSetting('ui.language', 'en');
+      return { success: false, error: i18n.t('scanner.defsBlockedDuringScan', locale) };
+    }
     const result = await clamEngine.updateDefinitions((progress) => {
       eventBus.emit('scan:progress', { scanType: 'definitions', pct: 10, message: 'Updating ClamAV definitions...' });
       if (progress && progress.text) {
@@ -60,10 +58,6 @@ function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputation
   });
 
   ipcMain.handle('scan:abort', () => {
-    const status = scanEngine.getStatus();
-    if (status.currentScan && status.currentScan.scanType === 'folderwatch') {
-      return { success: false, canceled: false, error: 'No user scan in progress' };
-    }
     return scanEngine.abortScan();
   });
 

@@ -11,7 +11,7 @@ function shouldSkip(fullPath, name) {
 }
 
 module.exports = async function largeFilesReport(args = {}, onProgress) {
-  const root = args.path || os.homedir();
+  const root = args.scanPath || args.path || os.homedir();
   const minSizeMB = Number(args.minSizeMB || 100);
   const minBytes = minSizeMB * 1024 * 1024;
   const maxResults = Number(args.maxResults || 40);

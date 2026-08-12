@@ -7,6 +7,15 @@ const os = require('os');
 const path = require('path');
 const { EventEmitter } = require('events');
 
+async function waitFor(condition, timeoutMs = 2000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (condition()) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error('Timed out waiting for condition');
+}
+
 describe('ScanEngine', () => {
   let tmp;
   let mockDb;
@@ -186,26 +195,47 @@ describe('ScanEngine', () => {
     assert.equal(result.error, 'Scan already in progress');
   });
 
-  it('runScan allows folderwatch scan during user scan', async () => {
+  it('runScan lets a user scan preempt a running folderwatch scan', async () => {
+    // Folder watch must never block the user: starting a user scan cancels
+    // the background scan and proceeds normally.
+    const pending = [];
+    const clam = {
+      isReady: true,
+      abortCurrentScan: () => true,
+      scanFile: async () => {
+        return new Promise((resolve) => pending.push(resolve));
+      }
+    };
     const engine = new ScanEngine(
       mockDb,
       mockEventBus,
-      mockClamEngine,
+      clam,
       mockHeuristicEngine,
       mockReputationEngine,
       mockQuarantineManager
     );
-    
-    // Start folderwatch scan without a user scan active
+
     const folderwatchPromise = engine.runScan('folderwatch', [tmp], 'Starting...');
-    assert.equal(engine.isFolderWatchScanning, true);
-    
-    // A user scan must still be rejected while folderwatch is active
-    const blocked = await engine.runScan('quick', [tmp], 'Starting...');
-    assert.equal(blocked.error, 'Scan already in progress');
-    
+    await waitFor(() => engine.isFolderWatchScanning);
+    assert.equal(pending.length, 1);
+
+    // User scan must not be rejected while folderwatch is active.
+    const userPromise = engine.runScan('quick', [tmp], 'Starting...');
+    // Let the preempt arm, then release the folder-watch scan as canceled.
+    await new Promise((r) => setTimeout(r, 50));
+    pending.shift()({ success: false, canceled: true, error: 'Scan canceled', threatsFound: 0, filesScanned: 0, output: '' });
+
+    // Release the user scan's own clamscan once it has taken over.
+    await waitFor(() => pending.length === 1);
+    pending.shift()({ success: true, threatsFound: 0, filesScanned: 1, threats: [], output: '' });
+
+    const result = await userPromise;
+    assert.equal(result.success, true);
+    assert.equal(result.status, 'completed');
+
     await folderwatchPromise;
     assert.equal(engine.isFolderWatchScanning, false);
+    assert.equal(engine.isScanning, false);
   });
 
   it('runScan completes successfully with no threats', async () => {
@@ -342,10 +372,10 @@ describe('ScanEngine', () => {
     
     const result = engine.abortScan();
     assert.equal(result.success, false);
-    assert.equal(result.error, 'No user scan in progress');
+    assert.equal(result.error, 'No scan in progress');
   });
 
-  it('abortScan returns error when only folderwatch scan is active', () => {
+  it('abortScan cancels a running folderwatch scan', () => {
     const engine = new ScanEngine(
       mockDb,
       mockEventBus,
@@ -357,10 +387,11 @@ describe('ScanEngine', () => {
     
     engine.folderWatchScan.isScanning = true;
     engine.folderWatchScan.currentScan = { scanType: 'folderwatch', paths: [tmp] };
+    engine.folderWatchScan.abortController = { abort: () => {} };
     
     const result = engine.abortScan();
-    assert.equal(result.success, false);
-    assert.equal(result.error, 'No user scan in progress');
+    assert.equal(result.success, true);
+    assert.equal(result.canceled, true);
   });
 
   it('abortScan calls clamEngine.abortCurrentScan', () => {

@@ -82,7 +82,7 @@ class SystemAudit {
       if (count === null) {
         return [{ name: 'Windows Updates', status: 'warn', message: 'Could not parse update status.', detail: raw || 'Unexpected response from Windows Update query.', recommendation: 'Check Windows Update in Settings manually.', actionUri: 'ms-settings:windowsupdate' }];
       } else if (count === 0) {
-        return [{ name: 'Windows Updates', status: 'pass', message: 'No pending updates.', detail: 'All mandatory updates are installed.', recommendation: 'Keep automatic updates enabled.' }];
+        return [{ name: 'Windows Updates', status: 'pass', message: 'No pending updates.', detail: 'All mandatory updates are installed.', recommendation: '' }];
       }
       return [{ name: 'Windows Updates', status: 'warn', message: `${count} mandatory update(s) pending.`, detail: `${count} mandatory update(s) are waiting to be installed.`, recommendation: 'Open Settings > Windows Update and install pending updates.', actionUri: 'ms-settings:windowsupdate' }];
     }
@@ -95,7 +95,7 @@ class SystemAudit {
       } else {
         const count = /^[0-9]+$/.test(raw) ? Number(raw) : null;
         if (count !== null && count === 0) {
-          return [{ name: 'Windows Updates', status: 'pass', message: 'No pending updates.', detail: 'All mandatory updates are installed.', recommendation: 'Keep automatic updates enabled.' }];
+          return [{ name: 'Windows Updates', status: 'pass', message: 'No pending updates.', detail: 'All mandatory updates are installed.', recommendation: '' }];
         } else if (count !== null && count > 0) {
           return [{ name: 'Windows Updates', status: 'warn', message: `${count} mandatory update(s) pending.`, detail: `${count} mandatory update(s) are waiting to be installed.`, recommendation: 'Open Settings > Windows Update and install pending updates.', actionUri: 'ms-settings:windowsupdate' }];
         }

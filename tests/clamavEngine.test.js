@@ -273,4 +273,75 @@ describe('ClamAVEngine', () => {
     // Should still be ready even if update fails (graceful degradation)
     assert.equal(engine.isReady, true);
   });
+
+  it('scanFile times out when clamscan hangs and recovers scan state', async () => {
+    // A hung clamscan (no output, no exit) previously left isScanning true
+    // forever, blocking every later scan with "Scan already in progress".
+    // Regression: scanFile must resolve via the inactivity timeout, kill the
+    // subprocess, and clear activeScanProcess so the engine can scan again.
+    // The engine's timeout timer is unref'd, so a ref'd keep-alive timer is
+    // required to let the event loop advance in this test.
+    let kills = 0;
+    require('child_process').spawn = () => {
+      const p = new EventEmitter();
+      p.stdout = new EventEmitter();
+      p.stderr = new EventEmitter();
+      p.kill = () => {
+        kills += 1;
+        p.emit('close', 1); // simulate the OS reporting the kill
+      };
+      return p;
+    };
+    delete require.cache[require.resolve('../src/security/ClamAVEngine')];
+    const FreshClamAVEngine = require('../src/security/ClamAVEngine');
+    const engine = new FreshClamAVEngine({ baseDir: path.join(tmp, 'clamav') });
+    fs.writeFileSync(path.join(engine.dbDir, 'main.cvd'), 'mock');
+    await engine.init();
+
+    const testFile = path.join(tmp, 'hung.bin');
+    fs.writeFileSync(testFile, 'x');
+
+    const keepAlive = setTimeout(() => {}, 500);
+    try {
+      const result = await engine.scanFile(testFile, null, { inactivityTimeoutMs: 50 });
+      assert.equal(result.success, false);
+      assert.equal(result.error, 'Scan timed out');
+      assert.equal(kills, 1);
+      assert.equal(engine.activeScanProcess, null);
+
+      // A subsequent scan is not blocked by the timed-out one.
+      const again = await engine.scanFile(testFile, null, { inactivityTimeoutMs: 50 });
+      assert.equal(again.error, 'Scan timed out');
+      assert.equal(engine.activeScanProcess, null);
+    } finally {
+      clearTimeout(keepAlive);
+    }
+  });
+
+  it('updateDefinitions times out when freshclam hangs', async () => {
+    const proc = new EventEmitter();
+    proc.stdout = new EventEmitter();
+    proc.stderr = new EventEmitter();
+    let killed = false;
+    proc.kill = () => {
+      killed = true;
+      proc.emit('close', 1); // simulate the OS reporting the kill
+    };
+
+    require('child_process').spawn = () => proc;
+    delete require.cache[require.resolve('../src/security/ClamAVEngine')];
+    const FreshClamAVEngine = require('../src/security/ClamAVEngine');
+    const engine = new FreshClamAVEngine({ baseDir: path.join(tmp, 'clamav') });
+
+    const keepAlive = setTimeout(() => {}, 500);
+    try {
+      const result = await engine.updateDefinitions(null, { timeoutMs: 50 });
+      assert.equal(result.success, false);
+      assert.equal(result.error, 'Definition update timed out');
+      assert.equal(killed, true);
+      assert.equal(engine.activeUpdateProcess, null);
+    } finally {
+      clearTimeout(keepAlive);
+    }
+  });
 });

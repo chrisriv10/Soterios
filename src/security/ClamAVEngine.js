@@ -3,6 +3,18 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
+// If clamscan produces no output for this long, the subprocess is considered
+// hung (blocked I/O, stuck on a locked file, etc.) and is killed so a scan can
+// never leave isScanning stuck true indefinitely.
+//
+// Windows pipes block-buffer clamscan's stdout, so a healthy scan can easily
+// go quiet for several minutes while a large or locked file is scanned. The
+// window must be generous enough that real scans never hit it.
+const DEFAULT_SCAN_INACTIVITY_TIMEOUT_MS = 600000;
+// freshclam has its own Connect/Receive timeouts but the process itself can
+// still hang (e.g. stuck DNS); cap the whole update so it always resolves.
+const DEFAULT_UPDATE_TIMEOUT_MS = 300000;
+
 class ClamAVEngine {
   constructor(options = {}) {
     const candidates = [
@@ -75,10 +87,12 @@ class ClamAVEngine {
     }
   }
 
-  updateDefinitions(onProgress) {
+  updateDefinitions(onProgress, options = {}) {
     if (!fs.existsSync(this.freshclamPath)) {
       return Promise.resolve({ success: false, error: 'freshclam.exe not found at ' + this.freshclamPath, output: '' });
     }
+
+    const timeoutMs = options.timeoutMs || DEFAULT_UPDATE_TIMEOUT_MS;
 
     fs.mkdirSync(this.dbDir, { recursive: true });
     const configPath = this.ensureFreshclamConfig();
@@ -108,7 +122,17 @@ class ClamAVEngine {
         return;
       }
 
+      let timedOut = false;
+      const updateTimeout = setTimeout(() => {
+        timedOut = true;
+        if (this.activeUpdateProcess === freshclam) {
+          try { this.activeUpdateProcess.kill(); } catch (_) {}
+        }
+      }, timeoutMs);
+      if (typeof updateTimeout.unref === 'function') updateTimeout.unref();
+
       const finish = (result) => {
+        clearTimeout(updateTimeout);
         if (this.activeUpdateProcess === freshclam) this.activeUpdateProcess = null;
         resolve(result);
       };
@@ -127,6 +151,11 @@ class ClamAVEngine {
         if (this.activeUpdateProcess === freshclam) {
           this.activeUpdateProcess = null;
           this.cancelUpdateRequested = false;
+        }
+
+        if (timedOut) {
+          finish({ success: false, error: 'Definition update timed out', output });
+          return;
         }
 
         if (wasCanceled) {
@@ -175,7 +204,7 @@ class ClamAVEngine {
     return path.resolve(value).replace(/\\/g, '/');
   }
 
-  async scanFile(filePath, onProgress) {
+  async scanFile(filePath, onProgress, options = {}) {
     if (!this.isReady) {
       return { success: false, error: 'ClamAV not ready', threatsFound: 0, filesScanned: 0, output: '' };
     }
@@ -192,6 +221,8 @@ class ClamAVEngine {
         };
       }
     }
+
+    const inactivityTimeoutMs = options.inactivityTimeoutMs || DEFAULT_SCAN_INACTIVITY_TIMEOUT_MS;
 
     let isDir;
     try {
@@ -228,12 +259,33 @@ class ClamAVEngine {
       let stderr = '';
       let lines = [];
 
+      let timedOut = false;
+      let inactivityTimer = null;
+
+      const armInactivityTimer = () => {
+        if (inactivityTimer) clearTimeout(inactivityTimer);
+        inactivityTimer = setTimeout(() => {
+          timedOut = true;
+          if (this.activeScanProcess === clam) {
+            try { this.activeScanProcess.kill(); } catch (_) {}
+          }
+        }, inactivityTimeoutMs);
+        if (typeof inactivityTimer.unref === 'function') inactivityTimer.unref();
+      };
+
+      const clearInactivityTimer = () => {
+        if (inactivityTimer) clearTimeout(inactivityTimer);
+        inactivityTimer = null;
+      };
+
       const finish = (result) => {
+        clearInactivityTimer();
         if (this.activeScanProcess === clam) this.activeScanProcess = null;
         resolve(result);
       };
 
       const handleOutput = (data) => {
+        armInactivityTimer();
         const chunk = data.toString();
         output += chunk;
         lines = lines.concat(chunk.split(/\r?\n/).filter(line => line.trim()));
@@ -244,6 +296,8 @@ class ClamAVEngine {
         }
       };
 
+      armInactivityTimer();
+
       clam.stdout.on('data', handleOutput);
       clam.stderr.on('data', (data) => {
         stderr += data.toString();
@@ -251,10 +305,23 @@ class ClamAVEngine {
       });
 
       clam.on('close', (code) => {
+        clearInactivityTimer();
         const wasCanceled = this.cancelScanRequested;
         if (this.activeScanProcess === clam) {
           this.activeScanProcess = null;
           this.cancelScanRequested = false;
+        }
+
+        if (timedOut) {
+          finish({
+            success: false,
+            error: 'Scan timed out',
+            threats: [],
+            threatsFound: 0,
+            output,
+            filesScanned: 0
+          });
+          return;
         }
 
         if (wasCanceled) {

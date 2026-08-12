@@ -536,7 +536,7 @@ function createWindow() {
   // whole load instead of just the initial blank-page flash. A fallback
   // timeout guarantees the window still appears even if that signal is
   // delayed or never arrives (e.g. an unexpected renderer error).
-  splashTimeoutId = setTimeout(dismissSplash, 8000);
+  splashTimeoutId = setTimeout(dismissSplash, 30000);
 
   if ((process.argv.includes('--dev') || process.env.NODE_ENV === 'development') && !isScreenshotCaptureMode()) {
     mainWindow.webContents.once('did-finish-load', () => {

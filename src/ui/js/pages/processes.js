@@ -277,6 +277,7 @@ window.Pages.processes = {
 
     const row = document.createElement('div');
     row.className = 'list-row';
+    if (p.hash) row.dataset.hash = p.hash;
     const padding = compact ? '8px 12px' : '16px';
     const gap = compact ? '4px' : '8px';
     const fontSize = compact ? '0.8rem' : '1.1rem';
@@ -287,6 +288,10 @@ const locationBadge = locationSuspicious
       ? `<span class="location-flag" title="${escapeHtml(reasonHint)}" style="font-size:0.7rem; padding:2px 6px; border-radius:4px; background:rgba(232,179,57,0.18); color:var(--accent-warning); white-space:nowrap;">${escapeHtml(this.t('processes.suspiciousLocation'))}</span>`
       : '';
 
+const trustedBadge = p.trusted
+      ? `<span class="trusted-flag" title="${escapeHtml(this.t('processes.trusted'))}" style="font-size:0.7rem; padding:2px 6px; border-radius:4px; background:rgba(34,197,94,0.18); color:var(--accent-success); white-space:nowrap;">${escapeHtml(this.t('processes.trusted'))}</span>`
+      : '';
+
     if (compact) {
       row.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -294,6 +299,7 @@ const locationBadge = locationSuspicious
             <img class="process-icon" data-exe="${escapeHtml(rawPath || '')}" src="" alt="" style="width:18px;height:18px;flex-shrink:0;border-radius:3px;display:none;" />
             <div style="font-weight:600; font-size:${fontSize};">${escapeHtml(p.name)} <span class="page-subtitle" style="font-size:0.75rem;">(PID ${escapeHtml(p.pid)})</span></div>
             ${locationBadge}
+            ${trustedBadge}
             <span class="risk-score" style="font-weight:600; font-size:${fontSize}; color:${isDanger ? 'var(--accent-danger)' : 'var(--accent-success)'}">${escapeHtml(p.risk.score)} ${escapeHtml(this.t('processes.riskScoreSuffix'))}</span>
             <span class="risk-level page-subtitle" style="font-size:0.7rem; text-transform:uppercase;">${escapeHtml(p.risk.level)}</span>
           </div>
@@ -313,6 +319,7 @@ const locationBadge = locationSuspicious
             <img class="process-icon" data-exe="${escapeHtml(rawPath || '')}" src="" alt="" style="width:20px;height:20px;flex-shrink:0;border-radius:3px;display:none;" />
             <div style="font-weight:600; font-size:1.1rem;">${escapeHtml(p.name)} <span class="page-subtitle" style="font-size:0.85rem;">(PID ${escapeHtml(p.pid)})</span></div>
             ${locationBadge}
+            ${trustedBadge}
             <div class="path-chip" title="${escapeHtml(rawPath)}">${escapeHtml(shortPath)}</div>
           </div>
           <div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
@@ -509,6 +516,7 @@ const locationBadge = locationSuspicious
     const processName = row.querySelector('[data-end-process]')?.dataset.processName;
     const pathEl = row.querySelector('.path-chip');
     const filePath = pathEl?.title || '';
+    const isTrusted = row.querySelector('.trusted-flag') !== null;
 
     this.closeContextMenu();
 
@@ -548,6 +556,13 @@ const locationBadge = locationSuspicious
     menu.appendChild(createMenuItem(this.t('processes.properties'), () => this.handleProperties(filePath)));
     menu.appendChild(createMenuItem(this.t('processes.openFileLocation'), () => this.handleOpenFileLocation(filePath)));
     menu.appendChild(createMenuItem(this.t('processes.searchOnline'), () => this.handleSearchOnline(processName)));
+    
+    // Show Trust or Untrust based on current state
+    if (isTrusted) {
+      menu.appendChild(createMenuItem(this.t('processes.untrustProcess'), () => this.handleUntrustProcess(filePath, container)));
+    } else {
+      menu.appendChild(createMenuItem(this.t('processes.trustProcess'), () => this.handleTrustProcess(filePath, container)));
+    }
 
     document.body.appendChild(menu);
     this._contextMenu = menu;
@@ -703,5 +718,76 @@ const locationBadge = locationSuspicious
     } catch (err) {
       alert('Failed to search online: ' + (err.message || String(err)));
     }
+  },
+
+  async handleTrustProcess(filePath, container) {
+    this.closeContextMenu();
+    if (!filePath) {
+      alert('File path not available for this process');
+      return;
+    }
+
+    if (!confirm(this.t('processes.trustProcessDesc') + '\n\n' + filePath)) {
+      return;
+    }
+
+    try {
+      // Get the hash from the process data (already calculated by the tool)
+      const row = this._contextMenuTarget;
+      const hash = row?.dataset?.hash;
+      
+      if (!hash) {
+        alert('Process hash not available. Try refreshing the process list.');
+        return;
+      }
+
+      // Add to trusted hashes via quarantine IPC
+      const res = await window.api.invoke('quarantine:addTrustedHash', hash, filePath, 'User-trusted process');
+      
+      if (res && res.success) {
+        alert(this.t('processes.trusted'));
+        this.load(container, true);
+      } else {
+        alert('Failed to trust process: ' + (res && res.error ? res.error : 'unknown error'));
+      }
+    } catch (err) {
+      alert('Failed to trust process: ' + (err.message || String(err)));
+    }
+  },
+
+  async handleUntrustProcess(filePath, container) {
+    this.closeContextMenu();
+    if (!filePath) {
+      alert('File path not available for this process');
+      return;
+    }
+
+    if (!confirm(this.t('processes.untrustProcessDesc') + '\n\n' + filePath)) {
+      return;
+    }
+
+    try {
+      // Get the hash from the process data
+      const row = this._contextMenuTarget;
+      const hash = row?.dataset?.hash;
+      
+      if (!hash) {
+        alert('Process hash not available. Try refreshing the process list.');
+        return;
+      }
+
+      // Remove from trusted hashes via quarantine IPC
+      const res = await window.api.invoke('quarantine:removeTrusted', hash);
+      
+      if (res && res.success) {
+        alert(this.t('processes.untrusted'));
+        this.load(container, true);
+      } else {
+        alert('Failed to untrust process: ' + (res && res.error ? res.error : 'unknown error'));
+      }
+    } catch (err) {
+      alert('Failed to untrust process: ' + (err.message || String(err)));
+    }
   }
 };
+

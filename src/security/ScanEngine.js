@@ -5,6 +5,10 @@ const os = require('os');
 const crypto = require('crypto');
 const { clampProgress } = require('../core/scanProgress');
 
+// How long a user scan waits for a preempted folder-watch scan to release the
+// ClamAV process before proceeding anyway.
+const FOLDER_WATCH_TAKEOVER_TIMEOUT_MS = 10000;
+
 function esc(v) {
   return String(v ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 }
@@ -161,9 +165,16 @@ class ScanEngine {
       if (this.userScan.isScanning) return { error: 'Scan already in progress' };
     } else {
       if (scanState.isScanning) return { error: 'Scan already in progress' };
-      // Only one scan can hold the ClamAV process at a time; wait out a
-      // running folder-watch scan rather than clobbering it.
-      if (this.folderWatchScan.isScanning) return { error: 'Scan already in progress' };
+      // A user scan always takes priority: cancel any running folder-watch
+      // scan so it never blocks the user, then wait for it to release the
+      // ClamAV process before spawning our own clamscan.
+      if (this.folderWatchScan.isScanning) {
+        this._cancelFolderWatchScan();
+        const deadline = Date.now() + FOLDER_WATCH_TAKEOVER_TIMEOUT_MS;
+        while (this.folderWatchScan.isScanning && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 25));
+        }
+      }
     }
     
     scanState.isScanning = true;
@@ -219,9 +230,7 @@ class ScanEngine {
         let hasReportedProgress = false;
         const result = await this.clamEngine.scanFile(targetPath, (progress) => {
           if (!progress) return;
-
-          if (progress.phase === 'update') {
-            emitProgress(Math.max(8, Math.min(20, cumulativeFiles / 5)), 'Updating ClamAV definitions...');
+          if (progress.phase === 'update') {            emitProgress(Math.max(8, Math.min(20, cumulativeFiles / 5)), 'Updating ClamAV definitions...');
             return;
           }
 
@@ -243,6 +252,8 @@ class ScanEngine {
             emitProgress(pct, 'Scanning ' + targetPath + ' (' + checked + ' files checked)...', { filesScanned: cumulativeFiles });
             hasReportedProgress = true;
           }
+        }, {
+          inactivityTimeoutMs: scanType === 'folderwatch' ? 600000 : scanType === 'full' ? 1800000 : 600000
         });
         
         // If no progress was reported during this path scan, emit a minimal progress update
@@ -386,16 +397,29 @@ class ScanEngine {
   }
 
   abortScan() {
-    // Only abort user scans, not folder-watch scans
-    if (!this.userScan.isScanning) {
-      return { success: false, canceled: false, error: 'No user scan in progress' };
+    // Prefer aborting the user's scan; only fall through to the background
+    // folder-watch scan if no user scan is active, so a stuck background
+    // scan can never lock the user out of scans indefinitely.
+    const target = this.userScan.isScanning ? this.userScan
+      : this.folderWatchScan.isScanning ? this.folderWatchScan
+      : null;
+
+    if (!target) {
+      return { success: false, canceled: false, error: 'No scan in progress' };
     }
-    if (this.userScan.abortController) this.userScan.abortController.abort();
+    if (target.abortController) target.abortController.abort();
     if (this.clamEngine && typeof this.clamEngine.abortCurrentScan === 'function') {
       this.clamEngine.abortCurrentScan();
     }
     this.eventBus.emit('scan:progress', { pct: null, message: 'Canceling scan...' });
     return { success: true, canceled: true };
+  }
+
+  _cancelFolderWatchScan() {
+    if (this.folderWatchScan.abortController) this.folderWatchScan.abortController.abort();
+    if (this.clamEngine && typeof this.clamEngine.abortCurrentScan === 'function') {
+      this.clamEngine.abortCurrentScan();
+    }
   }
 
   getStatus() {

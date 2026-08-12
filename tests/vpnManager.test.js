@@ -182,4 +182,21 @@ describe('vpnManager - disconnect', () => {
     assert.equal(result.ok, false);
     assert.match(result.error, /Office VPN/);
   });
+
+  it('rejects missing parameters for addFromProvider', async () => {
+    const manager = new VpnManager({ runPowerShell: fakeRun(() => ({ stdout: '' })) });
+    
+    const result1 = await manager.addFromProvider('', 'server1', 'user', 'pass');
+    assert.equal(result1.ok, false);
+    assert.match(result1.error, /Missing required parameters/);
+    
+    const result2 = await manager.addFromProvider('provider', '', 'user', 'pass');
+    assert.equal(result2.ok, false);
+    
+    const result3 = await manager.addFromProvider('provider', 'server', '', 'pass');
+    assert.equal(result3.ok, false);
+    
+    const result4 = await manager.addFromProvider('provider', 'server', 'user', '');
+    assert.equal(result4.ok, false);
+  });
 });

@@ -156,12 +156,14 @@ window.Pages['scanner'] = {
           b.disabled = true;
           b.textContent = t('scanner.statusScanning');
         });
+        if (updateDefinitionsButton) updateDefinitionsButton.disabled = true;
       } else {
         if (scanCard) scanCard.style.display = 'none';
         scanButtons.forEach((b) => {
           b.disabled = false;
           b.textContent = scanButtonOriginalLabels[b.id] || b.textContent;
         });
+        if (updateDefinitionsButton) updateDefinitionsButton.disabled = false;
       }
       updateFooterButtons();
     }

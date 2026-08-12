@@ -1,10 +1,12 @@
 const si = require('systeminformation');
-const { makeRisk } = require('../security/riskEngine');
+const { makeRisk, recommendationForRisk } = require('../security/riskEngine');
 const { suspiciousPathSignals } = require('../security/windowsChecks');
 const { exec } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
 const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
 
 // Well-known Windows system process names that should only ever run from a
 // specific expected system directory. A process using one of these names
@@ -23,11 +25,16 @@ function isMasquerading(name, lowerPath) {
   return !SYSTEM_DIR_PATTERNS.some((p) => lowerPath.includes(p));
 }
 
-function processSignals(proc) {
+function processSignals(proc, isTrusted = false) {
   const signals = [];
   const lowerPath = String(proc.path || '').toLowerCase().replace(/\//g, '\\');
   const cmd = String(proc.cmd || '').toLowerCase();
   const name = (proc.name || '').toLowerCase();
+
+  // If process is trusted, skip all risk signals
+  if (isTrusted) {
+    return signals;
+  }
 
   signals.push(...suspiciousPathSignals(proc.path));
 
@@ -69,13 +76,42 @@ function processSignals(proc) {
     }
   }
 
-  return signals;
-}
+  // File age/location combo - recently created executables in suspicious locations
+  if (lowerPath && proc.path && fs.existsSync(proc.path)) {
+    try {
+      const stats = fs.statSync(proc.path);
+      const fileAgeMs = Date.now() - stats.birthtimeMs;
+      const daysOld = fileAgeMs / (1000 * 60 * 60 * 24);
 
-function recommendationForRisk(risk) {
-  if (risk.score >= 50) return 'Immediate termination recommended.';
-  if (risk.score >= 35) return 'Review process path and command line arguments.';
-  return 'Safe process';
+      if (daysOld < 7) {
+        if (lowerPath.includes('\\appdata\\')) {
+          signals.push({ points: 25, message: `Recently created executable in AppData (${Math.round(daysOld)} days old).` });
+        } else if (lowerPath.includes('\\temp\\')) {
+          signals.push({ points: 20, message: `Recently created executable in temp location (${Math.round(daysOld)} days old).` });
+        } else if (lowerPath.includes('\\users\\') && !lowerPath.includes('\\program files\\')) {
+          signals.push({ points: 15, message: `Recently created executable in user profile (${Math.round(daysOld)} days old).` });
+        }
+      }
+    } catch (err) {
+      // Ignore stat errors - file might be inaccessible
+    }
+  }
+
+  // Hidden/stealth indicators - process name mimicry and character substitutions
+  const legitNames = ['svchost.exe', 'explorer.exe', 'lsass.exe', 'csrss.exe', 'winlogon.exe', 'services.exe', 'smss.exe', 'wininit.exe'];
+  for (const legit of legitNames) {
+    if (name !== legit && name.replace(/[^a-z]/g, '') === legit.replace(/[^a-z]/g, '')) {
+      signals.push({ points: 35, message: `Process name closely mimics legitimate Windows process "${legit}".` });
+      break;
+    }
+  }
+
+  // Check for obvious character substitutions (zero for O, etc.)
+  if (name.includes('svch0st') || name.includes('expl0rer') || (name.includes('csrss') && name !== 'csrss.exe')) {
+    signals.push({ points: 35, message: 'Process name contains character substitutions typical of masquerading.' });
+  }
+
+  return signals;
 }
 
 async function getProcessIOStats() {
@@ -120,7 +156,8 @@ module.exports = {
   id: 'process-viewer', name: 'Process Viewer',
   description: 'List running processes with CPU/memory and suspicious process scoring.',
   category: 'System', icon: 'list',
-  run: async () => {
+  run: async (args, context) => {
+    const db = context && context.db;
     try {
       const [procData, loadData, memData, ioStats] = await Promise.all([
         si.processes(),
@@ -143,9 +180,32 @@ module.exports = {
       const diskPercentage = Math.min(100, diskMBps);
       const networkPercentage = Math.min(100, networkMBps);
 
-      const processes = processList.map((p) => {
+      const processes = await Promise.all(processList.map(async (p) => {
         const diskIO = diskIOMap.get(p.pid) || 0;
         const networkIO = networkIOMap.get(p.pid) || 0;
+
+        // Calculate file hash for trust checking
+        let fileHash = null;
+        let isTrusted = false;
+        if (p.path && fs.existsSync(p.path)) {
+          try {
+            const hash = crypto.createHash('sha256');
+            const stream = fs.createReadStream(p.path);
+            stream.on('data', (chunk) => hash.update(chunk));
+            await new Promise((resolve, reject) => {
+              stream.on('end', () => {
+                fileHash = hash.digest('hex');
+                resolve();
+              });
+              stream.on('error', reject);
+            });
+            if (db && typeof db.isHashTrusted === 'function') {
+              isTrusted = db.isHashTrusted(fileHash);
+            }
+          } catch (err) {
+            // Ignore hash calculation errors
+          }
+        }
 
         const item = {
           pid: p.pid,
@@ -156,17 +216,20 @@ module.exports = {
           cpu: p.cpu !== undefined ? +(p.cpu).toFixed(1) : null,
           memory: p.mem !== undefined ? +(p.mem).toFixed(1) : null,
           diskIo: Math.round(diskIO),
-          networkIo: Math.round(networkIO)
+          networkIo: Math.round(networkIO),
+          hash: fileHash,
+          trusted: isTrusted
         };
-        item.risk = makeRisk(processSignals(item));
+        item.risk = makeRisk(processSignals(item, isTrusted));
         item.locationReasons = (item.risk.signals || [])
           .map((s) => s.message)
           .filter((msg) => /appdata|temporary|recycle bin|writable windows location|double extension/i.test(msg || ''));
         item.suspicious = item.locationReasons.length > 0;
         item.suspiciousReasons = (item.risk.signals || []).map((s) => s.message).filter(Boolean);
-        item.recommendedAction = recommendationForRisk(item.risk);
+        item.recommendedAction = recommendationForRisk(item.risk, 'process');
         return item;
-      }).sort((a, b) => {
+      }));
+      processes.sort((a, b) => {
         const riskDelta = b.risk.score - a.risk.score;
         if (riskDelta !== 0) return riskDelta;
         const usageA = (a.cpu || 0) + (a.memory || 0);
