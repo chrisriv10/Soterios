@@ -1,4 +1,5 @@
 const fs = require('fs');
+const crypto = require('crypto');
 const { ipcMain } = require('electron');
 
 function enrichSizes(records) {
@@ -44,6 +45,42 @@ function register(mainWindow, { quarantineManager, db }) {
   ipcMain.handle('quarantine:addTrustedHash', async (_event, hash, path, reason) => {
     db.addTrustedHash(hash, path, reason);
     return { success: true };
+  });
+
+  ipcMain.handle('quarantine:calculateAndTrustHash', async (_event, filePath, reason) => {
+    try {
+      if (!fs.existsSync(filePath)) {
+        return { success: false, error: 'File does not exist' };
+      }
+      
+      const hash = crypto.createHash('sha256');
+      const data = fs.readFileSync(filePath);
+      hash.update(data);
+      const hashValue = hash.digest('hex');
+      
+      db.addTrustedHash(hashValue, filePath, reason);
+      return { success: true, hash: hashValue };
+    } catch (err) {
+      return { success: false, error: err.message || 'Failed to calculate hash' };
+    }
+  });
+
+  ipcMain.handle('quarantine:calculateAndUntrustHash', async (_event, filePath) => {
+    try {
+      if (!fs.existsSync(filePath)) {
+        return { success: false, error: 'File does not exist' };
+      }
+      
+      const hash = crypto.createHash('sha256');
+      const data = fs.readFileSync(filePath);
+      hash.update(data);
+      const hashValue = hash.digest('hex');
+      
+      db.removeTrustedHash(hashValue);
+      return { success: true, hash: hashValue };
+    } catch (err) {
+      return { success: false, error: err.message || 'Failed to calculate hash' };
+    }
   });
 
   ipcMain.handle('quarantine:isHashTrusted', async (_event, hash) => {

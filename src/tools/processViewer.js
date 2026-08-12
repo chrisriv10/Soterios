@@ -76,27 +76,6 @@ function processSignals(proc, isTrusted = false) {
     }
   }
 
-  // File age/location combo - recently created executables in suspicious locations
-  if (lowerPath && proc.path && fs.existsSync(proc.path)) {
-    try {
-      const stats = fs.statSync(proc.path);
-      const fileAgeMs = Date.now() - stats.birthtimeMs;
-      const daysOld = fileAgeMs / (1000 * 60 * 60 * 24);
-
-      if (daysOld < 7) {
-        if (lowerPath.includes('\\appdata\\')) {
-          signals.push({ points: 25, message: `Recently created executable in AppData (${Math.round(daysOld)} days old).` });
-        } else if (lowerPath.includes('\\temp\\')) {
-          signals.push({ points: 20, message: `Recently created executable in temp location (${Math.round(daysOld)} days old).` });
-        } else if (lowerPath.includes('\\users\\') && !lowerPath.includes('\\program files\\')) {
-          signals.push({ points: 15, message: `Recently created executable in user profile (${Math.round(daysOld)} days old).` });
-        }
-      }
-    } catch (err) {
-      // Ignore stat errors - file might be inaccessible
-    }
-  }
-
   // Hidden/stealth indicators - process name mimicry and character substitutions
   const legitNames = ['svchost.exe', 'explorer.exe', 'lsass.exe', 'csrss.exe', 'winlogon.exe', 'services.exe', 'smss.exe', 'wininit.exe'];
   for (const legit of legitNames) {
@@ -121,8 +100,14 @@ async function getProcessIOStats() {
     // the path the same way Electron does at runtime.
     const scriptPath = path.join(__dirname, '../scripts/process-io-counter.ps1')
       .replace('app.asar', 'app.asar.unpacked');
-
-    const { stdout: ioStdout } = await execPromise(`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${scriptPath}"`, { timeout: 30000 });
+    // Verify script exists before executing to avoid unnecessary errors
+    let scriptExists = false;
+    try { require('fs').accessSync(scriptPath); scriptExists = true; } catch (_) {}
+    if (!scriptExists) {
+      console.warn('process-io-counter.ps1 not found at', scriptPath);
+      return { diskIOMap: new Map(), networkIOMap: new Map() };
+    }
+    const { stdout: ioStdout } = await execPromise(`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${scriptPath}"`, { timeout: 20000 });
 
     // Each line is "pid|name|readBytesPerSec|writeBytesPerSec|otherBytesPerSec".
     // Disk IO = read + write; "other" IO (named pipes, sockets, devices) is the
@@ -158,6 +143,19 @@ module.exports = {
   category: 'System', icon: 'list',
   run: async (args, context) => {
     const db = context && context.db;
+    // Get all trusted hashes once (fast database lookup)
+    const trustedHashes = new Set();
+    if (db && typeof db.getTrustedHashes === 'function') {
+      try {
+        const trusted = db.getTrustedHashes();
+        if (Array.isArray(trusted)) {
+          trusted.forEach(t => trustedHashes.add(t.hash));
+        }
+      } catch (err) {
+        // Ignore database errors
+      }
+    }
+    
     try {
       const [procData, loadData, memData, ioStats] = await Promise.all([
         si.processes(),
@@ -180,7 +178,7 @@ module.exports = {
       const diskPercentage = Math.min(100, diskMBps);
       const networkPercentage = Math.min(100, networkMBps);
 
-      const processes = await Promise.all(processList.map(async (p) => {
+      const processes = processList.map((p) => {
         const diskIO = diskIOMap.get(p.pid) || 0;
         const networkIO = networkIOMap.get(p.pid) || 0;
 
@@ -198,44 +196,29 @@ module.exports = {
           trusted: false
         };
         
-        // First calculate risk signals without hash check
-        item.risk = makeRisk(processSignals(item, false));
+        // Check if this process is trusted by calculating its hash
+        // Only do this if we have trusted hashes to check against
+        if (trustedHashes.size > 0 && p.path && fs.existsSync(p.path)) {
+          try {
+            const hash = crypto.createHash('sha256');
+            const data = fs.readFileSync(p.path);
+            hash.update(data);
+            item.hash = hash.digest('hex');
+            item.trusted = trustedHashes.has(item.hash);
+          } catch (err) {
+            // Ignore hash calculation errors (file locks, etc.)
+          }
+        }
+        
+        item.risk = makeRisk(processSignals(item, item.trusted));
         item.locationReasons = (item.risk.signals || [])
           .map((s) => s.message)
           .filter((msg) => /appdata|temporary|recycle bin|writable windows location|double extension/i.test(msg || ''));
         item.suspicious = item.locationReasons.length > 0;
         item.suspiciousReasons = (item.risk.signals || []).map((s) => s.message).filter(Boolean);
         item.recommendedAction = recommendationForRisk(item.risk, 'process');
-        
-        // Only calculate hash for processes that have risk signals
-        // This avoids expensive file reads for all processes
-        if (item.risk.score > 0 && p.path && fs.existsSync(p.path)) {
-          try {
-            const hash = crypto.createHash('sha256');
-            const stream = fs.createReadStream(p.path);
-            stream.on('data', (chunk) => hash.update(chunk));
-            await new Promise((resolve, reject) => {
-              stream.on('end', () => {
-                item.hash = hash.digest('hex');
-                resolve();
-              });
-              stream.on('error', reject);
-            });
-            if (db && typeof db.isHashTrusted === 'function') {
-              item.trusted = db.isHashTrusted(item.hash);
-            }
-            // Recalculate risk with trust status
-            if (item.trusted) {
-              item.risk = makeRisk(processSignals(item, true));
-              item.recommendedAction = recommendationForRisk(item.risk, 'process');
-            }
-          } catch (err) {
-            // Ignore hash calculation errors
-          }
-        }
-        
         return item;
-      }));
+      });
       processes.sort((a, b) => {
         const riskDelta = b.risk.score - a.risk.score;
         if (riskDelta !== 0) return riskDelta;

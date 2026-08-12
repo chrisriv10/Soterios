@@ -732,17 +732,8 @@ const trustedBadge = p.trusted
     }
 
     try {
-      // Get the hash from the process data (already calculated by the tool)
-      const row = this._contextMenuTarget;
-      const hash = row?.dataset?.hash;
-      
-      if (!hash) {
-        alert('Process hash not available. Try refreshing the process list.');
-        return;
-      }
-
-      // Add to trusted hashes via quarantine IPC
-      const res = await window.api.invoke('quarantine:addTrustedHash', hash, filePath, 'User-trusted process');
+      // Calculate hash on the backend since we don't have it on the client
+      const res = await window.api.invoke('quarantine:calculateAndTrustHash', filePath, 'User-trusted process');
       
       if (res && res.success) {
         alert(this.t('processes.trusted'));
@@ -767,17 +758,8 @@ const trustedBadge = p.trusted
     }
 
     try {
-      // Get the hash from the process data
-      const row = this._contextMenuTarget;
-      const hash = row?.dataset?.hash;
-      
-      if (!hash) {
-        alert('Process hash not available. Try refreshing the process list.');
-        return;
-      }
-
-      // Remove from trusted hashes via quarantine IPC
-      const res = await window.api.invoke('quarantine:removeTrusted', hash);
+      // Calculate hash on the backend and remove from trusted hashes
+      const res = await window.api.invoke('quarantine:calculateAndUntrustHash', filePath);
       
       if (res && res.success) {
         alert(this.t('processes.untrusted'));
