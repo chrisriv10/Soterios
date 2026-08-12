@@ -2,6 +2,7 @@
   const mainContent = document.getElementById('mainContent');
   const navItems = document.querySelectorAll('.nav-item[data-page]');
   let currentPage = null;
+  let currentContainer = null;
 
   function showUnknownPage(pageId) {
     mainContent.replaceChildren();
@@ -18,16 +19,31 @@
   function navigate(pageId) {
     const pageModule = isKnownPage(pageId) ? window.Pages[pageId] : null;
     if (!pageModule) { showUnknownPage(pageId); return; }
-    if (currentPage && currentPage !== pageId) {
-      const prev = window.Pages[currentPage];
-      if (prev && typeof prev.destroy === 'function') {
-        try { prev.destroy(); } catch (_) {}
-      }
+
+    // Clean up previous page container (destroy event listeners)
+    if (currentContainer) {
+      try { currentContainer.destroy?.(); } catch (_) {}
     }
+
+    // Update navigation indicators
     navItems.forEach((item) => { item.classList.toggle('active', item.dataset.page === pageId); });
+
+    // If showing the already-visible page, just return
+    if (currentContainer && currentPage === pageId) {
+      currentPage = pageId;
+      return;
+    }
+
     currentPage = pageId;
+
+    // Render new page into a fresh container
+    const newContainer = document.createElement('div');
+    newContainer.style.cssText = 'width:100%; display:block;';
+    pageModule.render(newContainer);
     mainContent.innerHTML = '';
-    pageModule.render(mainContent);
+    mainContent.appendChild(newContainer);
+    currentContainer = newContainer;
+
     // Re-translate UI after page render
     if (window.I18n && window.I18n.translateUI) {
       window.I18n.translateUI();
@@ -52,7 +68,6 @@
         aiNav.style.display = settings.features?.aiAssistant !== false ? 'flex' : 'none';
       }
     } catch (_) {
-      // If settings fail to load, keep lockdown hidden by default
       const lockdownNav = document.getElementById('lockdownNav');
       if (lockdownNav) {
         lockdownNav.style.display = 'none';

@@ -39,17 +39,17 @@ window.Pages.settings = {
       const currentLanguage = (window.I18n && window.I18n.locale)
         || settings.ui?.language
         || 'en';
-      // Pre-fetch "language in development" translation for each locale
-      await Promise.all(locales.map(async ({ code, label }) => {
-        if (code !== 'en') {
-          try {
-            const catalog = await window.api.invoke('i18n:getCatalog', code);
-            if (catalog && catalog['settings.languageInDevelopment']) {
-              languageInDevMap[code] = catalog['settings.languageInDevelopment'];
-            }
-          } catch (_) {}
-        }
-      }));
+      // Pre-fetch "language in development" translation ONLY for current language
+      // (not all locales) to speed up initial render. Other catalogs fetch on demand.
+      if (currentLanguage !== 'en') {
+        try {
+          const catalog = await window.api.invoke('i18n:getCatalog', currentLanguage);
+          if (catalog && catalog['settings.languageInDevelopment']) {
+            languageInDevMap[currentLanguage] = catalog['settings.languageInDevelopment'];
+          }
+        } catch (_) {}
+      }
+      // Generate locale options without pre-fetching all catalogs
       localeOptions = locales.map(({ code, label }) => {
         const warning = languageInDevMap[code] ? ` data-warning="${escapeHtml(languageInDevMap[code])}"` : '';
         return `<option value="${escapeHtml(code)}"${warning} ${currentLanguage === code ? 'selected' : ''}>${escapeHtml(label)}</option>`;
@@ -394,6 +394,13 @@ window.Pages.settings = {
       try {
         await window.I18n.setLocale(language);
         await Api.updateSettings({ ui: { language } });
+        // Fetch catalog for newly selected language so warning can show "in development" text
+        try {
+          const catalog = await window.api.invoke('i18n:getCatalog', language);
+          if (catalog && catalog['settings.languageInDevelopment']) {
+            languageInDevMap[language] = catalog['settings.languageInDevelopment'];
+          }
+        } catch (_) {}
         // Re-render the current page so template-literal text updates to the new locale
         if (window.AppRouter && typeof window.AppRouter.navigate === 'function') {
           window.AppRouter.navigate(window.AppRouter.current() || 'settings');
