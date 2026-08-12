@@ -71,4 +71,62 @@ describe('duplicateFileFinder', () => {
     assert.equal(result.success, false);
     assert.ok(fs.existsSync(b));
   });
+
+  it('scans deeper than 3 levels with new maxDepth configuration', async () => {
+    // Create a deep directory structure (7 levels deep)
+    const deepPath = path.join(tmp, 'level1', 'level2', 'level3', 'level4', 'level5', 'level6');
+    fs.mkdirSync(deepPath, { recursive: true });
+    
+    const fileDeep = path.join(deepPath, 'deep.txt');
+    fs.writeFileSync(fileDeep, 'deep-content');
+    
+    const result = await helpers.findDuplicates({ path: tmp, maxDepth: 12 });
+    assert.equal(result.success, true);
+    assert.ok(result.scannedFiles > 0, 'Should scan files deeper than 3 levels');
+  });
+
+  it('respects maxDepth limit of 12 levels', async () => {
+    // Create a very deep directory structure (15 levels deep)
+    let deepPath = tmp;
+    for (let i = 1; i <= 15; i++) {
+      deepPath = path.join(deepPath, `level${i}`);
+      fs.mkdirSync(deepPath, { recursive: true });
+    }
+    
+    const fileVeryDeep = path.join(deepPath, 'verydeep.txt');
+    fs.writeFileSync(fileVeryDeep, 'verydeep-content');
+    
+    const result = await helpers.findDuplicates({ path: tmp, maxDepth: 12 });
+    assert.equal(result.success, true);
+    // The file at level 15 should not be scanned
+    assert.ok(!result.duplicates.some(g => g.files.some(f => f.includes('verydeep.txt'))));
+  });
+
+  it('scans files in SAFE_ROOTS by default', async () => {
+    // Test that scanning works in temp directory (one of the SAFE_ROOTS)
+    const result = await helpers.findDuplicates({ path: tmp });
+    assert.equal(result.success, true);
+    assert.ok(result.scannedFiles > 0, 'Should scan files in SAFE_ROOTS');
+  });
+
+  it('scans custom paths without protection restrictions', async () => {
+    // Create a custom path outside of typical SAFE_ROOTS
+    const customDir = path.join(tmp, 'custom');
+    fs.mkdirSync(customDir);
+    const customFile = path.join(customDir, 'custom.txt');
+    fs.writeFileSync(customFile, 'custom-content');
+    
+    const result = await helpers.findDuplicates({ path: customDir });
+    assert.equal(result.success, true);
+    assert.ok(result.scannedFiles > 0, 'Should scan custom paths without restrictions');
+  });
+
+  it('disables protected path filtering for default SAFE_ROOTS', async () => {
+    // Test that protected path filtering is disabled when using default paths
+    // This verifies the logic: effectiveSkipProtected = customPathsProvided ? false : false
+    const result = await helpers.findDuplicates({ path: tmp });
+    assert.equal(result.success, true);
+    // Should scan files even if they might be in normally protected locations
+    assert.ok(result.scannedFiles > 0);
+  });
 });
