@@ -1,16 +1,12 @@
 window.Pages = window.Pages || {};
-window.Pages.scanner = {
+window.Pages['scanner'] = {
   cleanups: [],
   destroy() {
     this.cleanups.forEach(fn => fn());
     this.cleanups = [];
   },
-render(container) {
+  render(container) {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
-    // Schedule cache to avoid re-fetching on every nav
-    let scheduleCacheTs = 0;
-    const scheduleCacheTtl = 30_000; // 30 seconds
-    let scheduleConfigCache = { enabled: false, scanType: 'quick', customPath: null, intervalHours: 24, lastRun: null };
     container.innerHTML = `
       <div style="overflow-y: auto; max-height: calc(100vh - 80px); padding-right: 8px;">
       <header class="page-header">
@@ -278,22 +274,13 @@ render(container) {
     }
 
     async function loadSchedule() {
-      const now = Date.now();
-      // Use cached schedule if fresh (within TTL)
-      if (now - scheduleCacheTs < scheduleCacheTtl && scheduleConfigCache) {
-        scheduleConfig = scheduleConfigCache;
-        renderScheduleUI();
-        return;
-      }
       try {
         const config = await window.api.invoke('schedule:get');
         if (!hasView()) return;
-        scheduleConfigCache = Object.assign(
+        scheduleConfig = Object.assign(
           { enabled: false, scanType: 'quick', customPath: null, intervalHours: 24, lastRun: null },
           config || {}
         );
-        scheduleCacheTs = now;
-        scheduleConfig = scheduleConfigCache;
         renderScheduleUI();
       } catch (e) {
         if (hasView()) scheduleStatusText.textContent = e.message || t('scanner.scheduleLoadError');
@@ -505,6 +492,6 @@ render(container) {
 
     updateFooterButtons();
     refreshStatus();
-    this.loadScheduleCached(container);
+    loadSchedule();
   }
 };
