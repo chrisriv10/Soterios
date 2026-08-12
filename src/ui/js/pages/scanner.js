@@ -299,6 +299,7 @@ window.Pages['scanner'] = {
     }
 
     scheduleToggleBtn.addEventListener('click', () => {
+      if (!scheduleToggleBtn) return;
       const enabling = !scheduleConfig.enabled;
       if (enabling && scheduleConfig.scanType === 'custom' && !scheduleConfig.customPath) {
         scheduleStatusText.textContent = t('scanner.scheduleChooseFolderFirst');

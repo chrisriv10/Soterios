@@ -20,24 +20,6 @@ window.Pages['dashboard'] = {
     }
 
     // Warning title/detail translation map for security-overview tool
-    const warningTranslations = {
-      'Real-time protection is disabled': { title: 'dashboard.warn.rtpDisabled.title', detail: 'dashboard.warn.rtpDisabled.detail' },
-      'Folder watch is disabled': { title: 'dashboard.warn.folderWatchDisabled.title', detail: 'dashboard.warn.folderWatchDisabled.detail' },
-      'Suspicious network alerts are disabled': { title: 'dashboard.warn.networkAlertsDisabled.title', detail: 'dashboard.warn.networkAlertsDisabled.detail' },
-      'Network traffic history is disabled': { title: 'dashboard.warn.networkTrafficHistoryDisabled.title', detail: 'dashboard.warn.networkTrafficHistoryDisabled.detail' },
-      'Auto-generate reports is disabled': { title: 'dashboard.warn.autoReportsDisabled.title', detail: 'dashboard.warn.autoReportsDisabled.detail' },
-      'Scan history is disabled': { title: 'dashboard.warn.scanHistoryDisabled.title', detail: 'dashboard.warn.scanHistoryDisabled.detail' },
-      'External lookups are disabled': { title: 'dashboard.warn.externalLookupsDisabled.title', detail: 'dashboard.warn.externalLookupsDisabled.detail' },
-      'Geolocation heat map is disabled': { title: 'dashboard.warn.geoLookupDisabled.title', detail: 'dashboard.warn.geoLookupDisabled.detail' },
-      'Network perimeter map is disabled': { title: 'dashboard.warn.perimeterMapDisabled.title', detail: 'dashboard.warn.perimeterMapDisabled.detail' },
-      'ClamAV definitions are outdated': { title: 'dashboard.warn.definitionsOutdated.title', detail: 'dashboard.warn.definitionsOutdated.detail' },
-      'Windows Firewall is disabled': { title: 'dashboard.warn.firewallDisabled.title', detail: 'dashboard.warn.firewallDisabled.detail' },
-      'High memory usage detected': { title: 'dashboard.warn.highMemory.title', detail: 'dashboard.warn.highMemory.detail' },
-      'High CPU usage detected': { title: 'dashboard.warn.highCpu.title', detail: 'dashboard.warn.highCpu.detail' },
-      'Low disk space': { title: 'dashboard.warn.lowDisk.title', detail: 'dashboard.warn.lowDisk.detail' },
-    };
-
-    // Action mapping for warning types
     const warningActions = {
       'Real-time protection is disabled': {
         label: 'dashboard.action.enableRtp',
@@ -623,9 +605,9 @@ async function loadWarnings() {
 
     function setRtpState(active) {
       isRtpActive = !!active;
-      btnToggleRtp.textContent = isRtpActive ? t('dashboard.rtpDisable') : t('dashboard.rtpEnable');
-      rtpStatusText.textContent = isRtpActive ? t('dashboard.rtpActive') : t('dashboard.rtpDisabled');
-      rtpIcon.className = 'status-icon ' + (isRtpActive ? 'safe' : 'danger');
+      if (btnToggleRtp) btnToggleRtp.textContent = isRtpActive ? t('dashboard.rtpDisable') : t('dashboard.rtpEnable');
+      if (rtpStatusText) rtpStatusText.textContent = isRtpActive ? t('dashboard.rtpActive') : t('dashboard.rtpDisabled');
+      if (rtpIcon) rtpIcon.className = 'status-icon ' + (isRtpActive ? 'safe' : 'danger');
     }
 
     window.api.invoke('splash:progress', { pct: 35, label: t('splash.checkingProtection') });
@@ -861,12 +843,14 @@ async function loadWarnings() {
     window.api.invoke('splash:progress', { pct: 85, label: t('dashboard.lastScan') });
     window.api.invoke('splash:progress', { pct: 90, label: t('splash.loadingQuarantine') });
 
-    try {
+try {
       window.api.invoke('splash:progress', { pct: 100, label: t('splash.ready') });
       // Small delay to allow progress bar to finish animating to 100%
       await new Promise(resolve => setTimeout(resolve, 300));
       await window.api.invoke('app:ready');
     } catch (_) {
-    }
+      // app:ready failed or was never reached - ensure splash dismisses
+      await window.api.invoke('app:ready').catch(() => {});
+}
   }
 };

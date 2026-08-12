@@ -25,6 +25,7 @@ window.Pages['network'] = {
   _heatmapKeydownHandler: null,
   _selectedClusterIps: null,
   _selectedClusterLoc: null,
+  _userLocation: null, // User's actual geolocation for heatmap origin
 
   _startHeatmapPulses(content) {
     if (this._heatmapPulseRaf) {
@@ -530,7 +531,7 @@ if (content) this.paintHistoryChart(content).catch(() => {});
     }, this.CHART_REFRESH_INTERVAL_MS);
   },
 
-  async load(container, isInitial) {
+  async load(container, isInitial = false) {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const content = container.querySelector('#networkContent');
     if (!content) return;
@@ -557,6 +558,25 @@ if (content) this.paintHistoryChart(content).catch(() => {});
       const networkTrafficHistoryEnabled = settingsResult.status === 'fulfilled' ? settingsResult.value : true;
       const vpn = vpnResult.status === 'fulfilled' ? vpnResult.value : null;
       const vpns = (vpn && Array.isArray(vpn.vpns)) ? vpn.vpns : [];
+
+      // Fetch user location on initial load (safely with fallback)
+      if (isInitial && !this._userLocation) {
+        try {
+          this._userLocation = await window.api.invoke('network:getUserLocation');
+          // Safety: validate the returned location data
+          if (this._userLocation) {
+            if (typeof this._userLocation.lat !== 'number' || typeof this._userLocation.lon !== 'number' ||
+                this._userLocation.lat < -90 || this._userLocation.lat > 90 ||
+                this._userLocation.lon < -180 || this._userLocation.lon > 180) {
+              console.warn('Invalid user location data received, using fallback');
+              this._userLocation = null;
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to fetch user location, using fallback:', e.message || e);
+          this._userLocation = null;
+        }
+      }
 
       let html = '';
 
@@ -903,8 +923,23 @@ if (content) this.paintHistoryChart(content).catch(() => {});
             }
           }
 
-          // Home anchor point (bottom-center) used as the origin for connection-path arcs.
-          const homeX = 50, homeY = 94;
+          // Calculate home anchor point from user's actual location with safe fallback
+          // Default to center of map (50, 50) if location lookup fails
+          let homeX = 50, homeY = 50;
+          if (this._userLocation && this._userLocation.lat !== undefined && this._userLocation.lon !== undefined) {
+            // Additional safety validation for coordinates
+            const lat = this._userLocation.lat;
+            const lon = this._userLocation.lon;
+            if (typeof lat === 'number' && typeof lon === 'number' &&
+                lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+              homeX = ((lon + 180) / 360) * 100;
+              homeY = ((90 - lat) / 180) * 100;
+              
+              // Safety: clamp coordinates to valid map range (0-100)
+              homeX = Math.max(0, Math.min(100, homeX));
+              homeY = Math.max(0, Math.min(100, homeY));
+            }
+          }
           let arcSvg = '';
 
           for (const key in clusters) {
@@ -949,7 +984,8 @@ if (content) this.paintHistoryChart(content).catch(() => {});
             const midX = (homeX + x) / 2;
             const midY = (homeY + y) / 2;
             const dist = Math.hypot(x - homeX, y - homeY);
-            const bow = Math.min(28, dist * 0.28);
+            // Safety: ensure minimum bow for visibility, even for close connections
+            const bow = Math.max(2, Math.min(28, dist * 0.28));
             const ctrlX = midX;
             const ctrlY = midY - bow;
             const strokeW = c.classification === 'MALICIOUS' ? 0.45 : 0.28;

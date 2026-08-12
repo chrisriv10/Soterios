@@ -1,9 +1,30 @@
 const { ipcMain } = require('electron');
 const { execFile } = require('child_process');
+const https = require('https');
 const util = require('util');
 const execFilePromise = util.promisify(execFile);
 const logger = require('../../utils/logger');
 const featureFlags = require('../../core/featureFlags');
+
+function requestText(url, options = {}) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(url, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Soterios',
+        ...options.headers
+      }
+    }, (res) => {
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', chunk => { body += chunk; });
+      res.on('end', () => resolve({ statusCode: res.statusCode, body }));
+    });
+    req.on('error', reject);
+    req.setTimeout(15000, () => req.destroy(new Error('Request timed out')));
+    req.end();
+  });
+}
 
 
 function isValidIPv4(ip) {
@@ -187,6 +208,68 @@ function register(mainWindow, { db, eventBus, networkMonitor, networkEnricher, n
       }
     }
     return results;
+  });
+
+  ipcMain.handle('network:getUserLocation', async () => {
+    try {
+      // Safety check: ensure geo lookup is enabled
+      if (!featureFlags.getFlag(db, 'geoLookup', true)) {
+        return null;
+      }
+
+      // Safety check: validate geoLocationService is available
+      if (!geoLocationService) {
+        console.warn('GeoLocationService not available for user location lookup');
+        return null;
+      }
+
+      // Use the existing ipwho.is API to get user's public IP location
+      const res = await requestText('https://ipwho.is/');
+      
+      // Safety check: validate response
+      if (!res || res.statusCode !== 200) {
+        console.warn('User location lookup failed: invalid response status', res?.statusCode);
+        return null;
+      }
+
+      // Safety check: validate JSON parsing
+      const data = JSON.parse(res.body || '{}');
+      if (!data || typeof data !== 'object') {
+        console.warn('User location lookup failed: invalid JSON response');
+        return null;
+      }
+
+      // Safety check: validate API success flag
+      if (data.success === false) {
+        console.warn('User location lookup failed: API returned success=false', data.message);
+        return null;
+      }
+
+      // Safety check: validate required fields
+      if (typeof data.latitude !== 'number' || typeof data.longitude !== 'number') {
+        console.warn('User location lookup failed: missing or invalid coordinates');
+        return null;
+      }
+
+      // Validate coordinate ranges (latitude: -90 to 90, longitude: -180 to 180)
+      if (data.latitude < -90 || data.latitude > 90 || data.longitude < -180 || data.longitude > 180) {
+        console.warn('User location lookup failed: coordinates out of valid range', data.latitude, data.longitude);
+        return null;
+      }
+
+      // Return validated location data
+      return {
+        lat: data.latitude,
+        lon: data.longitude,
+        country: data.country || null,
+        city: data.city || null,
+        ip: data.ip || null
+      };
+    } catch (e) {
+      // Safety: catch any errors and return null instead of crashing
+      console.warn('User location lookup failed with error:', e.message || e);
+      return null;
+    }
   });
 
   ipcMain.handle('network:stats', async () => {
