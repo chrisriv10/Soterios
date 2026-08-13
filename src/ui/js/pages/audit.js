@@ -131,6 +131,7 @@ window.Pages['audit'] = {
     let currentPct = 0;
     let ceilingPct = 4;
     let unsubscribeProgress = null;
+    let lastProgress = null;
 
     // Check cache first (unless forced)
     const now = Date.now();
@@ -175,6 +176,7 @@ window.Pages['audit'] = {
     unsubscribeProgress = window.api.on('audit:progress', (event) => {
       const labelEl = container.querySelector('#auditProgressLabel');
       if (!event) return;
+      lastProgress = event;
       const { type, label, completed, total } = event;
       if (labelEl) {
         const translatedLabel = this.translateAuditLabel(label);
@@ -263,6 +265,33 @@ window.Pages['audit'] = {
             <div class="history-item"><div><div class="history-title">${escapeHtml(w.title)}</div><div class="history-meta">${escapeHtml(w.detail || '')}</div></div>
             <button class="btn btn-sm audit-restore" data-id="${escapeHtml(w.id)}">${escapeHtml(this.t('audit.restore'))}</button></div>`).join('')}</div></div>`;
       }
+
+      // The final progress event (e.g. "6/6") and the audit:run reply arrive in
+      // the same IPC batch, so replacing the content here would wipe the bar
+      // before it ever painted a frame. Hold the finished state long enough
+      // for one paint, then swap in the results.
+      const labelEl = content.querySelector('#auditProgressLabel');
+      if (lastProgress && lastProgress.type === 'complete'
+        && typeof lastProgress.completed === 'number' && typeof lastProgress.total === 'number'
+        && lastProgress.total > 0 && lastProgress.completed >= lastProgress.total) {
+        stopCreeping();
+        currentPct = 100;
+        ceilingPct = 100;
+        if (progressBar) {
+          progressBar.style.width = '100%';
+          progressBar.style.opacity = '1';
+        }
+        if (labelEl) {
+          labelEl.textContent = this.t('audit.completed', {
+            label: this.translateAuditLabel(lastProgress.label),
+            completed: lastProgress.completed,
+            total: lastProgress.total
+          });
+        }
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        if (!container.isConnected) return;
+      }
+
       content.innerHTML = html;
       content.querySelectorAll('.copy-command-btn').forEach((btn) => btn.addEventListener('click', async () => {
         const codeEl = content.querySelector(`#${btn.dataset.target}`);
