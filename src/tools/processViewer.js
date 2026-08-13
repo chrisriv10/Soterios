@@ -1,12 +1,45 @@
 const si = require('systeminformation');
 const { makeRisk, recommendationForRisk } = require('../security/riskEngine');
 const { suspiciousPathSignals } = require('../security/windowsChecks');
+const { hashFileStreaming } = require('../security/hashUtils');
 const { exec } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
 const path = require('path');
 const fs = require('fs');
-const crypto = require('crypto');
+
+// Bounded concurrency for the one-time background pass that hashes every
+// process executable after the trusted-hash set changes. Keeps the first
+// load after trusting responsive instead of reading every file at once.
+const HASH_CONCURRENCY = 4;
+
+// Time budget for the trusted-hash pass. Already-cached (unchanged) files
+// resolve instantly, so this only bounds the one-time cold pass after app
+// start or after the trusted set changes. The page renders immediately when
+// the budget expires; remaining trust flags converge on later refreshes.
+const HASH_BUDGET_MS = Number(process.env.SOTERIOS_PROCESS_HASH_BUDGET_MS) || 10000;
+
+function withTimeout(promise, ms, fallback) {
+  let timer;
+  const timeoutPromise = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(fallback), ms);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
+}
+
+async function mapWithConcurrency(items, limit, fn) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await fn(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
 
 // Well-known Windows system process names that should only ever run from a
 // specific expected system directory. A process using one of these names
@@ -107,7 +140,7 @@ async function getProcessIOStats() {
       return { diskIOMap: new Map(), networkIOMap: new Map() };
     }
     
-    const { stdout: ioStdout } = await execPromise(`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${scriptPath}"`, { timeout: 20000 });
+    const { stdout: ioStdout } = await execPromise(`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${scriptPath}"`, { timeout: 10000 });
 
     // Each line is "pid|name|readBytesPerSec|writeBytesPerSec|otherBytesPerSec".
     // Disk IO = read + write; "other" IO (named pipes, sockets, devices) is the
@@ -158,9 +191,9 @@ module.exports = {
     
     try {
       const [procData, loadData, memData, ioStats] = await Promise.all([
-        si.processes(),
-        si.currentLoad(),
-        si.mem(),
+        withTimeout(si.processes(), 15000, { list: [] }),
+        withTimeout(si.currentLoad(), 5000, { currentLoad: 0 }),
+        withTimeout(si.mem(), 5000, { total: 0, available: 0 }),
         getProcessIOStats()
       ]);
       const processList = procData.list || [];
@@ -182,7 +215,7 @@ module.exports = {
         const diskIO = diskIOMap.get(p.pid) || 0;
         const networkIO = networkIOMap.get(p.pid) || 0;
 
-        const item = {
+        return {
           pid: p.pid,
           ppid: p.parentPid || null,
           name: p.name || 'unknown',
@@ -195,21 +228,34 @@ module.exports = {
           hash: null,
           trusted: false
         };
-        
-        // Check if this process is trusted by calculating its hash
-        // Only do this if we have trusted hashes to check against
-        if (trustedHashes.size > 0 && p.path && fs.existsSync(p.path)) {
-          try {
-            const hash = crypto.createHash('sha256');
-            const data = fs.readFileSync(p.path);
-            hash.update(data);
-            item.hash = hash.digest('hex');
-            item.trusted = trustedHashes.has(item.hash);
-          } catch (err) {
-            // Ignore hash calculation errors (file locks, etc.)
-          }
+      });
+
+      // Check which processes are trusted by hashing their executables.
+      // Only run when there is something to check against; streaming async
+      // hashing (with a size cap and an mtime/size keyed cache) keeps this
+      // from ever blocking the main process, and the time budget makes the
+      // tool return promptly even on a cold cache: unchanged files resolve
+      // from the cache instantly, the rest converge over later refreshes.
+      if (trustedHashes.size > 0) {
+        const pathsToHash = processes
+          .map((p) => p.path)
+          .filter((p) => p && fs.existsSync(p));
+        const deadline = Date.now() + HASH_BUDGET_MS;
+        const hashes = await mapWithConcurrency(pathsToHash, HASH_CONCURRENCY, (p) => {
+          if (Date.now() > deadline) return null;
+          return hashFileStreaming(p).catch(() => null);
+        });
+        const hashByPath = new Map(pathsToHash.map((p, i) => [p, hashes[i]]));
+        for (const item of processes) {
+          if (!item.path) continue;
+          const h = hashByPath.get(item.path);
+          if (!h) continue;
+          item.hash = h;
+          item.trusted = trustedHashes.has(h);
         }
-        
+      }
+
+      for (const item of processes) {
         item.risk = makeRisk(processSignals(item, item.trusted));
         item.locationReasons = (item.risk.signals || [])
           .map((s) => s.message)
@@ -217,8 +263,7 @@ module.exports = {
         item.suspicious = item.locationReasons.length > 0;
         item.suspiciousReasons = (item.risk.signals || []).map((s) => s.message).filter(Boolean);
         item.recommendedAction = recommendationForRisk(item.risk, 'process');
-        return item;
-      });
+      }
       processes.sort((a, b) => {
         const riskDelta = b.risk.score - a.risk.score;
         if (riskDelta !== 0) return riskDelta;

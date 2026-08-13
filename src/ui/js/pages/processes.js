@@ -49,8 +49,10 @@ window.Pages.processes = {
             style="flex:1; max-width:360px; padding:8px 12px; border-radius:8px; border:1px solid var(--glass-border); background:var(--glass-bg,rgba(255,255,255,0.05)); color:inherit;">
           <select id="riskFilter" class="btn btn-sm">
             <option value="all">${escapeHtml(this.t('processes.riskFilterAll'))}</option>
+            <option value="critical">${escapeHtml(this.t('processes.riskFilterCritical'))}</option>
             <option value="high">${escapeHtml(this.t('processes.riskFilterHigh'))}</option>
-            <option value="normal">${escapeHtml(this.t('processes.riskFilterNormal'))}</option>
+            <option value="medium">${escapeHtml(this.t('processes.riskFilterMedium'))}</option>
+            <option value="low">${escapeHtml(this.t('processes.riskFilterLow'))}</option>
           </select>
           <select id="sortBy" class="btn btn-sm">
             <option value="default">${escapeHtml(this.t('processes.sortDefault'))}</option>
@@ -118,6 +120,8 @@ window.Pages.processes = {
   async load(container, isInitial = true) {
     const listEl = container.querySelector('#processList');
     if (!listEl) return;
+    if (this._loadInFlight) return;
+    this._loadInFlight = true;
     const scrollParent = listEl ? listEl.closest('.card') : null;
     const prevScrollTop = scrollParent ? scrollParent.scrollTop : 0;
 
@@ -136,6 +140,8 @@ window.Pages.processes = {
     } catch (err) {
       if (isInitial) showToolError(listEl, err);
       else console.error('Process refresh failed:', err);
+    } finally {
+      this._loadInFlight = false;
     }
   },
 
@@ -471,7 +477,11 @@ const trustedBadge = p.trusted
 
     this._rowIndex.forEach(({ el, blob, score }) => {
       const matchesQuery = !query || blob.includes(query);
-      const matchesRisk = this._riskFilter === 'high' ? score >= 35 : this._riskFilter === 'normal' ? score < 35 : true;
+      const matchesRisk = this._riskFilter === 'critical' ? score >= 80
+        : this._riskFilter === 'high' ? score >= 60 && score < 80
+        : this._riskFilter === 'medium' ? score >= 35 && score < 60
+        : this._riskFilter === 'low' ? score >= 1 && score < 35
+        : true;
       const matches = matchesQuery && matchesRisk;
       el.style.display = matches ? '' : 'none';
       if (matches) totalMatches += 1;

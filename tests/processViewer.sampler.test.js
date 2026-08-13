@@ -106,3 +106,133 @@ test('processViewer falls back to empty IO maps when the sampler fails', async (
     delete require.cache[PROCESS_VIEWER];
   }
 });
+
+test('processViewer returns within the hash budget and marks only completed hashes', async (t) => {
+  const fs = require('fs');
+  const os = require('os');
+  const crypto = require('crypto');
+  const si = require('systeminformation');
+  const cp = require('child_process');
+
+  const hashUtilsPath = path.join(__dirname, '..', 'src', 'security', 'hashUtils.js');
+  const realHashUtils = require(hashUtilsPath);
+  const realCacheEntry = require.cache[hashUtilsPath];
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pv-budget-'));
+  const paths = [];
+  for (let i = 0; i < 12; i++) {
+    const p = path.join(dir, `p${i}.exe`);
+    fs.writeFileSync(p, crypto.randomBytes(64));
+    paths.push(p);
+  }
+
+  const realExec = cp.exec;
+  cp.exec = (cmd, opts, cb) => {
+    const err = new Error('sampler disabled');
+    err.killed = false;
+    cb(err, { stdout: '', stderr: '' });
+  };
+
+  const realProcesses = si.processes;
+  const realCurrentLoad = si.currentLoad;
+  const realMem = si.mem;
+  si.processes = async () => ({
+    list: paths.map((p, i) => ({ pid: 100 + i, name: `p${i}.exe`, path: p, command: `p${i}`, cpu: 1, mem: 2 }))
+  });
+  si.currentLoad = async () => ({ currentLoad: 12 });
+  si.mem = async () => ({ total: 1000, available: 500 });
+
+  // Simulate a slow cold-cache hash pass: each file takes 120ms but the
+  // budget is 40ms, so the tool must return promptly with a partial set.
+  process.env.SOTERIOS_PROCESS_HASH_BUDGET_MS = '40';
+  require.cache[hashUtilsPath] = {
+    exports: {
+      ...realHashUtils,
+      hashFileStreaming: async () => {
+        await new Promise((r) => setTimeout(r, 120));
+        return 'deadbeef';
+      }
+    }
+  };
+  delete require.cache[PROCESS_VIEWER];
+  const viewer = require(PROCESS_VIEWER);
+  const context = { db: { getTrustedHashes: () => [{ hash: 'deadbeef' }] } };
+
+  const started = Date.now();
+  try {
+    const result = await viewer.run({}, context);
+    const elapsed = Date.now() - started;
+    assert.ok(elapsed < 2000, `tool returned promptly within budget (${elapsed}ms)`);
+    assert.strictEqual(result.processes.length, 12);
+    const trustedCount = result.processes.filter((p) => p.trusted).length;
+    assert.ok(trustedCount > 0 && trustedCount < 12,
+      `partial hashing within budget (${trustedCount}/12 trusted)`);
+  } finally {
+    delete process.env.SOTERIOS_PROCESS_HASH_BUDGET_MS;
+    if (realCacheEntry) require.cache[hashUtilsPath] = realCacheEntry;
+    else delete require.cache[hashUtilsPath];
+    cp.exec = realExec;
+    si.processes = realProcesses;
+    si.currentLoad = realCurrentLoad;
+    si.mem = realMem;
+    delete require.cache[PROCESS_VIEWER];
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('processViewer marks trusted processes (matching hash) with risk 0', async (t) => {
+  const fs = require('fs');
+  const os = require('os');
+  const crypto = require('crypto');
+  const si = require('systeminformation');
+  const cp = require('child_process');
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pv-trust-'));
+  const exePath = path.join(dir, 'trusted.exe');
+  fs.writeFileSync(exePath, crypto.randomBytes(4096));
+  const hash = crypto.createHash('sha256').update(fs.readFileSync(exePath)).digest('hex');
+
+  const realExec = cp.exec;
+  cp.exec = (cmd, opts, cb) => {
+    const err = new Error('sampler disabled');
+    err.killed = false;
+    cb(err, { stdout: '', stderr: '' });
+  };
+
+  const realProcesses = si.processes;
+  const realCurrentLoad = si.currentLoad;
+  const realMem = si.mem;
+  si.processes = async () => ({
+    list: [
+      { pid: 100, name: 'trusted.exe', path: exePath, command: 'trusted', cpu: 1, mem: 2 },
+      { pid: 101, name: 'other.exe', path: 'C:\\other.exe', command: 'other', cpu: 1, mem: 2 }
+    ]
+  });
+  si.currentLoad = async () => ({ currentLoad: 12 });
+  si.mem = async () => ({ total: 1000, available: 500 });
+
+  delete require.cache[PROCESS_VIEWER];
+  const viewer = require(PROCESS_VIEWER);
+  const context = { db: { getTrustedHashes: () => [{ hash }] } };
+
+  try {
+    const result = await viewer.run({}, context);
+    const byPid = new Map(result.processes.map((p) => [p.pid, p]));
+
+    const trusted = byPid.get(100);
+    assert.strictEqual(trusted.trusted, true, 'matching hash marks process trusted');
+    assert.strictEqual(trusted.hash, hash);
+    assert.strictEqual(trusted.risk.score, 0, 'trusted process gets risk 0');
+    assert.strictEqual(trusted.risk.level, 'none');
+
+    const other = byPid.get(101);
+    assert.strictEqual(other.trusted, false, 'missing executable is not trusted');
+  } finally {
+    cp.exec = realExec;
+    si.processes = realProcesses;
+    si.currentLoad = realCurrentLoad;
+    si.mem = realMem;
+    delete require.cache[PROCESS_VIEWER];
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

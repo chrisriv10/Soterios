@@ -1,7 +1,7 @@
 const fs = require('fs');
-const crypto = require('crypto');
 const path = require('path');
 const { ipcMain } = require('electron');
+const { hashFileStreaming, clearHashCache } = require('../../security/hashUtils');
 
 function enrichSizes(records) {
   return (records || []).map((r) => {
@@ -62,20 +62,18 @@ function register(mainWindow, { quarantineManager, db }) {
         return { success: false, error: 'File does not exist' };
       }
       
-      // Check file size to prevent memory issues (limit to 100MB)
-      const stats = fs.statSync(normalizedPath);
-      if (stats.size > 100 * 1024 * 1024) {
+      const hashValue = await hashFileStreaming(normalizedPath);
+      if (!hashValue) {
         return { success: false, error: 'File too large for hash calculation (max 100MB)' };
       }
       
-      const hash = crypto.createHash('sha256');
-      const data = fs.readFileSync(normalizedPath);
-      hash.update(data);
-      const hashValue = hash.digest('hex');
-      
       db.addTrustedHash(hashValue, normalizedPath, reason);
+      clearHashCache(normalizedPath);
       return { success: true, hash: hashValue };
     } catch (err) {
+      if (err && err.code === 'HASH_FILE_TOO_LARGE') {
+        return { success: false, error: err.message };
+      }
       return { success: false, error: err.message || 'Failed to calculate hash' };
     }
   });
@@ -94,20 +92,18 @@ function register(mainWindow, { quarantineManager, db }) {
         return { success: false, error: 'File does not exist' };
       }
       
-      // Check file size to prevent memory issues (limit to 100MB)
-      const stats = fs.statSync(normalizedPath);
-      if (stats.size > 100 * 1024 * 1024) {
+      const hashValue = await hashFileStreaming(normalizedPath);
+      if (!hashValue) {
         return { success: false, error: 'File too large for hash calculation (max 100MB)' };
       }
       
-      const hash = crypto.createHash('sha256');
-      const data = fs.readFileSync(normalizedPath);
-      hash.update(data);
-      const hashValue = hash.digest('hex');
-      
       db.removeTrustedHash(hashValue);
+      clearHashCache(normalizedPath);
       return { success: true, hash: hashValue };
     } catch (err) {
+      if (err && err.code === 'HASH_FILE_TOO_LARGE') {
+        return { success: false, error: err.message };
+      }
       return { success: false, error: err.message || 'Failed to calculate hash' };
     }
   });
