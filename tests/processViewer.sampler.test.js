@@ -236,3 +236,74 @@ test('processViewer marks trusted processes (matching hash) with risk 0', async 
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('processViewer hashes a shared executable once and does not let a late null clobber it', async (t) => {
+  const fs = require('fs');
+  const os = require('os');
+  const crypto = require('crypto');
+  const si = require('systeminformation');
+  const cp = require('child_process');
+
+  const hashUtilsPath = path.join(__dirname, '..', 'src', 'security', 'hashUtils.js');
+  const realHashUtils = require(hashUtilsPath);
+  const realCacheEntry = require.cache[hashUtilsPath];
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pv-dedupe-'));
+  const sharedExe = path.join(dir, 'shared.exe');
+  fs.writeFileSync(sharedExe, crypto.randomBytes(4096));
+
+  const realExec = cp.exec;
+  cp.exec = (cmd, opts, cb) => {
+    const err = new Error('sampler disabled');
+    err.killed = false;
+    cb(err, { stdout: '', stderr: '' });
+  };
+
+  const realProcesses = si.processes;
+  const realCurrentLoad = si.currentLoad;
+  const realMem = si.mem;
+  si.processes = async () => ({
+    list: [
+      { pid: 100, name: 'shared.exe', path: sharedExe, command: 'shared', cpu: 1, mem: 2 },
+      { pid: 101, name: 'shared.exe', path: sharedExe, command: 'shared', cpu: 1, mem: 2 }
+    ]
+  });
+  si.currentLoad = async () => ({ currentLoad: 12 });
+  si.mem = async () => ({ total: 1000, available: 500 });
+
+  // First hash call succeeds; any duplicate late call (which must not happen)
+  // resolves null, the exact shape of a budget-expired entry.
+  let hashCalls = 0;
+  require.cache[hashUtilsPath] = {
+    exports: {
+      ...realHashUtils,
+      hashFileStreaming: async () => {
+        hashCalls++;
+        return hashCalls === 1 ? 'deadbeef' : null;
+      }
+    }
+  };
+  delete require.cache[PROCESS_VIEWER];
+  const viewer = require(PROCESS_VIEWER);
+  const context = { db: { getTrustedHashes: () => [{ hash: 'deadbeef' }] } };
+
+  try {
+    const result = await viewer.run({}, context);
+    assert.strictEqual(hashCalls, 1, 'shared executable hashed exactly once');
+    const byPid = new Map(result.processes.map((p) => [p.pid, p]));
+    assert.strictEqual(byPid.get(100).trusted, true, 'first process on shared path trusted');
+    assert.strictEqual(byPid.get(101).trusted, true, 'second process on shared path trusted');
+    assert.strictEqual(byPid.get(100).hash, 'deadbeef');
+    assert.strictEqual(byPid.get(101).hash, 'deadbeef');
+  } finally {
+    delete process.env.SOTERIOS_PROCESS_HASH_BUDGET_MS;
+    if (realCacheEntry) require.cache[hashUtilsPath] = realCacheEntry;
+    else delete require.cache[hashUtilsPath];
+    cp.exec = realExec;
+    si.processes = realProcesses;
+    si.currentLoad = realCurrentLoad;
+    si.mem = realMem;
+    delete require.cache[PROCESS_VIEWER];
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

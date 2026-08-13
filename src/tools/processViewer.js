@@ -237,15 +237,20 @@ module.exports = {
       // tool return promptly even on a cold cache: unchanged files resolve
       // from the cache instantly, the rest converge over later refreshes.
       if (trustedHashes.size > 0) {
-        const pathsToHash = processes
-          .map((p) => p.path)
-          .filter((p) => p && fs.existsSync(p));
+        // Dedupe by path: several processes can share one executable, and a
+        // duplicate late-finishing entry (e.g. budget expired -> null) would
+        // otherwise clobber the successful hash for every process on that path.
+        const uniquePaths = [...new Set(
+          processes
+            .map((p) => p.path)
+            .filter((p) => p && fs.existsSync(p))
+        )];
         const deadline = Date.now() + HASH_BUDGET_MS;
-        const hashes = await mapWithConcurrency(pathsToHash, HASH_CONCURRENCY, (p) => {
+        const hashes = await mapWithConcurrency(uniquePaths, HASH_CONCURRENCY, (p) => {
           if (Date.now() > deadline) return null;
           return hashFileStreaming(p).catch(() => null);
         });
-        const hashByPath = new Map(pathsToHash.map((p, i) => [p, hashes[i]]));
+        const hashByPath = new Map(uniquePaths.map((p, i) => [p, hashes[i]]));
         for (const item of processes) {
           if (!item.path) continue;
           const h = hashByPath.get(item.path);
