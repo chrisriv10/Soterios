@@ -10,7 +10,7 @@ const fs = require('fs');
 // Windows pipes block-buffer clamscan's stdout, so a healthy scan can easily
 // go quiet for several minutes while a large or locked file is scanned. The
 // window must be generous enough that real scans never hit it.
-const DEFAULT_SCAN_INACTIVITY_TIMEOUT_MS = 600000;
+const DEFAULT_SCAN_INACTIVITY_TIMEOUT_MS = 1800000; // Increased from 10 min to 30 min for large file scans
 // freshclam has its own Connect/Receive timeouts but the process itself can
 // still hang (e.g. stuck DNS); cap the whole update so it always resolves.
 const DEFAULT_UPDATE_TIMEOUT_MS = 300000;
