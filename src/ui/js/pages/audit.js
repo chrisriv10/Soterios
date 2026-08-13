@@ -73,6 +73,23 @@ window.Pages['audit'] = {
     'Check BitLocker status in Windows settings.': 'audit.check.bitlocker.rec2'
   },
 
+  // Shared handler for the generic Manage button: open a settings URI or a
+  // special action (open-powershell) exposed by the backend result.
+  bindManageButtons(scope) {
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+    scope.querySelectorAll('.audit-open-settings').forEach((btn) => btn.addEventListener('click', async () => {
+      try {
+        if (btn.dataset.action === 'open-powershell') {
+          await window.api.invoke('shell:openPowerShell');
+        } else if (btn.dataset.uri) {
+          await window.soterios.shell.openExternal(btn.dataset.uri);
+        }
+      } catch (err) {
+        alert(err.message || t('audit.openSettingsError'));
+      }
+    }));
+  },
+
   render(container) {
     container.innerHTML = `
       <header class="page-header">
@@ -161,11 +178,17 @@ window.Pages['audit'] = {
       }
       if (typeof completed === 'number' && typeof total === 'number' && total > 0) {
         if (type === 'complete') {
+          // Use actual progress percentage instead of creeping animation for accuracy
           currentPct = Math.max(4, Math.round((completed / total) * 100));
           if (progressBar) progressBar.style.width = `${currentPct}%`;
+          // Set ceiling to actual progress to prevent bar from jumping ahead
+          ceilingPct = currentPct;
         }
         const nextMilestone = Math.min(total, completed + 1);
-        ceilingPct = nextMilestone >= total ? 100 : Math.max(currentPct + 1, Math.round((nextMilestone / total) * 100) - 3);
+        // Only set ceiling for next milestone if we haven't completed all checks
+        if (nextMilestone < total) {
+          ceilingPct = Math.max(currentPct + 1, Math.round((nextMilestone / total) * 100) - 1);
+        }
       }
     });
     
@@ -223,7 +246,7 @@ window.Pages['audit'] = {
           </div>
           ${res.detail ? `<div style="font-size:0.85rem; color:var(--text-dim); padding:8px; background:var(--bg-surface); border-radius:6px; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; white-space:pre-wrap; word-break:break-word;">${escapeHtml(res.detail)}</div>` : ''}
           ${res.recommendation ? this.renderRecommendation(res.recommendation) : ''}
-          ${res.actionUri ? `<button class="btn btn-sm audit-open-settings" data-uri="${escapeHtml(res.actionUri)}">${escapeHtml(this.t('audit.openWindowsUpdate'))}</button>` : ''}
+          ${(res.actionUri || res.manageAction) ? `<button class="btn btn-sm audit-open-settings" data-uri="${escapeHtml(res.actionUri || '')}" data-action="${escapeHtml(res.manageAction || '')}">${escapeHtml(this.t('audit.manage'))}</button>` : ''}
           ${res.status === 'warn' || res.status === 'fail' ? `<button class="btn btn-sm audit-ignore" data-id="${escapeHtml(this.warningId(res))}" data-title="${escapeHtml(res.name)}" data-detail="${escapeHtml(res.message || res.detail || '')}">${escapeHtml(this.t('audit.ignoreWarning'))}</button>` : ''}
         </div>`;
       }
@@ -247,13 +270,7 @@ window.Pages['audit'] = {
           alert(t('audit.copyError'));
         }
       }));
-      content.querySelectorAll('.audit-open-settings').forEach((btn) => btn.addEventListener('click', async () => {
-        try {
-          await window.soterios.shell.openExternal(btn.dataset.uri);
-        } catch (err) {
-          alert(err.message || t('audit.openSettingsError'));
-        }
-      }));
+      self.bindManageButtons(content);
       content.querySelectorAll('.audit-ignore').forEach((btn) => btn.addEventListener('click', async () => {
         const card = btn.closest('.card');
         btn.disabled = true;
@@ -337,7 +354,7 @@ window.Pages['audit'] = {
         </div>
         ${res.detail ? `<div style="font-size:0.85rem; color:var(--text-dim); padding:8px; background:var(--bg-surface); border-radius:6px; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; white-space:pre-wrap; word-break:break-word;">${escapeHtml(res.detail)}</div>` : ''}
         ${res.recommendation ? this.renderRecommendation(res.recommendation) : ''}
-        ${res.actionUri ? `<button class="btn btn-sm audit-open-settings" data-uri="${escapeHtml(res.actionUri)}">${escapeHtml(this.t('audit.openWindowsUpdate'))}</button>` : ''}
+        ${(res.actionUri || res.manageAction) ? `<button class="btn btn-sm audit-open-settings" data-uri="${escapeHtml(res.actionUri || '')}" data-action="${escapeHtml(res.manageAction || '')}">${escapeHtml(this.t('audit.manage'))}</button>` : ''}
         ${res.status === 'warn' || res.status === 'fail' ? `<button class="btn btn-sm audit-ignore" data-id="${escapeHtml(this.warningId(res))}" data-title="${escapeHtml(res.name)}" data-detail="${escapeHtml(res.message || res.detail || '')}">${escapeHtml(this.t('audit.ignoreWarning'))}</button>` : ''}
       </div>`;
     }
@@ -366,13 +383,7 @@ window.Pages['audit'] = {
         alert(t('audit.copyError'));
       }
     }));
-    content.querySelectorAll('.audit-open-settings').forEach((btn) => btn.addEventListener('click', async () => {
-      try {
-        await window.soterios.shell.openExternal(btn.dataset.uri);
-      } catch (err) {
-        alert(err.message || t('audit.openSettingsError'));
-      }
-    }));
+    self.bindManageButtons(content);
     content.querySelectorAll('.audit-ignore').forEach((btn) => btn.addEventListener('click', async () => {
       const card = btn.closest('.card');
       btn.disabled = true;
@@ -422,13 +433,14 @@ window.Pages['audit'] = {
         </div>
         ${res.detail ? `<div style="font-size:0.85rem; color:var(--text-dim); padding:8px; background:var(--bg-surface); border-radius:6px; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; white-space:pre-wrap; word-break:break-word;">${escapeHtml(res.detail)}</div>` : ''}
         ${res.recommendation ? self.renderRecommendation(res.recommendation) : ''}
-        ${res.actionUri ? `<button class="btn btn-sm audit-open-settings" data-uri="${escapeHtml(res.actionUri)}">${escapeHtml(self.t('audit.openWindowsUpdate'))}</button>` : ''}
+        ${(res.actionUri || res.manageAction) ? `<button class="btn btn-sm audit-open-settings" data-uri="${escapeHtml(res.actionUri || '')}" data-action="${escapeHtml(res.manageAction || '')}">${escapeHtml(self.t('audit.manage'))}</button>` : ''}
         ${res.status === 'warn' || res.status === 'fail' ? `<button class="btn btn-sm audit-ignore" data-id="${escapeHtml(self.warningId(res))}" data-title="${escapeHtml(res.name)}" data-detail="${escapeHtml(res.message || res.detail || '')}">${escapeHtml(self.t('audit.ignoreWarning'))}</button>` : ''}
       </div>`;
       resultsContainer.innerHTML += resultsHtml;
     }
 
-    // Re-bind event listeners for newly added ignore buttons
+    // Re-bind event listeners for newly added buttons
+    self.bindManageButtons(resultsContainer);
     resultsContainer.querySelectorAll('.audit-ignore').forEach((btn) => btn.addEventListener('click', async () => {
       const card = btn.closest('.card');
       btn.disabled = true;

@@ -1,4 +1,5 @@
 const { ipcMain, dialog, shell, app, BrowserWindow } = require('electron');
+const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -488,6 +489,16 @@ function register(mainWindow, {
        return { success: false, error: 'Invalid URL.' };
      }
      shell.openExternal(url);
+     return { success: true };
+   });
+
+   ipcMain.handle('shell:openPowerShell', () => {
+     const child = spawn('powershell.exe', ['-NoExit'], {
+       detached: true,
+       stdio: 'ignore',
+       windowsHide: false,
+     });
+     child.unref();
      return { success: true };
    });
 

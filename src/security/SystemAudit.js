@@ -51,16 +51,16 @@ class SystemAudit {
       try {
         const s = JSON.parse(def.stdout);
         if (s.AntivirusEnabled) {
-          out.push({ name: 'Windows Defender Antivirus', status: 'pass', message: 'Defender antivirus is enabled and running.', detail: `Engine: ${s.AMEngineVersion || 'N/A'} | Signatures: ${s.AntivirusSignatureVersion || 'N/A'} (${s.AntivirusSignatureAge || 0} days old)`, recommendation: '' });
+          out.push({ name: 'Windows Defender Antivirus', status: 'pass', message: 'Defender antivirus is enabled and running.', detail: `Engine: ${s.AMEngineVersion || 'N/A'} | Signatures: ${s.AntivirusSignatureVersion || 'N/A'} (${s.AntivirusSignatureAge || 0} days old)`, recommendation: '', actionUri: 'ms-settings:windowsdefender' });
         } else {
-          out.push({ name: 'Windows Defender Antivirus', status: 'fail', message: 'Defender antivirus is disabled!', detail: 'Antivirus protection is turned off.', recommendation: 'Open Windows Security > Virus & threat protection and turn on real-time protection.' });
+          out.push({ name: 'Windows Defender Antivirus', status: 'fail', message: 'Defender antivirus is disabled!', detail: 'Antivirus protection is turned off.', recommendation: 'Open Windows Security > Virus & threat protection and turn on real-time protection.', actionUri: 'ms-settings:windowsdefender' });
         }
-        out.push({ name: 'Real-Time Protection', status: s.RealTimeProtectionEnabled ? 'pass' : 'fail', message: s.RealTimeProtectionEnabled ? 'Real-time protection is active.' : 'Real-time protection is off!', detail: s.RealTimeProtectionEnabled ? 'Threats are blocked as they appear.' : 'Your system is vulnerable to active threats.', recommendation: s.RealTimeProtectionEnabled ? '' : 'Enable real-time protection in Windows Security settings.' });
+        out.push({ name: 'Real-Time Protection', status: s.RealTimeProtectionEnabled ? 'pass' : 'fail', message: s.RealTimeProtectionEnabled ? 'Real-time protection is active.' : 'Real-time protection is off!', detail: s.RealTimeProtectionEnabled ? 'Threats are blocked as they appear.' : 'Your system is vulnerable to active threats.', recommendation: s.RealTimeProtectionEnabled ? '' : 'Enable real-time protection in Windows Security settings.', actionUri: 'ms-settings:windowsdefender' });
       } catch (e) {
-        out.push({ name: 'Windows Defender', status: 'error', message: 'Could not parse Defender status.', detail: e.message });
+        out.push({ name: 'Windows Defender', status: 'error', message: 'Could not parse Defender status.', detail: e.message, actionUri: 'ms-settings:windowsdefender' });
       }
     } else {
-      out.push({ name: 'Windows Defender', status: 'error', message: 'Failed to query Defender status.', detail: 'The Get-MpComputerStatus cmdlet may not be available on this system.' });
+      out.push({ name: 'Windows Defender', status: 'error', message: 'Failed to query Defender status.', detail: 'The Get-MpComputerStatus cmdlet may not be available on this system.', actionUri: 'ms-settings:windowsdefender' });
     }
     return out;
   }
@@ -73,10 +73,11 @@ class SystemAudit {
         name: 'User Account Control (UAC)', status: enabled ? 'pass' : 'fail',
         message: enabled ? 'UAC is enabled.' : 'UAC is disabled! This is a severe security risk.',
         detail: enabled ? 'UAC prompts before making system-level changes.' : 'All programs run with full administrator privileges.',
-        recommendation: enabled ? '' : 'Enable UAC via Control Panel > User Accounts > Change User Account Control settings.'
+        recommendation: enabled ? '' : 'Enable UAC via Control Panel > User Accounts > Change User Account Control settings.',
+        actionUri: 'ms-settings:useraccountcontrolsettings'
       }];
     }
-    return [{ name: 'User Account Control', status: 'error', message: 'Could not check UAC status.' }];
+    return [{ name: 'User Account Control', status: 'error', message: 'Could not check UAC status.', actionUri: 'ms-settings:useraccountcontrolsettings' }];
   }
 
   async checkWindowsUpdate() {
@@ -89,7 +90,7 @@ class SystemAudit {
       if (count === null) {
         return [{ name: 'Windows Updates', status: 'warn', message: 'Could not parse update status.', detail: raw || 'Unexpected response from Windows Update query.', recommendation: 'Check Windows Update in Settings manually.', actionUri: 'ms-settings:windowsupdate' }];
       } else if (count === 0) {
-        return [{ name: 'Windows Updates', status: 'pass', message: 'No pending updates.', detail: 'All mandatory updates are installed.', recommendation: '' }];
+        return [{ name: 'Windows Updates', status: 'pass', message: 'No pending updates.', detail: 'All mandatory updates are installed.', recommendation: '', actionUri: 'ms-settings:windowsupdate' }];
       }
       return [{ name: 'Windows Updates', status: 'warn', message: `${count} mandatory update(s) pending.`, detail: `${count} mandatory update(s) are waiting to be installed.`, recommendation: 'Open Settings > Windows Update and install pending updates.', actionUri: 'ms-settings:windowsupdate' }];
     }
@@ -102,7 +103,7 @@ class SystemAudit {
       } else {
         const count = /^[0-9]+$/.test(raw) ? Number(raw) : null;
         if (count !== null && count === 0) {
-          return [{ name: 'Windows Updates', status: 'pass', message: 'No pending updates.', detail: 'All mandatory updates are installed.', recommendation: '' }];
+          return [{ name: 'Windows Updates', status: 'pass', message: 'No pending updates.', detail: 'All mandatory updates are installed.', recommendation: '', actionUri: 'ms-settings:windowsupdate' }];
         } else if (count !== null && count > 0) {
           return [{ name: 'Windows Updates', status: 'warn', message: `${count} mandatory update(s) pending.`, detail: `${count} mandatory update(s) are waiting to be installed.`, recommendation: 'Open Settings > Windows Update and install pending updates.', actionUri: 'ms-settings:windowsupdate' }];
         }
@@ -138,27 +139,30 @@ class SystemAudit {
             name: 'BitLocker Drive Encryption', status: 'pass',
             message: 'System drive is encrypted.',
             detail: 'Your data is protected if the device is lost or stolen.',
-            recommendation: ''
+            recommendation: '',
+            actionUri: 'ms-settings:bitlocker'
           }];
         } else if (statusValue === 0 || statusValue === null) {
           return [{
             name: 'BitLocker Drive Encryption', status: 'warn',
             message: statusValue === 0 ? 'System drive is NOT encrypted.' : 'BitLocker status unavailable.',
             detail: statusValue === 0 ? 'Anyone with physical access can read your data.' : 'Could not determine BitLocker protection status.',
-            recommendation: 'Enable BitLocker via Control Panel > BitLocker Drive Encryption.'
+            recommendation: 'Enable BitLocker via Control Panel > BitLocker Drive Encryption.',
+            actionUri: 'ms-settings:bitlocker'
           }];
         }
         return [{
           name: 'BitLocker Drive Encryption', status: 'warn',
           message: 'BitLocker status could not be determined.',
           detail: 'Unexpected BitLocker response format.',
-          recommendation: 'Check BitLocker status in Windows settings.'
+          recommendation: 'Check BitLocker status in Windows settings.',
+          actionUri: 'ms-settings:bitlocker'
         }];
       } catch (e) {
-        return [{ name: 'BitLocker', status: 'info', message: 'BitLocker status unavailable (may not be supported on this edition).', detail: 'BitLocker requires Windows Pro or Enterprise.' }];
+        return [{ name: 'BitLocker', status: 'info', message: 'BitLocker status unavailable (may not be supported on this edition).', detail: 'BitLocker requires Windows Pro or Enterprise.', actionUri: 'ms-settings:bitlocker' }];
       }
     }
-    return [{ name: 'BitLocker', status: 'info', message: 'BitLocker is not available on this system.', detail: 'Requires Windows Pro/Enterprise and a TPM chip.' }];
+    return [{ name: 'BitLocker', status: 'info', message: 'BitLocker is not available on this system.', detail: 'Requires Windows Pro/Enterprise and a TPM chip.', actionUri: 'ms-settings:bitlocker' }];
   }
 
   async checkExecutionPolicy() {
@@ -171,10 +175,11 @@ class SystemAudit {
         name: 'PowerShell Execution Policy', status: pass ? 'pass' : 'warn',
         message: policy ? `Policy: ${policy}` : 'Policy could not be determined.',
         detail: pass ? 'Only signed or locally authored scripts can run.' : 'Less restrictive execution policy may allow untrusted scripts.',
-        recommendation: pass ? '' : 'Consider setting to RemoteSigned: Set-ExecutionPolicy RemoteSigned -Scope LocalMachine'
+        recommendation: pass ? '' : 'Consider setting to RemoteSigned: Set-ExecutionPolicy RemoteSigned -Scope LocalMachine',
+        manageAction: 'open-powershell'
       }];
     }
-    return [{ name: 'PowerShell Execution Policy', status: 'warn', message: 'PowerShell execution policy query failed.', detail: ep.error || 'Unable to query execution policy.', recommendation: 'Check execution policy with Get-ExecutionPolicy -List in PowerShell.' }];
+    return [{ name: 'PowerShell Execution Policy', status: 'warn', message: 'PowerShell execution policy query failed.', detail: ep.error || 'Unable to query execution policy.', recommendation: 'Check execution policy with Get-ExecutionPolicy -List in PowerShell.', manageAction: 'open-powershell' }];
   }
 
   async checkSecureBoot() {
@@ -185,10 +190,11 @@ class SystemAudit {
         name: 'Secure Boot', status: enabled ? 'pass' : 'fail',
         message: enabled ? 'Secure Boot is enabled.' : 'Secure Boot is disabled!',
         detail: enabled ? 'Only trusted bootloaders can run during system startup.' : 'System is vulnerable to bootkit attacks.',
-        recommendation: enabled ? '' : 'Enable Secure Boot in your UEFI/BIOS firmware settings.'
+        recommendation: enabled ? '' : 'Enable Secure Boot in your UEFI/BIOS firmware settings.',
+        actionUri: 'ms-settings:recovery'
       }];
     }
-    return [{ name: 'Secure Boot', status: 'info', message: 'Secure Boot status could not be determined.', detail: 'This check may not be supported on virtual machines or older hardware.' }];
+    return [{ name: 'Secure Boot', status: 'info', message: 'Secure Boot status could not be determined.', detail: 'This check may not be supported on virtual machines or older hardware.', actionUri: 'ms-settings:recovery' }];
   }
 
   async runAudit(onProgress) {

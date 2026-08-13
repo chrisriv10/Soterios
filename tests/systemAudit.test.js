@@ -125,6 +125,22 @@ describe('SystemAudit', () => {
     assert.ok(results[0].message.includes('enabled'));
   });
 
+  it('checkDefender results carry Windows Security manage URI', async () => {
+    const audit = new SystemAudit();
+    const results = await audit.checkDefender();
+    assert.ok(results.every((r) => r.actionUri === 'ms-settings:windowsdefender'));
+  });
+
+  it('checkDefender error branches carry Windows Security manage URI', async () => {
+    currentExecHandler = async () => {
+      throw new Error('Query failed');
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkDefender();
+    assert.equal(results[0].status, 'error');
+    assert.equal(results[0].actionUri, 'ms-settings:windowsdefender');
+  });
+
   it('checkDefender returns fail when Defender is disabled', async () => {
     currentExecHandler = async () => {
       return {
@@ -175,6 +191,12 @@ describe('SystemAudit', () => {
     assert.ok(results[0].message.includes('enabled'));
   });
 
+  it('checkUac results carry UAC settings manage URI', async () => {
+    const audit = new SystemAudit();
+    const results = await audit.checkUac();
+    assert.equal(results[0].actionUri, 'ms-settings:useraccountcontrolsettings');
+  });
+
   it('checkUac returns fail when UAC is disabled', async () => {
     currentExecHandler = async () => {
       return { stdout: '0', stderr: '' };
@@ -216,6 +238,13 @@ describe('SystemAudit', () => {
     assert.equal(results[0].actionUri, 'ms-settings:windowsupdate');
   });
 
+  it('checkWindowsUpdate pass branch carries manage URI', async () => {
+    const audit = new SystemAudit();
+    const results = await audit.checkWindowsUpdate();
+    assert.equal(results[0].status, 'pass');
+    assert.equal(results[0].actionUri, 'ms-settings:windowsupdate');
+  });
+
   it('checkWindowsUpdate handles parse errors', async () => {
     currentExecHandler = async () => {
       return { stdout: 'invalid', stderr: '' };
@@ -243,6 +272,12 @@ describe('SystemAudit', () => {
     const results = await audit.checkBitLocker();
     assert.equal(results[0].status, 'pass');
     assert.ok(results[0].message.includes('encrypted'));
+  });
+
+  it('checkBitLocker results carry BitLocker manage URI', async () => {
+    const audit = new SystemAudit();
+    const results = await audit.checkBitLocker();
+    assert.equal(results[0].actionUri, 'ms-settings:bitlocker');
   });
 
   it('checkBitLocker returns warn when drive not encrypted', async () => {
@@ -277,6 +312,22 @@ describe('SystemAudit', () => {
     assert.ok(results[0].message.includes('RemoteSigned'));
   });
 
+  it('checkExecutionPolicy results carry open-powershell manage action', async () => {
+    const audit = new SystemAudit();
+    const results = await audit.checkExecutionPolicy();
+    assert.equal(results[0].manageAction, 'open-powershell');
+  });
+
+  it('checkExecutionPolicy error branch carries open-powershell manage action', async () => {
+    currentExecHandler = async () => {
+      throw new Error('Query failed');
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkExecutionPolicy();
+    assert.equal(results[0].status, 'warn');
+    assert.equal(results[0].manageAction, 'open-powershell');
+  });
+
   it('checkExecutionPolicy returns warn for insecure policies', async () => {
     currentExecHandler = async () => {
       return { stdout: 'Unrestricted', stderr: '' };
@@ -304,6 +355,12 @@ describe('SystemAudit', () => {
     const results = await audit.checkSecureBoot();
     assert.equal(results[0].status, 'pass');
     assert.ok(results[0].message.includes('enabled'));
+  });
+
+  it('checkSecureBoot results carry recovery settings manage URI', async () => {
+    const audit = new SystemAudit();
+    const results = await audit.checkSecureBoot();
+    assert.equal(results[0].actionUri, 'ms-settings:recovery');
   });
 
   it('checkSecureBoot returns fail when disabled', async () => {
