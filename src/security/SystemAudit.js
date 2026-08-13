@@ -74,10 +74,10 @@ class SystemAudit {
         message: enabled ? 'UAC is enabled.' : 'UAC is disabled! This is a severe security risk.',
         detail: enabled ? 'UAC prompts before making system-level changes.' : 'All programs run with full administrator privileges.',
         recommendation: enabled ? '' : 'Enable UAC via Control Panel > User Accounts > Change User Account Control settings.',
-        actionUri: 'ms-settings:useraccountcontrolsettings'
+        actionUri: 'control userpasswords2'
       }];
     }
-    return [{ name: 'User Account Control', status: 'error', message: 'Could not check UAC status.', actionUri: 'ms-settings:useraccountcontrolsettings' }];
+    return [{ name: 'User Account Control', status: 'error', message: 'Could not check UAC status.', actionUri: 'control userpasswords2' }];
   }
 
   async checkWindowsUpdate() {
@@ -140,7 +140,7 @@ class SystemAudit {
             message: 'System drive is encrypted.',
             detail: 'Your data is protected if the device is lost or stolen.',
             recommendation: '',
-            actionUri: 'ms-settings:bitlocker'
+            actionUri: 'control /name Microsoft.BitLockerDriveEncryption'
           }];
         } else if (statusValue === 0 || statusValue === null) {
           return [{
@@ -148,7 +148,7 @@ class SystemAudit {
             message: statusValue === 0 ? 'System drive is NOT encrypted.' : 'BitLocker status unavailable.',
             detail: statusValue === 0 ? 'Anyone with physical access can read your data.' : 'Could not determine BitLocker protection status.',
             recommendation: 'Enable BitLocker via Control Panel > BitLocker Drive Encryption.',
-            actionUri: 'ms-settings:bitlocker'
+            actionUri: 'control /name Microsoft.BitLockerDriveEncryption'
           }];
         }
         return [{
@@ -156,13 +156,13 @@ class SystemAudit {
           message: 'BitLocker status could not be determined.',
           detail: 'Unexpected BitLocker response format.',
           recommendation: 'Check BitLocker status in Windows settings.',
-          actionUri: 'ms-settings:bitlocker'
+          actionUri: 'control /name Microsoft.BitLockerDriveEncryption'
         }];
       } catch (e) {
-        return [{ name: 'BitLocker', status: 'info', message: 'BitLocker status unavailable (may not be supported on this edition).', detail: 'BitLocker requires Windows Pro or Enterprise.', actionUri: 'ms-settings:bitlocker' }];
+        return [{ name: 'BitLocker', status: 'info', message: 'BitLocker status unavailable (may not be supported on this edition).', detail: 'BitLocker requires Windows Pro or Enterprise.', actionUri: 'control /name Microsoft.BitLockerDriveEncryption' }];
       }
     }
-    return [{ name: 'BitLocker', status: 'info', message: 'BitLocker is not available on this system.', detail: 'Requires Windows Pro/Enterprise and a TPM chip.', actionUri: 'ms-settings:bitlocker' }];
+    return [{ name: 'BitLocker', status: 'info', message: 'BitLocker is not available on this system.', detail: 'Requires Windows Pro/Enterprise and a TPM chip.', actionUri: 'control /name Microsoft.BitLockerDriveEncryption' }];
   }
 
   async checkExecutionPolicy() {

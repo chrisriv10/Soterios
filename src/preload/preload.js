@@ -28,7 +28,10 @@ contextBridge.exposeInMainWorld('soterios', {
   shell: {
     showItemInFolder: (filePath) => ipcRenderer.invoke('shell:showItemInFolder', filePath),
     openPath: (filePath) => ipcRenderer.invoke('shell:openPath', filePath),
-    openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url)
+    openFolder: (filePath) => ipcRenderer.invoke('shell:openFolder', filePath),
+    openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
+    openPowerShell: () => ipcRenderer.invoke('shell:openPowerShell'),
+    openControlPanel: (command) => ipcRenderer.invoke('shell:openControlPanel', command)
   },
   app: {
     info: () => ipcRenderer.invoke('app:info')

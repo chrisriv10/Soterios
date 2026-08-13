@@ -80,9 +80,15 @@ window.Pages['audit'] = {
     scope.querySelectorAll('.audit-open-settings').forEach((btn) => btn.addEventListener('click', async () => {
       try {
         if (btn.dataset.action === 'open-powershell') {
-          await window.api.invoke('shell:openPowerShell');
+          await window.soterios.shell.openPowerShell();
         } else if (btn.dataset.uri) {
-          await window.soterios.shell.openExternal(btn.dataset.uri);
+          // Control Panel applets (e.g. "control userpasswords2") are not
+          // URLs and cannot go through shell.openExternal.
+          if (/^control(\s|$)/i.test(btn.dataset.uri)) {
+            await window.soterios.shell.openControlPanel(btn.dataset.uri);
+          } else {
+            await window.soterios.shell.openExternal(btn.dataset.uri);
+          }
         }
       } catch (err) {
         alert(err.message || t('audit.openSettingsError'));

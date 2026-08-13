@@ -502,6 +502,24 @@ function register(mainWindow, {
      return { success: true };
    });
 
+   // Control Panel applets (e.g. "control userpasswords2" or
+   // "control /name Microsoft.BitLockerDriveEncryption") are not URLs, so
+   // they cannot go through shell.openExternal. Spawn control.exe directly.
+   ipcMain.handle('shell:openControlPanel', (_event, command) => {
+     if (typeof command !== 'string'
+       || !/^control [A-Za-z0-9._:/\\-]+( [A-Za-z0-9._:/\\-]+)*$/.test(command)) {
+       return { success: false, error: 'Invalid control panel command.' };
+     }
+     const args = command.replace(/^control\s+/i, '').split(/\s+/).filter(Boolean);
+     const child = spawn('control.exe', args, {
+       detached: true,
+       stdio: 'ignore',
+       windowsHide: false,
+     });
+     child.unref();
+     return { success: true };
+   });
+
   // -- Emergency Lockdown --
   ipcMain.handle('lockdown:getStatus', async () => {
     if (!emergencyLockdown) {

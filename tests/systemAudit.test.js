@@ -194,7 +194,7 @@ describe('SystemAudit', () => {
   it('checkUac results carry UAC settings manage URI', async () => {
     const audit = new SystemAudit();
     const results = await audit.checkUac();
-    assert.equal(results[0].actionUri, 'ms-settings:useraccountcontrolsettings');
+    assert.equal(results[0].actionUri, 'control userpasswords2');
   });
 
   it('checkUac returns fail when UAC is disabled', async () => {
@@ -277,7 +277,7 @@ describe('SystemAudit', () => {
   it('checkBitLocker results carry BitLocker manage URI', async () => {
     const audit = new SystemAudit();
     const results = await audit.checkBitLocker();
-    assert.equal(results[0].actionUri, 'ms-settings:bitlocker');
+    assert.equal(results[0].actionUri, 'control /name Microsoft.BitLockerDriveEncryption');
   });
 
   it('checkBitLocker returns warn when drive not encrypted', async () => {
