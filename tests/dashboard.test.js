@@ -1,122 +1,75 @@
 'use strict';
 
-const { describe, it, beforeEach, afterEach } = require('node:test');
+const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
 
-describe('dashboard scan button synchronization', () => {
-  let mockContainer;
-  let mockApi;
-  let originalWindowApi;
+describe('dashboard warning metadata', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'ui', 'js', 'pages', 'dashboard.js'), 'utf8');
 
-  beforeEach(() => {
-    // Mock window.api
-    originalWindowApi = global.window?.api;
-    mockApi = {
-      on: (event, callback) => {
-        // Store event listeners for testing
-        if (!mockApi._listeners) mockApi._listeners = {};
-        if (!mockApi._listeners[event]) mockApi._listeners[event] = [];
-        mockApi._listeners[event].push(callback);
-        return () => {
-          // Cleanup function
-          const idx = mockApi._listeners[event].indexOf(callback);
-          if (idx > -1) mockApi._listeners[event].splice(idx, 1);
-        };
-      },
-      invoke: async (command, args) => {
-        if (command === 'scan:quick') return {};
-        if (command === 'scan:full') return {};
-        return {};
+  function extractWarningActions() {
+    const marker = 'const warningActions = {';
+    const startIdx = source.indexOf(marker);
+    assert.ok(startIdx !== -1, 'warningActions object must exist in dashboard.js');
+    const objStart = source.indexOf('{', startIdx);
+    let depth = 0;
+    let endIdx = -1;
+    for (let i = objStart; i < source.length; i++) {
+      const ch = source[i];
+      if (ch === '{') depth++;
+      else if (ch === '}') {
+        depth--;
+        if (depth === 0) {
+          endIdx = i + 1;
+          break;
+        }
       }
-    };
-    global.window = { api: mockApi };
+    }
+    assert.ok(endIdx !== -1, 'warningActions object must be parseable');
+    const objText = source.slice(objStart, endIdx);
+    const sandbox = { window: { api: { invoke: async () => {} } } };
+    return vm.runInNewContext(`(${objText})`, sandbox);
+  }
 
-    // Mock container
-    mockContainer = {
-      querySelector: (selector) => {
-        if (selector === '#btnQuickScan') {
-          return {
-            textContent: 'Quick Scan',
-            disabled: false,
-            addEventListener: () => {}
-          };
-        }
-        if (selector === '#btnFullScan') {
-          return {
-            textContent: 'Full Scan', 
-            disabled: false,
-            addEventListener: () => {}
-          };
-        }
-        if (selector === '#lastScanTime') {
-          return {
-            textContent: 'Last scan: Never'
-          };
-        }
-        return null;
-      },
-      querySelectorAll: () => []
-    };
+  it('should not reference the deleted warningTranslations object', () => {
+    assert.ok(
+      !source.includes('warningTranslations'),
+      'dashboard.js must not reference the deleted warningTranslations object'
+    );
   });
 
-  afterEach(() => {
-    // Restore original window.api
-    if (originalWindowApi) {
-      global.window.api = originalWindowApi;
-    } else {
-      delete global.window.api;
+  it('should have a single translateWarning definition', () => {
+    const matches = source.match(/function translateWarning/g) || [];
+    assert.equal(matches.length, 1, 'translateWarning should be defined exactly once');
+  });
+
+  it('should give every warning a title, detail and label for translation', () => {
+    const actions = extractWarningActions();
+    const entries = Object.entries(actions);
+    assert.ok(entries.length >= 14, `expected at least 14 known warnings, got ${entries.length}`);
+    for (const [rawTitle, meta] of entries) {
+      assert.equal(typeof rawTitle, 'string');
+      assert.ok(rawTitle.length > 0, 'warning key must be a non-empty string');
+      assert.equal(typeof meta.title, 'string', `${rawTitle}: missing title i18n key`);
+      assert.equal(typeof meta.detail, 'string', `${rawTitle}: missing detail i18n key`);
+      assert.equal(typeof meta.label, 'string', `${rawTitle}: missing action label i18n key`);
+      assert.ok(meta.title.startsWith('dashboard.warn.'), `${rawTitle}: title key must live under dashboard.warn`);
+      assert.ok(meta.label.startsWith('dashboard.action.'), `${rawTitle}: label key must live under dashboard.action`);
     }
   });
 
-  it('should have cleanup array and destroy method', () => {
-    // This test verifies the cleanup pattern is in place
-    // The actual dashboard page should have cleanups array and destroy method
-    assert.ok(true, 'Cleanup pattern should be implemented in dashboard.js');
-  });
-
-  it('should set both buttons to scanning state when quick scan starts', async () => {
-    // Simulate scan:progress event
-    if (mockApi._listeners && mockApi._listeners['scan:progress']) {
-      mockApi._listeners['scan:progress'].forEach(callback => {
-        callback({ pct: 10, scanType: 'quick' });
-      });
-    }
-    assert.ok(true, 'Both buttons should show "Scanning..." state');
-  });
-
-  it('should set both buttons to scanning state when full scan starts', async () => {
-    // Simulate scan:progress event
-    if (mockApi._listeners && mockApi._listeners['scan:progress']) {
-      mockApi._listeners['scan:progress'].forEach(callback => {
-        callback({ pct: 10, scanType: 'full' });
-      });
-    }
-    assert.ok(true, 'Both buttons should show "Scanning..." state');
-  });
-
-  it('should reset button state when scan completes', async () => {
-    // Simulate scan:complete event
-    if (mockApi._listeners && mockApi._listeners['scan:complete']) {
-      mockApi._listeners['scan:complete'].forEach(callback => {
-        callback({ status: 'completed', scanType: 'quick' });
-      });
-    }
-    assert.ok(true, 'Both buttons should reset to original labels');
-  });
-
-  it('should sync button state when scan starts from other sources', async () => {
-    // Simulate scan:progress event from scanner page
-    if (mockApi._listeners && mockApi._listeners['scan:progress']) {
-      mockApi._listeners['scan:progress'].forEach(callback => {
-        callback({ pct: 5, scanType: 'quick' });
-      });
-    }
-    assert.ok(true, 'Dashboard buttons should sync with external scan start');
-  });
-
-  it('should clean up event listeners on destroy', () => {
-    // This test verifies the cleanup mechanism
-    // The actual implementation should remove all event listeners when destroy() is called
-    assert.ok(true, 'Event listeners should be cleaned up on page destroy');
+  it('should translate a known warning via the shared source of truth', () => {
+    const actions = extractWarningActions();
+    const i18n = require(path.join(__dirname, '..', 'src', 'i18n'));
+    const catalog = i18n.loadCatalog('en');
+    const sample = Object.entries(actions)[0];
+    const [rawTitle, meta] = sample;
+    const title = catalog[meta.title];
+    const detail = catalog[meta.detail];
+    assert.ok(title != null, `missing en translation for ${meta.title}`);
+    assert.ok(detail != null, `missing en translation for ${meta.detail}`);
+    assert.notEqual(title, meta.title, `en translation for ${meta.title} must not fall back to the raw key`);
   });
 });

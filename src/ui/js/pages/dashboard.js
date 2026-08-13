@@ -19,9 +19,13 @@ window.Pages['dashboard'] = {
       return alive && document.body.contains(container);
     }
 
-    // Warning title/detail translation map for security-overview tool
+    // Warning metadata for security-overview tool. Single source of truth:
+    // each entry is keyed by the raw warning title and carries both the i18n
+    // keys used to translate it and the action button used to resolve it.
     const warningActions = {
       'Real-time protection is disabled': {
+        title: 'dashboard.warn.rtpDisabled.title',
+        detail: 'dashboard.warn.rtpDisabled.detail',
         label: 'dashboard.action.enableRtp',
         handler: async () => {
           await window.api.invoke('rtp:toggle', true);
@@ -29,54 +33,72 @@ window.Pages['dashboard'] = {
         }
       },
       'Folder watch is disabled': {
+        title: 'dashboard.warn.folderWatchDisabled.title',
+        detail: 'dashboard.warn.folderWatchDisabled.detail',
         label: 'dashboard.action.enableFolderWatch',
         handler: async () => {
           await window.api.invoke('db:setSetting', 'feature.folderWatch', true);
         }
       },
       'Suspicious network alerts are disabled': {
+        title: 'dashboard.warn.networkAlertsDisabled.title',
+        detail: 'dashboard.warn.networkAlertsDisabled.detail',
         label: 'dashboard.action.enableNetworkAlerts',
         handler: async () => {
           await window.api.invoke('db:setSetting', 'feature.networkAlerts', true);
         }
       },
       'Network traffic history is disabled': {
+        title: 'dashboard.warn.networkTrafficHistoryDisabled.title',
+        detail: 'dashboard.warn.networkTrafficHistoryDisabled.detail',
         label: 'dashboard.action.enableHistory',
         handler: async () => {
           await window.api.invoke('db:setSetting', 'feature.networkTrafficHistory', true);
         }
       },
       'Auto-generate reports is disabled': {
+        title: 'dashboard.warn.autoReportsDisabled.title',
+        detail: 'dashboard.warn.autoReportsDisabled.detail',
         label: 'dashboard.action.enableReports',
         handler: async () => {
           await window.api.invoke('db:setSetting', 'feature.autoReports', true);
         }
       },
       'Scan history is disabled': {
+        title: 'dashboard.warn.scanHistoryDisabled.title',
+        detail: 'dashboard.warn.scanHistoryDisabled.detail',
         label: 'dashboard.action.enableHistory',
         handler: async () => {
           await window.api.invoke('db:setSetting', 'feature.scanHistory', true);
         }
       },
       'External lookups are disabled': {
+        title: 'dashboard.warn.externalLookupsDisabled.title',
+        detail: 'dashboard.warn.externalLookupsDisabled.detail',
         label: 'dashboard.action.enableLookups',
         handler: async () => {
           await window.api.invoke('db:setSetting', 'feature.externalLookups', true);
         }
       },
       'Geolocation heat map is disabled': {
+        title: 'dashboard.warn.geoLookupDisabled.title',
+        detail: 'dashboard.warn.geoLookupDisabled.detail',
         label: 'dashboard.action.enableGeo',
         handler: async () => {
           await window.api.invoke('db:setSetting', 'feature.geoLookup', true);
         }
       },
       'Network perimeter map is disabled': {
+        title: 'dashboard.warn.perimeterMapDisabled.title',
+        detail: 'dashboard.warn.perimeterMapDisabled.detail',
         label: 'dashboard.action.enableMap',
         handler: async () => {
           await window.api.invoke('db:setSetting', 'feature.networkPerimeterMap', true);
         }
       },
       'ClamAV definitions are outdated': {
+        title: 'dashboard.warn.definitionsOutdated.title',
+        detail: 'dashboard.warn.definitionsOutdated.detail',
         label: 'dashboard.action.updateDefinitions',
         handler: async () => {
           const res = await window.api.invoke('scan:updateDefinitions');
@@ -84,24 +106,32 @@ window.Pages['dashboard'] = {
         }
       },
       'Windows Firewall is disabled': {
+        title: 'dashboard.warn.firewallDisabled.title',
+        detail: 'dashboard.warn.firewallDisabled.detail',
         label: 'dashboard.action.enableFirewall',
         handler: async () => {
           await window.api.invoke('firewall:enableAll');
         }
       },
       'High memory usage detected': {
+        title: 'dashboard.warn.highMemory.title',
+        detail: 'dashboard.warn.highMemory.detail',
         label: 'dashboard.action.runCleanup',
         handler: async () => {
           await window.api.invoke('tools:runScript', 'clearTempFiles');
         }
       },
       'High CPU usage detected': {
+        title: 'dashboard.warn.highCpu.title',
+        detail: 'dashboard.warn.highCpu.detail',
         label: 'dashboard.action.runCleanup',
         handler: async () => {
           await window.api.invoke('tools:runScript', 'clearTempFiles');
         }
       },
       'Low disk space': {
+        title: 'dashboard.warn.lowDisk.title',
+        detail: 'dashboard.warn.lowDisk.detail',
         label: 'dashboard.action.diskCleanup',
         handler: async () => {
           await window.api.invoke('tools:runScript', 'largeFilesReport');
@@ -110,8 +140,8 @@ window.Pages['dashboard'] = {
     };
 
     function translateWarning(w) {
-      const trans = warningTranslations[w.title];
-      if (trans) return { ...w, title: t(trans.title), detail: t(trans.detail) };
+      const meta = warningActions[w.title];
+      if (meta) return { ...w, title: t(meta.title), detail: t(meta.detail) };
       return w;
     }
 
@@ -463,18 +493,6 @@ window.Pages['dashboard'] = {
         : t('dashboard.lastScanNever');
     }
 
-    function translateWarning(w) {
-      const trans = warningTranslations[w.title];
-      if (trans) {
-        return {
-          ...w,
-          title: t(trans.title),
-          detail: t(trans.detail)
-        };
-      }
-      return w;
-    }
-
 async function loadWarnings() {
       const warningList = document.getElementById('warningList');
       const ignoredList = document.getElementById('ignoredWarningList');
@@ -527,8 +545,8 @@ async function loadWarnings() {
           const ignored = warningCacheData.recommendations
             .filter((i) => i.level === 'warn' || i.level === 'danger')
             .map(w => {
-              const trans = warningTranslations[w.title];
-              if (trans) return { ...w, title: t(trans.title), detail: t(trans.detail) };
+              const meta = warningActions[w.title];
+              if (meta) return { ...w, title: t(meta.title), detail: t(meta.detail) };
               return w;
             });
           ignoredList.innerHTML = ignored.length ? ignored.map((w) => `
@@ -562,8 +580,8 @@ async function loadWarnings() {
         const ignored = await window.api.invoke('warnings:listIgnored');
         // Also translate ignored warnings if they match our known warnings
         const translatedIgnored = ignored.map(w => {
-          const trans = warningTranslations[w.title];
-          if (trans) return { ...w, title: t(trans.title), detail: t(trans.detail) };
+          const meta = warningActions[w.title];
+          if (meta) return { ...w, title: t(meta.title), detail: t(meta.detail) };
           return w;
         });
         ignoredList.innerHTML = translatedIgnored.length ? translatedIgnored.map((w) => `
