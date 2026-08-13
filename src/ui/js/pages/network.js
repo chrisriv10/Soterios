@@ -254,12 +254,6 @@ window.Pages['network'] = {
     `;
     await this.load(container, true);
 
-    // Initial paint of traffic history chart
-    const initialContent = container.querySelector('#networkContent');
-    if (initialContent) {
-      await this.paintHistoryChart(initialContent);
-    }
-
     const content = container.querySelector('#networkContent');
     if (content) {
       content.addEventListener('click', (e) => {
@@ -1203,6 +1197,11 @@ if (content) this.paintHistoryChart(content).catch(() => {});
       }
 
       this.applyConnectionFilter(container);
+
+      // Paint traffic history chart after rendering (if enabled)
+      if (networkTrafficHistoryEnabled && !this._minimized.has('history')) {
+        this.paintHistoryChart(content).catch(() => {});
+      }
 
       if (searchWasFocused) {
         const newSearchEl = content.querySelector('#connectionSearch');
