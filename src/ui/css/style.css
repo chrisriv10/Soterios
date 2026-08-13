@@ -724,13 +724,15 @@ body {
   font-size: 0.75rem;
   min-width: 0;
   overflow: hidden;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .tool-row .tool-input-inline label {
   min-width: 0;
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tool-row .temp-age-input {
