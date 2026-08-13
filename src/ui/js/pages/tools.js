@@ -430,7 +430,7 @@ window.Pages.tools = {
       <div class="tool-input-inline">
         <label style="display:flex; align-items:center; gap:8px; font-size:0.8rem; color:var(--text-muted); cursor:pointer;">
           ${escapeHtml(this.t('tools.deleteOlderThan'))}
-          <input type="number" min="0" max="365" value="7" id="tempAgeDaysInput" class="temp-age-input" style="width:56px;" />
+          <input type="number" min="0" max="365" value="7" id="tempAgeDaysInput" class="temp-age-input" />
           ${escapeHtml(this.t('tools.days'))}
         </label>
       </div>` : s.id === 'file-shredder' ? `
@@ -441,7 +441,7 @@ window.Pages.tools = {
       <div class="tool-input-inline">
         <label style="display:flex; align-items:center; gap:8px; font-size:0.8rem; color:var(--text-muted); cursor:pointer;">
           ${escapeHtml(this.t('tools.filesLargerThan'))}
-          <input type="number" min="1" max="10000" value="100" id="minSizeMBInput" class="min-size-input" style="width:56px;" />
+          <input type="number" min="1" max="10000" value="100" id="minSizeMBInput" class="min-size-input" />
           ${escapeHtml(this.t('tools.megabytes'))}
         </label>
       </div>

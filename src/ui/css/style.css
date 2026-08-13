@@ -734,7 +734,7 @@ body {
 }
 
 .tool-row .temp-age-input {
-  width: 56px !important;
+  width: 60px;
   flex-shrink: 0;
 }
 
