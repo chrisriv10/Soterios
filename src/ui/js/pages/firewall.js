@@ -102,7 +102,7 @@ window.Pages['firewall'] = {
       <div class="stat-tile"><div class="stat-label">${escapeHtml(t('firewall.allowBlock'))}</div><div class="stat-value" style="color:var(--ok);">${safeRules.allow} / <span style="color:var(--danger);">${safeRules.block}</span></div></div>
       <div class="stat-tile"><div class="stat-label">${escapeHtml(t('firewall.enabledDisabled'))}</div><div class="stat-value" style="color:var(--ok);">${safeRules.enabled} / <span style="color:var(--text-dim);">${safeRules.disabled}</span></div></div>
     </div>`;
-    html += `<div class="grid grid-3" style="margin-bottom:18px;">
+    html += `<div class="grid grid-4" style="margin-bottom:18px;">
       <div class="stat-tile"><div class="stat-label">${escapeHtml(t('firewall.domainRules'))}</div><div class="stat-value">${safeRules.profiles.domain}</div></div>
       <div class="stat-tile"><div class="stat-label">${escapeHtml(t('firewall.privateRules'))}</div><div class="stat-value">${safeRules.profiles.private}</div></div>
       <div class="stat-tile"><div class="stat-label">${escapeHtml(t('firewall.publicRules'))}</div><div class="stat-value">${safeRules.profiles.public}</div></div>
@@ -818,7 +818,6 @@ window.Pages['firewall'] = {
       if (contentDiv) {
         contentDiv.innerHTML = `
           <div class="card compact" style="display:flex; flex-direction:column; gap:8px;">
-            <div style="font-weight:600; font-size:0.85rem;">${escapeHtml(t('firewall.perimeterDetail'))}</div>
             <div style="font-size:0.78rem; color:var(--text-dim); display:flex; flex-direction:column; gap:6px;">
               <div>${escapeHtml(t('firewall.perimeterDesc1'))}</div>
               <div style="margin-top:6px;">${t('firewall.perimeterDesc2', { unverified: `<span class="glossary-term" title="${escapeHtml(this._glossary('unverified'))}">${escapeHtml(t('common.unverified'))}</span>` })}</div>

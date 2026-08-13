@@ -74,21 +74,24 @@ describe('dashboard warning metadata', () => {
   });
 
   it('should fetch the ignored list from the DB, not from cached recommendations', () => {
-    const cacheBranch = source.slice(source.indexOf('const data = (now - warningCacheTs'));
+    const cacheBranch = source.slice(source.indexOf('let data = dashboardCache.overview.data'));
     assert.ok(
       cacheBranch.includes("await window.api.invoke('warnings:listIgnored')"),
       'ignored warnings must be re-fetched from the DB on every load'
     );
+    const dbFetchIdx = cacheBranch.indexOf("await window.api.invoke('warnings:listIgnored')");
+    assert.ok(dbFetchIdx !== -1);
+    const ignoredRenderBlock = cacheBranch.slice(dbFetchIdx, cacheBranch.indexOf('ignoredList.querySelectorAll', dbFetchIdx));
     assert.ok(
-      !/warningCacheData\.recommendations[\s\S]*unignore-warning/.test(cacheBranch),
-      'ignored list must not be rendered from warningCacheData.recommendations'
+      !ignoredRenderBlock.includes('dashboardCache'),
+      'ignored list must be rendered from the DB fetch, not from cached recommendations'
     );
   });
 
-  it('should invalidate the warning cache after ignore, restore and action handlers', () => {
+  it('should invalidate the dashboard cache after ignore, restore and action handlers', () => {
     assert.ok(
-      source.includes('function invalidateWarningCache()'),
-      'an invalidateWarningCache helper must exist'
+      source.includes('function invalidateDashboardCache()'),
+      'an invalidateDashboardCache helper must exist'
     );
     for (const [name, line] of [
       ['ignore', "await window.api.invoke('warnings:ignore'"],
@@ -99,9 +102,25 @@ describe('dashboard warning metadata', () => {
       assert.ok(idx !== -1, `loadWarnings must contain the ${name} handler`);
       const tail = source.slice(idx);
       assert.ok(
-        tail.includes('invalidateWarningCache()'),
-        `the ${name} handler must invalidate the warning cache before reloading`
+        tail.includes('invalidateDashboardCache()'),
+        `the ${name} handler must invalidate the dashboard cache before reloading`
       );
     }
+  });
+
+  it('should reuse the module-level cache across renders', () => {
+    assert.ok(
+      source.includes('const dashboardCache = {'),
+      'dashboardCache must be declared at module scope'
+    );
+    const moduleHead = source.slice(0, source.indexOf('window.Pages[\'dashboard\']'));
+    assert.ok(
+      moduleHead.includes('const dashboardCache = {'),
+      'dashboardCache must live outside render() so it survives navigation'
+    );
+    assert.ok(
+      moduleHead.includes('dashboardCacheTtl'),
+      'dashboard cache TTL must be declared at module scope'
+    );
   });
 });

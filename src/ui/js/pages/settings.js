@@ -518,7 +518,7 @@ window.Pages.settings = {
               <li>${escapeHtml(t('settings.browserExtension.stepDevMode'))}</li>
               <li>${escapeHtml(t('settings.browserExtension.stepLoadUnpacked'))}</li>
             </ol>
-            <div style="font-size:0.85rem; word-break:break-all; margin-bottom:12px;"><code id="browserExtFolder" style="background:var(--panel-bg, rgba(128,128,128,0.12)); padding:2px 6px; border-radius:4px;"></code></div>
+            <div style="font-size:0.85rem; word-break:break-all; margin-bottom:12px;"><code id="browserExtFolder" style="background:var(--panel-bg, rgba(128,128,128,0.12)); padding:2px 6px; border-radius:4px;">${escapeHtml(state.extDir || '')}</code></div>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
               <button class="btn btn-sm" id="browserExtOpenFolder">${escapeHtml(t('settings.browserExtension.openFolder'))}</button>
               <button class="btn btn-sm" id="browserExtOpenPage">${escapeHtml(t('settings.browserExtension.openPage'))}</button>

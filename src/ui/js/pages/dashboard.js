@@ -1,5 +1,20 @@
 window.Pages = window.Pages || {};
 
+// Module-level cache so the expensive dashboard reads (security-overview
+// tool call + health score) survive navigating away and back. Entries are
+// invalidated on any mutation (ignore/restore/action, scan completion,
+// RTP toggle) or expire after the TTL.
+const dashboardCache = {
+  overview: { ts: 0, data: null },
+  health: { ts: 0, data: null }
+};
+const dashboardCacheTtl = 60_000; // 60 seconds
+
+function invalidateDashboardCache() {
+  dashboardCache.overview = { ts: 0, data: null };
+  dashboardCache.health = { ts: 0, data: null };
+}
+
 window.Pages['dashboard'] = {
   cleanups: [],
   destroy() {
@@ -10,18 +25,6 @@ window.Pages['dashboard'] = {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     let alive = true;
     this.cleanups.push(() => { alive = false; });
-    // Warning cache to avoid re-fetching security-overview on every nav
-    let warningCacheTs = 0;
-    const warningCacheTtl = 60_000; // 60 seconds
-    let warningCacheData = null;
-
-    // Ignore/restore/action handlers mutate the DB, so the cached
-    // security-overview result (which already filtered out ignored issues)
-    // must be dropped before the next loadWarnings().
-    function invalidateWarningCache() {
-      warningCacheTs = 0;
-      warningCacheData = null;
-    }
 
     function hasView() {
       return alive && document.body.contains(container);
@@ -510,11 +513,12 @@ async function loadWarnings() {
         // list always comes fresh from the DB so Restore/Ignore take effect
         // immediately instead of rendering from stale cached recommendations.
         const now = Date.now();
-        const data = (now - warningCacheTs < warningCacheTtl && warningCacheData)
-          ? warningCacheData
-          : await Api.runTool('security-overview', {});
-        warningCacheData = data;
-        warningCacheTs = now;
+        let data = dashboardCache.overview.data;
+        if (data === null || now - dashboardCache.overview.ts >= dashboardCacheTtl) {
+          data = await Api.runTool('security-overview', {});
+          dashboardCache.overview.data = data;
+          dashboardCache.overview.ts = now;
+        }
 
         const translatedWarnings = (data.recommendations || [])
           .filter((i) => i.level === 'warn' || i.level === 'danger')
@@ -550,7 +554,7 @@ async function loadWarnings() {
 
           try {
             await action.handler();
-            invalidateWarningCache();
+            invalidateDashboardCache();
             await loadWarnings();
           } catch (err) {
             btn.disabled = false;
@@ -564,7 +568,7 @@ async function loadWarnings() {
           try {
             await window.api.invoke('warnings:ignore', { id: btn.dataset.ignoreWarning, title: btn.dataset.title, detail: btn.dataset.detail });
             if (item) item.remove();
-            invalidateWarningCache();
+            invalidateDashboardCache();
             await loadWarnings();
           } catch (err) {
             btn.disabled = false;
@@ -593,7 +597,7 @@ async function loadWarnings() {
           try {
             await window.api.invoke('warnings:unignore', btn.dataset.unignoreWarning);
             if (item) item.remove();
-            invalidateWarningCache();
+            invalidateDashboardCache();
             await loadWarnings();
           } catch (err) {
             btn.disabled = false;
@@ -671,14 +675,24 @@ async function loadWarnings() {
       window.api.invoke('splash:progress', { pct: 55, label: t('splash.loadingQuarantine') });
 
     // health:score depends on the reads above; warnings (security-overview,
-    // the slowest call) is independent, so run both concurrently.
+    // the slowest call) is independent, so run both concurrently. Both are
+    // cached at module scope so re-entering the dashboard is instant.
     const [healthResult, warningsResult] = await Promise.allSettled([
-      window.api.invoke('health:score', {
-        lastScanMatches: latestScanForHealth ? (latestScanForHealth.threats_found ?? null) : null,
-        lastScanDate: latestScanForHealth ? latestScanForHealth.timestamp : null,
-        rtpActive: isRtpActive,
-        firewallActive: fwEnabled === null ? undefined : fwEnabled
-      }),
+      (async () => {
+        const hNow = Date.now();
+        if (dashboardCache.health.data !== null && hNow - dashboardCache.health.ts < dashboardCacheTtl) {
+          return dashboardCache.health.data;
+        }
+        const result = await window.api.invoke('health:score', {
+          lastScanMatches: latestScanForHealth ? (latestScanForHealth.threats_found ?? null) : null,
+          lastScanDate: latestScanForHealth ? latestScanForHealth.timestamp : null,
+          rtpActive: isRtpActive,
+          firewallActive: fwEnabled === null ? undefined : fwEnabled
+        });
+        dashboardCache.health.data = result;
+        dashboardCache.health.ts = Date.now();
+        return result;
+      })(),
       loadWarnings()
     ]);
 
@@ -753,7 +767,7 @@ async function loadWarnings() {
       }
     }
 
-    if (btnRefreshWarnings) btnRefreshWarnings.addEventListener('click', loadWarnings);
+    if (btnRefreshWarnings) btnRefreshWarnings.addEventListener('click', () => { invalidateDashboardCache(); loadWarnings(); });
     if (btnUpdateDb) {
       btnUpdateDb.addEventListener('click', async () => {
         btnUpdateDb.disabled = true;
@@ -787,6 +801,7 @@ async function loadWarnings() {
         const status = await window.api.invoke('rtp:toggle', next);
         await window.api.invoke('db:setSetting', 'feature.realtimeProtection', !!status);
         setRtpState(status);
+        invalidateDashboardCache();
       } catch (err) {
         setRtpState(previous);
         alert(errorMessage(err) || t('common.failed'));
@@ -845,6 +860,7 @@ async function loadWarnings() {
       if (!hasView()) return;
       if (data?.scanType === 'folderwatch') return;
       setScanButtonsState(false);
+      invalidateDashboardCache();
       if (container.querySelector('#lastScanTime')) {
         await loadLastScan();
       }
