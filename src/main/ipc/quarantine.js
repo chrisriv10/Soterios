@@ -64,7 +64,7 @@ function register(mainWindow, { quarantineManager, db }) {
       
       const hashValue = await hashFileStreaming(normalizedPath);
       if (!hashValue) {
-        return { success: false, error: 'File too large for hash calculation (max 100MB)' };
+        return { success: false, error: 'File could not be read (permission denied or file was removed)' };
       }
       
       db.addTrustedHash(hashValue, normalizedPath, reason);
@@ -94,7 +94,7 @@ function register(mainWindow, { quarantineManager, db }) {
       
       const hashValue = await hashFileStreaming(normalizedPath);
       if (!hashValue) {
-        return { success: false, error: 'File too large for hash calculation (max 100MB)' };
+        return { success: false, error: 'File could not be read (permission denied or file was removed)' };
       }
       
       db.removeTrustedHash(hashValue);
