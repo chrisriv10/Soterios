@@ -4,6 +4,7 @@ window.Pages.tools = {
   _uninstallerApps: [],
   _selectedShredFiles: [],
   _largeFilesScanPath: null, // Store selected scan path for large files report
+  _duplicateScanPath: null, // Store selected scan path for duplicate finder
   _duplicateState: {
     filter: 'all',
     search: '',
@@ -419,6 +420,24 @@ window.Pages.tools = {
           }
         });
       }
+
+      const browseFilesBtn = container.querySelector('#browseFilesBtn');
+      if (browseFilesBtn) {
+        browseFilesBtn.addEventListener('click', async () => {
+          try {
+            const folder = await Api.pickFolder();
+            if (folder) {
+              this._duplicateScanPath = folder;
+              const scanPathInput = container.querySelector('#scanPathInput');
+              if (scanPathInput) {
+                scanPathInput.value = folder;
+              }
+            }
+          } catch (err) {
+            console.error('Folder picker error:', err);
+          }
+        });
+      }
     } catch (err) {
       showToolError(container.querySelector('#toolsColumn'), err);
     }
@@ -449,7 +468,8 @@ window.Pages.tools = {
         <button class="btn btn-sm" id="largeFilesBrowseBtn" style="padding:4px 10px;">${this._largeFilesScanPath ? escapeHtml(this.t('tools.changeFolder')) : escapeHtml(this.t('tools.selectFolder'))}</button>
       </div>` : s.id === 'duplicate-finder' ? `
 <div class="tool-input-inline">
-  <button class="btn btn-sm" id="browseFilesBtn" style="flex:1;">${escapeHtml(this.t('tools.browse'))}</button>
+  <input type="text" id="scanPathInput" placeholder="${escapeHtml(this.t('tools.selectFolder'))}" value="${escapeHtml(this._duplicateScanPath || '')}" style="flex:1; padding:7px 12px; border-radius:8px; border:1px solid var(--glass-border); background:var(--glass-bg,rgba(255,255,255,0.05)); color:inherit;" readonly />
+  <button class="btn btn-sm" id="browseFilesBtn" style="padding:4px 10px;">${escapeHtml(this.t('tools.browse'))}</button>
 </div>` : '';
 
     // Translate tool names and descriptions
@@ -562,9 +582,9 @@ window.Pages.tools = {
 
   getScanPath(container) {
     const input = container.querySelector('#scanPathInput');
-    if (!input) return undefined;
+    if (!input) return this._duplicateScanPath;
     const val = input.value.trim();
-    return val.length > 0 ? val : undefined;
+    return val.length > 0 ? val : this._duplicateScanPath;
   },
 
   getLargeFilesScanPath(container) {

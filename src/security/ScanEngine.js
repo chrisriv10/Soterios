@@ -26,6 +26,7 @@ function renderScanReportHtml(report) {
   const errors = report.errors.length
     ? report.errors.map((e) => `<li>${esc(e)}</li>`).join('')
     : '<li>No scan errors recorded.</li>';
+  const scanType = report.scanType ? report.scanType.charAt(0).toUpperCase() + report.scanType.slice(1) : 'Scan';
   return `<!doctype html>
 <html><head><meta charset="utf-8"><title>Soterios Scan Report</title>
 <style>body{font-family:Segoe UI,Arial,sans-serif;margin:32px;color:#15202b;background:#fff}.muted{color:#667085}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0}.card{border:1px solid #d7dde5;border-radius:6px;padding:14px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{text-align:left;border-bottom:1px solid #e6eaf0;padding:8px;font-size:13px}.danger{color:#b42318}.ok{color:#027a48}.warn{color:#b54708}pre{white-space:pre-wrap;word-break:break-word}</style>
@@ -33,7 +34,7 @@ function renderScanReportHtml(report) {
 <h1>Soterios Scan Report</h1>
 <div class="muted">Generated ${esc(new Date(report.completedAt).toLocaleString())}</div>
 <div class="grid">
-  <div class="card"><div class="muted">Type</div><h2>${esc(report.scanType)}</h2></div>
+  <div class="card"><div class="muted">Type</div><h2>${esc(scanType)}</h2></div>
   <div class="card"><div class="muted">Status</div><h2 class="${report.status === 'completed' ? 'ok' : 'warn'}">${esc(report.status)}</h2></div>
   <div class="card"><div class="muted">Files Scanned</div><h2>${esc(report.filesScanned)}</h2></div>
   <div class="card"><div class="muted">Threats</div><h2 class="${report.threatsFound ? 'danger' : 'ok'}">${esc(report.threatsFound)}</h2></div>

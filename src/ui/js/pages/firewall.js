@@ -102,7 +102,7 @@ window.Pages['firewall'] = {
       <div class="stat-tile"><div class="stat-label">${escapeHtml(t('firewall.allowBlock'))}</div><div class="stat-value" style="color:var(--ok);">${safeRules.allow} / <span style="color:var(--danger);">${safeRules.block}</span></div></div>
       <div class="stat-tile"><div class="stat-label">${escapeHtml(t('firewall.enabledDisabled'))}</div><div class="stat-value" style="color:var(--ok);">${safeRules.enabled} / <span style="color:var(--text-dim);">${safeRules.disabled}</span></div></div>
     </div>`;
-    html += `<div class="grid grid-4" style="margin-bottom:18px;">
+    html += `<div class="grid grid-3" style="margin-bottom:18px;">
       <div class="stat-tile"><div class="stat-label">${escapeHtml(t('firewall.domainRules'))}</div><div class="stat-value">${safeRules.profiles.domain}</div></div>
       <div class="stat-tile"><div class="stat-label">${escapeHtml(t('firewall.privateRules'))}</div><div class="stat-value">${safeRules.profiles.private}</div></div>
       <div class="stat-tile"><div class="stat-label">${escapeHtml(t('firewall.publicRules'))}</div><div class="stat-value">${safeRules.profiles.public}</div></div>
@@ -110,7 +110,7 @@ window.Pages['firewall'] = {
 
     let list = profiles;
     if (!Array.isArray(list)) list = [list];
-    html += '<div class="dashboard-grid">';
+    html += '<div class="grid grid-3">';
     for (const res of list) {
       if (!res) continue;
       const name = res.Name || 'Profile';

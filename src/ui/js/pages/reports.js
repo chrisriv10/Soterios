@@ -144,9 +144,10 @@ window.Pages.reports = {
     container.querySelector('#exportReportPdf').style.display = 'inline-flex';
     container.querySelector('#exportReportCsv').style.display = 'inline-flex';
     container.querySelector('#exportReportToast').style.display = 'none';
+    const scanType = report.scan_type ? report.scan_type.charAt(0).toUpperCase() + report.scan_type.slice(1) : 'Scan';
     this.showViewer(
       container,
-      `${report.scan_type} scan - ${parseUtcTimestamp(report.timestamp).toLocaleString()}`,
+      `${scanType} scan - ${parseUtcTimestamp(report.timestamp).toLocaleString()}`,
       this.renderScanReport(report)
     );
   },
@@ -285,10 +286,11 @@ window.Pages.reports = {
       }
       el.innerHTML = reports.map((r) => {
         const statusClass = r.status === 'completed' ? 'clean' : r.status === 'canceled' ? 'warn' : 'match';
+        const scanType = r.scan_type ? r.scan_type.charAt(0).toUpperCase() + r.scan_type.slice(1) : 'Scan';
         return `
           <div class="history-item">
             <div style="min-width:0;">
-              <div class="history-title">${escapeHtml(r.scan_type)} scan <span class="log-tag ${statusClass}">${escapeHtml(r.status)}</span></div>
+              <div class="history-title">${escapeHtml(scanType)} scan <span class="log-tag ${statusClass}">${escapeHtml(r.status)}</span></div>
               <div class="history-meta">${escapeHtml(parseUtcTimestamp(r.timestamp).toLocaleString())} | ${r.files_scanned} ${escapeHtml(tFactory()('common.files'))}, ${r.threats_found} ${escapeHtml(tFactory()('common.threats'))}</div>
             </div>
             <div style="display:flex; gap:6px;">
