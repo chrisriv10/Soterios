@@ -1395,6 +1395,8 @@ body {
 .scan-indicator--done .scan-indicator-dot { background: #22c55e; animation: none; }
 .scan-indicator--done { background: rgba(34,197,94,0.08); border-color: rgba(34,197,94,0.25); }
 .scan-indicator--done .scan-indicator-pct { color: #22c55e; }
+.scan-indicator-cancel { padding: 2px 8px; font-size: 0.7rem; line-height: 1.4; cursor: pointer; }
+.scan-indicator-cancel:hover { text-decoration: underline; }
 
 /* Startup items */
 .startup-row { 

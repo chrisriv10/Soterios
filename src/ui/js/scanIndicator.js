@@ -3,6 +3,7 @@
   const fill = document.getElementById('scanIndicatorFill');
   const pct = document.getElementById('scanIndicatorPct');
   const msg = document.getElementById('scanIndicatorMsg');
+  const cancelBtn = document.getElementById('btnScanIndicatorCancel');
   if (!el || !fill || !pct || !msg) return;
   const label = el.querySelector('.scan-indicator-label');
   const dot = el.querySelector('.scan-indicator-dot');
@@ -16,10 +17,15 @@
 
   function show() {
     el.style.display = 'block';
+    if (cancelBtn) {
+      cancelBtn.style.display = 'inline-block';
+      cancelBtn.disabled = false;
+    }
   }
 
   function hide() {
     el.style.display = 'none';
+    if (cancelBtn) cancelBtn.style.display = 'none';
   }
 
   function setProgress(percent, message) {
@@ -34,6 +40,7 @@
     clearTimeout(doneTimer);
     clearTimeout(progressTimer);
     el.classList.add('scan-indicator--done');
+    if (cancelBtn) cancelBtn.style.display = 'none';
     const isDefs = scanType === 'definitions';
     if (status === 'canceled') {
       fill.style.width = pct.textContent;
@@ -105,4 +112,17 @@
   el.addEventListener('click', () => {
     if (window.AppRouter) window.AppRouter.navigate('scanner');
   });
+
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      cancelBtn.disabled = true;
+      try {
+        await window.api.invoke('scan:abort');
+        // scan:complete will fire and hide the indicator; no need to act here.
+      } catch (_) {
+        cancelBtn.disabled = false;
+      }
+    });
+  }
 })();

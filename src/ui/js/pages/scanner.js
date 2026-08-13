@@ -26,17 +26,26 @@ window.Pages['scanner'] = {
         <div class="card">
           <h3>${escapeHtml(t('scanner.quickScan'))}</h3>
           <p class="page-subtitle">${escapeHtml(t('scanner.quickDesc'))}</p>
-          <button class="btn btn-primary" style="margin-top:12px;" id="btnScannerQuick">${escapeHtml(t('scanner.quickStart'))}</button>
+          <div style="display:flex; align-items:center; gap:8px; margin-top:12px;">
+            <button class="btn btn-primary" id="btnScannerQuick">${escapeHtml(t('scanner.quickStart'))}</button>
+            <button class="btn btn-sm" id="btnCancelQuick" style="display:none;">${escapeHtml(t('scanner.cancelScan'))}</button>
+          </div>
         </div>
         <div class="card">
           <h3>${escapeHtml(t('scanner.fullScan'))}</h3>
           <p class="page-subtitle">${escapeHtml(t('scanner.fullDesc'))}</p>
-          <button class="btn" style="margin-top:12px;" id="btnScannerFull">${escapeHtml(t('scanner.fullStart'))}</button>
+          <div style="display:flex; align-items:center; gap:8px; margin-top:12px;">
+            <button class="btn" id="btnScannerFull">${escapeHtml(t('scanner.fullStart'))}</button>
+            <button class="btn btn-sm" id="btnCancelFull" style="display:none;">${escapeHtml(t('scanner.cancelScan'))}</button>
+          </div>
         </div>
         <div class="card">
           <h3>${escapeHtml(t('scanner.customScan'))}</h3>
           <p class="page-subtitle">${escapeHtml(t('scanner.customDesc'))}</p>
-          <button class="btn" style="margin-top:12px;" id="btnScannerCustom">${escapeHtml(t('scanner.customSelect'))}</button>
+          <div style="display:flex; align-items:center; gap:8px; margin-top:12px;">
+            <button class="btn" id="btnScannerCustom">${escapeHtml(t('scanner.customSelect'))}</button>
+            <button class="btn btn-sm" id="btnCancelCustom" style="display:none;">${escapeHtml(t('scanner.cancelScan'))}</button>
+          </div>
         </div>
       </div>
       <div class="card" id="scheduleCard" style="margin-top:24px;">
@@ -112,6 +121,7 @@ window.Pages['scanner'] = {
     const cancelButton = document.getElementById('btnCancelScan');
     const reportButton = document.getElementById('btnOpenScanReports');
     const scanButtons = Array.from(document.querySelectorAll('#btnScannerQuick, #btnScannerFull, #btnScannerCustom'));
+    const perCardCancelButtons = Array.from(document.querySelectorAll('#btnCancelQuick, #btnCancelFull, #btnCancelCustom'));
     const scanButtonOriginalLabels = {};
     scanButtons.forEach((btn) => { scanButtonOriginalLabels[btn.id] = btn.textContent; });
     let isScanRunning = false;
@@ -119,6 +129,7 @@ window.Pages['scanner'] = {
     let showReportButton = false;
     let scanHistoryEnabled = true;
     let alive = true;
+    let hideCardTimer = null;
     this.cleanups.push(() => { alive = false; });
 
     function updateFooterButtons() {
@@ -129,6 +140,10 @@ window.Pages['scanner'] = {
       reportButton.style.display = showReports ? 'inline-block' : 'none';
       cancelButton.disabled = !showCancel;
       reportButton.disabled = !showReports;
+      perCardCancelButtons.forEach((btn) => {
+        btn.style.display = showCancel ? 'inline-block' : 'none';
+        btn.disabled = !showCancel;
+      });
     }
 
     function hasView() {
@@ -144,6 +159,7 @@ window.Pages['scanner'] = {
       if (!hasView()) return;
       isScanRunning = active;
       if (active) {
+        clearTimeout(hideCardTimer);
         if (scanCard) scanCard.style.display = 'block';
         if (scanStatus) scanStatus.textContent = t('scanner.statusScanning');
         if (scanDetail) scanDetail.textContent = t('scanner.detailWait');
@@ -158,7 +174,8 @@ window.Pages['scanner'] = {
         });
         if (updateDefinitionsButton) updateDefinitionsButton.disabled = true;
       } else {
-        if (scanCard) scanCard.style.display = 'none';
+        // Do NOT hide the card here: setComplete writes the result text first
+        // and then schedules a short delay before hiding the card.
         scanButtons.forEach((b) => {
           b.disabled = false;
           b.textContent = scanButtonOriginalLabels[b.id] || b.textContent;
@@ -176,6 +193,12 @@ window.Pages['scanner'] = {
         showReportButton = false;
       }
       setScanning(false);
+      // Keep the result card visible a few seconds so the outcome is readable,
+      // then hide it. New scans clear this timer in setScanning(true).
+      clearTimeout(hideCardTimer);
+      hideCardTimer = setTimeout(() => {
+        if (hasView() && scanCard) scanCard.style.display = 'none';
+      }, 5000);
       if (canceled) {
         if (scanStatus) scanStatus.textContent = t('scanner.statusScanCanceled');
         if (scanDetail) scanDetail.textContent = t('scanner.detailCanceled', { count: filesScanned }) + (historyEnabled ? ' ' + t('common.scanReportSaved') : '');
@@ -440,9 +463,10 @@ window.Pages['scanner'] = {
       }
     });
 
-    cancelButton.addEventListener('click', async () => {
+    async function requestCancelScan(trigger) {
       if (!isScanRunning || activeAction !== 'virus') return;
       cancelButton.disabled = true;
+      perCardCancelButtons.forEach((btn) => { btn.disabled = true; });
       scanStatus.textContent = t('scanner.statusCanceling');
       scanDetail.textContent = t('scanner.detailCanceling');
       try {
@@ -450,9 +474,14 @@ window.Pages['scanner'] = {
         if (!hasView()) return;
         setComplete(false, 0, 0, '', true);
       } catch (e) {
+        cancelButton.disabled = false;
+        perCardCancelButtons.forEach((btn) => { btn.disabled = false; });
         setError(e.message);
       }
-    });
+    }
+
+    cancelButton.addEventListener('click', () => requestCancelScan(cancelButton));
+    perCardCancelButtons.forEach((btn) => btn.addEventListener('click', () => requestCancelScan(btn)));
 
     reportButton.addEventListener('click', () => window.AppRouter.navigate('reports'));
 
