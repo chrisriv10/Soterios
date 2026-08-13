@@ -126,7 +126,7 @@ describe('Scan cancellation cleanup', () => {
     ]);
   });
 
-  it('does not persist reports for canceled or folderwatch scans', async () => {
+  it('persists reports for canceled custom scans but not folderwatch scans', async () => {
     let savedReports = 0;
     let loggedScans = 0;
     const db = {
@@ -177,8 +177,8 @@ describe('Scan cancellation cleanup', () => {
       output: ''
     });
     await pending;
-    assert.equal(savedReports, 0);
-    assert.equal(loggedScans, 0);
+    assert.equal(savedReports, 1);
+    assert.equal(loggedScans, 1);
   });
 });
 

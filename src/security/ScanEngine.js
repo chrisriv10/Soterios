@@ -349,7 +349,7 @@ class ScanEngine {
         errors,
         details: { threats, errors }
       };
-      const shouldPersistReport = scanType !== 'folderwatch' && !wasCanceled;
+      const shouldPersistReport = scanType !== 'folderwatch';
       const report = shouldPersistReport
         ? this.saveScanReport(reportPayload)
         : reportPayload;

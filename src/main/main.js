@@ -945,7 +945,9 @@ app.whenReady().then(async () => {
         // Only show notification if not canceled
         if (data.status === 'canceled') {
           label = t('toast.scanCanceled');
-          body = t('toast.scanCanceledDetail', { count: data.filesScanned || 0 });
+          const autoReportsEnabled = featureFlags.getFlag(db, 'autoReports', true);
+          const willGenerateReport = autoReportsEnabled && (scanType === 'quick' || scanType === 'full');
+          body = willGenerateReport ? t('toast.scanCanceledWithReport') : t('toast.scanCanceledDetail');
           level = 'warn';
         } else {
           label = data.status === 'completed' ? t('toast.scanCompleted') : t('toast.scanFinishedWithIssues');
@@ -959,8 +961,8 @@ app.whenReady().then(async () => {
       (async () => {
         try {
           if (!featureFlags.getFlag(db, 'autoReports', true)) return;
-          const isCanceled = data.status === 'canceled' || data.report?.status === 'canceled';
-          if (isCanceled || (scanType !== 'quick' && scanType !== 'full')) return;
+          // Only generate reports for quick and full scans
+          if (scanType !== 'quick' && scanType !== 'full') return;
           logLine('info', 'Generating scan report...');
 
           const result = await toolRegistry.run('generate-security-report', { version: app.getVersion() }, { toolRegistry, db, log: logLine });
