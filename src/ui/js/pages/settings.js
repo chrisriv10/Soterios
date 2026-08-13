@@ -553,7 +553,17 @@ window.Pages.settings = {
         if (openFolderBtn) {
           openFolderBtn.addEventListener('click', async () => {
             const folder = body.querySelector('#browserExtFolder')?.textContent;
-            if (folder) await Api.openPath(folder);
+            if (folder) {
+              try {
+                const result = await Api.openFolder(folder);
+                if (!result || !result.success) {
+                  throw new Error((result && result.error) || 'Failed to open folder');
+                }
+              } catch (err) {
+                console.error('Failed to open folder:', err);
+                alert(err.message || 'Failed to open folder');
+              }
+            }
           });
         }
         const openPageBtn = body.querySelector('#browserExtOpenPage');

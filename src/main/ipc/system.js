@@ -484,6 +484,19 @@ function register(mainWindow, {
     return errorMessage ? { success: false, error: errorMessage } : { success: true };
   });
 
+  // Open an arbitrary existing folder in Explorer. Unlike shell:openPath,
+  // this is not restricted to the reports directory: it backs the settings
+  // "open extension folder" button, where the folder lives under the user's
+  // profile. Mirrors shell:showItemInFolder, which is likewise unvalidated.
+  ipcMain.handle('shell:openFolder', async (_event, filePath) => {
+    const resolved = path.resolve(filePath || '');
+    if (!fs.existsSync(resolved)) {
+      return { success: false, error: 'Folder not found.' };
+    }
+    const errorMessage = await shell.openPath(resolved);
+    return errorMessage ? { success: false, error: errorMessage } : { success: true };
+  });
+
    ipcMain.handle('shell:openExternal', (_event, url) => {
      if (typeof url !== 'string' || (!/^https?:\/\//i.test(url) && !/^ms-settings:/i.test(url))) {
        return { success: false, error: 'Invalid URL.' };
