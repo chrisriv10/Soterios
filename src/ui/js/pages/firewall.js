@@ -279,6 +279,7 @@ window.Pages['firewall'] = {
 
     try {
       await window.api.invoke('firewall:setProfileEnabled', { profile: profileName, enabled: !currentlyEnabled });
+      window.DashboardCache?.invalidate?.();
       await this._refreshSummary(container, t);
     } catch (e) {
       alert(this._friendlyError(e, t('firewall.failedToggle', { action: turningOff ? t('common.disable') : t('common.enable'), profile: profileName })));

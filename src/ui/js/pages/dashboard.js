@@ -15,6 +15,11 @@ function invalidateDashboardCache() {
   dashboardCache.health = { ts: 0, data: null };
 }
 
+// Shared invalidation hook for other pages whose mutations feed the
+// dashboard's cached reads (e.g. the firewall profile toggle changes the
+// firewall status the health score is computed from).
+window.DashboardCache = { invalidate: invalidateDashboardCache };
+
 window.Pages['dashboard'] = {
   cleanups: [],
   destroy() {
