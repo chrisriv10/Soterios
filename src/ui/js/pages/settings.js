@@ -167,8 +167,8 @@ window.Pages.settings = {
         </div>
 
         <div class="card">
-          <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.browserExtension.cardTitle'))}</div>
-          <div class="toggle-desc" style="margin-bottom:12px;">${escapeHtml(t('settings.browserExtension.explainer'))}</div>
+          <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.browserExtension.label'))}</div>
+          <div class="toggle-desc" style="margin-bottom:12px;">${escapeHtml(t('settings.browserExtension.desc'))}</div>
           <div id="browserExtensionBody">${escapeHtml(t('settings.browserExtension.checking'))}</div>
         </div>
 
@@ -355,12 +355,29 @@ window.Pages.settings = {
     const languageSelect = container.querySelector('#languageSelect');
     const languageWarning = container.querySelector('#languageWarning');
     const languageHint = container.querySelector('#languageHint');
-    function updateLanguageWarning(lang) {
+    async function updateLanguageWarning(lang) {
       const selectedLang = lang || languageSelect.value;
       if (selectedLang && selectedLang !== 'en') {
         // Read warning from the option's data-warning attribute
         const selectedOpt = languageSelect.querySelector(`option[value="${selectedLang}"]`);
-        const msg = (selectedOpt && selectedOpt.dataset.warning) || languageInDevMap[selectedLang] || t('settings.languageInDevelopment');
+        let msg = (selectedOpt && selectedOpt.dataset.warning) || languageInDevMap[selectedLang];
+
+        // If not cached, fetch the catalog for this language to get the warning
+        if (!msg) {
+          try {
+            const catalog = await window.api.invoke('i18n:getCatalog', selectedLang);
+            if (catalog && catalog['settings.languageInDevelopment']) {
+              msg = catalog['settings.languageInDevelopment'];
+              languageInDevMap[selectedLang] = msg; // Cache for future use
+            }
+          } catch (_) {}
+        }
+
+        // Fallback to current language's translation if still not found
+        if (!msg) {
+          msg = t('settings.languageInDevelopment');
+        }
+
         languageWarning.textContent = msg;
         languageWarning.style.display = 'block';
         languageHint.style.display = 'none';
@@ -371,20 +388,22 @@ window.Pages.settings = {
     }
     // Show warning for hovered option in dropdown (using mousemove on select)
     let lastHoveredValue = null;
+    let hoverDebounce = null;
     languageSelect.addEventListener('mousemove', (e) => {
       const opt = e.target.closest('option');
       if (opt && opt.value && opt.value !== 'en' && opt.value !== lastHoveredValue) {
         lastHoveredValue = opt.value;
-        updateLanguageWarning(opt.value);
+        if (hoverDebounce) clearTimeout(hoverDebounce);
+        hoverDebounce = setTimeout(() => updateLanguageWarning(opt.value), 100);
       }
     });
     // Show warning on interaction (click/focus) before change is committed
     languageSelect.addEventListener('mousedown', () => updateLanguageWarning(languageSelect.value));
     languageSelect.addEventListener('focus', () => updateLanguageWarning(languageSelect.value));
-    languageSelect.addEventListener('change', () => { lastHoveredValue = null; updateLanguageWarning(languageSelect.value); });
+    languageSelect.addEventListener('change', () => { lastHoveredValue = null; if (hoverDebounce) clearTimeout(hoverDebounce); updateLanguageWarning(languageSelect.value); });
     // Reset to current selection when mouse leaves dropdown
-    languageSelect.addEventListener('mouseleave', () => { lastHoveredValue = null; updateLanguageWarning(languageSelect.value); });
-    languageSelect.addEventListener('blur', () => { lastHoveredValue = null; updateLanguageWarning(languageSelect.value); });
+    languageSelect.addEventListener('mouseleave', () => { lastHoveredValue = null; if (hoverDebounce) clearTimeout(hoverDebounce); updateLanguageWarning(languageSelect.value); });
+    languageSelect.addEventListener('blur', () => { lastHoveredValue = null; if (hoverDebounce) clearTimeout(hoverDebounce); updateLanguageWarning(languageSelect.value); });
     // Initial check
     updateLanguageWarning();
 
@@ -521,7 +540,7 @@ window.Pages.settings = {
               const folder = body.querySelector('#browserExtFolder');
               if (folder) folder.textContent = result.extDir;
               if (steps) steps.style.display = 'block';
-              renderBrowserExtensionSection(container);
+              // Don't re-render - keep the steps visible so user can follow them
             } catch (err) {
               status.textContent = err.message || String(err);
               if (showToast) showToast(t('settings.browserExtension.error'), 'error');

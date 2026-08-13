@@ -210,6 +210,7 @@
   "settings.browserExtension.orgNote": "The extension installs via a browser policy, so it appears as \"Installed by your organization\" and can only be removed from here.",
   "settings.browserExtension.partialError": "Some browsers failed: {detail}",
   "settings.browserExtension.error": "Failed to update browser extension",
+  "settings.browserExtension.extensionId": "Extension ID: {id}",
   "settings.colorScheme": "Color Scheme",
   "tray.systemHealth": "System Health",
   "tray.rtpActive": "RTP Active",
