@@ -64,6 +64,7 @@ const featureFlags = require('../core/featureFlags');
 let mainWindow;
 let splashWindow;
 let splashTimeoutId;
+let splashCloseSafetyId;
 let splashProgressBuffer = [];
 let splashProgressReady = false;
 let dbRef; // set once the database is created in app.whenReady() below, so
@@ -505,6 +506,10 @@ function scheduleScreenshotCapture(win, config) {
 // so a slow/failed load never leaves the user stuck looking at the splash
 // screen forever.
 function dismissSplash() {
+  if (splashCloseSafetyId) {
+    clearTimeout(splashCloseSafetyId);
+    splashCloseSafetyId = undefined;
+  }
   if (splashTimeoutId) {
     clearTimeout(splashTimeoutId);
     splashTimeoutId = undefined;
@@ -667,7 +672,21 @@ app.whenReady().then(async () => {
   });
 
   // Register app:ready handler early so renderer can dismiss splash
+  // The main window is shown right away, but the splash stays up until the
+  // splash renderer confirms it actually displayed the Ready label
+  // (splash:ready-shown), so a fast startup never cuts the Ready state off.
+  // A safety timer guarantees the splash still closes if that signal is
+  // delayed or never arrives (e.g. a renderer error).
   ipcMain.handle('app:ready', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+    }
+    if (!splashCloseSafetyId) {
+      splashCloseSafetyId = setTimeout(dismissSplash, 5000);
+    }
+  });
+
+  ipcMain.handle('splash:ready-shown', () => {
     dismissSplash();
   });
 
@@ -886,7 +905,12 @@ app.whenReady().then(async () => {
       if (milestone !== undefined) {
         announcedProgress.add(milestone);
         const files = data.filesScanned || 0;
-        showNotification(t('toast.scanProgressTitle'), t('scan.progress', { files, pct: data.pct }), 'info');
+        // Use "Preparing scan" message for initial milestone when no files have been scanned yet
+        if (files === 0 && data.message && data.message.includes('Preparing')) {
+          showNotification(t('toast.scanProgressTitle'), t('scan.preparing'), 'info');
+        } else {
+          showNotification(t('toast.scanProgressTitle'), t('scan.progress', { files, pct: data.pct }), 'info');
+        }
       }
     });
 
