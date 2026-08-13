@@ -72,4 +72,36 @@ describe('dashboard warning metadata', () => {
     assert.ok(detail != null, `missing en translation for ${meta.detail}`);
     assert.notEqual(title, meta.title, `en translation for ${meta.title} must not fall back to the raw key`);
   });
+
+  it('should fetch the ignored list from the DB, not from cached recommendations', () => {
+    const cacheBranch = source.slice(source.indexOf('const data = (now - warningCacheTs'));
+    assert.ok(
+      cacheBranch.includes("await window.api.invoke('warnings:listIgnored')"),
+      'ignored warnings must be re-fetched from the DB on every load'
+    );
+    assert.ok(
+      !/warningCacheData\.recommendations[\s\S]*unignore-warning/.test(cacheBranch),
+      'ignored list must not be rendered from warningCacheData.recommendations'
+    );
+  });
+
+  it('should invalidate the warning cache after ignore, restore and action handlers', () => {
+    assert.ok(
+      source.includes('function invalidateWarningCache()'),
+      'an invalidateWarningCache helper must exist'
+    );
+    for (const [name, line] of [
+      ['ignore', "await window.api.invoke('warnings:ignore'"],
+      ['restore', "await window.api.invoke('warnings:unignore'"],
+      ['action', 'await action.handler();']
+    ]) {
+      const idx = source.indexOf(line);
+      assert.ok(idx !== -1, `loadWarnings must contain the ${name} handler`);
+      const tail = source.slice(idx);
+      assert.ok(
+        tail.includes('invalidateWarningCache()'),
+        `the ${name} handler must invalidate the warning cache before reloading`
+      );
+    }
+  });
 });

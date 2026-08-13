@@ -15,6 +15,14 @@ window.Pages['dashboard'] = {
     const warningCacheTtl = 60_000; // 60 seconds
     let warningCacheData = null;
 
+    // Ignore/restore/action handlers mutate the DB, so the cached
+    // security-overview result (which already filtered out ignored issues)
+    // must be dropped before the next loadWarnings().
+    function invalidateWarningCache() {
+      warningCacheTs = 0;
+      warningCacheData = null;
+    }
+
     function hasView() {
       return alive && document.body.contains(container);
     }
@@ -497,10 +505,18 @@ async function loadWarnings() {
       const warningList = document.getElementById('warningList');
       const ignoredList = document.getElementById('ignoredWarningList');
       if (!warningList || !ignoredList) return;
-      // Check warning cache first (60s TTL)
-      const now = Date.now();
-      if (now - warningCacheTs < warningCacheTtl && warningCacheData) {
-        const translatedWarnings = (warningCacheData.recommendations || [])
+      try {
+        // Only the slow security-overview tool call is cached; the ignored
+        // list always comes fresh from the DB so Restore/Ignore take effect
+        // immediately instead of rendering from stale cached recommendations.
+        const now = Date.now();
+        const data = (now - warningCacheTs < warningCacheTtl && warningCacheData)
+          ? warningCacheData
+          : await Api.runTool('security-overview', {});
+        warningCacheData = data;
+        warningCacheTs = now;
+
+        const translatedWarnings = (data.recommendations || [])
           .filter((i) => i.level === 'warn' || i.level === 'danger')
           .map(translateWarning);
         warningList.innerHTML = translatedWarnings.length ? translatedWarnings.map((w) => {
@@ -519,20 +535,22 @@ async function loadWarnings() {
             </div>
           </div>`;
         }).join('') : `<div class="empty-state">${escapeHtml(t('dashboard.noWarnings'))}</div>`;
+
         // Re-attach event listeners (they were lost when innerHTML was set)
         warningList.querySelectorAll('[data-open-warning]').forEach((btn) => btn.addEventListener('click', () => window.AppRouter.navigate(btn.dataset.openWarning)));
         warningList.querySelectorAll('[data-action-warning]').forEach((btn) => btn.addEventListener('click', async () => {
           const warningTitle = btn.dataset.actionWarning;
           const action = warningActions[warningTitle];
           if (!action) return;
-          
+
           const item = btn.closest('.history-item');
           const originalText = btn.textContent;
           btn.disabled = true;
           btn.textContent = t('common.loading');
-          
+
           try {
             await action.handler();
+            invalidateWarningCache();
             await loadWarnings();
           } catch (err) {
             btn.disabled = false;
@@ -540,36 +558,13 @@ async function loadWarnings() {
             alert(err.message || t('common.failed'));
           }
         }));
-        // Render ignored warnings from cache
-        if (warningCacheData && warningCacheData.recommendations) {
-          const ignored = warningCacheData.recommendations
-            .filter((i) => i.level === 'warn' || i.level === 'danger')
-            .map(w => {
-              const meta = warningActions[w.title];
-              if (meta) return { ...w, title: t(meta.title), detail: t(meta.detail) };
-              return w;
-            });
-          ignoredList.innerHTML = ignored.length ? ignored.map((w) => `
-            <div class="history-item">
-              <div>
-                <div class="history-title">${escapeHtml(w.title)}</div>
-                <div class="history-meta">${escapeHtml(w.detail || '')}</div>
-              </div>
-              <button class="btn btn-sm" data-unignore-warning="${escapeHtml(w.id)}">${escapeHtml(t('dashboard.warningRestore'))}</button>
-            </div>`).join('') : `<div class="empty-state">${escapeHtml(t('dashboard.noIgnoredWarnings'))}</div>`;
-        }
-        return;
-      }
-      try {
-        const data = await Api.runTool('security-overview', {});
-        warningCacheData = data;
-        warningCacheTs = now;
         warningList.querySelectorAll('[data-ignore-warning]').forEach((btn) => btn.addEventListener('click', async () => {
           const item = btn.closest('.history-item');
           btn.disabled = true;
           try {
             await window.api.invoke('warnings:ignore', { id: btn.dataset.ignoreWarning, title: btn.dataset.title, detail: btn.dataset.detail });
             if (item) item.remove();
+            invalidateWarningCache();
             await loadWarnings();
           } catch (err) {
             btn.disabled = false;
@@ -598,6 +593,7 @@ async function loadWarnings() {
           try {
             await window.api.invoke('warnings:unignore', btn.dataset.unignoreWarning);
             if (item) item.remove();
+            invalidateWarningCache();
             await loadWarnings();
           } catch (err) {
             btn.disabled = false;
