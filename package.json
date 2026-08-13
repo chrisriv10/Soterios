@@ -20,7 +20,7 @@
     "dist:linux": "electron-builder --linux --publish never",
     "postinstall": "node tools/download-clamav.js",
     "prepack": "node tools/download-clamav.js",
-    "test": "node tests/node-test-runner.js && jest tests/passwordTools.test.js tests/reportExport.test.js",
+    "test": "node tests/node-test-runner.js && jest tests/passwordTools.test.js tests/reportExport.test.js tests/splashProgress.test.js",
     "sync-wiki": "node tools/sync-wiki.js",
     "extension:install": "node tools/install-native-host.js",
     "extension:crx": "node tools/build-extension-crx.js",

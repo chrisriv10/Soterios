@@ -552,9 +552,13 @@ function createWindow() {
 
   // Intentionally no auto-show on 'ready-to-show' here -- the window stays
   // hidden until the renderer signals it has actually finished loading data
-  // (see the 'app:ready' handler below). Do not auto-dismiss the splash on a
-  // timer: showing partially loaded dashboard cards is worse than continuing
-  // to show loading progress while a slow initial read completes.
+  // (see the 'app:ready' handler below), so the splash screen covers the
+  // whole load instead of just the initial blank-page flash. A fallback
+  // timeout guarantees the window still appears even if that signal is
+  // delayed or never arrives (e.g. an unexpected renderer error). Progress
+  // messages continue to stream during the wait, so a slow initial read
+  // never looks frozen.
+  splashTimeoutId = setTimeout(dismissSplash, 30000);
 
   if ((process.argv.includes('--dev') || process.env.NODE_ENV === 'development') && !isScreenshotCaptureMode()) {
     mainWindow.webContents.once('did-finish-load', () => {
