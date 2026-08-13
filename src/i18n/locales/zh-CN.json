@@ -732,7 +732,7 @@
   "processes.riskFilterAll": "所有风险等级",
   "processes.riskFilterHigh": "高风险 (≥60)",
   "processes.riskFilterMedium": "中风险 (35-59)",
-  "processes.riskFilterLow": "低风险 (1-34)",
+  "processes.riskFilterLow": "低风险 (0-34)",
   "processes.riskLevel": "{level}",
   "processes.riskScore": "{score} 风险",
   "processes.riskScoreSuffix": "风险",

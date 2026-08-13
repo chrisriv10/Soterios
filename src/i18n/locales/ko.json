@@ -733,7 +733,7 @@
   "processes.riskFilterCritical": "치명적 위험 (≥80)",
   "processes.riskFilterHigh": "높은 위험 (60-79)",
   "processes.riskFilterMedium": "중간 위험 (35-59)",
-  "processes.riskFilterLow": "낮은 위험 (1-34)",
+  "processes.riskFilterLow": "낮은 위험 (0-34)",
   "processes.riskLevel": "{level}",
   "processes.riskScore": "{score} 위험",
   "processes.riskScoreSuffix": "위험",

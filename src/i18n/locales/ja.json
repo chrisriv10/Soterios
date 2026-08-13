@@ -733,7 +733,7 @@
   "processes.riskFilterCritical": "致命的リスク (≥80)",
   "processes.riskFilterHigh": "高リスク (60-79)",
   "processes.riskFilterMedium": "中リスク (35-59)",
-  "processes.riskFilterLow": "低リスク (1-34)",
+  "processes.riskFilterLow": "低リスク (0-34)",
   "processes.riskLevel": "{level}",
   "processes.riskScore": "{score} リスク",
   "processes.riskScoreSuffix": "リスク",

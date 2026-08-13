@@ -733,7 +733,7 @@
   "processes.riskFilterCritical": "गंभीर जोखिम (≥80)",
   "processes.riskFilterHigh": "उच्च रिस्क (60-79)",
   "processes.riskFilterMedium": "मध्यम रिस्क (35-59)",
-  "processes.riskFilterLow": "कम रिस्क (1-34)",
+  "processes.riskFilterLow": "कम रिस्क (0-34)",
   "processes.riskLevel": "{level}",
   "processes.riskScore": "{score} रिस्क",
   "processes.riskScoreSuffix": "जोखिम",

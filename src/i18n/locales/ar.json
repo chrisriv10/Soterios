@@ -733,7 +733,7 @@
   "processes.riskFilterCritical": "خطر حرج (≥80)",
   "processes.riskFilterHigh": "مخاطر عالية (60-79)",
   "processes.riskFilterMedium": "مخاطر متوسطة (35-59)",
-  "processes.riskFilterLow": "مخاطر منخفضة (1-34)",
+  "processes.riskFilterLow": "مخاطر منخفضة (0-34)",
   "processes.riskLevel": "{level}",
   "processes.riskScore": "{score} مخاطر",
   "processes.riskScoreSuffix": "مخاطرة",

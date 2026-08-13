@@ -580,7 +580,7 @@
   "processes.riskFilterCritical": "Critical Risk (≥80)",
   "processes.riskFilterHigh": "High Risk (60-79)",
   "processes.riskFilterMedium": "Medium Risk (35-59)",
-  "processes.riskFilterLow": "Low Risk (1-34)",
+  "processes.riskFilterLow": "Low Risk (0-34)",
   "processes.sortDefault": "Sort: Default",
   "processes.sortRisk": "Risk (High to Low)",
   "processes.sortCpu": "CPU (High to Low)",

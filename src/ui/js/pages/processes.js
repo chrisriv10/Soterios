@@ -480,7 +480,7 @@ const trustedBadge = p.trusted
       const matchesRisk = this._riskFilter === 'critical' ? score >= 80
         : this._riskFilter === 'high' ? score >= 60 && score < 80
         : this._riskFilter === 'medium' ? score >= 35 && score < 60
-        : this._riskFilter === 'low' ? score >= 1 && score < 35
+        : this._riskFilter === 'low' ? score >= 0 && score < 35
         : true;
       const matches = matchesQuery && matchesRisk;
       el.style.display = matches ? '' : 'none';

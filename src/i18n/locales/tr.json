@@ -733,7 +733,7 @@
   "processes.riskFilterCritical": "Kritik Risk (≥80)",
   "processes.riskFilterHigh": "Yüksek Risk (60-79)",
   "processes.riskFilterMedium": "Orta Risk (35-59)",
-  "processes.riskFilterLow": "Düşük Risk (1-34)",
+  "processes.riskFilterLow": "Düşük Risk (0-34)",
   "processes.riskLevel": "{level}",
   "processes.riskScore": "{score} Risk",
   "processes.riskScoreSuffix": "Risk",

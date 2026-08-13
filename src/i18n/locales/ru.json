@@ -732,7 +732,7 @@
   "processes.riskFilterAll": "Все уровни риска",
   "processes.riskFilterHigh": "Высокий риск (≥60)",
   "processes.riskFilterMedium": "Средний риск (35-59)",
-  "processes.riskFilterLow": "Низкий риск (1-34)",
+  "processes.riskFilterLow": "Низкий риск (0-34)",
   "processes.riskLevel": "{level}",
   "processes.riskScore": "{score} Риск",
   "processes.riskScoreSuffix": "Риск",

@@ -733,7 +733,7 @@
   "processes.riskFilterCritical": "Riesgo crítico (≥80)",
   "processes.riskFilterHigh": "Riesgo alto (60-79)",
   "processes.riskFilterMedium": "Riesgo medio (35-59)",
-  "processes.riskFilterLow": "Riesgo bajo (1-34)",
+  "processes.riskFilterLow": "Riesgo bajo (0-34)",
   "processes.riskLevel": "{level}",
   "processes.riskScore": "{score} Riesgo",
   "processes.riskScoreSuffix": "Riesgo",
