@@ -134,7 +134,7 @@ window.Pages['dashboard'] = {
         detail: 'dashboard.warn.highMemory.detail',
         label: 'dashboard.action.runCleanup',
         handler: async () => {
-          await window.api.invoke('tools:runScript', 'clearTempFiles');
+          await Api.runTool('run-script', { scriptId: 'clear-temp-files' });
         }
       },
       'High CPU usage detected': {
@@ -142,7 +142,7 @@ window.Pages['dashboard'] = {
         detail: 'dashboard.warn.highCpu.detail',
         label: 'dashboard.action.runCleanup',
         handler: async () => {
-          await window.api.invoke('tools:runScript', 'clearTempFiles');
+          await Api.runTool('run-script', { scriptId: 'clear-temp-files' });
         }
       },
       'Low disk space': {
@@ -150,7 +150,7 @@ window.Pages['dashboard'] = {
         detail: 'dashboard.warn.lowDisk.detail',
         label: 'dashboard.action.diskCleanup',
         handler: async () => {
-          await window.api.invoke('tools:runScript', 'largeFilesReport');
+          await Api.runTool('run-script', { scriptId: 'large-files-report' });
         }
       }
     };
