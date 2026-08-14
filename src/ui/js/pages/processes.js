@@ -267,7 +267,7 @@ window.Pages.processes = {
   _reasonHint(p) {
     return (p.locationReasons && p.locationReasons[0])
       || ((p.suspiciousReasons || []).find((r) =>
-        /appdata|temporary|recycle bin|writable windows location|double extension/i.test(r || '')
+        /appdata|temporary|recycle bin|writable windows location|double extension|execution chain|process hollowing|remote URL|squiblydoo|encoded script|downloadstring/i.test(r || '')
       ))
       || '';
   },

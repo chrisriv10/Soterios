@@ -52,13 +52,28 @@ const PROTECTED_SYSTEM_NAMES = new Set([
 ]);
 const SYSTEM_DIR_PATTERNS = ['\\windows\\system32\\', '\\windows\\syswow64\\', '\\windows\\'];
 
+// Applications that routinely open user-supplied or downloaded content
+// (documents, e-mail attachments, PDFs). A script host or command shell
+// being launched directly by one of these -- without the user consciously
+// opening a terminal -- is one of the best-established initial-execution
+// patterns for document- and macro-based malware (MITRE ATT&CK T1204/T1059).
+const SCRIPT_SPAWNING_PARENT_NAMES = new Set([
+  'winword.exe', 'excel.exe', 'powerpnt.exe', 'outlook.exe', 'mspub.exe', 'visio.exe',
+  'acrord32.exe', 'acrobat.exe', 'foxitreader.exe'
+]);
+
+const SCRIPT_HOST_PROCESS_NAMES = new Set([
+  'cmd.exe', 'powershell.exe', 'pwsh.exe', 'wscript.exe', 'cscript.exe',
+  'mshta.exe', 'regsvr32.exe', 'rundll32.exe', 'certutil.exe', 'bitsadmin.exe'
+]);
+
 function isMasquerading(name, lowerPath) {
   if (!PROTECTED_SYSTEM_NAMES.has(name)) return false;
   if (!lowerPath) return false; // can't confirm location either way -- don't guess
   return !SYSTEM_DIR_PATTERNS.some((p) => lowerPath.includes(p));
 }
 
-function processSignals(proc, isTrusted = false) {
+function processSignals(proc, isTrusted = false, parentName = null) {
   const signals = [];
   const lowerPath = String(proc.path || '').toLowerCase().replace(/\//g, '\\');
   const cmd = String(proc.cmd || '').toLowerCase();
@@ -94,6 +109,24 @@ function processSignals(proc, isTrusted = false) {
     signals.push({ points: 40, message: 'certutil.exe used with download/decode flags -- a known technique for smuggling payloads via a trusted signed tool.' });
   if (name === 'bitsadmin.exe' && cmd.includes('/transfer'))
     signals.push({ points: 35, message: 'bitsadmin.exe used to transfer files -- a known technique for downloading payloads via a trusted signed tool.' });
+
+  // Parent-process lineage checks -- who launched a process is often as
+  // telling as what it does. The caller resolves the parent name from the
+  // full process list and passes it in.
+  const parent = String(parentName || '').toLowerCase();
+  if (parent && SCRIPT_SPAWNING_PARENT_NAMES.has(parent) && SCRIPT_HOST_PROCESS_NAMES.has(name)) {
+    signals.push({ points: 55, message: `Launched by ${parentName}, a common execution chain used by malicious documents/attachments to run scripts (matches a common malicious document execution pattern).` });
+  }
+
+  // svchost.exe should always be a direct child of services.exe (the Service
+  // Control Manager). Any other parent is a strong indicator of process
+  // hollowing or a payload posing as a system service host. Deliberately not
+  // extended to other protected system names: their real parents commonly
+  // exit right after spawning the child, so an unresolved parent there is
+  // normal and must not be treated as suspicious.
+  if (name === 'svchost.exe' && parent && parent !== 'services.exe') {
+    signals.push({ points: 50, message: `Named "svchost.exe" but its parent process is "${parentName}" instead of services.exe -- a strong indicator of process hollowing or a fake service host.` });
+  }
 
   // Running from a non-system drive or a network share is a much milder
   // signal on its own (plenty of legitimate portable software does this),
@@ -174,6 +207,7 @@ module.exports = {
   id: 'process-viewer', name: 'Process Viewer',
   description: 'List running processes with CPU/memory and suspicious process scoring.',
   category: 'System', icon: 'list',
+  processSignals,
   run: async (args, context) => {
     const db = context && context.db;
     // Get all trusted hashes once (fast database lookup)
@@ -260,8 +294,13 @@ module.exports = {
         }
       }
 
+      // Resolve every process's parent name once so lineage checks (Office
+      // apps spawning script hosts, svchost hollowing) can look it up in
+      // O(1) instead of re-scanning the whole list per process.
+      const nameByPid = new Map(processList.map((p) => [p.pid, p.name || 'unknown']));
+
       for (const item of processes) {
-        item.risk = makeRisk(processSignals(item, item.trusted));
+        item.risk = makeRisk(processSignals(item, item.trusted, nameByPid.get(item.ppid) || null));
         item.locationReasons = (item.risk.signals || [])
           .map((s) => s.message)
           .filter((msg) => /appdata|temporary|recycle bin|writable windows location|double extension/i.test(msg || ''));
