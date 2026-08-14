@@ -1680,11 +1680,8 @@ if (content) this.paintHistoryChart(content).catch(() => {});
       btn.onclick = async () => {
         try {
           const ip = btn.getAttribute('data-alert-block');
-          await window.api.invoke('firewall:addRule', {
-            direction: 'inbound',
-            action: 'block',
-            remoteAddress: ip
-          });
+          await window.api.invoke('firewall:createRule', { name: `Block IP ${ip} (Out)`, direction: 'Outbound', action: 'Block', remoteAddress: ip });
+          await window.api.invoke('firewall:createRule', { name: `Block IP ${ip} (In)`, direction: 'Inbound', action: 'Block', remoteAddress: ip });
           btn.textContent = 'Blocked';
           btn.disabled = true;
         } catch (e) {
