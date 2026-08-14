@@ -339,7 +339,7 @@ const trustedBadge = p.trusted
           </div>
         </div>
         <div style="display:flex; justify-content:space-between; margin-top:8px; padding-top:8px; border-top:1px solid var(--glass-border); gap:12px; flex-wrap:wrap;">
-          <div class="recommended-action" style="font-size:0.85rem; color:var(--accent-warning); flex:1; min-width:200px;">${escapeHtml(p.recommendedAction)}${reasonHint ? ` — ${escapeHtml(reasonHint)}` : ''}</div>
+          ${(p.recommendedAction || reasonHint) ? `<div class="recommended-action" style="font-size:0.85rem; color:var(--accent-warning); flex:1; min-width:200px;">${p.recommendedAction ? escapeHtml(p.recommendedAction) + (reasonHint ? ` — ${escapeHtml(reasonHint)}` : '') : escapeHtml(reasonHint)}</div>` : ''}
           <div style="display:flex; gap:16px; font-size:0.85rem; font-weight:500;">
             <span class="cpu-value">${p.cpu !== null ? p.cpu + '% CPU' : escapeHtml(this.t('processes.cpuNa'))}</span>
             <span class="memory-value">${p.memory !== null ? p.memory + '% RAM' : escapeHtml(this.t('processes.memoryNa'))}</span>
@@ -382,9 +382,9 @@ const trustedBadge = p.trusted
     if (entry.riskLevelEl) entry.riskLevelEl.textContent = p.risk.level;
     if (entry.recommendedEl) {
       const reasonHint = this._reasonHint(p);
-      entry.recommendedEl.textContent = reasonHint
-        ? `${p.recommendedAction} — ${reasonHint}`
-        : (p.recommendedAction || '');
+      entry.recommendedEl.textContent = p.recommendedAction
+        ? reasonHint ? `${p.recommendedAction} — ${reasonHint}` : p.recommendedAction
+        : (reasonHint || '');
     }
     if (entry.cpuEl) entry.cpuEl.textContent = p.cpu !== null ? `${p.cpu}% CPU` : this.t('processes.cpuNa');
     if (entry.memoryEl) entry.memoryEl.textContent = p.memory !== null ? `${p.memory}% RAM` : this.t('processes.memoryNa');
