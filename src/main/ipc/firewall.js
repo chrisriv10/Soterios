@@ -48,6 +48,10 @@ function register(mainWindow, { db, firewallManager }) {
     return firewallManager.setProfileEnabled(profile, !!enabled);
   });
 
+  ipcMain.handle('firewall:enableAll', async () => {
+    return firewallManager.enableAllProfiles();
+  });
+
   ipcMain.handle('firewall:exportRules', async () => {
     const data = await firewallManager.exportRules();
     const result = await dialog.showSaveDialog(mainWindow || BrowserWindow.getFocusedWindow(), {

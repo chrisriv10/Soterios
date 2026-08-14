@@ -126,7 +126,10 @@ window.Pages['dashboard'] = {
         detail: 'dashboard.warn.firewallDisabled.detail',
         label: 'dashboard.action.enableFirewall',
         handler: async () => {
-          await window.api.invoke('firewall:enableAll');
+          const res = await window.api.invoke('firewall:enableAll');
+          if (res && !res.success) {
+            throw new Error((res.errors || []).map((e) => e.profile).join(', ') || t('common.failed'));
+          }
         }
       },
       'High memory usage detected': {

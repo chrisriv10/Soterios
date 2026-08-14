@@ -180,3 +180,43 @@ describe('FirewallManager import/export validation', () => {
     assert.equal(exported.rules[0].name, 'Soterios - Block IP 1.2.3.4 (Out)');
   });
 });
+
+describe('FirewallManager enableAllProfiles', () => {
+  class FakePowerShellFirewallManager extends FakeFirewallManager {
+    constructor(opts = {}) {
+      super();
+      this.opts = opts;
+      this.powerShellCalls = [];
+    }
+
+    async runPowerShell(command) {
+      this.powerShellCalls.push(command);
+      const failFor = this.opts.failFor;
+      if (failFor && command.includes(`-Name ${failFor} `)) {
+        throw new Error(`${failFor} went boom`);
+      }
+    }
+  }
+
+  it('enables all three profiles', async () => {
+    const mgr = new FakePowerShellFirewallManager();
+    const result = await mgr.enableAllProfiles();
+    assert.equal(result.success, true);
+    assert.deepEqual(result.enabled, ['Domain', 'Private', 'Public']);
+    assert.deepEqual(result.errors, []);
+    assert.equal(mgr.powerShellCalls.length, 3);
+    assert.match(mgr.powerShellCalls.join('\n'), /-Name Domain .*-Enabled True/);
+    assert.match(mgr.powerShellCalls.join('\n'), /-Name Public .*-Enabled True/);
+  });
+
+  it('reports partial failure without swallowing the other profiles', async () => {
+    const mgr = new FakePowerShellFirewallManager({ failFor: 'Public' });
+    const result = await mgr.enableAllProfiles();
+    assert.equal(result.success, false);
+    assert.deepEqual(result.enabled, ['Domain', 'Private']);
+    assert.equal(result.errors.length, 1);
+    assert.equal(result.errors[0].profile, 'Public');
+    assert.equal(typeof result.errors[0].error, 'string');
+    assert.equal(mgr.powerShellCalls.length, 3, 'all profiles are attempted even when one fails');
+  });
+});

@@ -229,6 +229,24 @@ class FirewallManager {
     return { success: true };
   }
 
+  // Best-effort enable of every Windows Firewall profile. Unlike
+  // setProfileEnabled, one failing profile does not abort the rest; failures
+  // are collected so the caller can surface partial state (same pattern as
+  // importRules).
+  async enableAllProfiles() {
+    const enabled = [];
+    const errors = [];
+    for (const profile of ['Domain', 'Private', 'Public']) {
+      try {
+        await this.setProfileEnabled(profile, true);
+        enabled.push(profile);
+      } catch (e) {
+        errors.push({ profile, error: e.message || String(e) });
+      }
+    }
+    return { success: errors.length === 0, enabled, errors };
+  }
+
   // Snapshot of Soterios-managed rules for backup / migrate across machines.
   async exportRules() {
     const rules = await this.listRules();
