@@ -22,6 +22,8 @@ window.Pages.tools = {
     'browser-cache-report',
     'disk-space-report',
     'windows-services-report',
+    'scheduled-tasks-report',
+    'hosts-file-check',
     'uninstaller-report',
     'duplicate-finder',
     'file-shredder'
@@ -34,6 +36,8 @@ window.Pages.tools = {
     'browser-cache-report': 'tools.script.browserCacheReport.name',
     'disk-space-report': 'tools.script.diskSpaceReport.name',
     'windows-services-report': 'tools.script.windowsServicesReport.name',
+    'scheduled-tasks-report': 'tools.script.scheduledTasksReport.name',
+    'hosts-file-check': 'tools.script.hostsFileCheck.name',
     'uninstaller-report': 'tools.script.uninstallerReport.name',
     'duplicate-finder': 'tools.script.duplicateFinder.name',
     'file-shredder': 'tools.script.fileShredder.name'
@@ -289,7 +293,7 @@ window.Pages.tools = {
       id: 'diagnostics',
       labelKey: 'tools.category.diagnostics',
       icon: 'activity',
-      scripts: ['disk-space-report', 'windows-services-report', 'duplicate-finder']
+      scripts: ['disk-space-report', 'windows-services-report', 'scheduled-tasks-report', 'hosts-file-check', 'duplicate-finder']
     },
     {
       id: 'management',
@@ -480,6 +484,8 @@ window.Pages.tools = {
       'browser-cache-report': { name: 'tools.script.browserCacheReport.name', desc: 'tools.script.browserCacheReport.desc' },
       'disk-space-report': { name: 'tools.script.diskSpaceReport.name', desc: 'tools.script.diskSpaceReport.desc' },
       'windows-services-report': { name: 'tools.script.windowsServicesReport.name', desc: 'tools.script.windowsServicesReport.desc' },
+      'scheduled-tasks-report': { name: 'tools.script.scheduledTasksReport.name', desc: 'tools.script.scheduledTasksReport.desc' },
+      'hosts-file-check': { name: 'tools.script.hostsFileCheck.name', desc: 'tools.script.hostsFileCheck.desc' },
       'uninstaller-report': { name: 'tools.script.uninstallerReport.name', desc: 'tools.script.uninstallerReport.desc' },
       'duplicate-finder': { name: 'tools.script.duplicateFinder.name', desc: 'tools.script.duplicateFinder.desc' },
       'file-shredder': { name: 'tools.script.fileShredder.name', desc: 'tools.script.fileShredder.desc' },
@@ -511,6 +517,8 @@ window.Pages.tools = {
       'browser-cache-report': 'archive',
       'disk-space-report': 'activity',
       'windows-services-report': 'list-checks',
+      'scheduled-tasks-report': 'gauge',
+      'hosts-file-check': 'shield-check',
       'uninstaller-report': 'archive',
       'duplicate-finder': 'copy',
       'file-shredder': 'trash-2'
@@ -736,6 +744,21 @@ async runScript(container, btn) {
       html += `<div class="log-row"><span class="log-tag info">${result.autoStartCount || 0}</span><span class="log-path">${this.t('tools.autoStartServices')}, ${result.flaggedCount || 0} ${this.t('tools.flagged')}</span></div>`;
       html += (result.flagged || []).map(s => `<div class="log-row" style="${this.lazyRowStyle}"><span class="log-tag match">${this.t('tools.flag')}</span><span class="log-path">${escapeHtml(s.displayName || s.name)} ${s.pathName ? '(' + escapeHtml(s.pathName) + ')' : ''}</span></div>`).join('');
       html += (result.services || []).slice(0, 120).map(s => `<div class="log-row" style="${this.lazyRowStyle}"><span class="log-tag clean">${escapeHtml(s.state || '')}</span><span class="log-path">${escapeHtml(s.displayName || s.name)}</span></div>`).join('');
+    } else if (scriptId === 'scheduled-tasks-report') {
+      if (result.supported === false) {
+        html += `<div class="log-row"><span class="log-tag warn">${this.t('tools.info')}</span><span class="log-path">${escapeHtml(result.message || '')}</span></div>`;
+      } else {
+        html += `<div class="log-row"><span class="log-tag info">${result.taskCount || 0}</span><span class="log-path">${this.t('tools.activeTasks')}, ${result.flaggedCount || 0} ${this.t('tools.flagged')}</span></div>`;
+        html += (result.flagged || []).map(t => `<div class="log-row" style="${this.lazyRowStyle}"><span class="log-tag match">${this.t('tools.flag')}</span><span class="log-path">${escapeHtml(t.path || '')}${escapeHtml(t.name || '')} — ${escapeHtml(t.actions || '')}</span></div>`).join('');
+        html += (result.tasks || []).slice(0, 150).map(t => `<div class="log-row" style="${this.lazyRowStyle}"><span class="log-tag clean">${escapeHtml(t.state || '')}</span><span class="log-path">${escapeHtml(t.path || '')}${escapeHtml(t.name || '')}</span></div>`).join('');
+      }
+    } else if (scriptId === 'hosts-file-check') {
+      if (result.supported === false) {
+        html += `<div class="log-row"><span class="log-tag warn">${this.t('tools.info')}</span><span class="log-path">${escapeHtml(result.message || '')}</span></div>`;
+      } else {
+        html += `<div class="log-row"><span class="log-tag info">${result.entryCount || 0}</span><span class="log-path">${this.t('tools.customHostsEntries')}, ${result.flaggedCount || 0} ${this.t('tools.flagged')}</span></div>`;
+        html += (result.entries || []).map(e => `<div class="log-row" style="${this.lazyRowStyle}"><span class="log-tag ${e.flagged ? 'match' : 'clean'}">${escapeHtml(e.ip)}</span><span class="log-path">${escapeHtml(e.host)}</span>${e.flagged ? `<span class="log-tag warn">${escapeHtml(e.flagReason || this.t('tools.flag'))}</span>` : ''}</div>`).join('');
+      }
     } else if (scriptId === 'uninstaller-report') {
       if (result.supported === false) {
         html += `<div class="log-row"><span class="log-tag warn">${this.t('tools.info')}</span><span class="log-path">${escapeHtml(result.message || this.t('uninstaller.unavailable'))}</span></div>`;

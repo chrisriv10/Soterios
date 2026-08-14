@@ -47,7 +47,7 @@ Download the latest Windows release:
 - **Credential Safety Hub** — local password generator, strength checker, HIBP k-anonymity password leak checks, and XposedOrNot email breach checks
 - **Real-Time Protection** — toggles Windows Defender real-time monitoring on/off and verifies its state
 - **Quarantine Management** — restore or permanently delete isolated files
-- **Tools & Maintenance** — temp file cleanup, disk reports, large file finder, browser cache reports, startup items, network reports, Windows services reports, and network interface/connection reports
+- **Tools & Maintenance** — temp file cleanup, disk reports, large file finder, browser cache reports, startup items, network reports, Windows services reports, scheduled tasks reports, hosts file integrity checks, and network interface/connection reports
 
 ---
 

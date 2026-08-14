@@ -13,6 +13,8 @@ The **Tools & Maintenance** page provides built-in utilities for disk cleanup, s
 | **Browser Cache Report** | Reports cache sizes for Chromium-based browsers. Includes option to clear cache. |
 | **Network Report** | Read-only report of network interfaces, default gateway, and active established connections. |
 | **Windows Services Report** | Lists auto-start services; flags services running from unsigned paths. |
+| **Scheduled Tasks Report** | Read-only report of active scheduled tasks; flags actions running from suspicious locations or via script hosts (LOLBins). |
+| **Hosts File Integrity Check** | Reports custom hosts file entries and flags redirects targeting security/update domains. |
 
 ## Running a tool
 
