@@ -49,7 +49,6 @@ window.Pages.processes = {
             style="flex:1; max-width:360px; padding:8px 12px; border-radius:8px; border:1px solid var(--glass-border); background:var(--glass-bg,rgba(255,255,255,0.05)); color:inherit;">
           <select id="riskFilter" class="btn btn-sm">
             <option value="all">${escapeHtml(this.t('processes.riskFilterAll'))}</option>
-            <option value="critical">${escapeHtml(this.t('processes.riskFilterCritical'))}</option>
             <option value="high">${escapeHtml(this.t('processes.riskFilterHigh'))}</option>
             <option value="medium">${escapeHtml(this.t('processes.riskFilterMedium'))}</option>
             <option value="low">${escapeHtml(this.t('processes.riskFilterLow'))}</option>
@@ -477,8 +476,7 @@ const trustedBadge = p.trusted
 
     this._rowIndex.forEach(({ el, blob, score }) => {
       const matchesQuery = !query || blob.includes(query);
-      const matchesRisk = this._riskFilter === 'critical' ? score >= 80
-        : this._riskFilter === 'high' ? score >= 60 && score < 80
+      const matchesRisk = this._riskFilter === 'high' ? score >= 60
         : this._riskFilter === 'medium' ? score >= 35 && score < 60
         : this._riskFilter === 'low' ? score >= 0 && score < 35
         : true;

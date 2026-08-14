@@ -1,17 +1,15 @@
 /**
  * Accepts a numeric risk score and converts it into a severity level.
  * Severity thresholds:
- * - 80–100: critical
- * - 60–79: high
+ * - 60–100: high
  * - 35–59: medium
  * - 1–34: low
  * - 0: none
  * @param {number} score - Risk score in the range of 0–100.
- * @returns {'none'|'low'|'medium'|'high'|'critical'} Risk severity level.
+ * @returns {'none'|'low'|'medium'|'high'} Risk severity level.
  */
 
 function levelFromScore(score) {
-  if (score >= 80) return 'critical';
   if (score >= 60) return 'high';
   if (score >= 35) return 'medium';
   if (score > 0) return 'low';
@@ -43,7 +41,7 @@ function scoreSignals(signals) {
  * @param {{ points?: number, message?: string }[]} signals - Detected risk signals.
  * @returns {{
  *   score: number,
- *   level: 'none'|'low'|'medium'|'high'|'critical',
+ *   level: 'none'|'low'|'medium'|'high',
  *   signals: { points?: number, message?: string }[]
  * }} Risk assessment object.
  */
