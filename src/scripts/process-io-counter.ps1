@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'SilentlyContinue'
-$samples = 3
-$intervalMs = 600
+$samples = 2
+$intervalMs = 400
 $accum = @{}
 $names = @{}
 

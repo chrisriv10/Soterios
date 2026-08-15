@@ -173,7 +173,7 @@ async function getProcessIOStats() {
       return { diskIOMap: new Map(), networkIOMap: new Map() };
     }
     
-    const { stdout: ioStdout } = await execPromise(`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${scriptPath}"`, { timeout: 10000 });
+    const { stdout: ioStdout } = await execPromise(`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${scriptPath}"`, { timeout: 30000, windowsHide: true });
 
     // Each line is "pid|name|readBytesPerSec|writeBytesPerSec|otherBytesPerSec".
     // Disk IO = read + write; "other" IO (named pipes, sockets, devices) is the
