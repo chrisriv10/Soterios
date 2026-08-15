@@ -91,11 +91,19 @@ function showResult(input, result, reuse) {
     });
   }
   if (badges.length === 0) {
-    badges.push({
-      text: 'Safe',
-      bg: '#28a745',
-      title: 'Not found in known breaches (HIBP)'
-    });
+    if (result && result.error) {
+      badges.push({
+        text: 'Checks disabled',
+        bg: '#6e7781',
+        title: result.error
+      });
+    } else {
+      badges.push({
+        text: 'Safe',
+        bg: '#28a745',
+        title: 'Not found in known breaches (HIBP)'
+      });
+    }
   }
 
   badges.forEach((badgeSpec, i) => {

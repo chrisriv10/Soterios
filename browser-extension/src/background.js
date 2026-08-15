@@ -1,3 +1,5 @@
+importScripts('threatChecks.js');
+
 chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === 'install') {
     const { externalLookupsEnabled } = await chrome.storage.sync.get('externalLookupsEnabled');
@@ -182,40 +184,15 @@ function broadcastSettings(settings) {
 }
 
 async function checkPassword(password) {
-  // Respect hibpEnabled setting
-  const { hibpEnabled } = await chrome.storage.sync.get('hibpEnabled');
+  // Respect privacyMode and hibpEnabled settings
+  const { hibpEnabled, privacyMode } = await chrome.storage.sync.get(['hibpEnabled', 'privacyMode']);
+  if (privacyMode === true) {
+    return { error: 'Disabled by Privacy Mode' };
+  }
   if (hibpEnabled === false) {
     return { error: 'HIBP checks disabled' };
   }
-
-  const HIBP_API = 'https://api.pwnedpasswords.com/range/';
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-1', data);
-  const hash = Array.from(new Uint8Array(hashBuffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('')
-    .toUpperCase();
-  
-  const prefix = hash.slice(0, 5);
-  const suffix = hash.slice(5);
-  
-  try {
-    const resp = await fetch(`${HIBP_API}${prefix}`);
-    const text = await resp.text();
-    const lines = text.trim().split('\n');
-    
-    for (const line of lines) {
-      const [suf, count] = line.split(':');
-      if (suf === suffix) {
-        return { pwned: true, count: parseInt(count, 10) };
-      }
-    }
-    return { pwned: false, count: 0 };
-  } catch (e) {
-    console.error('[Soterios] HIBP check failed:', e);
-    return { error: e.message };
-  }
+  return runHibpCheck({ password, fetchFn: fetch });
 }
 
 // Connect to native host on startup
