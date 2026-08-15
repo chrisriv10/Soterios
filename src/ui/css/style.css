@@ -920,6 +920,19 @@ body {
   gap: 24px;
 }
 
+/* Full-width section header inside the results grid */
+.audit-section-title {
+  grid-column: 1 / -1;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--glass-border);
+  padding-bottom: 6px;
+  margin-top: 8px;
+}
+
 .scanner-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
