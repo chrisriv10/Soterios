@@ -10,7 +10,12 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 // Handle messages from popup and content scripts
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'CHECK_PASSWORD' && msg.password) {
-    checkPassword(msg.password).then(sendResponse);
+    checkPassword(msg.password).then(result => {
+      if (result && result.pwned && sender.tab) {
+        setBadge(sender.tab.id, '#dc3545');
+      }
+      sendResponse(result);
+    });
     return true; // async response
   }
 
@@ -30,9 +35,32 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  if (msg.type === 'REUSE_DETECTED') {
+    if (sender.tab && !pwnedTabs.get(sender.tab.id)) {
+      setBadge(sender.tab.id, '#f59e0b');
+    }
+  }
+
   if (msg.type === 'SETTINGS_UPDATED') {
     broadcastSettings(msg.settings);
   }
+});
+
+const pwnedTabs = new Map();
+
+function setBadge(tabId, color) {
+  if (color === '#dc3545') pwnedTabs.set(tabId, true);
+  chrome.action.setBadgeBackgroundColor({ color, tabId });
+  chrome.action.setBadgeText({ text: '!', tabId });
+}
+
+function clearBadge(tabId) {
+  pwnedTabs.delete(tabId);
+  chrome.action.setBadgeText({ text: '', tabId });
+}
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.status === 'loading') clearBadge(tabId);
 });
 
 // Native messaging port for desktop app communication
