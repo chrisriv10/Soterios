@@ -23,6 +23,12 @@ window.Pages['network'] = {
   _heatmapWindowMouseMove: null,
   _heatmapWindowMouseUp: null,
   _heatmapKeydownHandler: null,
+  _heatmapWidgetEl: null,
+  _heatmapData: null,
+  _heatmapClusters: [],
+  _heatmapTier: null,
+  _heatmapArcSignature: '',
+  _selectedClusterId: null,
   _selectedClusterIps: null,
   _selectedClusterLoc: null,
   _userLocation: null, // User's actual geolocation for heatmap origin
@@ -32,6 +38,7 @@ window.Pages['network'] = {
       cancelAnimationFrame(this._heatmapPulseRaf);
       this._heatmapPulseRaf = null;
     }
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
     const dots = content.querySelectorAll('.heatmap-pulse-dot');
     if (!dots.length) return;
     const items = Array.from(dots).map((el) => ({
@@ -83,6 +90,328 @@ window.Pages['network'] = {
     if (label) label.textContent = `${Math.round(this._heatmapZoom * 100)}%`;
     const resetBtn = content.querySelector('#heatmapZoomReset');
     if (resetBtn) resetBtn.style.display = this._heatmapZoom > 1.001 ? 'flex' : 'none';
+  },
+
+  _heatmapTierForZoom(zoom) {
+    const value = Math.max(1, Math.min(6, Number(zoom) || 1));
+    if (value >= 3.5) return { id: 'street', lonStep: 3, latStep: 2.5, labelLimit: 30, nextZoom: 6 };
+    if (value >= 1.75) return { id: 'region', lonStep: 8, latStep: 6, labelLimit: 12, nextZoom: 3.5 };
+    return { id: 'world', lonStep: 18, latStep: 12, labelLimit: 0, nextZoom: 1.75 };
+  },
+
+  _validHeatmapHome(location = this._userLocation) {
+    if (!location || typeof location.lat !== 'number' || typeof location.lon !== 'number' ||
+        !Number.isFinite(location.lat) || !Number.isFinite(location.lon) ||
+        location.lat < -90 || location.lat > 90 || location.lon < -180 || location.lon > 180) return null;
+    return {
+      lat: location.lat,
+      lon: location.lon,
+      x: Math.max(0, Math.min(100, ((location.lon + 180) / 360) * 100)),
+      y: Math.max(0, Math.min(100, ((90 - location.lat) / 180) * 100))
+    };
+  },
+
+  _buildHeatmapClusters(connections, geoData, zoom) {
+    const tier = this._heatmapTierForZoom(zoom);
+    const groups = new Map();
+    const value = (connection, camel, pascal) => connection?.[camel] ?? connection?.[pascal] ?? '';
+    const riskRank = { SAFE: 0, UNKNOWN: 1, MALICIOUS: 2 };
+    const countValue = (bucket, key) => {
+      const label = String(key || '').trim();
+      if (label) bucket.set(label, (bucket.get(label) || 0) + 1);
+    };
+
+    for (const connection of connections || []) {
+      const ip = String(value(connection, 'remoteAddress', 'RemoteAddress'));
+      const geo = geoData?.[ip];
+      const lat = Number(geo?.lat);
+      const lon = Number(geo?.lon);
+      if (!ip || !Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) continue;
+      const cellLon = Math.floor((lon + 180) / tier.lonStep);
+      const cellLat = Math.floor((lat + 90) / tier.latStep);
+      const id = `${tier.id}:${cellLon}:${cellLat}`;
+      if (!groups.has(id)) {
+        groups.set(id, {
+          id, tier: tier.id, count: 0, latTotal: 0, lonTotal: 0,
+          ips: new Set(), locations: new Set(), connections: [],
+          risks: { SAFE: 0, UNKNOWN: 0, MALICIOUS: 0 }, highestRisk: 'SAFE',
+          processes: new Map(), services: new Map(), states: new Map(), ports: new Map()
+        });
+      }
+      const group = groups.get(id);
+      const risk = ['SAFE', 'UNKNOWN', 'MALICIOUS'].includes(connection.classification) ? connection.classification : 'UNKNOWN';
+      group.count++;
+      group.latTotal += lat;
+      group.lonTotal += lon;
+      group.ips.add(ip);
+      group.connections.push(connection);
+      group.risks[risk]++;
+      if (riskRank[risk] > riskRank[group.highestRisk]) group.highestRisk = risk;
+      if (geo.city || geo.country) group.locations.add([geo.city, geo.country].filter(Boolean).join(', '));
+      countValue(group.processes, connection.processName || (connection.pid ? `PID ${connection.pid}` : ''));
+      countValue(group.services, connection.serviceName || value(connection, 'remotePort', 'RemotePort'));
+      countValue(group.states, value(connection, 'state', 'State'));
+      countValue(group.ports, value(connection, 'remotePort', 'RemotePort'));
+    }
+
+    const clusters = Array.from(groups.values()).map((group) => {
+      const lat = group.latTotal / group.count;
+      const lon = group.lonTotal / group.count;
+      const top = (map) => Array.from(map, ([label, count]) => ({ label, count }))
+        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+      return {
+        ...group,
+        lat, lon,
+        x: Math.max(0, Math.min(100, ((lon + 180) / 360) * 100)),
+        y: Math.max(0, Math.min(100, ((90 - lat) / 180) * 100)),
+        ips: Array.from(group.ips).sort(),
+        locations: Array.from(group.locations).sort(),
+        processes: top(group.processes), services: top(group.services),
+        states: top(group.states), ports: top(group.ports)
+      };
+    });
+    clusters.sort((a, b) => riskRank[b.highestRisk] - riskRank[a.highestRisk] || b.count - a.count || a.id.localeCompare(b.id));
+    const labelIds = new Set([...clusters].sort((a, b) => b.count - a.count || a.id.localeCompare(b.id)).slice(0, tier.labelLimit).map((c) => c.id));
+    for (const cluster of clusters) cluster.showLabel = labelIds.has(cluster.id);
+    return { tier, clusters };
+  },
+
+  _focusHeatmapTarget(cluster, viewportW, viewportH) {
+    const tier = this._heatmapTierForZoom(this._heatmapZoom);
+    const zoom = tier.nextZoom;
+    const worldX = (cluster.x / 100) * viewportW;
+    const worldY = (cluster.y / 100) * viewportH;
+    const pan = this._clampHeatmapPan(zoom, {
+      x: viewportW / 2 - worldX * zoom,
+      y: viewportH / 2 - worldY * zoom
+    }, viewportW, viewportH);
+    return { zoom, pan };
+  },
+
+  _resolveHeatmapSelection(clusters, selectedId, selectedIps) {
+    const ips = new Set(selectedIps || []);
+    return clusters.find((cluster) => cluster.id === selectedId) ||
+      (ips.size ? clusters.find((cluster) => cluster.ips.some((ip) => ips.has(ip))) : null) || null;
+  },
+
+  _createHeatmapWidget(t) {
+    const widget = document.createElement('div');
+    widget.className = 'heatmap-widget card';
+    widget.innerHTML = `
+      <div id="heatmapViewport" class="heatmap-viewport">
+        <div id="heatmapWorld" class="heatmap-world">
+          <div class="heatmap-map-skin" aria-hidden="true"></div>
+          <svg id="heatmapArcs" class="heatmap-arcs" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
+          <div id="heatmapMarkers" class="heatmap-markers"></div>
+          <div id="heatmapHome" class="heatmap-home" aria-hidden="true"></div>
+          <div class="heatmap-pan-hint">${escapeHtml(t('network.heatmapPanHint'))}</div>
+        </div>
+        <div id="heatmapTooltip" class="heatmap-tooltip" role="tooltip"></div>
+        <div class="heatmap-controls">
+          <div class="heatmap-controls-row">
+            <button type="button" id="heatmapArcsToggle" class="heatmap-zoom-btn heatmap-arcs-toggle"><span aria-hidden="true">&#10022;</span><span>${escapeHtml(t('network.heatmapArcsLabel'))}</span></button>
+            <button type="button" id="heatmapZoomOut" class="heatmap-zoom-btn" title="${escapeHtml(t('network.heatmapZoomOut'))}" aria-label="${escapeHtml(t('network.heatmapZoomOut'))}">&minus;</button>
+            <button type="button" id="heatmapZoomIn" class="heatmap-zoom-btn" title="${escapeHtml(t('network.heatmapZoomIn'))}" aria-label="${escapeHtml(t('network.heatmapZoomIn'))}">+</button>
+          </div>
+          <button type="button" id="heatmapZoomReset" class="heatmap-zoom-btn heatmap-reset" title="${escapeHtml(t('network.heatmapZoomReset'))}"><span id="heatmapZoomLabel">100%</span>&nbsp;&#8635;</button>
+        </div>
+      </div>
+      <aside id="heatmapClusterPanel" class="heatmap-cluster-panel" hidden></aside>`;
+    return widget;
+  },
+
+  _mountHeatmapWidget(content, data, t) {
+    const mount = content.querySelector('#heatmapWidgetMount');
+    if (!mount) return;
+    if (!this._heatmapWidgetEl) this._heatmapWidgetEl = this._createHeatmapWidget(t);
+    mount.replaceWith(this._heatmapWidgetEl);
+    this._updateHeatmapWidget(data, t);
+    this._applyHeatmapTransform(content);
+  },
+
+  _updateHeatmapWidget(data, t) {
+    const widget = this._heatmapWidgetEl;
+    if (!widget) return;
+    const built = this._buildHeatmapClusters(data.connections, data.geoData, this._heatmapZoom);
+    const tierChanged = this._heatmapTier !== built.tier.id;
+    this._heatmapTier = built.tier.id;
+    this._heatmapClusters = built.clusters;
+    const priorIps = new Set(this._selectedClusterIps || []);
+    const selected = this._resolveHeatmapSelection(built.clusters, this._selectedClusterId, priorIps);
+    if (selected) {
+      this._selectedClusterId = selected.id;
+      this._selectedClusterIps = selected.ips;
+      this._selectedClusterLoc = selected.locations.join(' | ');
+    } else {
+      this._selectedClusterId = null;
+      this._selectedClusterIps = null;
+      this._selectedClusterLoc = null;
+    }
+    this._diffHeatmapMarkers(widget, built.clusters, t, tierChanged);
+    this._diffHeatmapArcs(widget, built.clusters, t);
+    this._renderHeatmapDrawer(widget, selected, t);
+  },
+
+  _diffHeatmapMarkers(widget, clusters, t, tierChanged) {
+    const layer = widget.querySelector('#heatmapMarkers');
+    if (!layer) return;
+    let empty = layer.querySelector('.heatmap-empty');
+    if (!clusters.length && !empty) {
+      empty = document.createElement('div');
+      empty.className = 'heatmap-empty';
+      layer.appendChild(empty);
+    }
+    if (empty) {
+      empty.textContent = t('network.heatmapNoMatches');
+      empty.hidden = clusters.length > 0;
+    }
+    const existing = new Map(Array.from(layer.querySelectorAll('.heatmap-marker'), (node) => [node.dataset.clusterId, node]));
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    for (const cluster of clusters) {
+      let marker = existing.get(cluster.id);
+      const isNew = !marker;
+      if (!marker) {
+        marker = document.createElement('button');
+        marker.type = 'button';
+        marker.className = 'heatmap-marker';
+        marker.innerHTML = '<span class="heatmap-marker-count"></span><span class="heatmap-marker-label"></span>';
+        layer.appendChild(marker);
+      }
+      existing.delete(cluster.id);
+      const location = cluster.locations.join(' | ') || t('common.unverifiedLocation');
+      const classLabel = this._classificationLabel(cluster.highestRisk);
+      const safeStop = (cluster.risks.SAFE / cluster.count) * 100;
+      const unknownStop = safeStop + (cluster.risks.UNKNOWN / cluster.count) * 100;
+      const size = Math.min(36, 12 + Math.log2(cluster.count + 1) * 5);
+      marker.dataset.clusterId = cluster.id;
+      marker.dataset.ips = cluster.ips.join(',');
+      marker.dataset.loc = location;
+      marker.dataset.count = String(cluster.count);
+      marker.dataset.classification = cluster.highestRisk;
+      marker.dataset.classLabel = classLabel;
+      marker.className = `heatmap-marker heatmap-risk-${cluster.highestRisk.toLowerCase()}${this._selectedClusterId === cluster.id ? ' is-selected' : ''}${isNew && !reducedMotion ? ' is-entering' : ''}`;
+      marker.style.left = `${cluster.x}%`;
+      marker.style.top = `${cluster.y}%`;
+      marker.style.setProperty('--cluster-size', `${size}px`);
+      marker.style.setProperty('--safe-stop', `${safeStop}%`);
+      marker.style.setProperty('--unknown-stop', `${unknownStop}%`);
+      marker.setAttribute('aria-label', t('network.heatmapMarkerAria', { location, count: cluster.count, risk: classLabel }));
+      marker.title = t('network.heatmapMarkerTitle', { location, count: cluster.count, ips: cluster.ips.length, risk: classLabel });
+      marker.querySelector('.heatmap-marker-count').textContent = String(cluster.count);
+      const label = marker.querySelector('.heatmap-marker-label');
+      label.textContent = location;
+      label.hidden = !cluster.showLabel;
+      if (tierChanged) marker.classList.add('tier-changing');
+    }
+    for (const marker of existing.values()) {
+      if (reducedMotion) marker.remove();
+      else {
+        marker.classList.add('is-exiting');
+        marker.addEventListener('animationend', () => marker.remove(), { once: true });
+      }
+    }
+  },
+
+  _diffHeatmapArcs(widget, clusters, t) {
+    const svg = widget.querySelector('#heatmapArcs');
+    const homeEl = widget.querySelector('#heatmapHome');
+    const toggle = widget.querySelector('#heatmapArcsToggle');
+    const home = this._validHeatmapHome();
+    const signature = home ? `${home.lat}:${home.lon}|${clusters.map((cluster) => `${cluster.id}:${cluster.x.toFixed(2)}:${cluster.y.toFixed(2)}:${cluster.highestRisk}`).join('|')}` : '';
+    homeEl.hidden = !home;
+    svg.hidden = !home || !this._heatmapShowArcs;
+    toggle.disabled = !home;
+    toggle.title = !home ? t('network.heatmapArcsUnavailable') : (this._heatmapShowArcs ? t('network.heatmapArcsOn') : t('network.heatmapArcsOff'));
+    toggle.setAttribute('aria-pressed', this._heatmapShowArcs ? 'true' : 'false');
+    toggle.classList.toggle('is-muted', !this._heatmapShowArcs || !home);
+    if (!home) {
+      svg.replaceChildren();
+      this._heatmapArcSignature = '';
+      if (this._heatmapPulseRaf) cancelAnimationFrame(this._heatmapPulseRaf);
+      this._heatmapPulseRaf = null;
+      return;
+    }
+    homeEl.style.left = `${home.x}%`;
+    homeEl.style.top = `${home.y}%`;
+    homeEl.title = t('network.heatmapHomeLabel');
+    if (signature === this._heatmapArcSignature) return;
+    this._heatmapArcSignature = signature;
+    const namespace = 'http://www.w3.org/2000/svg';
+    const existing = new Map(Array.from(svg.querySelectorAll('[data-cluster-id]'), (node) => [`${node.matches('path') ? 'path' : 'particle'}:${node.dataset.clusterId}`, node]));
+    for (const cluster of clusters) {
+      const midX = (home.x + cluster.x) / 2;
+      const midY = (home.y + cluster.y) / 2;
+      const distance = Math.hypot(cluster.x - home.x, cluster.y - home.y);
+      const controlY = midY - Math.max(2, Math.min(28, distance * 0.28));
+      const pathData = `M ${home.x} ${home.y} Q ${midX} ${controlY} ${cluster.x} ${cluster.y}`;
+      const riskClass = `heatmap-risk-${cluster.highestRisk.toLowerCase()}`;
+      let path = existing.get(`path:${cluster.id}`);
+      if (!path) { path = document.createElementNS(namespace, 'path'); svg.appendChild(path); }
+      path.dataset.clusterId = cluster.id;
+      path.setAttribute('d', pathData);
+      path.setAttribute('class', `heatmap-arc ${riskClass}`);
+      existing.delete(`path:${cluster.id}`);
+      let dot = existing.get(`particle:${cluster.id}`);
+      if (!dot) { dot = document.createElementNS(namespace, 'ellipse'); svg.appendChild(dot); }
+      dot.dataset.clusterId = cluster.id;
+      dot.setAttribute('class', `heatmap-pulse-dot ${riskClass}`);
+      const dotRadius = cluster.highestRisk === 'MALICIOUS' ? 1.05 : 0.75;
+      dot.setAttribute('rx', String(dotRadius));
+      dot.setAttribute('ry', String(dotRadius * (950 / 620)));
+      dot.dataset.hx = String(home.x); dot.dataset.hy = String(home.y);
+      dot.dataset.cx0 = String(midX); dot.dataset.cy0 = String(controlY);
+      dot.dataset.tx = String(cluster.x); dot.dataset.ty = String(cluster.y);
+      dot.dataset.dur = String(Math.max(1.4, Math.min(3.4, 1 + distance / 32)));
+      const hash = Array.from(cluster.id).reduce((total, character) => ((total * 31) + character.charCodeAt(0)) | 0, 0);
+      dot.dataset.delay = String((Math.abs(hash) % 20) / 10);
+      existing.delete(`particle:${cluster.id}`);
+    }
+    for (const node of existing.values()) node.remove();
+    this._startHeatmapPulses(widget);
+  },
+
+  _selectHeatmapCluster(clusterId) {
+    const selected = this._heatmapClusters.find((cluster) => cluster.id === clusterId) || null;
+    this._selectedClusterId = selected?.id || null;
+    this._selectedClusterIps = selected?.ips || null;
+    this._selectedClusterLoc = selected?.locations.join(' | ') || null;
+    this._heatmapWidgetEl?.querySelectorAll('.heatmap-marker').forEach((marker) => marker.classList.toggle('is-selected', marker.dataset.clusterId === this._selectedClusterId));
+    this._renderHeatmapDrawer(this._heatmapWidgetEl, selected, (key, vars) => window.I18n?.t(key, vars) ?? key);
+  },
+
+  _renderHeatmapDrawer(widget, cluster, t) {
+    const panel = widget?.querySelector('#heatmapClusterPanel');
+    if (!panel) return;
+    if (!cluster) { panel.hidden = true; panel.innerHTML = ''; return; }
+    const location = cluster.locations.join(' | ') || t('common.unverifiedLocation');
+    const list = (items, empty) => items.length ? items.slice(0, 5).map((item) => `<span>${escapeHtml(item.label)} <b>${item.count}</b></span>`).join('') : `<span>${escapeHtml(empty)}</span>`;
+    const endpoints = cluster.connections.map((connection) => {
+      const ip = connection.remoteAddress ?? connection.RemoteAddress ?? '';
+      const port = connection.remotePort ?? connection.RemotePort ?? '';
+      const state = connection.state ?? connection.State ?? '';
+      const processName = connection.processName || (connection.pid ? `PID ${connection.pid}` : t('common.unknown'));
+      const risk = ['SAFE', 'UNKNOWN', 'MALICIOUS'].includes(connection.classification) ? connection.classification : 'UNKNOWN';
+      return `<div class="heatmap-endpoint-row heatmap-risk-${risk.toLowerCase()}"><code>${escapeHtml(ip)}:${escapeHtml(port)}</code><span>${escapeHtml(processName)}</span><small>${escapeHtml(state)}</small></div>`;
+    }).join('');
+    panel.innerHTML = `
+      <div class="heatmap-drawer-header"><div><small>${escapeHtml(t('network.clusterDetails'))}</small><strong>${escapeHtml(location)}</strong></div><button type="button" class="heatmap-infobox-close" aria-label="${escapeHtml(t('network.heatmapCloseDetails'))}">&times;</button></div>
+      <div class="heatmap-drawer-body">
+        <div class="heatmap-kpis"><span><b>${cluster.count}</b>${escapeHtml(t('network.heatmapConnections'))}</span><span><b>${cluster.ips.length}</b>${escapeHtml(t('network.heatmapUniqueIps'))}</span></div>
+        <div class="heatmap-risk-breakdown"><span class="heatmap-risk-safe">${escapeHtml(t('network.heatmapLegendSafe'))} <b>${cluster.risks.SAFE}</b></span><span class="heatmap-risk-unknown">${escapeHtml(t('network.heatmapLegendUnverified'))} <b>${cluster.risks.UNKNOWN}</b></span><span class="heatmap-risk-malicious">${escapeHtml(t('network.heatmapLegendMalicious'))} <b>${cluster.risks.MALICIOUS}</b></span></div>
+        <section><h4>${escapeHtml(t('network.heatmapTopProcesses'))}</h4><div class="heatmap-chip-list">${list(cluster.processes, t('network.heatmapNone'))}</div></section>
+        <section><h4>${escapeHtml(t('network.heatmapTopServices'))}</h4><div class="heatmap-chip-list">${list(cluster.services, t('network.heatmapNone'))}</div></section>
+        <section><h4>${escapeHtml(t('network.heatmapStatesPorts'))}</h4><div class="heatmap-chip-list">${list(cluster.states, t('network.heatmapNone'))}${list(cluster.ports, t('network.heatmapNone'))}</div></section>
+        <section><h4>${escapeHtml(t('network.heatmapEndpoints'))}</h4><div class="heatmap-endpoints">${endpoints}</div></section>
+        <button type="button" id="heatmapFocusCluster" class="button secondary heatmap-focus">${escapeHtml(t('network.heatmapFocusCluster'))}</button>
+      </div>`;
+    panel.hidden = false;
+  },
+
+  _refreshHeatmapTier(content) {
+    const tier = this._heatmapTierForZoom(this._heatmapZoom);
+    if (tier.id === this._heatmapTier || !this._heatmapData) return;
+    this._updateHeatmapWidget(this._heatmapData, (key, vars) => window.I18n?.t(key, vars) ?? key);
+    this._applyHeatmapTransform(content);
   },
 
   _classificationLabel(classification) {
@@ -173,77 +502,6 @@ window.Pages['network'] = {
 
   async _renderAsync(container, t) {
     container.innerHTML = `
-      <style>
-        @keyframes heatmapPulseMalicious {
-          0% { transform: translate(-50%, -50%) scale(0.7); opacity: 0.7; }
-          70% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
-          100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
-        }
-        .heatmap-marker {
-          will-change: transform;
-        }
-        .heatmap-marker.heatmap-pulse-malicious::after {
-          content: '';
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          width: 100%;
-          height: 100%;
-          border-radius: 50%;
-          background: var(--danger);
-          transform: translate(-50%, -50%) scale(0.7);
-          opacity: 0.7;
-          animation: heatmapPulseMalicious 2s infinite;
-          will-change: transform, opacity;
-          pointer-events: none;
-        }
-        @keyframes flashHighlight {
-          0% { background-color: rgba(255, 255, 255, 0.2); }
-          100% { background-color: transparent; }
-        }
-        .flash-highlight {
-          animation: flashHighlight 1.5s ease-out;
-        }
-        .heatmap-marker:hover {
-          z-index: 10;
-          transform: translate(-50%, -50%) scale(1.2) !important;
-        }
-        #heatmapViewport.panning {
-          cursor: grabbing !important;
-        }
-        .heatmap-arc {
-          fill: none;
-          opacity: 0.22;
-        }
-        @keyframes heatmapHomePulse {
-          0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.8; }
-          100% { transform: translate(-50%, -50%) scale(2.6); opacity: 0; }
-        }
-        .heatmap-home::after {
-          content: '';
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          width: 100%;
-          height: 100%;
-          border-radius: 50%;
-          background: var(--accent-primary);
-          animation: heatmapHomePulse 2.2s ease-out infinite;
-          pointer-events: none;
-        }
-        .heatmap-zoom-btn {
-          width: 26px; height: 26px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);
-          background: rgba(20,26,33,0.85); color: var(--text-main); cursor: pointer; font-size: 0.9rem;
-          display: flex; align-items: center; justify-content: center; line-height: 1; transition: background 0.15s ease;
-        }
-        .heatmap-zoom-btn:hover { background: rgba(40,48,58,0.95); }
-        #heatmapTooltip {
-          position: absolute; pointer-events: none; z-index: 30; display: none;
-          background: rgba(18, 23, 29, 0.96); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
-          padding: 8px 11px; font-size: 0.75rem; line-height: 1.5; box-shadow: 0 6px 20px rgba(0,0,0,0.45);
-          white-space: normal; max-width: 260px;
-        }
-      </style>
       <header class="page-header">
         <h1 class="page-title">${escapeHtml(t('network.title'))}</h1>
         <p class="page-subtitle">${escapeHtml(t('network.subtitle'))}</p>
@@ -285,31 +543,40 @@ window.Pages['network'] = {
             window.Pages['network']._heatmapPan = newPan;
           }
           window.Pages['network']._applyHeatmapTransform(content);
+          window.Pages['network']._refreshHeatmapTier(content);
           return;
         }
         if (arcsToggle) {
           window.Pages['network']._heatmapShowArcs = !window.Pages['network']._heatmapShowArcs;
-          const arcsSvg = content.querySelector('#heatmapArcs');
-          if (arcsSvg) arcsSvg.style.display = window.Pages['network']._heatmapShowArcs ? 'block' : 'none';
           const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
-          arcsToggle.title = window.Pages['network']._heatmapShowArcs ? t('network.heatmapArcsOn') : t('network.heatmapArcsOff');
-          const icon = arcsToggle.querySelector('span');
-          if (icon) icon.style.opacity = window.Pages['network']._heatmapShowArcs ? '1' : '0.45';
+          window.Pages['network']._diffHeatmapArcs(window.Pages['network']._heatmapWidgetEl, window.Pages['network']._heatmapClusters, t);
+          return;
+        }
+        const focusCluster = e.target.closest('#heatmapFocusCluster');
+        if (focusCluster) {
+          const page = window.Pages['network'];
+          const cluster = page._heatmapClusters.find((item) => item.id === page._selectedClusterId);
+          const viewport = content.querySelector('#heatmapViewport');
+          if (cluster && viewport) {
+            const rect = viewport.getBoundingClientRect();
+            const target = page._focusHeatmapTarget(cluster, rect.width, rect.height);
+            page._heatmapZoom = target.zoom;
+            page._heatmapPan = target.pan;
+            viewport.classList.add('is-focusing');
+            viewport.addEventListener('transitionend', () => viewport.classList.remove('is-focusing'), { once: true });
+            page._refreshHeatmapTier(content);
+            page._applyHeatmapTransform(content);
+          }
           return;
         }
         const marker = e.target.closest('.heatmap-marker');
         if (marker) {
-          const ips = marker.dataset.ips.split(',');
-          window.Pages['network']._selectedClusterIps = ips;
-          window.Pages['network']._selectedClusterLoc = marker.dataset.loc;
-          window.Pages['network'].load(container, false);
+          window.Pages['network']._selectHeatmapCluster(marker.dataset.clusterId);
         } else if (e.target.closest('.heatmap-infobox-close')) {
-          window.Pages['network']._selectedClusterIps = null;
-          window.Pages['network'].load(container, false);
-        } else if (e.target.closest('#heatmapViewport') && !e.target.closest('#heatmapClusterPanel') && window.Pages['network']._selectedClusterIps) {
+          window.Pages['network']._selectHeatmapCluster(null);
+        } else if (e.target.closest('#heatmapViewport') && window.Pages['network']._selectedClusterIps) {
           // click on empty map background closes the open cluster panel
-          window.Pages['network']._selectedClusterIps = null;
-          window.Pages['network'].load(container, false);
+          window.Pages['network']._selectHeatmapCluster(null);
         }
       });
 
@@ -333,6 +600,7 @@ window.Pages['network'] = {
         page._heatmapZoom = newZoom;
         page._heatmapPan = newPan;
         page._applyHeatmapTransform(content);
+        page._refreshHeatmapTier(content);
       }, { passive: false });
 
       content.addEventListener('mousedown', (e) => {
@@ -384,8 +652,7 @@ window.Pages['network'] = {
           return;
         }
         if (window.Pages['network']._selectedClusterIps) {
-          window.Pages['network']._selectedClusterIps = null;
-          window.Pages['network'].load(container, false);
+          window.Pages['network']._selectHeatmapCluster(null);
         }
       };
       window.addEventListener('mousemove', this._heatmapWindowMouseMove);
@@ -852,207 +1119,21 @@ if (content) this.paintHistoryChart(content).catch(() => {});
 
       if (Object.keys(geoData).length > 0) {
         const hmMin = this._minimized.has('heatmap');
-        let safeCount = 0, unknownCount = 0, maliciousCount = 0;
-        for (const c of filteredConnections) {
-          if (c.classification === 'SAFE') safeCount++;
-          else if (c.classification === 'UNKNOWN') unknownCount++;
-          else if (c.classification === 'MALICIOUS') maliciousCount++;
-        }
-        html += `<div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:${hmMin ? '0' : '10px'}; flex-wrap:wrap; gap:8px;">`;
-        html += `<div>
-          <h3 style="margin:0; font-size:1rem; display:flex; align-items:center; gap:8px;">
-            ${escapeHtml(t('network.heatmapTitle'))}
-            <button class="card-minimize-btn" data-card-id="heatmap" title="${hmMin ? 'Restore' : 'Minimize'}" style="background:none; border:none; cursor:pointer; color:var(--text-dim); font-size:1rem; padding:0 4px; line-height:1; transition:transform 0.2s;" aria-label="${hmMin ? 'Restore' : 'Minimize'}">${hmMin ? '&#9660;' : '&#9650;'}</button>
-          </h3>
-          <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">${escapeHtml(t('network.heatmapCounts', { total: totalConnectionsCount, filtered: filteredConnectionsCount, mapped: mappedCount }))} &nbsp;·&nbsp; <span style="color:var(--ok); font-weight:600;">${safeCount}</span> ${escapeHtml(t('network.heatmapLegendSafe'))} &nbsp;<span style="color:var(--warn); font-weight:600;">${unknownCount}</span> ${escapeHtml(t('network.heatmapLegendUnverified'))} &nbsp;<span style="color:var(--danger); font-weight:600;">${maliciousCount}</span> ${escapeHtml(t('network.heatmapLegendMalicious'))}</div>
+        const riskCounts = filteredConnections.reduce((counts, connection) => {
+          const risk = ['SAFE', 'UNKNOWN', 'MALICIOUS'].includes(connection.classification) ? connection.classification : 'UNKNOWN';
+          counts[risk]++;
+          return counts;
+        }, { SAFE: 0, UNKNOWN: 0, MALICIOUS: 0 });
+        const minimizeLabel = hmMin ? t('network.heatmapRestore') : t('common.minimize');
+        html += `<div class="heatmap-heading">
+          <div><h3>${escapeHtml(t('network.heatmapTitle'))}<button class="card-minimize-btn" data-card-id="heatmap" title="${escapeHtml(minimizeLabel)}" aria-label="${escapeHtml(minimizeLabel)}">${hmMin ? '&#9660;' : '&#9650;'}</button></h3>
+          <p>${escapeHtml(t('network.heatmapCounts', { total: totalConnectionsCount, filtered: filteredConnectionsCount, mapped: mappedCount }))}</p></div>
+          ${hmMin ? '' : `<div class="heatmap-legend"><span class="heatmap-risk-safe">${riskCounts.SAFE} ${escapeHtml(t('network.heatmapLegendSafe'))}</span><span class="heatmap-risk-unknown">${riskCounts.UNKNOWN} ${escapeHtml(t('network.heatmapLegendUnverified'))}</span><span class="heatmap-risk-malicious">${riskCounts.MALICIOUS} ${escapeHtml(t('network.heatmapLegendMalicious'))}</span></div>`}
         </div>`;
-        if (!hmMin) {
-          html += `<div style="display:flex; gap:12px; font-size:0.75rem; font-weight:600; align-items:center;">
-            <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--ok);"></span> ${escapeHtml(t('network.heatmapLegendSafe'))}</span>
-            <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--warn);"></span> ${escapeHtml(t('network.heatmapLegendUnverified'))}</span>
-            <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--danger);"></span> ${escapeHtml(t('network.heatmapLegendMalicious'))}</span>
-          </div>`;
-        }
-        html += '</div>';
-
-        if (!hmMin) {
-          html += `<div class="card" style="padding:0; margin-bottom:18px; position:relative; background-color:var(--bg-panel); overflow:hidden; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
-            <div id="heatmapViewport" style="position:relative; width:100%; aspect-ratio:950/620; overflow:hidden; cursor:${this._heatmapZoom > 1.001 ? 'grab' : 'default'};">
-              <div id="heatmapWorld" style="position:absolute; inset:0; transform-origin:0 0; transform:translate(${this._heatmapPan.x}px, ${this._heatmapPan.y}px) scale(${this._heatmapZoom}); will-change:transform;">
-                <div id="heatmapMapBgMount"></div>
-                <div style="position:absolute; inset:0; z-index:3;">`;
-
-          if (mappedCount === 0) {
-            html += `<div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; font-size:0.85rem; color:var(--text-dim); white-space:nowrap;">${escapeHtml(t('network.heatmapNoMatches'))}</div>`;
-          }
-
-          const clusters = {};
-          for (const c of filteredConnections) {
-            const ip = firstDefined(c.remoteAddress, c.RemoteAddress);
-            const geo = geoData[ip];
-            if (!geo || geo.lat === undefined || geo.lon === undefined) continue;
-
-            const clusterX = Math.round(geo.lon / 2.5) * 2.5;
-            const clusterY = Math.round(geo.lat / 2.5) * 2.5;
-            const key = `${clusterX},${clusterY}`;
-
-            if (!clusters[key]) {
-              clusters[key] = {
-                lat: clusterY, lon: clusterX,
-                count: 0,
-                ips: new Set(),
-                classification: 'SAFE',
-                locations: new Set()
-              };
-            }
-
-            clusters[key].count++;
-            clusters[key].ips.add(ip);
-            if (geo.city && geo.country) clusters[key].locations.add(`${geo.city}, ${geo.country}`);
-
-            if (c.classification === 'MALICIOUS') {
-              clusters[key].classification = 'MALICIOUS';
-            } else if (c.classification === 'UNKNOWN' && clusters[key].classification === 'SAFE') {
-              clusters[key].classification = 'UNKNOWN';
-            }
-          }
-
-          // Calculate home anchor point from user's actual location with safe fallback
-          // Default to center of map (50, 50) if location lookup fails
-          let homeX = 50, homeY = 50;
-          if (this._userLocation && this._userLocation.lat !== undefined && this._userLocation.lon !== undefined) {
-            // Additional safety validation for coordinates
-            const lat = this._userLocation.lat;
-            const lon = this._userLocation.lon;
-            if (typeof lat === 'number' && typeof lon === 'number' &&
-                lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
-              homeX = ((lon + 180) / 360) * 100;
-              homeY = ((90 - lat) / 180) * 100;
-              
-              // Safety: clamp coordinates to valid map range (0-100)
-              homeX = Math.max(0, Math.min(100, homeX));
-              homeY = Math.max(0, Math.min(100, homeY));
-            }
-          }
-          let arcSvg = '';
-
-          for (const key in clusters) {
-            const c = clusters[key];
-            const x = ((c.lon + 180) / 360) * 100;
-            const y = ((90 - c.lat) / 180) * 100;
-
-            let color = 'var(--ok)';
-            let colorHex = '#3FB950';
-            let glow = 'var(--ok)';
-            let pulseClass = '';
-
-            if (c.classification === 'MALICIOUS') {
-              color = 'var(--danger)';
-              colorHex = '#F85149';
-              glow = 'var(--danger)';
-              pulseClass = 'heatmap-pulse-malicious';
-            } else if (c.classification === 'UNKNOWN') {
-              color = 'var(--warn)';
-              colorHex = '#D29922';
-              glow = 'var(--warn)';
-            }
-
-            const size = Math.max(8, 6 + Math.log(c.count) * 4);
-            const ipList = Array.from(c.ips).join(',');
-            const locList = Array.from(c.locations).join(' | ') || t('common.unverifiedLocation');
-            const classificationDisplay = this._classificationLabel(c.classification);
-
-            html += `<div class="heatmap-marker ${pulseClass}" data-ips="${ipList}" data-loc="${escapeHtml(locList)}"
-              data-count="${c.count}" data-classification="${escapeHtml(c.classification)}" data-class-label="${escapeHtml(classificationDisplay)}"
-              title="${escapeHtml(locList)}\\nIPs: ${ipList}\\nConnections: ${c.count}\\nClassification: ${escapeHtml(classificationDisplay)}"
-              style="position:absolute; left:${x}%; top:${y}%; width:${size}px; height:${size}px;
-              background-color:${color}; border-radius:50%; transform:translate(-50%, -50%);
-              box-shadow:0 0 10px ${glow}; cursor:pointer; pointer-events:auto; display:flex;
-              align-items:center; justify-content:center; color:#fff; font-size:9px; font-weight:bold; transition: transform 0.15s ease-out;">
-              ${c.count > 1 ? c.count : ''}
-            </div>`;
-
-            // Bowed "signal" path from the home anchor to this cluster, with a
-            // faint static guide line plus a small pulse that travels along it
-            // (animated via a JS rAF loop for reliable cross-platform motion).
-            const midX = (homeX + x) / 2;
-            const midY = (homeY + y) / 2;
-            const dist = Math.hypot(x - homeX, y - homeY);
-            // Safety: ensure minimum bow for visibility, even for close connections
-            const bow = Math.max(2, Math.min(28, dist * 0.28));
-            const ctrlX = midX;
-            const ctrlY = midY - bow;
-            const strokeW = c.classification === 'MALICIOUS' ? 0.45 : 0.28;
-            const dotR = c.classification === 'MALICIOUS' ? 1.05 : 0.75;
-            const dur = Math.max(1.4, Math.min(3.4, 1 + dist / 32)).toFixed(2);
-            const pathD = `M ${homeX} ${homeY} Q ${ctrlX} ${ctrlY} ${x} ${y}`;
-            arcSvg += `<path class="heatmap-arc" d="${pathD}" stroke="${colorHex}" stroke-width="${strokeW}"></path>`;
-            arcSvg += `<circle class="heatmap-pulse-dot" r="${dotR}" fill="${colorHex}"
-              data-hx="${homeX}" data-hy="${homeY}" data-cx0="${ctrlX}" data-cy0="${ctrlY}" data-tx="${x}" data-ty="${y}"
-              data-dur="${dur}" data-delay="${(Math.random() * dur).toFixed(2)}"
-              style="filter:drop-shadow(0 0 2px ${colorHex});" cx="${homeX}" cy="${homeY}"></circle>`;
-          }
-
-          html += `</div>`;
-          html += `<svg id="heatmapArcs" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute; inset:0; width:100%; height:100%; z-index:1; pointer-events:none; display:${this._heatmapShowArcs ? 'block' : 'none'};">${arcSvg}</svg>`;
-          html += `<div class="heatmap-home" title="${escapeHtml(t('network.heatmapHomeLabel'))}" style="position:absolute; left:${homeX}%; top:${homeY}%; width:9px; height:9px; border-radius:50%; background:var(--accent-primary); transform:translate(-50%,-50%); box-shadow:0 0 8px var(--accent-primary); z-index:3;"></div>`;
-          html += `<div style="position:absolute; bottom:6px; left:8px; z-index:4; font-size:0.68rem; color:var(--text-dim); opacity:0.7; pointer-events:none; background:rgba(11,14,20,0.4); padding:2px 6px; border-radius:4px;">${escapeHtml(t('network.heatmapPanHint'))}</div>`;
-
-          if (window.Pages['network']._selectedClusterIps) {
-            const selectedIps = window.Pages['network']._selectedClusterIps;
-            const loc = window.Pages['network']._selectedClusterLoc;
-            const matchingConns = filteredConnections.filter(c => {
-               const ip = firstDefined(c.remoteAddress, c.RemoteAddress);
-               return selectedIps.includes(ip);
-            });
-
-            html += `<div id="heatmapClusterPanel" style="position:absolute; top:10px; right:10px; width:320px; max-height:calc(100% - 20px); background:rgba(20, 26, 33, 0.95); border:1px solid rgba(255,255,255,0.1); border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,0.5); z-index:20; display:flex; flex-direction:column; backdrop-filter:blur(4px); pointer-events:auto;">
-              <div style="padding:10px 14px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;">
-                <div style="font-weight:600; font-size:0.9rem;">${escapeHtml(loc || t('network.clusterDetails'))}</div>
-                <div class="heatmap-infobox-close" style="cursor:pointer; opacity:0.7; font-size:1.4rem; line-height:1;">&times;</div>
-              </div>
-              <div style="padding:10px 14px; overflow-y:auto; font-size:0.8rem; display:flex; flex-direction:column; gap:12px;">`;
-
-            for (const c of matchingConns) {
-              const proc = c.processName ? `(${escapeHtml(c.processName)})` : (c.pid ? `(PID: ${escapeHtml(c.pid)})` : '');
-              const ip = firstDefined(c.remoteAddress, c.RemoteAddress);
-              const port = firstDefined(c.remotePort, c.RemotePort);
-              const state = getState(c);
-              let stateColor = 'var(--text-dim)';
-              if (state === 'ESTABLISHED') stateColor = 'var(--ok)';
-              else if (state === 'LISTEN' || state === 'LISTENING') stateColor = 'var(--accent-primary)';
-              else if (state === 'TIME_WAIT') stateColor = 'var(--warn)';
-              else if (state === 'CLOSE_WAIT') stateColor = 'var(--danger)';
-
-              html += `<div>
-                <div style="font-family:monospace; color:var(--text-primary); font-size:0.85rem;">${escapeHtml(ip)}:${escapeHtml(port)}</div>
-                <div style="color:var(--text-dim); display:flex; justify-content:space-between; margin-top:4px;">
-                  <span>${proc}</span>
-                  <span style="color:${stateColor}; font-weight:600; font-size:0.7rem; background:${stateColor}15; padding:2px 4px; border-radius:4px;">${escapeHtml(state)}</span>
-                </div>
-              </div>`;
-            }
-
-            html += `</div></div>`;
-          }
-
-          html += `</div>`; // #heatmapWorld
-          html += `<div id="heatmapTooltip"></div>`;
-          html += `<div style="position:absolute; top:8px; right:8px; z-index:25; display:flex; flex-direction:column; gap:6px; align-items:flex-end;">
-            <div style="display:flex; gap:4px;">
-              <button type="button" id="heatmapArcsToggle" class="heatmap-zoom-btn" style="width:auto; padding:0 8px; gap:5px; font-size:0.72rem;" title="${this._heatmapShowArcs ? escapeHtml(t('network.heatmapArcsOn')) : escapeHtml(t('network.heatmapArcsOff'))}">
-                <span style="opacity:${this._heatmapShowArcs ? '1' : '0.45'};">&#10022;</span><span>${escapeHtml(t('network.heatmapArcsLabel'))}</span>
-              </button>
-              <button type="button" id="heatmapZoomOut" class="heatmap-zoom-btn" title="${escapeHtml(t('network.heatmapZoomOut'))}">&minus;</button>
-              <button type="button" id="heatmapZoomIn" class="heatmap-zoom-btn" title="${escapeHtml(t('network.heatmapZoomIn'))}">+</button>
-            </div>
-            <button type="button" id="heatmapZoomReset" class="heatmap-zoom-btn" style="width:auto; padding:0 8px; font-size:0.7rem; display:${this._heatmapZoom > 1.001 ? 'flex' : 'none'};" title="${escapeHtml(t('network.heatmapZoomReset'))}">
-              <span id="heatmapZoomLabel">${Math.round(this._heatmapZoom * 100)}%</span>&nbsp;&#8635;
-            </button>
-          </div>`;
-          html += `</div>`; // #heatmapViewport
-          html += `</div>`; // .card
-        }
+        if (!hmMin) html += '<div id="heatmapWidgetMount"></div>';
+        this._heatmapData = { connections: filteredConnections, geoData };
+      } else {
+        this._heatmapData = null;
       }
 
       html += `<div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px; flex-wrap:wrap;">
@@ -1161,18 +1242,12 @@ if (content) this.paintHistoryChart(content).catch(() => {});
       }
 
       content.innerHTML = html;
-      this._startHeatmapPulses(content);
-
-      const mapBgMount = content.querySelector('#heatmapMapBgMount');
-      if (mapBgMount) {
-        if (!this._worldMapBgEl) {
-          this._worldMapBgEl = document.createElement('div');
-          this._worldMapBgEl.innerHTML = `
-            <div style="position:absolute; top:0; left:0; right:0; bottom:0; background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 20px 20px; pointer-events:none; z-index:1;"></div>
-            <img src="../img/world-map.svg" alt="World Map" style="width:100%; height:auto; opacity:0.6; display:block; pointer-events:none; user-select:none;" />
-          `;
-        }
-        mapBgMount.replaceWith(this._worldMapBgEl);
+      if (this._heatmapData && !this._minimized.has('heatmap')) {
+        this._mountHeatmapWidget(content, this._heatmapData, t);
+      } else if (this._minimized.has('heatmap') && this._heatmapPulseRaf) {
+        cancelAnimationFrame(this._heatmapPulseRaf);
+        this._heatmapPulseRaf = null;
+        this._heatmapArcSignature = '';
       }
 
       const alertsPanelMount = content.querySelector('#networkAlertsPanel');
@@ -1760,7 +1835,12 @@ if (content) this.paintHistoryChart(content).catch(() => {});
     this._geoCache = {};
     this._selectedClusterIps = null;
     this._selectedClusterLoc = null;
-    this._worldMapBgEl = null;
+    this._selectedClusterId = null;
+    this._heatmapClusters = [];
+    this._heatmapTier = null;
+    this._heatmapData = null;
+    this._heatmapArcSignature = '';
+    this._heatmapWidgetEl = null;
     this._alertsPanelEl = null;
     this._alertsExpanded = false;
     this._lastAlertHitsKey = null;

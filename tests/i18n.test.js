@@ -24,7 +24,20 @@ const visualizationKeys = [
   'firewall.perimeterActivityAria',
   'firewall.perimeterServices',
   'firewall.perimeterStates',
-  'firewall.perimeterMemberConnections'
+  'firewall.perimeterMemberConnections',
+  'network.heatmapRestore',
+  'network.heatmapMarkerAria',
+  'network.heatmapMarkerTitle',
+  'network.heatmapArcsUnavailable',
+  'network.heatmapCloseDetails',
+  'network.heatmapConnections',
+  'network.heatmapUniqueIps',
+  'network.heatmapTopProcesses',
+  'network.heatmapTopServices',
+  'network.heatmapStatesPorts',
+  'network.heatmapEndpoints',
+  'network.heatmapFocusCluster',
+  'network.heatmapNone'
 ];
 
 describe('i18n - missing translation detection', () => {

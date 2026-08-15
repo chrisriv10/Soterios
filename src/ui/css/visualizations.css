@@ -173,6 +173,399 @@
   .perimeter-radar .perim-node.leaving .perim-node-core { animation: none; }
 }
 
+/* Adaptive geo activity map */
+.heatmap-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.heatmap-heading h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1rem;
+}
+
+.heatmap-heading p {
+  margin: 3px 0 0;
+  color: var(--text-dim);
+  font-size: .75rem;
+}
+
+.heatmap-heading .card-minimize-btn {
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.heatmap-legend {
+  display: flex;
+  gap: 12px;
+  font-size: .75rem;
+  font-weight: 650;
+}
+
+.heatmap-risk-safe { color: var(--ok); }
+.heatmap-risk-unknown { color: var(--warn); }
+.heatmap-risk-malicious { color: var(--danger); }
+
+.heatmap-widget {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 0;
+  margin-bottom: 18px;
+  overflow: hidden;
+  border-color: var(--glass-border);
+  background: var(--bg-panel);
+}
+
+.heatmap-viewport {
+  position: relative;
+  min-width: 0;
+  aspect-ratio: 950 / 620;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 48%, color-mix(in srgb, var(--accent-primary) 12%, transparent), transparent 62%),
+    linear-gradient(150deg, var(--bg-panel), var(--bg-surface));
+}
+
+.heatmap-world {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+  transition: transform .18s ease-out;
+}
+
+.heatmap-viewport.panning .heatmap-world { transition: none; }
+.heatmap-viewport.panning { cursor: grabbing !important; }
+.heatmap-viewport.is-focusing .heatmap-world { transition-duration: .42s; }
+
+.heatmap-map-skin {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.heatmap-map-skin::before {
+  content: '';
+  position: absolute;
+  inset: 3%;
+  background: color-mix(in srgb, var(--accent-primary) 52%, var(--text-dim));
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent-primary) 35%, transparent));
+  -webkit-mask: url('../img/world-map.svg') center / contain no-repeat;
+  mask: url('../img/world-map.svg') center / contain no-repeat;
+  opacity: .62;
+}
+
+.heatmap-map-skin::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--text-dim) 15%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--text-dim) 15%, transparent) 1px, transparent 1px);
+  background-size: 10% 16.666%;
+  opacity: .55;
+}
+
+.heatmap-markers,
+.heatmap-arcs {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.heatmap-empty {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--text-dim);
+  font-size: .85rem;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.heatmap-arcs { pointer-events: none; }
+
+.heatmap-arc {
+  fill: none;
+  opacity: .28;
+  vector-effect: non-scaling-stroke;
+  stroke-width: .5;
+}
+
+.heatmap-arc.heatmap-risk-safe { stroke: var(--ok); }
+.heatmap-arc.heatmap-risk-unknown { stroke: var(--warn); }
+.heatmap-arc.heatmap-risk-malicious { stroke: var(--danger); }
+.heatmap-pulse-dot.heatmap-risk-safe { fill: var(--ok); }
+.heatmap-pulse-dot.heatmap-risk-unknown { fill: var(--warn); }
+.heatmap-pulse-dot.heatmap-risk-malicious { fill: var(--danger); }
+
+.heatmap-marker {
+  position: absolute;
+  z-index: 4;
+  width: var(--cluster-size);
+  height: var(--cluster-size);
+  padding: 3px;
+  border: 0;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: conic-gradient(
+    var(--ok) 0 var(--safe-stop),
+    var(--warn) var(--safe-stop) var(--unknown-stop),
+    var(--danger) var(--unknown-stop) 100%
+  );
+  box-shadow: 0 0 13px color-mix(in srgb, var(--text-dim) 30%, transparent);
+  color: var(--text-main);
+  cursor: pointer;
+  transition: left .28s ease, top .28s ease, width .2s ease, height .2s ease, transform .15s ease, box-shadow .15s ease;
+}
+
+.heatmap-marker::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  z-index: -1;
+  border: 1px solid currentColor;
+  border-radius: inherit;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.heatmap-marker.heatmap-risk-safe { color: var(--ok); }
+.heatmap-marker.heatmap-risk-unknown { color: var(--warn); }
+.heatmap-marker.heatmap-risk-malicious { color: var(--danger); }
+
+.heatmap-marker.heatmap-risk-unknown::after,
+.heatmap-marker.heatmap-risk-malicious::after {
+  animation: heatmapRiskPulse 2.2s ease-out infinite;
+}
+
+.heatmap-marker-count {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  border-radius: inherit;
+  background: var(--bg-surface);
+  color: var(--text-main);
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.heatmap-marker-label {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  max-width: 140px;
+  padding: 2px 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: 5px;
+  transform: translateX(-50%);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--bg-base) 88%, transparent);
+  color: var(--text-main);
+  font-size: 9px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.heatmap-marker:hover,
+.heatmap-marker:focus-visible,
+.heatmap-marker.is-selected {
+  z-index: 8;
+  transform: translate(-50%, -50%) scale(1.16);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--bg-surface), 0 0 0 5px currentColor, 0 0 20px currentColor;
+}
+
+.heatmap-marker.is-entering { animation: heatmapMarkerEnter .35s ease-out both; }
+.heatmap-marker.is-exiting { animation: heatmapMarkerExit .18s ease-in both; pointer-events: none; }
+
+.heatmap-home {
+  position: absolute;
+  z-index: 5;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--bg-surface);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--accent-primary);
+  box-shadow: 0 0 12px var(--accent-primary);
+}
+
+.heatmap-home::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border: 1px solid var(--accent-primary);
+  border-radius: inherit;
+  animation: heatmapHomePulse 2.2s ease-out infinite;
+}
+
+.heatmap-pan-hint {
+  position: absolute;
+  bottom: 7px;
+  left: 8px;
+  z-index: 6;
+  padding: 3px 7px;
+  border: 1px solid var(--glass-border);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--bg-base) 82%, transparent);
+  color: var(--text-dim);
+  font-size: .68rem;
+  pointer-events: none;
+}
+
+.heatmap-controls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.heatmap-controls-row { display: flex; gap: 4px; }
+
+.heatmap-zoom-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--glass-border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--bg-surface) 88%, transparent);
+  color: var(--text-main);
+  cursor: pointer;
+  line-height: 1;
+  backdrop-filter: blur(8px);
+}
+
+.heatmap-zoom-btn:hover:not(:disabled) { background: var(--bg-elevated); }
+.heatmap-zoom-btn:disabled { cursor: not-allowed; opacity: .38; }
+.heatmap-arcs-toggle,
+.heatmap-reset { width: auto; padding: 0 9px; gap: 5px; font-size: .72rem; }
+.heatmap-arcs-toggle.is-muted span:first-child { opacity: .42; }
+
+.heatmap-tooltip {
+  position: absolute;
+  z-index: 15;
+  display: none;
+  max-width: 260px;
+  padding: 8px 11px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-base) 94%, transparent);
+  color: var(--text-main);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--bg-base) 70%, transparent);
+  font-size: .75rem;
+  line-height: 1.5;
+  pointer-events: none;
+}
+
+.heatmap-cluster-panel {
+  width: min(340px, 36vw);
+  max-height: min(620px, 70vh);
+  overflow: hidden;
+  border-left: 1px solid var(--glass-border);
+  background: var(--bg-surface);
+}
+
+.heatmap-cluster-panel[hidden] { display: none; }
+
+.heatmap-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.heatmap-drawer-header div { display: grid; gap: 2px; min-width: 0; }
+.heatmap-drawer-header small { color: var(--text-dim); }
+.heatmap-drawer-header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.heatmap-infobox-close { border: 0; background: none; color: var(--text-dim); cursor: pointer; font-size: 1.35rem; }
+
+.heatmap-drawer-body {
+  display: grid;
+  gap: 14px;
+  max-height: calc(min(620px, 70vh) - 55px);
+  padding: 14px 16px;
+  overflow-y: auto;
+}
+
+.heatmap-kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.heatmap-kpis span { display: grid; padding: 9px; border: 1px solid var(--glass-border); border-radius: 8px; color: var(--text-dim); font-size: .7rem; }
+.heatmap-kpis b { color: var(--text-main); font-size: 1rem; }
+.heatmap-risk-breakdown { display: flex; flex-wrap: wrap; gap: 8px; font-size: .72rem; }
+.heatmap-drawer-body section { display: grid; gap: 7px; }
+.heatmap-drawer-body h4 { margin: 0; color: var(--text-dim); font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; }
+.heatmap-chip-list { display: flex; flex-wrap: wrap; gap: 5px; }
+.heatmap-chip-list span { padding: 3px 7px; border: 1px solid var(--glass-border); border-radius: 999px; color: var(--text-dim); font-size: .7rem; }
+.heatmap-chip-list b { color: var(--text-main); }
+.heatmap-endpoints { display: grid; gap: 5px; }
+.heatmap-endpoint-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; padding: 7px 8px; border-left: 3px solid currentColor; border-radius: 5px; background: var(--bg-elevated); font-size: .72rem; }
+.heatmap-endpoint-row code { overflow: hidden; color: var(--text-main); text-overflow: ellipsis; }
+.heatmap-endpoint-row span,
+.heatmap-endpoint-row small { color: var(--text-dim); }
+.heatmap-endpoint-row small { grid-column: 2; grid-row: 1; }
+.heatmap-focus { width: 100%; justify-content: center; }
+
+.flash-highlight { animation: flashHighlight 1.5s ease-out; }
+
+@keyframes heatmapRiskPulse {
+  0% { transform: scale(.75); opacity: .75; }
+  75%, 100% { transform: scale(1.9); opacity: 0; }
+}
+
+@keyframes heatmapHomePulse {
+  from { transform: scale(.8); opacity: .8; }
+  to { transform: scale(2.8); opacity: 0; }
+}
+
+@keyframes heatmapMarkerEnter {
+  from { transform: translate(-50%, -50%) scale(.5); opacity: 0; }
+}
+
+@keyframes heatmapMarkerExit {
+  to { transform: translate(-50%, -50%) scale(.35); opacity: 0; }
+}
+
+@keyframes flashHighlight {
+  from { background-color: color-mix(in srgb, var(--text-main) 20%, transparent); }
+  to { background-color: transparent; }
+}
+
+@media (max-width: 900px) {
+  .heatmap-widget { grid-template-columns: 1fr; }
+  .heatmap-cluster-panel { width: auto; max-height: 420px; border-top: 1px solid var(--glass-border); border-left: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heatmap-world,
+  .heatmap-marker { transition: none; }
+  .heatmap-marker::after,
+  .heatmap-home::after,
+  .heatmap-marker.is-entering,
+  .heatmap-marker.is-exiting { animation: none; }
+}
+
 @media (max-width: 760px) {
   .perim-kpi-grid { grid-template-columns: 1fr; }
   .perim-group-actions { grid-template-columns: 1fr; }
