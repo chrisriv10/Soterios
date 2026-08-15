@@ -24,6 +24,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  if (msg.type === 'GET_DESKTOP_THEME') {
+    getDesktopTheme().then(sendResponse);
+    return true;
+  }
+
   if (msg.type === 'FORWARD_CREDENTIAL_LEAK') {
     chrome.storage.sync.get('notifyDesktop').then(prefs => {
       if (prefs.notifyDesktop === false) {
@@ -138,6 +143,33 @@ function notifyDesktopApp(payload) {
 
     nativePort.onMessage.addListener(onMessage);
     nativePort.postMessage({ type: 'CREDENTIAL_LEAK', domain: payload.domain, count: payload.count });
+  });
+}
+
+function getDesktopTheme() {
+  return new Promise((resolve) => {
+    if (!nativePort) {
+      connectNative();
+    }
+    if (!nativePort) {
+      return resolve({ theme: null });
+    }
+
+    const timeout = setTimeout(() => {
+      nativePort.onMessage.removeListener(onMessage);
+      resolve({ theme: null });
+    }, 1500);
+
+    const onMessage = (msg) => {
+      if (msg.type === 'THEME') {
+        clearTimeout(timeout);
+        nativePort.onMessage.removeListener(onMessage);
+        resolve({ theme: msg.theme || null });
+      }
+    };
+
+    nativePort.onMessage.addListener(onMessage);
+    nativePort.postMessage({ type: 'GET_THEME' });
   });
 }
 

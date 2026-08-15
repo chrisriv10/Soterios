@@ -4,9 +4,17 @@ function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme || 'dark');
 }
 
-chrome.storage.sync.get('theme', ({ theme }) => {
-  applyTheme(theme);
-});
+async function resolveTheme() {
+  const { theme } = await chrome.storage.sync.get('theme');
+  if (theme) return theme;
+  try {
+    const result = await chrome.runtime.sendMessage({ type: 'GET_DESKTOP_THEME' });
+    if (result && result.theme) return result.theme;
+  } catch (e) { }
+  return 'dark';
+}
+
+resolveTheme().then(applyTheme);
 
 async function sha1(str) {
   const buf = new TextEncoder().encode(str);

@@ -10,13 +10,21 @@ function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme || 'dark');
 }
 
-function loadTheme() {
-  chrome.storage.sync.get('theme', ({ theme }) => {
-    const value = theme || 'dark';
-    const select = document.getElementById('theme');
-    applyTheme(value);
-    if (select) select.value = value;
-  });
+async function getDesktopThemeValue() {
+  try {
+    const result = await chrome.runtime.sendMessage({ type: 'GET_DESKTOP_THEME' });
+    return result && result.theme ? result.theme : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function loadTheme() {
+  const { theme } = await chrome.storage.sync.get('theme');
+  const value = theme || (await getDesktopThemeValue()) || 'dark';
+  const select = document.getElementById('theme');
+  applyTheme(value);
+  if (select) select.value = value;
 }
 
 function loadSettings() {
