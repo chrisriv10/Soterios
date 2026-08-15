@@ -3,7 +3,8 @@ const DEFAULTS = {
   autoCheck: true,
   showIcon: true,
   notifyDesktop: true,
-  checkOnType: false
+  checkOnType: false,
+  privacyMode: false
 };
 
 function applyTheme(theme) {
