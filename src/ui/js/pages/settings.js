@@ -163,7 +163,6 @@ window.Pages.settings = {
             </div>
             <label class="toggle"><input type="checkbox" id="vpnAutoConnectToggle" ${settings.features.vpnAutoConnect ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
-          <div id="featureToggleStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
         </div>
 
         <div class="card">
@@ -237,7 +236,6 @@ window.Pages.settings = {
             </div>
             <label class="toggle"><input type="checkbox" id="scanNotificationsToggle" ${settings.features.scanNotifications !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
-          <div id="notificationStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
         </div>
 
         <div class="card">
@@ -460,14 +458,11 @@ window.Pages.settings = {
       finally { setButtonLoading(btn, false); }
     });
 
-    async function saveFeature(key, value, input, statusEl) {
-      if (!statusEl) statusEl = container.querySelector('#featureToggleStatus');
-      statusEl.textContent = '';
+    async function saveFeature(key, value, input) {
       input.disabled = true;
       try {
         await Api.updateSettings({ features: { [key]: value } });
         window.DashboardCache?.invalidate?.();
-        statusEl.textContent = t('settings.featureSaved');
         if (showToast) {
           const featureName = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim();
           if (value) {
@@ -478,7 +473,6 @@ window.Pages.settings = {
         }
       } catch (err) {
         input.checked = !value;
-        statusEl.textContent = err.message || String(err);
         if (showToast) {
           showToast(t('settings.toast.featureError'), 'error');
         }
@@ -501,6 +495,46 @@ window.Pages.settings = {
 
     const privacyModeToggle = container.querySelector('#privacyModeToggle');
     const privacyModeStatus = container.querySelector('#privacyModeStatus');
+
+    // Toggle element ids for every privacy-sensitive feature so the UI can
+    // lock them (uncheck + disable + dim + hint) while Privacy Mode is on.
+    const privacyLockedToggleIds = {
+      externalLookups: '#externalLookupsToggle',
+      geoLookup: '#geoLookupToggle',
+      aiAssistant: '#aiAssistantToggle',
+      networkTrafficHistory: '#networkTrafficHistoryToggle',
+      scanHistory: '#scanHistoryToggle',
+      autoReports: '#autoReportToggle'
+    };
+
+    function applyPrivacyModeLock(privacyOn, snapshot) {
+      for (const key of Object.keys(privacyLockedToggleIds)) {
+        const el = container.querySelector(privacyLockedToggleIds[key]);
+        if (!el) continue;
+        const row = el.closest('.toggle-row');
+        const hint = row ? row.querySelector('.privacy-lock-hint') : null;
+        if (privacyOn) {
+          el.checked = false;
+          el.disabled = true;
+          if (row) row.style.opacity = '0.55';
+          if (!hint) {
+            const div = document.createElement('div');
+            div.className = 'privacy-lock-hint';
+            div.style.cssText = 'margin-top:6px; font-size:0.8rem; color:var(--text-dim);';
+            if (row) row.appendChild(div);
+          }
+          (row ? row.querySelector('.privacy-lock-hint') : null).textContent = t('settings.privacyMode.locked');
+        } else {
+          el.disabled = false;
+          if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, key)) {
+            el.checked = Boolean(snapshot[key]);
+          }
+          if (row) row.style.opacity = '';
+          if (hint) hint.remove();
+        }
+      }
+    }
+
     async function updatePrivacyModeStatus() {
       if (!privacyModeStatus) return;
       try {
@@ -537,6 +571,7 @@ window.Pages.settings = {
           await window.api.invoke('db:setSetting', 'privacy.snapshot', JSON.stringify(snapshot));
           await Api.updateSettings({ features: helpers.disablePatch });
           await Api.updateSettings({ features: { privacyMode: true } });
+          applyPrivacyModeLock(true, snapshot);
         } else {
           let snapshot = {};
           try {
@@ -548,6 +583,7 @@ window.Pages.settings = {
           }
           await window.api.invoke('db:setSetting', 'privacy.snapshot', '');
           await Api.updateSettings({ features: { privacyMode: false } });
+          applyPrivacyModeLock(false, snapshot);
         }
         await updatePrivacyModeStatus();
       } catch (err) {
@@ -557,7 +593,8 @@ window.Pages.settings = {
         input.disabled = false;
       }
     });
-    updatePrivacyModeStatus();
+updatePrivacyModeStatus();
+    applyPrivacyModeLock(!!settings.features.privacyMode);
 
     async function renderBrowserExtensionSection(container) {
       const body = container.querySelector('#browserExtensionBody');
@@ -654,12 +691,9 @@ window.Pages.settings = {
     renderBrowserExtensionSection(container);
     container.querySelector('#emergencyLockdownToggle').addEventListener('change', async (event) => {
       const checked = event.target.checked;
-      const statusEl = container.querySelector('#featureToggleStatus');
-      statusEl.textContent = '';
       event.target.disabled = true;
       try {
         await Api.updateSettings({ features: { emergencyLockdown: checked } });
-        statusEl.textContent = t('settings.featureSaved');
         
         // Update lockdown nav visibility immediately
         const lockdownNav = document.getElementById('lockdownNav');
@@ -668,15 +702,12 @@ window.Pages.settings = {
         }
       } catch (err) {
         event.target.checked = !checked;
-        statusEl.textContent = err.message || String(err);
       } finally {
         event.target.disabled = false;
       }
     });
     container.querySelector('#notificationsToggle').addEventListener('change', async (event) => {
       const checked = event.target.checked;
-      const statusEl = container.querySelector('#notificationStatus');
-      statusEl.textContent = '';
       event.target.disabled = true;
       try {
         await Api.updateSettings({ features: { notificationsEnabled: checked } });
@@ -687,15 +718,13 @@ window.Pages.settings = {
             await Api.updateSettings({ features: { scanNotifications: false } });
           }
         }
-        statusEl.textContent = t('settings.featureSaved');
       } catch (err) {
         event.target.checked = !checked;
-        statusEl.textContent = err.message || String(err);
       } finally {
         event.target.disabled = false;
       }
     });
-    container.querySelector('#scanNotificationsToggle').addEventListener('change', (event) => saveFeature('scanNotifications', event.target.checked, event.target, container.querySelector('#notificationStatus')));
+    container.querySelector('#scanNotificationsToggle').addEventListener('change', (event) => saveFeature('scanNotifications', event.target.checked, event.target));
 
     container.querySelector('#launchAtStartupToggle').addEventListener('change', async (event) => {
       const checked = event.target.checked;
