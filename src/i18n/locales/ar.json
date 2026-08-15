@@ -311,6 +311,8 @@
   "dashboard.noIgnoredWarnings": "لا توجد تحذيرات متجاهلة.",
   "dashboard.noWarnings": "لا توجد تحذيرات نشطة.",
   "dashboard.quickScan": "فحص سريع",
+  "dashboard.refresh": "تحديث",
+  "dashboard.refreshTooltip": "تحديث جميع بيانات لوحة المعلومات",
   "dashboard.refreshWarnings": "تحديث",
   "dashboard.rtpActive": "نشط",
   "dashboard.rtpDisable": "تعطيل",

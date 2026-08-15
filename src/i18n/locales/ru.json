@@ -228,6 +228,8 @@
   "dashboard.noIgnoredWarnings": "Нет игнорированных предупреждений.",
   "dashboard.noWarnings": "Нет активных предупреждений.",
   "dashboard.quickScan": "Быстрая проверка",
+  "dashboard.refresh": "Обновить",
+  "dashboard.refreshTooltip": "Обновить все данные панели управления",
   "dashboard.refreshWarnings": "Обновить",
   "dashboard.rtpActive": "Активно",
   "dashboard.rtpDisable": "Отключить",

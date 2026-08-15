@@ -420,6 +420,8 @@
   "dashboard.viewQuarantine": "View Quarantine",
   "dashboard.warnings": "Warnings",
   "dashboard.warningsDesc": "Review or ignore warnings you have accepted.",
+  "dashboard.refresh": "Refresh",
+  "dashboard.refreshTooltip": "Refresh all dashboard data",
   "dashboard.refreshWarnings": "Refresh",
   "dashboard.noWarnings": "No active warnings.",
   "dashboard.ignoredWarnings": "Ignored Warnings",

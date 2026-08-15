@@ -228,6 +228,8 @@
   "dashboard.noIgnoredWarnings": "कोई अनदेखी चेतावनी नहीं।",
   "dashboard.noWarnings": "कोई सक्रिय चेतावनी नहीं।",
   "dashboard.quickScan": "क्विक स्कैन",
+  "dashboard.refresh": "रीफ्रेश",
+  "dashboard.refreshTooltip": "सभी डैशबोर्ड डेटा रीफ्रेश करें",
   "dashboard.refreshWarnings": "रीफ्रेश",
   "dashboard.rtpActive": "सक्रिय",
   "dashboard.rtpDisable": "अक्षम करें",

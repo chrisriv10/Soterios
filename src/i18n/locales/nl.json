@@ -228,6 +228,8 @@
   "dashboard.noIgnoredWarnings": "Geen genegeerde waarschuwingen.",
   "dashboard.noWarnings": "Geen actieve waarschuwingen.",
   "dashboard.quickScan": "Snelle scan",
+  "dashboard.refresh": "Vernieuwen",
+  "dashboard.refreshTooltip": "Alle dashboardgegevens vernieuwen",
   "dashboard.refreshWarnings": "Vernieuwen",
   "dashboard.rtpActive": "Actief",
   "dashboard.rtpDisable": "Uitschakelen",

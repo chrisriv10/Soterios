@@ -166,8 +166,15 @@ window.Pages['dashboard'] = {
 
     container.innerHTML = `
       <header class="page-header">
-        <h1 class="page-title">${escapeHtml(t('dashboard.title'))}</h1>
-        <p class="page-subtitle">${escapeHtml(t('dashboard.subtitle'))}</p>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+          <div>
+            <h1 class="page-title">${escapeHtml(t('dashboard.title'))}</h1>
+            <p class="page-subtitle">${escapeHtml(t('dashboard.subtitle'))}</p>
+          </div>
+          <button id="btnRefreshDashboard" class="btn btn-secondary" style="font-size:0.85rem; padding:6px 12px;" title="${escapeHtml(t('dashboard.refreshTooltip'))}">
+            ${escapeHtml(t('dashboard.refresh'))}
+          </button>
+        </div>
       </header>
       <div id="dashboardContent" style="overflow-y:auto; margin-right:8px; padding-right:8px;">
         <div class="dashboard-grid">
@@ -636,90 +643,94 @@ async function loadWarnings() {
       if (rtpIcon) rtpIcon.className = 'status-icon ' + (isRtpActive ? 'safe' : 'danger');
     }
 
-    window.api.invoke('splash:progress', { pct: 35, label: t('splash.checkingProtection') });
+    async function loadDashboardData() {
+      window.api.invoke('splash:progress', { pct: 35, label: t('splash.checkingProtection') });
 
-    // Fetch the independent dashboard reads concurrently instead of one at a
-    // time so the splash doesn't linger on the slowest sequential call.
-    const [rtpResult, fwResult, scanResult, quarantineResult] = await Promise.allSettled([
-      window.api.invoke('rtp:status'),
-      window.api.invoke('firewall:status'),
-      window.api.invoke('scanReports:latest'),
-      window.api.invoke('quarantine:list', 'quarantined')
-    ]);
+      // Fetch the independent dashboard reads concurrently instead of one at a
+      // time so the splash doesn't linger on the slowest sequential call.
+      const [rtpResult, fwResult, scanResult, quarantineResult] = await Promise.allSettled([
+        window.api.invoke('rtp:status'),
+        window.api.invoke('firewall:status'),
+        window.api.invoke('scanReports:latest'),
+        window.api.invoke('quarantine:list', 'quarantined')
+      ]);
 
-    isRtpActive = rtpResult.status === 'fulfilled' ? !!rtpResult.value : false;
-    setRtpState(isRtpActive);
-    window.api.invoke('splash:progress', { pct: 40, label: t('splash.checkingProtection') });
+      isRtpActive = rtpResult.status === 'fulfilled' ? !!rtpResult.value : false;
+      setRtpState(isRtpActive);
+      window.api.invoke('splash:progress', { pct: 40, label: t('splash.checkingProtection') });
 
-    let fwEnabled = null;
-    if (fwResult.status === 'fulfilled') {
-      fwEnabled = fwResult.value;
-    }
-    const fwIcon = document.getElementById('fwIcon');
-    const fwStatusText = document.getElementById('fwStatusText');
-    if (fwEnabled === null) {
-      if (fwStatusText) fwStatusText.textContent = t('common.unknown');
-      if (fwIcon) fwIcon.className = 'status-icon warning';
-    } else {
-      if (fwStatusText) fwStatusText.textContent = fwEnabled ? t('dashboard.firewallActive') : t('dashboard.firewallDisabled');
-      if (fwIcon) fwIcon.className = 'status-icon ' + (fwEnabled ? 'safe' : 'danger');
-    }
-    window.api.invoke('splash:progress', { pct: 50, label: t('splash.verifyingFirewall') });
-
-    const latestScanForHealth = scanResult.status === 'fulfilled' ? scanResult.value : null;
-    const lastScanEl = container.querySelector('#lastScanTime');
-    if (lastScanEl) {
-      lastScanEl.textContent = latestScanForHealth
-        ? `${parseSqliteTimestamp(latestScanForHealth.timestamp).toLocaleString()} (${latestScanForHealth.status})`
-        : t('dashboard.lastScanNever');
-    }
-
-    if (quarantineResult.status === 'fulfilled' && quarantineResult.value) {
-      const threatsCountEl = container.querySelector('#threatsCount');
-      if (threatsCountEl) {
-        threatsCountEl.textContent = quarantineResult.value.length;
+      let fwEnabled = null;
+      if (fwResult.status === 'fulfilled') {
+        fwEnabled = fwResult.value;
       }
-    }
+      const fwIcon = document.getElementById('fwIcon');
+      const fwStatusText = document.getElementById('fwStatusText');
+      if (fwEnabled === null) {
+        if (fwStatusText) fwStatusText.textContent = t('common.unknown');
+        if (fwIcon) fwIcon.className = 'status-icon warning';
+      } else {
+        if (fwStatusText) fwStatusText.textContent = fwEnabled ? t('dashboard.firewallActive') : t('dashboard.firewallDisabled');
+        if (fwIcon) fwIcon.className = 'status-icon ' + (fwEnabled ? 'safe' : 'danger');
+      }
+      window.api.invoke('splash:progress', { pct: 50, label: t('splash.verifyingFirewall') });
+
+      const latestScanForHealth = scanResult.status === 'fulfilled' ? scanResult.value : null;
+      const lastScanEl = container.querySelector('#lastScanTime');
+      if (lastScanEl) {
+        lastScanEl.textContent = latestScanForHealth
+          ? `${parseSqliteTimestamp(latestScanForHealth.timestamp).toLocaleString()} (${latestScanForHealth.status})`
+          : t('dashboard.lastScanNever');
+      }
+
+      if (quarantineResult.status === 'fulfilled' && quarantineResult.value) {
+        const threatsCountEl = container.querySelector('#threatsCount');
+        if (threatsCountEl) {
+          threatsCountEl.textContent = quarantineResult.value.length;
+        }
+      }
       window.api.invoke('splash:progress', { pct: 55, label: t('splash.checkingQuarantine') });
 
-    // health:score depends on the reads above; warnings (security-overview,
-    // the slowest call) is independent, so run both concurrently. Both are
-    // cached at module scope so re-entering the dashboard is instant.
-    const [healthResult, warningsResult] = await Promise.allSettled([
-      (async () => {
-        const hNow = Date.now();
-        if (dashboardCache.health.data !== null && hNow - dashboardCache.health.ts < dashboardCacheTtl) {
-          return dashboardCache.health.data;
-        }
-        const result = await window.api.invoke('health:score', {
-          lastScanMatches: latestScanForHealth ? (latestScanForHealth.threats_found ?? null) : null,
-          lastScanDate: latestScanForHealth ? latestScanForHealth.timestamp : null,
-          rtpActive: isRtpActive,
-          firewallActive: fwEnabled === null ? undefined : fwEnabled
-        });
-        dashboardCache.health.data = result;
-        dashboardCache.health.ts = Date.now();
-        return result;
-      })(),
-      loadWarnings()
-    ]);
+      // health:score depends on the reads above; warnings (security-overview,
+      // the slowest call) is independent, so run both concurrently. Both are
+      // cached at module scope so re-entering the dashboard is instant.
+      const [healthResult, warningsResult] = await Promise.allSettled([
+        (async () => {
+          const hNow = Date.now();
+          if (dashboardCache.health.data !== null && hNow - dashboardCache.health.ts < dashboardCacheTtl) {
+            return dashboardCache.health.data;
+          }
+          const result = await window.api.invoke('health:score', {
+            lastScanMatches: latestScanForHealth ? (latestScanForHealth.threats_found ?? null) : null,
+            lastScanDate: latestScanForHealth ? latestScanForHealth.timestamp : null,
+            rtpActive: isRtpActive,
+            firewallActive: fwEnabled === null ? undefined : fwEnabled
+          });
+          dashboardCache.health.data = result;
+          dashboardCache.health.ts = Date.now();
+          return result;
+        })(),
+        loadWarnings()
+      ]);
 
-    if (healthResult.status === 'fulfilled') {
-      lastHealthResult = healthResult.value;
-      healthScore.textContent = String(healthResult.value.score);
-      const level = healthResult.value.score >= 80 ? 'safe' : healthResult.value.score >= 60 ? 'warning' : 'danger';
-      healthIcon.className = 'status-icon ' + level;
-      healthDetail.textContent = summarizeHealth(healthResult.value);
-    } else {
-      healthScore.textContent = t('common.notAvailable');
-      healthDetail.textContent = (healthResult.reason && healthResult.reason.message) || t('common.failed');
-      healthIcon.className = 'status-icon warning';
+      if (healthResult.status === 'fulfilled') {
+        lastHealthResult = healthResult.value;
+        healthScore.textContent = String(healthResult.value.score);
+        const level = healthResult.value.score >= 80 ? 'safe' : healthResult.value.score >= 60 ? 'warning' : 'danger';
+        healthIcon.className = 'status-icon ' + level;
+        healthDetail.textContent = summarizeHealth(healthResult.value);
+      } else {
+        healthScore.textContent = t('common.notAvailable');
+        healthDetail.textContent = (healthResult.reason && healthResult.reason.message) || t('common.failed');
+        healthIcon.className = 'status-icon warning';
+      }
+      window.api.invoke('splash:progress', { pct: 65, label: t('splash.calculatingHealth') });
+      if (warningsResult.status === 'rejected') {
+        console.warn('Failed to load dashboard warnings:', warningsResult.reason);
+      }
+      window.api.invoke('splash:progress', { pct: 75, label: t('splash.checkingWarnings') });
     }
-    window.api.invoke('splash:progress', { pct: 65, label: t('splash.calculatingHealth') });
-    if (warningsResult.status === 'rejected') {
-      console.warn('Failed to load dashboard warnings:', warningsResult.reason);
-    }
-    window.api.invoke('splash:progress', { pct: 75, label: t('splash.checkingWarnings') });
+
+    await loadDashboardData();
 
     const btnManageFirewall = document.getElementById('btnManageFirewall');
     if (btnManageFirewall) {
@@ -776,6 +787,21 @@ async function loadWarnings() {
     }
 
     if (btnRefreshWarnings) btnRefreshWarnings.addEventListener('click', () => { invalidateDashboardCache(); loadWarnings(); });
+    const btnRefreshDashboard = container.querySelector('#btnRefreshDashboard');
+    if (btnRefreshDashboard) {
+      btnRefreshDashboard.addEventListener('click', async () => {
+        btnRefreshDashboard.disabled = true;
+        btnRefreshDashboard.textContent = t('common.loading');
+        try {
+          invalidateDashboardCache();
+          await loadDashboardData();
+          await restoreScanRunningState();
+        } finally {
+          btnRefreshDashboard.disabled = false;
+          btnRefreshDashboard.textContent = t('dashboard.refresh');
+        }
+      });
+    }
     if (btnUpdateDb) {
       btnUpdateDb.addEventListener('click', async () => {
         btnUpdateDb.disabled = true;

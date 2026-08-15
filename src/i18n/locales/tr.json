@@ -228,6 +228,8 @@
   "dashboard.noIgnoredWarnings": "Yoksayılan uyarı yok.",
   "dashboard.noWarnings": "Aktif uyarı yok.",
   "dashboard.quickScan": "Hızlı Tarama",
+  "dashboard.refresh": "Yenile",
+  "dashboard.refreshTooltip": "Tüm panel verilerini yenile",
   "dashboard.refreshWarnings": "Yenile",
   "dashboard.rtpActive": "Aktif",
   "dashboard.rtpDisable": "Devre dışı bırak",

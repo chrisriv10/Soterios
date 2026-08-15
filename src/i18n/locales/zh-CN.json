@@ -228,6 +228,8 @@
   "dashboard.noIgnoredWarnings": "无已忽略的警告。",
   "dashboard.noWarnings": "无活动警告。",
   "dashboard.quickScan": "快速扫描",
+  "dashboard.refresh": "刷新",
+  "dashboard.refreshTooltip": "刷新所有仪表板数据",
   "dashboard.refreshWarnings": "刷新",
   "dashboard.rtpActive": "活动",
   "dashboard.rtpDisable": "禁用",

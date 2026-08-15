@@ -228,6 +228,8 @@
   "dashboard.noIgnoredWarnings": "Brak zignorowanych ostrzeżeń.",
   "dashboard.noWarnings": "Brak aktywnych ostrzeżeń.",
   "dashboard.quickScan": "Szybki Skan",
+  "dashboard.refresh": "Odśwież",
+  "dashboard.refreshTooltip": "Odśwież wszystkie dane pulpitu",
   "dashboard.refreshWarnings": "Odśwież",
   "dashboard.rtpActive": "Aktywny",
   "dashboard.rtpDisable": "Wyłącz",

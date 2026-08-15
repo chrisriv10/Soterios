@@ -228,6 +228,8 @@
   "dashboard.noIgnoredWarnings": "Keine ignorierten Warnungen.",
   "dashboard.noWarnings": "Keine aktiven Warnungen.",
   "dashboard.quickScan": "Schnellscan",
+  "dashboard.refresh": "Aktualisieren",
+  "dashboard.refreshTooltip": "Alle Dashboard-Daten aktualisieren",
   "dashboard.refreshWarnings": "Aktualisieren",
   "dashboard.rtpActive": "Aktiv",
   "dashboard.rtpDisable": "Deaktivieren",

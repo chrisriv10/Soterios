@@ -228,6 +228,8 @@
   "dashboard.noIgnoredWarnings": "무시된 경고 없음.",
   "dashboard.noWarnings": "활성 경고 없음.",
   "dashboard.quickScan": "빠른 검사",
+  "dashboard.refresh": "새로고침",
+  "dashboard.refreshTooltip": "대시보드의 모든 데이터 새로고침",
   "dashboard.refreshWarnings": "새로고침",
   "dashboard.rtpActive": "활성",
   "dashboard.rtpDisable": "비활성화",

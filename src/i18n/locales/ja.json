@@ -228,6 +228,8 @@
   "dashboard.noIgnoredWarnings": "無視された警告なし。",
   "dashboard.noWarnings": "アクティブな警告なし。",
   "dashboard.quickScan": "クイック スキャン",
+  "dashboard.refresh": "更新",
+  "dashboard.refreshTooltip": "ダッシュボードのすべてのデータを更新",
   "dashboard.refreshWarnings": "更新",
   "dashboard.rtpActive": "アクティブ",
   "dashboard.rtpDisable": "無効化",
