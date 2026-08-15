@@ -248,6 +248,7 @@ window.Pages.settings = {
             <label class="toggle"><input type="checkbox" id="privacyModeToggle" ${settings.features.privacyMode ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
           <div id="privacyModeStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);">${escapeHtml(t('settings.privacyMode.checking'))}</div>
+          <div id="privacyLockHint" style="display:none; margin-top:8px; font-size:0.8rem; color:var(--text-dim);"></div>
         </div>
 
         <div class="card">
@@ -508,30 +509,26 @@ window.Pages.settings = {
     };
 
     function applyPrivacyModeLock(privacyOn, snapshot) {
+      const hintEl = container.querySelector('#privacyLockHint');
       for (const key of Object.keys(privacyLockedToggleIds)) {
         const el = container.querySelector(privacyLockedToggleIds[key]);
         if (!el) continue;
         const row = el.closest('.toggle-row');
-        const hint = row ? row.querySelector('.privacy-lock-hint') : null;
         if (privacyOn) {
           el.checked = false;
           el.disabled = true;
           if (row) row.style.opacity = '0.55';
-          if (!hint) {
-            const div = document.createElement('div');
-            div.className = 'privacy-lock-hint';
-            div.style.cssText = 'margin-top:6px; font-size:0.8rem; color:var(--text-dim);';
-            if (row) row.appendChild(div);
-          }
-          (row ? row.querySelector('.privacy-lock-hint') : null).textContent = t('settings.privacyMode.locked');
         } else {
           el.disabled = false;
           if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, key)) {
             el.checked = Boolean(snapshot[key]);
           }
           if (row) row.style.opacity = '';
-          if (hint) hint.remove();
         }
+      }
+      if (hintEl) {
+        hintEl.style.display = privacyOn ? 'block' : 'none';
+        hintEl.textContent = privacyOn ? t('settings.privacyMode.locked') : '';
       }
     }
 
