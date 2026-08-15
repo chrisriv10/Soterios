@@ -49,7 +49,7 @@ async function onIconClick(e) {
     if (notifyDesktopEnabled && result && result.pwned && result.count > 0) {
       await chrome.runtime.sendMessage({
         type: 'FORWARD_CREDENTIAL_LEAK',
-        payload: { password, count: result.count }
+        payload: { domain: location.hostname, count: result.count }
       });
     }
   } catch (err) {
@@ -131,7 +131,7 @@ function setupAutoCheck(input) {
             // Forward breach to desktop app for alerting
             await chrome.runtime.sendMessage({
               type: 'FORWARD_CREDENTIAL_LEAK',
-              payload: { password, count: result.count }
+              payload: { domain: location.hostname, count: result.count }
             });
           }
         } catch (err) {

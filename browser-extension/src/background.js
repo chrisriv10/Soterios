@@ -109,7 +109,7 @@ function notifyDesktopApp(payload) {
     };
 
     nativePort.onMessage.addListener(onMessage);
-    nativePort.postMessage({ type: 'CREDENTIAL_LEAK', password: payload.password, count: payload.count });
+    nativePort.postMessage({ type: 'CREDENTIAL_LEAK', domain: payload.domain, count: payload.count });
   });
 }
 
