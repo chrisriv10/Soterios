@@ -119,7 +119,14 @@ function register(mainWindow, {
         return db.setSetting(key, value);
       }
     }
-    return db.setSetting(key, value);
+    const result = db.setSetting(key, value);
+    if (key === 'ui.theme') {
+      try {
+        const themePath = path.join(app.getPath('userData'), 'theme.json');
+        fs.writeFileSync(themePath, JSON.stringify({ theme: value }, null, 2), 'utf8');
+      } catch (_) { }
+    }
+    return result;
   });
   // -- Internationalization --
   ipcMain.handle('i18n:getCatalog', (_event, locale) => i18n.loadCatalog(locale));
