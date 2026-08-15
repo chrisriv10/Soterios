@@ -21,6 +21,16 @@ test('checkReuse flags same hash under a different hostname', async () => {
   assert.strictEqual(reuse.otherDomain, 'github.com');
 });
 
+test('local reuse detection is unaffected by privacy mode', async () => {
+  const hash = await computeSha256('hunter2');
+  let map = storeReuse({}, hash, 'github.com', 1000);
+  map = storeReuse(map, hash, 'stackoverflow.com', 2000);
+  const reuse = checkReuse(map, hash, 'stackoverflow.com');
+  assert.strictEqual(reuse.reused, true);
+  assert.strictEqual(reuse.otherDomain, 'github.com');
+  assert.strictEqual(Object.keys(map).length, 2);
+});
+
 test('checkReuse does not flag same hash on the same hostname', async () => {
   const hash = await computeSha256('hunter2');
   const map = { 'github.com': { hash, lastSeen: 1000 } };
