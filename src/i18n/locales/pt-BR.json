@@ -1104,6 +1104,8 @@
   "splash.buildingInterface": "Construindo interface...",
   "splash.calculatingHealth": "Calculando pontuação de saúde...",
   "splash.checkingProtection": "Verificando status de proteção...",
+  "splash.checkingQuarantine": "Verificando status da quarentena...",
+  "splash.checkingWarnings": "Verificando alertas...",
   "splash.connectingDb": "Conectando ao banco de dados...",
   "splash.loadingDashboard": "Carregando painel de controle...",
   "splash.loadingEngines": "Carregando motores de segurança...",

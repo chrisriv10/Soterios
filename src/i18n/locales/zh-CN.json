@@ -1104,6 +1104,8 @@
   "splash.buildingInterface": "正在构建界面...",
   "splash.calculatingHealth": "正在计算健康评分...",
   "splash.checkingProtection": "正在检查防护状态...",
+  "splash.checkingQuarantine": "正在检查隔离区状态...",
+  "splash.checkingWarnings": "正在检查警告...",
   "splash.connectingDb": "正在连接数据库...",
   "splash.loadingDashboard": "正在加载仪表盘...",
   "splash.loadingEngines": "正在加载安全引擎...",

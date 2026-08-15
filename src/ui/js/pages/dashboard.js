@@ -680,7 +680,7 @@ async function loadWarnings() {
         threatsCountEl.textContent = quarantineResult.value.length;
       }
     }
-      window.api.invoke('splash:progress', { pct: 55, label: t('splash.loadingQuarantine') });
+      window.api.invoke('splash:progress', { pct: 55, label: t('splash.checkingQuarantine') });
 
     // health:score depends on the reads above; warnings (security-overview,
     // the slowest call) is independent, so run both concurrently. Both are
@@ -719,7 +719,7 @@ async function loadWarnings() {
     if (warningsResult.status === 'rejected') {
       console.warn('Failed to load dashboard warnings:', warningsResult.reason);
     }
-    window.api.invoke('splash:progress', { pct: 75, label: t('splash.loadingWarnings') });
+    window.api.invoke('splash:progress', { pct: 75, label: t('splash.checkingWarnings') });
 
     const btnManageFirewall = document.getElementById('btnManageFirewall');
     if (btnManageFirewall) {
@@ -878,8 +878,8 @@ async function loadWarnings() {
     // (e.g. page reloaded while a scan is still running).
     restoreScanRunningState();
 
-    window.api.invoke('splash:progress', { pct: 85, label: t('dashboard.lastScan') });
-    window.api.invoke('splash:progress', { pct: 90, label: t('splash.loadingQuarantine') });
+    window.api.invoke('splash:progress', { pct: 85, label: t('splash.loadingDashboard') });
+    window.api.invoke('splash:progress', { pct: 90, label: t('splash.finalizing') });
 
 try {
       window.api.invoke('splash:progress', { pct: 100, label: t('splash.ready') });
