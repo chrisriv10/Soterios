@@ -630,9 +630,35 @@ app.on('second-instance', (_event, commandLine) => {
     if (url) {
       mainWindow.webContents.send('protocol-url', url);
       handleCredentialLeakDeepLink(url);
+      handleThreatDetectedDeepLink(url);
     }
   }
 });
+
+function handleThreatDetectedDeepLink(url) {
+  if (!url || !url.startsWith('soterios://threat-detected')) return;
+  if (!dbRef) {
+    logLine('warn', 'Deep link received before database ready', { url });
+    return;
+  }
+  try {
+    const parsed = new URL(url.replace('soterios:', 'soterios://'));
+    const domain = parsed.searchParams.get('domain') || '';
+    const threatType = parsed.searchParams.get('threatType') || '';
+    dbRef.addAlert({
+      level: 'warning',
+      source: 'Browser Extension',
+      title: 'Suspected Malicious Site',
+      message: `A site visited in the browser was flagged by Google Safe Browsing${domain ? `: ${domain}` : ''}`,
+      detail: `Threat type: ${threatType}${domain ? ` | Domain: ${domain}` : ''}`,
+      timestamp: new Date().toISOString(),
+      metadata: { source: 'browser-extension-safebrowsing', ...(domain ? { domain } : {}), ...(threatType ? { threatType } : {}) }
+    });
+    if (eventBus) eventBus.emit('alert:new', { level: 'warning', source: 'Browser Extension' });
+  } catch (e) {
+    logLine('warn', 'Failed to parse deep link URL:', { url, error: e.message });
+  }
+}
 
 function handleCredentialLeakDeepLink(url) {
   if (!url || !url.startsWith('soterios://credential-leak')) return;
@@ -744,9 +770,10 @@ app.whenReady().then(async () => {
   }
 
   // Check for soterios:// deep link on first launch
-  const deepLinkArg = process.argv.find((arg) => typeof arg === 'string' && arg.startsWith('soterios://credential-leak'));
+  const deepLinkArg = process.argv.find((arg) => typeof arg === 'string' && arg.startsWith('soterios://'));
   if (deepLinkArg) {
     handleCredentialLeakDeepLink(deepLinkArg);
+    handleThreatDetectedDeepLink(deepLinkArg);
   }
 
   // 2. Security Engines (Dependency Injection)

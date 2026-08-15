@@ -47,6 +47,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  if (msg.type === 'FORWARD_THREAT' && msg.payload && msg.payload.domain && msg.payload.threatType) {
+    chrome.storage.sync.get(['notifyDesktop', 'privacyMode']).then(prefs => {
+      if (prefs.notifyDesktop === false) {
+        sendResponse({ ok: false, error: 'Desktop notifications disabled' });
+        return;
+      }
+      if (prefs.privacyMode === true) {
+        sendResponse({ ok: false, error: 'Blocked by Privacy Mode' });
+        return;
+      }
+      notifyThreatDesktop(msg.payload).then(sendResponse);
+    });
+    return true;
+  }
+
   if (msg.type === 'REUSE_DETECTED') {
     if (sender.tab && !pwnedTabs.get(sender.tab.id)) {
       setBadge(sender.tab.id, '#f59e0b');
@@ -175,6 +190,32 @@ function notifyDesktopApp(payload) {
 
     nativePort.onMessage.addListener(onMessage);
     nativePort.postMessage({ type: 'CREDENTIAL_LEAK', domain: payload.domain, count: payload.count });
+  });
+}
+
+function notifyThreatDesktop(payload) {
+  return new Promise((resolve) => {
+    if (!nativePort) {
+      connectNative();
+    }
+    if (!nativePort) {
+      return resolve({ ok: false, error: 'No native port' });
+    }
+
+    const timeout = setTimeout(() => {
+      resolve({ ok: false, error: 'No response from desktop app' });
+    }, 2000);
+
+    const onMessage = (msg) => {
+      if (msg.type === 'THREAT_NOTIFIED') {
+        clearTimeout(timeout);
+        nativePort.onMessage.removeListener(onMessage);
+        resolve({ ok: true });
+      }
+    };
+
+    nativePort.onMessage.addListener(onMessage);
+    nativePort.postMessage({ type: 'THREAT_DETECTED', domain: payload.domain, threatType: payload.threatType });
   });
 }
 

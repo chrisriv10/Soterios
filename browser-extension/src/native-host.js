@@ -132,6 +132,12 @@ async function handleMessage(msg) {
       send({ type: 'LEAK_NOTIFIED', ok: true, domain: msg.domain, count: msg.count });
       break;
     }
+    case 'THREAT_DETECTED': {
+      const deepLinkUrl = `soterios://threat-detected?domain=${encodeURIComponent(msg.domain || '')}&threatType=${encodeURIComponent(msg.threatType || '')}`;
+      await launchDesktopApp(deepLinkUrl);
+      send({ type: 'THREAT_NOTIFIED', ok: true, domain: msg.domain, threatType: msg.threatType });
+      break;
+    }
     case 'PING': {
       send({ type: 'PONG', ok: true });
       break;

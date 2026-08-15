@@ -333,6 +333,10 @@ function runThreatCheck() {
     if (chrome.runtime.lastError) return;
     if (response && response.status === 'unsafe') {
       showThreatBanner(response.threatType);
+      chrome.runtime.sendMessage({
+        type: 'FORWARD_THREAT',
+        payload: { domain: window.location.hostname, threatType: response.threatType }
+      });
     }
   });
 }
