@@ -101,6 +101,27 @@ function launchDesktopApp(deepLinkUrl) {
   });
 }
 
+function resolveUserDataDir() {
+  if (process.env.SOTERIOS_USERDATA) return process.env.SOTERIOS_USERDATA;
+  const appData = process.env.APPDATA
+    || (process.platform === 'darwin'
+      ? path.join(process.env.HOME || '', 'Library', 'Application Support')
+      : path.join(process.env.HOME || '', '.config'));
+  return path.join(appData, 'Soterios');
+}
+
+function getDesktopTheme() {
+  try {
+    const themePath = path.join(resolveUserDataDir(), 'theme.json');
+    if (!fs.existsSync(themePath)) return null;
+    const raw = JSON.parse(fs.readFileSync(themePath, 'utf8'));
+    return raw && typeof raw.theme === 'string' && raw.theme ? raw.theme : null;
+  } catch (e) {
+    log('Failed to read theme:', e.message);
+    return null;
+  }
+}
+
 async function handleMessage(msg) {
   log('Received:', msg.type);
 
@@ -118,6 +139,10 @@ async function handleMessage(msg) {
     case 'OPEN_APP': {
       await launchDesktopApp();
       send({ type: 'APP_OPENED', ok: true });
+      break;
+    }
+    case 'GET_THEME': {
+      send({ type: 'THEME', theme: getDesktopTheme() });
       break;
     }
     default: {
