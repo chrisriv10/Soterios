@@ -6,6 +6,19 @@ const DEFAULTS = {
   checkOnType: false
 };
 
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme || 'dark');
+}
+
+function loadTheme() {
+  chrome.storage.sync.get('theme', ({ theme }) => {
+    const value = theme || 'dark';
+    const select = document.getElementById('theme');
+    applyTheme(value);
+    if (select) select.value = value;
+  });
+}
+
 function loadSettings() {
   chrome.storage.sync.get(DEFAULTS, settings => {
     Object.keys(DEFAULTS).forEach(key => {
@@ -48,4 +61,12 @@ function setupToggles() {
 document.addEventListener('DOMContentLoaded', () => {
   loadSettings();
   setupToggles();
+  loadTheme();
+  const themeSelect = document.getElementById('theme');
+  if (themeSelect) {
+    themeSelect.addEventListener('change', () => {
+      applyTheme(themeSelect.value);
+      chrome.storage.sync.set({ theme: themeSelect.value });
+    });
+  }
 });

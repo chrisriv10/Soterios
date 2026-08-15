@@ -1,5 +1,13 @@
 const HIBP_API = 'https://api.pwnedpasswords.com/range/';
 
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme || 'dark');
+}
+
+chrome.storage.sync.get('theme', ({ theme }) => {
+  applyTheme(theme);
+});
+
 async function sha1(str) {
   const buf = new TextEncoder().encode(str);
   const hash = await crypto.subtle.digest('SHA-1', buf);
