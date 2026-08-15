@@ -276,9 +276,20 @@ function showThreatBanner(threatType) {
     'social-engineering': 'phishing',
     'malware': 'malware',
     'unwanted-software': 'unwanted software',
-    'potentially-harmful-applications': 'a potentially harmful application'
+    'potentially-harmful-applications': 'potentially harmful applications'
   };
   const label = labels[threatType] || 'malicious content';
+  const suffix = labels[threatType] ? ` (${label})` : '';
+  const text = document.createElement('span');
+  text.textContent = `Google Safe Browsing reports this site may contain ${label}${suffix}. Proceed with caution. `;
+
+  const link = document.createElement('a');
+  link.href = 'https://safebrowsing.google.com/';
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.textContent = 'Advisory provided by Google';
+  link.style.cssText = 'color: #ffffff; text-decoration: underline;';
+  text.appendChild(link);
 
   const banner = document.createElement('div');
   banner.id = 'soterios-threat-banner';
@@ -297,9 +308,6 @@ function showThreatBanner(threatType) {
     z-index: 2147483647;
     box-shadow: 0 2px 8px rgba(0,0,0,0.4);
   `;
-
-  const text = document.createElement('span');
-  text.textContent = `Warning: this site is reported to contain ${label}. Proceed with caution.`;
 
   const dismiss = document.createElement('button');
   dismiss.textContent = 'Dismiss';
