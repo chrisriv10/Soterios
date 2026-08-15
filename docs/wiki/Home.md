@@ -12,6 +12,7 @@ Version-controlled wiki source for [Soterios](https://github.com/chrisriv10/Sote
 - [System Tools](System-Tools.md) — maintenance utilities
 - [Process and Network Monitoring](Process-and-Network-Monitoring.md) — processes, connections, firewall
 - [Password Security](Password-Security.md) — generator, strength checker, breach checks
+- [Browser Extension](Browser-Extension.md) — breach badges, Privacy Mode, Safe Browsing warnings
 
 ## Privacy and support
 

@@ -66,10 +66,11 @@ function parseExpireTime(raw, now) {
   return Math.min(serverExpiry, capExpiry);
 }
 
-async function runSafeBrowsingCheck({ url, apiKey, fetchFn, now }) {
+async function runSafeBrowsingCheck({ url, apiKey, fetchFn, now, timeoutMs }) {
   if (!apiKey) return { status: 'not_configured' };
+  const timeout = timeoutMs || THREAT_CHECK_TIMEOUT_MS;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), THREAT_CHECK_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
   try {
     const { prefixB64, fullB64 } = await urlHashPrefix(url);
     const resp = await fetchFn(`${SAFE_BROWSING_API}?key=${encodeURIComponent(apiKey)}`, {
