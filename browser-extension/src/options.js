@@ -4,7 +4,8 @@ const DEFAULTS = {
   showIcon: true,
   notifyDesktop: true,
   checkOnType: false,
-  privacyMode: false
+  privacyMode: false,
+  safeBrowsingEnabled: true
 };
 
 function applyTheme(theme) {
@@ -51,6 +52,21 @@ function saveSettings() {
   });
 }
 
+function loadApiKey() {
+  chrome.storage.sync.get('safeBrowsingApiKey', ({ safeBrowsingApiKey }) => {
+    const input = document.getElementById('safeBrowsingApiKey');
+    if (input) input.value = safeBrowsingApiKey || '';
+  });
+}
+
+function setupApiKeyInput() {
+  const input = document.getElementById('safeBrowsingApiKey');
+  if (!input) return;
+  input.addEventListener('input', () => {
+    chrome.storage.sync.set({ safeBrowsingApiKey: input.value.trim() });
+  });
+}
+
 function setupToggles() {
   document.querySelectorAll('.toggle').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -71,6 +87,8 @@ document.addEventListener('DOMContentLoaded', () => {
   loadSettings();
   setupToggles();
   loadTheme();
+  loadApiKey();
+  setupApiKeyInput();
   const themeSelect = document.getElementById('theme');
   if (themeSelect) {
     themeSelect.addEventListener('change', () => {

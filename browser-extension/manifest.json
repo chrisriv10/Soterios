@@ -15,7 +15,7 @@
   },
   "options_page": "options.html",
   "permissions": ["storage", "nativeMessaging"],
-  "host_permissions": ["https://api.pwnedpasswords.com/*"],
+  "host_permissions": ["https://api.pwnedpasswords.com/*", "https://safebrowsing.googleapis.com/*"],
   "background": {
     "service_worker": "src/background.js"
   },

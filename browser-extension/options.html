@@ -20,7 +20,8 @@
     .toggle[aria-checked="true"] { background: var(--accent-success); border-color: var(--accent-success); }
     .toggle::after { content: ''; position: absolute; top: 1px; left: 1px; width: 20px; height: 20px; background: var(--text-main); border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.3); transition: transform 0.2s; }
     .toggle[aria-checked="true"]::after { transform: translateX(20px); }
-    select { padding: 6px 10px; border-radius: 6px; border: 1px solid var(--glass-border); background: var(--bg-surface-hover); color: var(--text-main); font: inherit; }
+    select, input[type="text"] { padding: 6px 10px; border-radius: 6px; border: 1px solid var(--glass-border); background: var(--bg-surface-hover); color: var(--text-main); font: inherit; }
+    input[type="text"] { width: 100%; }
     .saved { color: var(--accent-success); font-size: 12px; margin-top: 12px; display: none; }
     .saved.show { display: block; }
     .warning { background: var(--accent-warning-glow); border: 1px solid var(--accent-warning); border-radius: 6px; padding: 12px; margin-top: 24px; font-size: 13px; color: var(--accent-warning); }
@@ -38,6 +39,24 @@
         <div class="setting-desc">Disables all calls to third-party services (HIBP, Safe Browsing, etc). Password and reuse checks stay fully local.</div>
       </div>
       <button class="toggle" id="privacyMode" aria-checked="false" aria-label="Privacy Mode"></button>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Safe Browsing</h2>
+    <div class="setting">
+      <div class="setting-info">
+        <div class="setting-title">Warn about malicious sites</div>
+        <div class="setting-desc">Uses Google Safe Browsing. Only a hash prefix of the URL leaves the device. Requires a free API key.</div>
+      </div>
+      <button class="toggle" id="safeBrowsingEnabled" aria-checked="true" aria-label="Safe Browsing"></button>
+    </div>
+    <div class="setting">
+      <div class="setting-info">
+        <div class="setting-title">Safe Browsing API key</div>
+        <div class="setting-desc">Get a key from the Google Cloud Console, then paste it here.</div>
+      </div>
+      <input type="text" id="safeBrowsingApiKey" aria-label="Safe Browsing API key" placeholder="AIza..." autocomplete="off" spellcheck="false">
     </div>
   </div>
 

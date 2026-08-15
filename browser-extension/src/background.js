@@ -31,6 +31,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  if (msg.type === 'CHECK_URL_THREAT' && msg.url) {
+    checkUrlThreat(msg.url).then(sendResponse);
+    return true;
+  }
+
   if (msg.type === 'FORWARD_CREDENTIAL_LEAK') {
     chrome.storage.sync.get('notifyDesktop').then(prefs => {
       if (prefs.notifyDesktop === false) {
@@ -54,6 +59,31 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 const pwnedTabs = new Map();
+const threatCache = new Map();
+
+async function checkUrlThreat(rawUrl) {
+  const { privacyMode, safeBrowsingEnabled, safeBrowsingApiKey } = await chrome.storage.sync.get(['privacyMode', 'safeBrowsingEnabled', 'safeBrowsingApiKey']);
+  if (privacyMode === true) return { status: 'disabled', reason: 'Privacy Mode' };
+  if (safeBrowsingEnabled === false || !safeBrowsingApiKey) return { status: 'not_configured' };
+
+  let origin;
+  try {
+    origin = new URL(rawUrl).origin;
+  } catch (e) {
+    origin = rawUrl;
+  }
+
+  const cached = threatCache.get(origin);
+  if (cached && cached.expiresAt && cached.expiresAt > Date.now()) {
+    return { status: cached.status, threatType: cached.threatType, expiresAt: cached.expiresAt, cached: true };
+  }
+
+  const result = await runSafeBrowsingCheck({ url: rawUrl, apiKey: safeBrowsingApiKey, fetchFn: fetch, now: Date.now() });
+  if (result.status === 'unsafe' || result.status === 'safe') {
+    threatCache.set(origin, { status: result.status, threatType: result.threatType, expiresAt: result.expiresAt });
+  }
+  return result;
+}
 
 function setBadge(tabId, color) {
   if (color === '#dc3545') pwnedTabs.set(tabId, true);
