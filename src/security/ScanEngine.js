@@ -98,7 +98,15 @@ class ScanEngine {
       currentScan: null,
       notes: [],
       progress: 0,
-      filesScanned: 0
+      filesScanned: 0,
+      threatsFound: 0,
+      phase: 'idle',
+      lastMessage: '',
+      currentTarget: null,
+      targetIndex: 0,
+      targetCount: 0,
+      progressEstimated: false,
+      lastResult: null
     };
 
     this.folderWatchScan = {
@@ -107,7 +115,15 @@ class ScanEngine {
       currentScan: null,
       notes: [],
       progress: 0,
-      filesScanned: 0
+      filesScanned: 0,
+      threatsFound: 0,
+      phase: 'idle',
+      lastMessage: '',
+      currentTarget: null,
+      targetIndex: 0,
+      targetCount: 0,
+      progressEstimated: false,
+      lastResult: null
     };
   }
 
@@ -139,7 +155,7 @@ class ScanEngine {
     });
 
     if (targets.length === 0) {
-      return { success: true, filesScanned: 0, threatsFound: 0, note: 'No scan targets found.' };
+      return this.runScan('quick', [], 'No scan targets found.');
     }
 
     return this.runScan('quick', targets, 'Quick scan starting...');
@@ -180,8 +196,23 @@ class ScanEngine {
     
     scanState.isScanning = true;
     scanState.abortController = new AbortController();
-    scanState.currentScan = { scanType, paths, startedAt: new Date().toISOString() };
+    scanState.currentScan = {
+      scanType,
+      paths,
+      targetPaths: paths,
+      startedAt: new Date().toISOString()
+    };
     scanState.notes = [];
+    scanState.progress = 0;
+    scanState.filesScanned = 0;
+    scanState.threatsFound = 0;
+    scanState.phase = 'preparing';
+    scanState.lastMessage = startMessage;
+    scanState.currentTarget = null;
+    scanState.targetIndex = 0;
+    scanState.targetCount = paths.length;
+    scanState.progressEstimated = scanType === 'full';
+    if (!isFolderWatch) scanState.lastResult = null;
 
     const startTime = Date.now();
     let totalFilesScanned = 0;
@@ -198,23 +229,46 @@ class ScanEngine {
     // percentage reported so far and clamps every emission to it.
     let maxEmittedPct = 0;
     let cumulativeFiles = 0;
-    const emitProgress = (pctCandidate, message, extra) => {
+    const emitProgress = (pctCandidate, message, extra = {}) => {
       const pct = Math.max(maxEmittedPct, clampProgress(pctCandidate));
       maxEmittedPct = pct;
       scanState.progress = pct;
-      if (extra && extra.filesScanned) {
+      if (Number.isFinite(extra.filesScanned)) {
         scanState.filesScanned = extra.filesScanned;
       }
-      this.eventBus.emit('scan:progress', { scanType, pct, message, ...extra });
+      if (Number.isFinite(extra.threatsFound)) {
+        scanState.threatsFound = extra.threatsFound;
+      }
+      if (extra.phase) scanState.phase = extra.phase;
+      if (Object.prototype.hasOwnProperty.call(extra, 'currentTarget')) {
+        scanState.currentTarget = extra.currentTarget;
+      }
+      if (Number.isFinite(extra.targetIndex)) scanState.targetIndex = extra.targetIndex;
+      if (Number.isFinite(extra.targetCount)) scanState.targetCount = extra.targetCount;
+      scanState.lastMessage = message || scanState.lastMessage;
+      this.eventBus.emit('scan:progress', {
+        scanType,
+        pct,
+        message,
+        phase: scanState.phase,
+        startedAt: scanState.currentScan.startedAt,
+        currentTarget: scanState.currentTarget,
+        targetIndex: scanState.targetIndex,
+        targetCount: scanState.targetCount,
+        filesScanned: scanState.filesScanned,
+        threatsFound: scanState.threatsFound,
+        progressEstimated: scanState.progressEstimated,
+        ...extra
+      });
     };
 
     try {
-      emitProgress(5, startMessage);
+      emitProgress(5, startMessage, { phase: 'preparing' });
 
       // Pre-count total files for accurate progress calculation (skip for full scans to avoid long delays)
       let totalFilesToScan = 0;
       if (scanType !== 'full' && paths.length < 10) {
-        emitProgress(5, 'Preparing scan');
+        emitProgress(5, 'Preparing scan', { phase: 'preparing' });
         totalFilesToScan = countFilesInPaths(paths);
         console.log(`[ScanEngine] Pre-counted ${totalFilesToScan} files in ${paths.length} paths`);
       }
@@ -226,12 +280,21 @@ class ScanEngine {
         }
 
         const targetPath = paths[i];
+        emitProgress(maxEmittedPct, 'Scanning ' + targetPath + '...', {
+          phase: 'scanning',
+          currentTarget: targetPath,
+          targetIndex: i + 1,
+          targetCount: paths.length
+        });
         
         let pathLastChecked = 0;
         let hasReportedProgress = false;
         const result = await this.clamEngine.scanFile(targetPath, (progress) => {
           if (!progress) return;
-          if (progress.phase === 'update') {            emitProgress(Math.max(8, Math.min(20, cumulativeFiles / 5)), 'Updating ClamAV definitions...');
+          if (progress.phase === 'update') {
+            emitProgress(Math.max(8, Math.min(20, cumulativeFiles / 5)), 'Updating ClamAV definitions...', {
+              phase: 'updating-definitions'
+            });
             return;
           }
 
@@ -250,7 +313,14 @@ class ScanEngine {
               // Fall back to logarithmic scaling for full scans or when pre-counting was skipped
               pct = Math.min(95, Math.round(Math.log10(cumulativeFiles + 1) * 15));
             }
-            emitProgress(pct, 'Scanning ' + targetPath + ' (' + checked + ' files checked)...', { filesScanned: cumulativeFiles });
+            emitProgress(pct, 'Scanning ' + targetPath + ' (' + checked + ' files checked)...', {
+              phase: 'scanning',
+              currentTarget: targetPath,
+              targetIndex: i + 1,
+              targetCount: paths.length,
+              filesScanned: cumulativeFiles,
+              threatsFound: totalThreatsFound
+            });
             hasReportedProgress = true;
           }
         }, {
@@ -259,7 +329,14 @@ class ScanEngine {
         
         // If no progress was reported during this path scan, emit a minimal progress update
         if (!hasReportedProgress && !wasCanceled) {
-          emitProgress(Math.max(5, Math.min(20, cumulativeFiles / 5)), 'Scanning ' + targetPath + ' (no files found)...', { filesScanned: cumulativeFiles });
+          emitProgress(Math.max(5, Math.min(20, cumulativeFiles / 5)), 'Scanning ' + targetPath + ' (no files found)...', {
+            phase: 'scanning',
+            currentTarget: targetPath,
+            targetIndex: i + 1,
+            targetCount: paths.length,
+            filesScanned: cumulativeFiles,
+            threatsFound: totalThreatsFound
+          });
         }
 
         if (scanState.abortController.signal.aborted) {
@@ -275,6 +352,8 @@ class ScanEngine {
         if (result.success) {
           totalThreatsFound += result.threatsFound || 0;
           totalFilesScanned += result.filesScanned || 0;
+          scanState.threatsFound = totalThreatsFound;
+          scanState.filesScanned = Math.max(totalFilesScanned, cumulativeFiles);
           if (Array.isArray(result.threats)) threats.push(...result.threats);
           if (result.note) {
             scanState.notes.push(result.note);
@@ -287,7 +366,10 @@ class ScanEngine {
                 // Hold at the current highest percentage rather than
                 // recalculating - the path's scan has already completed by this
                 // point, so progress shouldn't dip back just because a threat was found.
-                emitProgress(maxEmittedPct, 'Quarantining ' + threat.name + '...');
+                emitProgress(maxEmittedPct, 'Quarantining ' + threat.name + '...', {
+                  phase: 'quarantining',
+                  threatsFound: totalThreatsFound
+                });
                 
                 const fileBuffer = fs.readFileSync(threat.path);
                 const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
@@ -337,13 +419,14 @@ class ScanEngine {
       scanState.isScanning = false;
       const durationMs = Date.now() - startTime;
       const status = wasCanceled ? 'canceled' : (errors.length === 0 ? 'completed' : 'failed');
+      const finalFilesScanned = Math.max(totalFilesScanned, cumulativeFiles);
       const reportPayload = {
         scanType,
         status,
         startedAt: scanState.currentScan ? scanState.currentScan.startedAt : new Date(startTime).toISOString(),
         completedAt: new Date().toISOString(),
         targetPaths: paths,
-        filesScanned: totalFilesScanned,
+        filesScanned: finalFilesScanned,
         threatsFound: totalThreatsFound,
         durationMs,
         threats,
@@ -361,10 +444,29 @@ class ScanEngine {
       } catch (_) {}
       scanState.currentScan = null;
       scanState.abortController = null;
+      scanState.filesScanned = finalFilesScanned;
+      scanState.threatsFound = totalThreatsFound;
+      scanState.phase = status;
+      scanState.lastMessage = status === 'completed' ? 'Scan complete' : status === 'canceled' ? 'Scan canceled' : 'Scan failed';
+      const lastResult = {
+        scanType,
+        status,
+        startedAt: reportPayload.startedAt,
+        completedAt: reportPayload.completedAt,
+        targetPaths: paths,
+        filesScanned: finalFilesScanned,
+        threatsFound: totalThreatsFound,
+        progress: status === 'completed' ? 100 : maxEmittedPct,
+        durationMs,
+        errors: errors.slice(),
+        note: scanState.notes.length ? scanState.notes.join(' ') : undefined,
+        report
+      };
+      if (!isFolderWatch) scanState.lastResult = lastResult;
       if (wasCanceled) {
         this.eventBus.emit('scan:canceled', {
           scanType,
-          filesScanned: totalFilesScanned,
+          filesScanned: finalFilesScanned,
           threatsFound: totalThreatsFound,
           durationMs,
           status: 'canceled'
@@ -372,8 +474,9 @@ class ScanEngine {
       }
       this.eventBus.emit('scan:complete', {
         scanType,
-        filesScanned: totalFilesScanned,
+        filesScanned: finalFilesScanned,
         threatsFound: totalThreatsFound,
+        pct: status === 'completed' ? 100 : maxEmittedPct,
         durationMs,
         threats,
         errors,
@@ -388,7 +491,7 @@ class ScanEngine {
       success: !wasCanceled && errors.length === 0,
       canceled: wasCanceled,
       status: wasCanceled ? 'canceled' : (errors.length === 0 ? 'completed' : 'failed'),
-      filesScanned: totalFilesScanned,
+      filesScanned: Math.max(totalFilesScanned, cumulativeFiles),
       threatsFound: totalThreatsFound,
       threats,
       errors,
@@ -412,7 +515,21 @@ class ScanEngine {
     if (this.clamEngine && typeof this.clamEngine.abortCurrentScan === 'function') {
       this.clamEngine.abortCurrentScan();
     }
-    this.eventBus.emit('scan:progress', { pct: null, message: 'Canceling scan...' });
+    target.phase = 'canceling';
+    target.lastMessage = 'Canceling scan...';
+    this.eventBus.emit('scan:progress', {
+      scanType: target.currentScan && target.currentScan.scanType,
+      pct: null,
+      message: target.lastMessage,
+      phase: target.phase,
+      startedAt: target.currentScan && target.currentScan.startedAt,
+      currentTarget: target.currentTarget,
+      targetIndex: target.targetIndex,
+      targetCount: target.targetCount,
+      filesScanned: target.filesScanned,
+      threatsFound: target.threatsFound,
+      progressEstimated: target.progressEstimated
+    });
     return { success: true, canceled: true };
   }
 
@@ -432,8 +549,21 @@ class ScanEngine {
       isFolderWatchScanning: this.folderWatchScan.isScanning,
       currentScan: this.userScan.currentScan || this.folderWatchScan.currentScan,
       progress: activeScan ? activeScan.progress : 0,
-      filesScanned: activeScan ? activeScan.filesScanned : 0
+      filesScanned: activeScan ? activeScan.filesScanned : 0,
+      threatsFound: activeScan ? activeScan.threatsFound : 0,
+      phase: activeScan ? activeScan.phase : 'idle',
+      message: activeScan ? activeScan.lastMessage : '',
+      currentTarget: activeScan ? activeScan.currentTarget : null,
+      targetIndex: activeScan ? activeScan.targetIndex : 0,
+      targetCount: activeScan ? activeScan.targetCount : 0,
+      progressEstimated: activeScan ? activeScan.progressEstimated : false,
+      startedAt: activeScan && activeScan.currentScan ? activeScan.currentScan.startedAt : null,
+      lastResult: this.userScan.lastResult
     };
+  }
+
+  clearLastResult() {
+    this.userScan.lastResult = null;
   }
 
   saveScanReport(report) {

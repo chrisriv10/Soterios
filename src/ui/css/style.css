@@ -1394,8 +1394,10 @@ body {
 .mono { font-family: 'Cascadia Code', 'Fira Code', monospace; }
 
 /* Global scan indicator (sidebar) */
-.scan-indicator { margin: 0 0 4px; padding: 10px 12px; background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.25); border-radius: 8px; cursor: pointer; transition: background 0.2s, margin 0.3s ease; }
+.scan-indicator { margin: 0 0 4px; padding: 10px 12px; background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.25); border-radius: 8px; transition: background 0.2s, margin 0.3s ease; }
 .scan-indicator:hover { background: rgba(99,102,241,0.14); }
+.scan-indicator-open { cursor: pointer; }
+.scan-indicator-open:focus-visible { border-radius: 4px; outline: 2px solid var(--accent-primary); outline-offset: 3px; }
 .scan-indicator:not([style*="display: none"]) { margin-bottom: 4px; }
 .scan-indicator-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
 .scan-indicator-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-primary); flex-shrink: 0; animation: scanPulse 1.2s ease-in-out infinite; }
@@ -1408,8 +1410,49 @@ body {
 .scan-indicator--done .scan-indicator-dot { background: #22c55e; animation: none; }
 .scan-indicator--done { background: rgba(34,197,94,0.08); border-color: rgba(34,197,94,0.25); }
 .scan-indicator--done .scan-indicator-pct { color: #22c55e; }
-.scan-indicator-cancel { padding: 2px 8px; font-size: 0.7rem; line-height: 1.4; cursor: pointer; }
+.scan-indicator-cancel { margin-top: 7px; padding: 2px 8px; font-size: 0.7rem; line-height: 1.4; cursor: pointer; }
 .scan-indicator-cancel:hover { text-decoration: underline; }
+
+/* Detailed scan progress (Scanner page) */
+.scan-progress-panel { scroll-margin: 24px; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+.scan-progress-panel:focus { outline: none; }
+.scan-progress-panel:focus-visible { border-color: var(--accent-primary); box-shadow: 0 0 0 3px var(--accent-primary-glow); }
+.scan-progress-header { display: flex; align-items: center; gap: 14px; }
+.scan-progress-heading { min-width: 0; flex: 1; }
+.scan-progress-kicker { color: var(--text-muted); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.scan-progress-title { color: var(--text-main); font-size: 1.05rem; font-weight: 700; margin-top: 2px; }
+.scan-progress-percent { color: var(--accent-primary); font-size: 1.45rem; font-variant-numeric: tabular-nums; font-weight: 700; min-width: 64px; text-align: right; }
+.scan-phase-badge { align-items: center; background: var(--accent-primary-glow); border: 1px solid rgba(99,102,241,0.28); border-radius: 999px; color: var(--accent-primary); display: inline-flex; font-size: 0.72rem; font-weight: 700; padding: 4px 9px; white-space: nowrap; }
+.scan-phase-badge[data-phase="completed"] { background: var(--ok-glow); border-color: rgba(34,197,94,0.3); color: var(--ok); }
+.scan-phase-badge[data-phase="canceled"] { background: var(--warn-glow); border-color: rgba(234,179,8,0.3); color: var(--warn); }
+.scan-phase-badge[data-phase="failed"] { background: var(--danger-glow); border-color: rgba(239,68,68,0.3); color: var(--danger); }
+.scan-progress-overview { margin-top: 18px; }
+.scan-progress-label-row { align-items: center; color: var(--text-muted); display: flex; font-size: 0.78rem; justify-content: space-between; margin-bottom: 7px; }
+.scan-progress-estimate { background: var(--bg-surface-hover); border-radius: 999px; color: var(--text-muted); font-size: 0.68rem; font-weight: 600; padding: 2px 8px; }
+.scan-progress-track { height: 10px; border-radius: 999px; }
+.scan-progress-track .stat-bar-fill { height: 100%; border-radius: inherit; }
+.scan-activity { background: var(--bg-surface-hover); border: 1px solid var(--glass-border); border-radius: 10px; margin-top: 18px; min-width: 0; padding: 13px 14px; }
+.scan-activity-label { color: var(--text-main); font-size: 0.85rem; font-weight: 700; }
+.scan-activity-value { color: var(--text-muted); font-size: 0.8rem; margin-top: 3px; overflow-wrap: anywhere; }
+.scan-target-path { color: var(--accent-primary); direction: ltr; font-family: var(--font-mono); font-size: 0.75rem; margin-top: 8px; overflow: hidden; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.scan-progress-metrics { display: grid; gap: 10px; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 16px; }
+.scan-progress-metrics--definitions { grid-template-columns: minmax(140px, 220px); }
+.scan-progress-metric { background: rgba(255,255,255,0.025); border: 1px solid var(--glass-border); border-radius: 9px; min-width: 0; padding: 11px 12px; }
+.scan-progress-metric span { color: var(--text-muted); display: block; font-size: 0.7rem; margin-bottom: 4px; }
+.scan-progress-metric strong { color: var(--text-main); display: block; font-size: 1rem; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scan-progress-actions { display: flex; gap: 10px; margin-top: 16px; }
+
+@media (max-width: 1000px) {
+  .scan-progress-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 720px) {
+  .scan-progress-header { align-items: flex-start; flex-wrap: wrap; }
+  .scan-progress-heading { flex-basis: calc(100% - 60px); }
+  .scan-progress-percent { margin-left: auto; }
+  .scan-phase-badge { order: 4; }
+  .scan-progress-metrics { grid-template-columns: 1fr; }
+}
 
 /* Startup items */
 .startup-row { 
@@ -1561,6 +1604,14 @@ body {
 [dir="rtl"] .scan-indicator-header {
   flex-direction: row-reverse;
 }
+
+[dir="rtl"] .scan-progress-header,
+[dir="rtl"] .scan-progress-actions,
+[dir="rtl"] .scan-progress-label-row {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .scan-progress-percent { text-align: left; }
 
 [dir="rtl"] .output-header {
   flex-direction: row-reverse;

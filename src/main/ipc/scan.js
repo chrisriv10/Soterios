@@ -11,34 +11,137 @@ const DEFAULT_SCHEDULE = {
 };
 
 function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputationEngine }) {
+  const definitionState = {
+    isScanning: false,
+    currentScan: null,
+    progress: 0,
+    phase: 'idle',
+    message: '',
+    lastResult: null,
+  };
+
+  function newestResult(first, second) {
+    if (!first) return second || null;
+    if (!second) return first;
+    return new Date(first.completedAt || 0).getTime() >= new Date(second.completedAt || 0).getTime()
+      ? first
+      : second;
+  }
+
+  function definitionSnapshot() {
+    const current = definitionState.currentScan;
+    return {
+      isScanning: definitionState.isScanning,
+      isFolderWatchScanning: false,
+      currentScan: current,
+      progress: definitionState.progress,
+      filesScanned: 0,
+      threatsFound: 0,
+      phase: definitionState.phase,
+      message: definitionState.message,
+      currentTarget: null,
+      targetIndex: 0,
+      targetCount: 0,
+      progressEstimated: false,
+      startedAt: current ? current.startedAt : null,
+      lastResult: definitionState.lastResult,
+    };
+  }
+
   // -- Scanning Engine --
   ipcMain.handle('scan:status', () => {
+    const scanStatus = scanEngine.getStatus();
+    const scan = definitionState.isScanning
+      ? definitionSnapshot()
+      : {
+          ...scanStatus,
+          lastResult: newestResult(scanStatus.lastResult, definitionState.lastResult),
+        };
     return {
       engine: clamEngine.getStatus(),
-      scan: scanEngine.getStatus(),
+      scan,
     };
   });
 
   ipcMain.handle('scan:updateDefinitions', async () => {
-    const status = scanEngine.getStatus();
-    if (status && (status.isScanning || status.isFolderWatchScanning)) {
+    const engineScanStatus = scanEngine.getStatus();
+    if (engineScanStatus && (engineScanStatus.isScanning || engineScanStatus.isFolderWatchScanning)) {
       const locale = db.getSetting('ui.language', 'en');
       return { success: false, error: i18n.t('scanner.defsBlockedDuringScan', locale) };
     }
-    const result = await clamEngine.updateDefinitions((progress) => {
-      eventBus.emit('scan:progress', { scanType: 'definitions', pct: 10, message: 'Updating ClamAV definitions...' });
-      if (progress && progress.text) {
-        const match = progress.text.match(/(\d+)%/);
-        if (match) {
-          eventBus.emit('scan:progress', { scanType: 'definitions', pct: Math.min(95, Number(match[1])), message: 'Updating ClamAV definitions...' });
+    const startedAt = new Date().toISOString();
+    const startTime = Date.now();
+    definitionState.isScanning = true;
+    definitionState.currentScan = { scanType: 'definitions', startedAt, paths: [], targetPaths: [] };
+    definitionState.progress = 10;
+    definitionState.phase = 'updating-definitions';
+    definitionState.message = 'Updating ClamAV definitions...';
+    definitionState.lastResult = null;
+    if (typeof scanEngine.clearLastResult === 'function') scanEngine.clearLastResult();
+
+    const emitProgress = (pct) => {
+      definitionState.progress = Math.max(definitionState.progress, Math.min(95, Number(pct) || 0));
+      eventBus.emit('scan:progress', {
+        scanType: 'definitions',
+        pct: definitionState.progress,
+        message: definitionState.message,
+        phase: definitionState.phase,
+        startedAt,
+        currentTarget: null,
+        targetIndex: 0,
+        targetCount: 0,
+        filesScanned: 0,
+        threatsFound: 0,
+        progressEstimated: false,
+      });
+    };
+
+    emitProgress(10);
+    let result;
+    try {
+      result = await clamEngine.updateDefinitions((progress) => {
+        if (progress && progress.text) {
+          const match = progress.text.match(/(\d+)%/);
+          if (match) {
+            emitProgress(Number(match[1]));
+          }
         }
-      }
-    });
-    eventBus.emit('scan:complete', {
+      });
+    } catch (error) {
+      result = { success: false, error: error && error.message ? error.message : String(error) };
+    }
+    const status = result.success ? 'completed' : 'failed';
+    const completedAt = new Date().toISOString();
+    const durationMs = Date.now() - startTime;
+    definitionState.isScanning = false;
+    definitionState.currentScan = null;
+    definitionState.progress = 100;
+    definitionState.phase = status;
+    definitionState.message = result.success ? 'Signatures updated' : 'Signature update failed';
+    definitionState.lastResult = {
       scanType: 'definitions',
-      status: result.success ? 'completed' : 'failed',
+      status,
+      startedAt,
+      completedAt,
+      targetPaths: [],
       filesScanned: 0,
       threatsFound: 0,
+      progress: 100,
+      durationMs,
+      errors: result.success ? [] : [result.error || 'Definition update failed'],
+      note: result.error,
+    };
+    eventBus.emit('scan:complete', {
+      scanType: 'definitions',
+      status,
+      filesScanned: 0,
+      threatsFound: 0,
+      pct: 100,
+      startedAt,
+      completedAt,
+      durationMs,
+      phase: status,
+      progressEstimated: false,
       errors: result.success ? [] : [result.error || 'Definition update failed'],
       error: result.error,
     });
@@ -46,14 +149,17 @@ function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputation
   });
 
   ipcMain.handle('scan:quick', async () => {
+    definitionState.lastResult = null;
     return scanEngine.runQuickScan();
   });
 
   ipcMain.handle('scan:full', async () => {
+    definitionState.lastResult = null;
     return scanEngine.runFullScan();
   });
 
   ipcMain.handle('scan:custom', async (_event, targetPaths) => {
+    definitionState.lastResult = null;
     return scanEngine.runCustomScan(targetPaths);
   });
 
@@ -115,6 +221,7 @@ function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputation
     if (Date.now() - lastRunMs < intervalMs) return;
 
     scheduledScanRunning = true;
+    definitionState.lastResult = null;
     saveScheduleConfig({ lastRun: new Date().toISOString() });
     try {
       if (config.scanType === 'full') {

@@ -3,8 +3,9 @@
   const fill = document.getElementById('scanIndicatorFill');
   const pct = document.getElementById('scanIndicatorPct');
   const msg = document.getElementById('scanIndicatorMsg');
+  const openTrigger = document.getElementById('scanIndicatorOpen');
   const cancelBtn = document.getElementById('btnScanIndicatorCancel');
-  if (!el || !fill || !pct || !msg) return;
+  if (!el || !openTrigger || !fill || !pct || !msg) return;
   const label = el.querySelector('.scan-indicator-label');
   const dot = el.querySelector('.scan-indicator-dot');
 
@@ -109,8 +110,25 @@
     markDone(data && data.status, data && data.threatsFound, data && data.scanType);
   });
 
-  el.addEventListener('click', () => {
-    if (window.AppRouter) window.AppRouter.navigate('scanner');
+  function openScanDetails() {
+    if (!window.AppRouter) return;
+    if (window.AppState) window.AppState.focusScanProgress = true;
+    window.AppRouter.navigate('scanner');
+    requestAnimationFrame(() => {
+      const panel = document.getElementById('scanStatusCard');
+      if (!panel || panel.style.display === 'none') return;
+      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      panel.focus({ preventScroll: true });
+      if (window.AppState) window.AppState.focusScanProgress = false;
+    });
+  }
+
+  openTrigger.addEventListener('click', openScanDetails);
+  openTrigger.addEventListener('keydown', (event) => {
+    if (event.target !== openTrigger) return;
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    openScanDetails();
   });
 
   if (cancelBtn) {

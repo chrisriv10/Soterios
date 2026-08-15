@@ -25,16 +25,18 @@
 
       <nav class="nav">
       <div id="scanIndicator" class="scan-indicator" style="display:none;">
+        <div id="scanIndicatorOpen" class="scan-indicator-open" role="button" tabindex="0" aria-controls="scanStatusCard" data-i18n-aria-label="scanIndicator.openDetails">
         <div class="scan-indicator-header">
           <span class="scan-indicator-dot"></span>
           <span class="scan-indicator-label" data-i18n="nav.scanning">Scanning…</span>
           <span class="scan-indicator-pct" id="scanIndicatorPct">0%</span>
-          <button class="btn btn-sm scan-indicator-cancel" id="btnScanIndicatorCancel" style="display:none;" data-i18n="scanner.cancelScan">Cancel Scan</button>
         </div>
         <div class="scan-indicator-track">
           <div class="scan-indicator-fill" id="scanIndicatorFill" style="width:0%"></div>
         </div>
         <div class="scan-indicator-msg" id="scanIndicatorMsg"></div>
+        </div>
+        <button class="btn btn-sm scan-indicator-cancel" id="btnScanIndicatorCancel" style="display:none;" data-i18n="scanner.cancelScan">Cancel Scan</button>
       </div>
         <div class="nav-group-label" data-i18n="nav.protection"></div>
         <div class="nav-item active" data-page="dashboard">

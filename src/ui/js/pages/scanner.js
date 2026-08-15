@@ -83,29 +83,63 @@ window.Pages['scanner'] = {
           </div>
         </div>
       </div>
-      <div class="card" id="scanStatusCard" style="margin-top:24px; display:none;">
-        <div style="display:flex; align-items:center; gap:16px;">
+      <section class="card scan-progress-panel" id="scanStatusCard" style="margin-top:24px; display:none;" tabindex="-1" aria-labelledby="scanProgressTitle">
+        <div class="scan-progress-header">
           <div class="status-icon info" id="scanIcon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </div>
-          <div style="flex:1;">
-            <div id="scanStatus" style="font-weight:600;">${escapeHtml(t('scanner.statusReady'))}</div>
-            <div id="scanDetail" class="page-subtitle" style="font-size:0.85rem;"></div>
+          <div class="scan-progress-heading">
+            <div class="scan-progress-kicker" id="scanTypeText">${escapeHtml(t('scanner.progressScan'))}</div>
+            <div id="scanProgressTitle" class="scan-progress-title">${escapeHtml(t('scanner.statusReady'))}</div>
+          </div>
+          <span class="scan-phase-badge" id="scanPhaseBadge">${escapeHtml(t('scanner.phaseReady'))}</span>
+          <div class="scan-progress-percent" id="scanProgressPct">0%</div>
+        </div>
+
+        <div class="scan-progress-overview">
+          <div class="scan-progress-label-row">
+            <span>${escapeHtml(t('scanner.overallProgress'))}</span>
+            <span class="scan-progress-estimate" id="scanProgressEstimate" style="display:none;">${escapeHtml(t('scanner.estimatedProgress'))}</span>
+          </div>
+          <div class="stat-bar-track scan-progress-track" id="progressTrack" role="progressbar" aria-label="${escapeHtml(t('scanner.overallProgress'))}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="stat-bar-fill" id="scanProgressFill" style="width:0%;"></div>
           </div>
         </div>
-        <div style="margin-top:12px; display:flex; gap:10px;">
+
+        <div class="scan-activity" aria-live="polite" aria-atomic="true">
+          <div class="scan-activity-label" id="scanStatus">${escapeHtml(t('scanner.currentActivity'))}</div>
+          <div class="scan-activity-value" id="scanDetail">${escapeHtml(t('scanner.detailWait'))}</div>
+          <div class="scan-target-path" id="scanProgressTarget" style="display:none;"></div>
+        </div>
+
+        <div class="scan-progress-metrics" id="scanProgressMetrics">
+          <div class="scan-progress-metric"><span>${escapeHtml(t('scanner.filesScanned'))}</span><strong id="scanFilesMetric">0</strong></div>
+          <div class="scan-progress-metric"><span>${escapeHtml(t('scanner.threatsFoundLabel'))}</span><strong id="scanThreatsMetric">0</strong></div>
+          <div class="scan-progress-metric"><span>${escapeHtml(t('scanner.elapsedTime'))}</span><strong id="scanElapsedMetric">0:00</strong></div>
+          <div class="scan-progress-metric"><span>${escapeHtml(t('scanner.scanTargets'))}</span><strong id="scanTargetsMetric">—</strong></div>
+        </div>
+
+        <div class="scan-progress-actions">
           <button class="btn btn-sm" id="btnCancelScan" disabled>${escapeHtml(t('scanner.cancelScan'))}</button>
           <button class="btn btn-sm" id="btnOpenScanReports">${escapeHtml(t('scanner.viewReports'))}</button>
         </div>
-        <div class="stat-bar-track" id="progressTrack" style="margin-top:12px; height:6px; border-radius:3px; overflow:hidden;">
-          <div class="stat-bar-fill" id="scanProgressFill" style="width:0%; height:100%; background:var(--accent-primary); transition: width 0.3s ease;"></div>
-        </div>
-      </div>
+      </section>
       </div>`;
 
     const progressFill = document.getElementById('scanProgressFill');
+    const progressTrack = document.getElementById('progressTrack');
+    const progressPct = document.getElementById('scanProgressPct');
+    const progressEstimate = document.getElementById('scanProgressEstimate');
     const scanStatus = document.getElementById('scanStatus');
     const scanDetail = document.getElementById('scanDetail');
+    const scanTarget = document.getElementById('scanProgressTarget');
+    const scanTypeText = document.getElementById('scanTypeText');
+    const scanPhaseBadge = document.getElementById('scanPhaseBadge');
+    const scanFilesMetric = document.getElementById('scanFilesMetric');
+    const scanThreatsMetric = document.getElementById('scanThreatsMetric');
+    const scanElapsedMetric = document.getElementById('scanElapsedMetric');
+    const scanTargetsMetric = document.getElementById('scanTargetsMetric');
+    const scanProgressMetrics = document.getElementById('scanProgressMetrics');
     const scanCard = document.getElementById('scanStatusCard');
     const scanIcon = document.getElementById('scanIcon');
     const clamStatusText = document.getElementById('clamStatusText');
@@ -129,8 +163,14 @@ window.Pages['scanner'] = {
     let showReportButton = false;
     let scanHistoryEnabled = true;
     let alive = true;
-    let hideCardTimer = null;
-    this.cleanups.push(() => { alive = false; });
+    let activeStartedAt = null;
+    let completedDurationMs = null;
+    let activeProgress = 0;
+    let elapsedTimer = null;
+    this.cleanups.push(() => {
+      alive = false;
+      if (elapsedTimer) clearInterval(elapsedTimer);
+    });
 
     function updateFooterButtons() {
       if (!cancelButton || !reportButton) return;
@@ -150,16 +190,119 @@ window.Pages['scanner'] = {
       return alive && document.body.contains(container);
     }
 
+    function focusProgressPanelIfRequested() {
+      if (!window.AppState?.focusScanProgress || !scanCard || scanCard.style.display === 'none') return;
+      requestAnimationFrame(() => {
+        if (!hasView()) return;
+        scanCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        scanCard.focus({ preventScroll: true });
+        window.AppState.focusScanProgress = false;
+      });
+    }
+
     function setProgress(pct) {
       if (!hasView() || !progressFill) return;
-      progressFill.style.width = Math.min(100, Math.max(0, pct)) + '%';
+      const value = Math.min(100, Math.max(0, Number(pct) || 0));
+      activeProgress = value;
+      progressFill.style.width = value + '%';
+      if (progressPct) progressPct.textContent = Math.round(value) + '%';
+      if (progressTrack) progressTrack.setAttribute('aria-valuenow', String(Math.round(value)));
+    }
+
+    function formatDuration(durationMs) {
+      const totalSeconds = Math.max(0, Math.floor((Number(durationMs) || 0) / 1000));
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      return hours > 0
+        ? `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+        : `${minutes}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    function scanTypeLabel(scanType) {
+      const labels = {
+        quick: 'scanner.quickScan',
+        full: 'scanner.fullScan',
+        custom: 'scanner.customScan',
+        definitions: 'scanner.definitionUpdate'
+      };
+      return t(labels[scanType] || 'scanner.progressScan');
+    }
+
+    function phaseLabel(phase) {
+      const labels = {
+        preparing: 'scanner.phasePreparing',
+        scanning: 'scanner.phaseScanning',
+        'updating-definitions': 'scanner.phaseUpdatingDefinitions',
+        quarantining: 'scanner.phaseQuarantining',
+        canceling: 'scanner.phaseCanceling',
+        completed: 'scanner.phaseCompleted',
+        failed: 'scanner.phaseFailed',
+        canceled: 'scanner.phaseCanceled'
+      };
+      return t(labels[phase] || 'scanner.phaseReady');
+    }
+
+    function updateElapsed() {
+      if (!hasView() || !scanElapsedMetric) return;
+      const duration = completedDurationMs != null
+        ? completedDurationMs
+        : activeStartedAt ? Date.now() - new Date(activeStartedAt).getTime() : 0;
+      scanElapsedMetric.textContent = formatDuration(duration);
+    }
+
+    elapsedTimer = setInterval(updateElapsed, 1000);
+
+    function setDefinitionMetrics(isDefinitions) {
+      if (!scanProgressMetrics) return;
+      scanProgressMetrics.classList.toggle('scan-progress-metrics--definitions', isDefinitions);
+      const metrics = Array.from(scanProgressMetrics.children);
+      metrics.forEach((metric, index) => {
+        metric.style.display = isDefinitions && index !== 2 ? 'none' : '';
+      });
+    }
+
+    function renderLiveSnapshot(snapshot) {
+      if (!hasView() || !snapshot) return;
+      const scanType = snapshot.scanType || snapshot.currentScan?.scanType || 'quick';
+      const isDefinitions = scanType === 'definitions';
+      activeAction = isDefinitions ? 'definitions' : 'virus';
+      activeStartedAt = snapshot.startedAt || snapshot.currentScan?.startedAt || activeStartedAt || new Date().toISOString();
+      completedDurationMs = null;
+      setScanning(true);
+      if (scanTypeText) scanTypeText.textContent = scanTypeLabel(scanType);
+      if (scanPhaseBadge) {
+        scanPhaseBadge.textContent = phaseLabel(snapshot.phase);
+        scanPhaseBadge.dataset.phase = snapshot.phase || 'scanning';
+      }
+      if (scanStatus) scanStatus.textContent = phaseLabel(snapshot.phase || 'scanning');
+      if (scanDetail) scanDetail.textContent = snapshot.message || t('scanner.detailWait');
+      if (scanTarget) {
+        const target = snapshot.currentTarget || '';
+        scanTarget.textContent = target;
+        scanTarget.title = target;
+        scanTarget.style.display = target ? 'block' : 'none';
+      }
+      if (scanFilesMetric) scanFilesMetric.textContent = Number(snapshot.filesScanned || 0).toLocaleString();
+      if (scanThreatsMetric) scanThreatsMetric.textContent = Number(snapshot.threatsFound || 0).toLocaleString();
+      if (scanTargetsMetric) {
+        scanTargetsMetric.textContent = snapshot.targetCount > 0
+          ? t('scanner.targetProgress', { current: snapshot.targetIndex || 1, total: snapshot.targetCount })
+          : '—';
+      }
+      if (progressEstimate) progressEstimate.style.display = snapshot.progressEstimated ? 'inline-flex' : 'none';
+      setDefinitionMetrics(isDefinitions);
+      const nextProgress = snapshot.pct == null
+        ? (snapshot.progress == null ? activeProgress : snapshot.progress)
+        : snapshot.pct;
+      setProgress(nextProgress);
+      updateElapsed();
     }
 
     function setScanning(active) {
       if (!hasView()) return;
       isScanRunning = active;
       if (active) {
-        clearTimeout(hideCardTimer);
         if (scanCard) scanCard.style.display = 'block';
         if (scanStatus) scanStatus.textContent = t('scanner.statusScanning');
         if (scanDetail) scanDetail.textContent = t('scanner.detailWait');
@@ -167,15 +310,12 @@ window.Pages['scanner'] = {
           scanIcon.className = 'status-icon info';
           scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
         }
-        setProgress(30);
         scanButtons.forEach((b) => {
           b.disabled = true;
           b.textContent = t('scanner.statusScanning');
         });
         if (updateDefinitionsButton) updateDefinitionsButton.disabled = true;
       } else {
-        // Do NOT hide the card here: setComplete writes the result text first
-        // and then schedules a short delay before hiding the card.
         scanButtons.forEach((b) => {
           b.disabled = false;
           b.textContent = scanButtonOriginalLabels[b.id] || b.textContent;
@@ -187,21 +327,62 @@ window.Pages['scanner'] = {
 
     function setComplete(success, filesScanned, threatsFound, note, canceled, historyEnabled = true) {
       if (!hasView()) return;
-      if (activeAction === 'virus') {
-        showReportButton = historyEnabled && (canceled || success);
+      const result = (typeof success === 'object' && success) || {
+        scanType: activeAction === 'definitions' ? 'definitions' : 'quick',
+        status: canceled ? 'canceled' : success ? 'completed' : 'failed',
+        filesScanned,
+        threatsFound,
+        note,
+        durationMs: completedDurationMs || 0,
+        progress: canceled ? activeProgress : 100
+      };
+      const isDefinitions = result.scanType === 'definitions';
+      activeAction = isDefinitions ? 'definitions' : 'virus';
+      const wasCanceled = result.status === 'canceled';
+      const wasSuccessful = result.status === 'completed';
+      const resultFiles = Number(result.filesScanned || 0);
+      const resultThreats = Number(result.threatsFound || 0);
+      if (!isDefinitions) {
+        showReportButton = historyEnabled && (wasCanceled || wasSuccessful);
       } else {
         showReportButton = false;
       }
       setScanning(false);
-      // Keep the result card visible a few seconds so the outcome is readable,
-      // then hide it. New scans clear this timer in setScanning(true).
-      clearTimeout(hideCardTimer);
-      hideCardTimer = setTimeout(() => {
-        if (hasView() && scanCard) scanCard.style.display = 'none';
-      }, 5000);
-      if (canceled) {
+      if (scanCard) scanCard.style.display = 'block';
+      activeStartedAt = result.startedAt || null;
+      completedDurationMs = Number(result.durationMs || 0);
+      if (scanTypeText) scanTypeText.textContent = scanTypeLabel(result.scanType);
+      if (scanPhaseBadge) {
+        scanPhaseBadge.textContent = phaseLabel(result.status);
+        scanPhaseBadge.dataset.phase = result.status;
+      }
+      if (progressEstimate) progressEstimate.style.display = result.scanType === 'full' ? 'inline-flex' : 'none';
+      if (scanFilesMetric) scanFilesMetric.textContent = resultFiles.toLocaleString();
+      if (scanThreatsMetric) scanThreatsMetric.textContent = resultThreats.toLocaleString();
+      if (scanTargetsMetric) scanTargetsMetric.textContent = Array.isArray(result.targetPaths) && result.targetPaths.length
+        ? String(result.targetPaths.length)
+        : '—';
+      if (scanTarget) scanTarget.style.display = 'none';
+      setDefinitionMetrics(isDefinitions);
+      setProgress(result.progress ?? result.pct ?? (wasSuccessful ? 100 : activeProgress));
+      updateElapsed();
+
+      if (isDefinitions) {
+        if (scanStatus) scanStatus.textContent = wasSuccessful ? t('scanner.defsUpdated') : t('scanner.defsUpdateFailed');
+        if (scanDetail) scanDetail.textContent = result.note || (wasSuccessful ? t('scanner.defsReady') : t('scanner.defsUpdateFailed'));
+        if (scanIcon) {
+          scanIcon.className = 'status-icon ' + (wasSuccessful ? 'safe' : 'danger');
+          scanIcon.innerHTML = wasSuccessful
+            ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'
+            : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+        }
+        updateFooterButtons();
+        return;
+      }
+
+      if (wasCanceled) {
         if (scanStatus) scanStatus.textContent = t('scanner.statusScanCanceled');
-        if (scanDetail) scanDetail.textContent = t('scanner.detailCanceled', { count: filesScanned }) + (historyEnabled ? ' ' + t('common.scanReportSaved') : '');
+        if (scanDetail) scanDetail.textContent = t('scanner.detailCanceled', { count: resultFiles }) + (historyEnabled ? ' ' + t('common.scanReportSaved') : '');
         if (scanIcon) {
           scanIcon.className = 'status-icon warning';
           scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="13"/><circle cx="12" cy="16.5" r="1" fill="currentColor" stroke="none"/></svg>';
@@ -209,19 +390,18 @@ window.Pages['scanner'] = {
         updateFooterButtons();
         return;
       }
-      setProgress(100);
-      if (success) {
+      if (wasSuccessful) {
         if (scanStatus) scanStatus.textContent = t('scanner.statusScanComplete');
-        if (scanDetail) scanDetail.textContent = t('scanner.detailComplete', { count: filesScanned, threats: threatsFound }) + (note ? ' ' + note : '');
+        if (scanDetail) scanDetail.textContent = t('scanner.detailComplete', { count: resultFiles, threats: resultThreats }) + (result.note ? ' ' + result.note : '');
         if (scanIcon) {
-          scanIcon.className = 'status-icon ' + (threatsFound > 0 ? 'danger' : 'safe');
-          scanIcon.innerHTML = threatsFound > 0
+          scanIcon.className = 'status-icon ' + (resultThreats > 0 ? 'danger' : 'safe');
+          scanIcon.innerHTML = resultThreats > 0
             ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;"><circle cx="12" cy="12" r="5"/><path d="M12 2v3"/><path d="M12 19v3"/><path d="M2 12h3"/><path d="M19 12h3"/><path d="M5.6 5.6l2.1 2.1"/><path d="M18.3 18.3l-2.1-2.1"/><path d="M18.3 5.6l-2.1 2.1"/><path d="M5.6 18.3l2.1-2.1"/><circle cx="10" cy="10" r=".5"/><circle cx="14.5" cy="10.5" r=".5"/><circle cx="13" cy="14.5" r=".5"/><circle cx="9.5" cy="14" r=".5"/></svg>'
             : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
         }
       } else {
         if (scanStatus) scanStatus.textContent = t('scanner.statusScanFailed');
-        if (scanDetail) scanDetail.textContent = note || t('scanner.statusScanFailed');
+        if (scanDetail) scanDetail.textContent = result.note || result.error || (result.errors && result.errors[0]) || t('scanner.statusScanFailed');
         if (scanIcon) {
           scanIcon.className = 'status-icon danger';
           scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
@@ -235,20 +415,14 @@ window.Pages['scanner'] = {
         const status = await window.api.invoke('scan:status');
         if (!hasView()) return;
         if (status.scan && status.scan.isScanning) {
-          activeAction = status.scan.currentScan && status.scan.currentScan.scanType === 'definitions' ? 'definitions' : 'virus';
-          setScanning(true);
-          // Restore progress if available
-          if (status.scan.progress !== undefined) {
-            setProgress(status.scan.progress);
-          }
-          if (status.scan.filesScanned !== undefined && scanDetail) {
-            scanDetail.textContent = t('scan.progress', { files: status.scan.filesScanned, pct: status.scan.progress || 0 });
-          }
-          // Force scan card to be visible
-          if (scanCard) scanCard.style.display = 'block';
+          renderLiveSnapshot(status.scan);
+        } else if (status.scan && status.scan.lastResult) {
+          setComplete(status.scan.lastResult, undefined, undefined, undefined, undefined, scanHistoryEnabled);
         } else {
           setScanning(false);
+          if (scanCard) scanCard.style.display = 'none';
         }
+        focusProgressPanelIfRequested();
         const engine = status.engine || status;
         if (!engine.ready) {
           if (clamStatusText) clamStatusText.textContent = t('scanner.engineNotReady');
@@ -374,14 +548,7 @@ window.Pages['scanner'] = {
     this.cleanups.push(window.api.on('scan:progress', (data) => {
       if (!hasView()) return;
       if (data?.scanType === 'folderwatch') return;
-      if (data && data.pct !== undefined) {
-        if (data.scanType) {
-          activeAction = data.scanType === 'definitions' ? 'definitions' : 'virus';
-        }
-        if (scanCard) scanCard.style.display = 'block';
-        setProgress(data.pct);
-        if (scanDetail) scanDetail.textContent = data.message || t('scanner.statusScanning');
-      }
+      if (data) renderLiveSnapshot(data);
     }));
 
     this.cleanups.push(window.api.on('scan:complete', async (data) => {
@@ -389,44 +556,15 @@ window.Pages['scanner'] = {
       if (data.scanType === 'folderwatch') return;
       if (window.AppRouter && window.AppRouter.current && window.AppRouter.current() !== 'scanner') return;
 
-      const canceled = data.status === 'canceled';
-
-      // ✅ Handle definition updates separately (prevents "0 threats found")
-      if (data.scanType === 'definitions') {
-        scanStatus.textContent = data.status === 'failed'
-          ? t('scanner.defsUpdateFailed')
-          : t('scanner.defsUpdated');
-
-        scanDetail.textContent = data.status === 'failed'
-          ? (data.note || data.error || t('scanner.defsUpdateFailed'))
-          : (data.note || t('scanner.defsReady'));
-
-        setProgress(100);
-        isScanRunning = false;
-        activeAction = null;
-        showReportButton = false;
-        updateFooterButtons();
-        return;
+      if (data.scanType !== 'definitions') {
+        try {
+          const settings = await Api.getSettings();
+          scanHistoryEnabled = !!settings.features.scanHistory;
+        } catch (_) {
+          scanHistoryEnabled = true;
+        }
       }
-
-      // normal virus scan flow
-      if (data.scanType) activeAction = 'virus';
-
-      try {
-        const settings = await Api.getSettings();
-        scanHistoryEnabled = !!settings.features.scanHistory;
-      } catch (_) {
-        scanHistoryEnabled = true;
-      }
-
-      setComplete(
-        !canceled && data.status !== 'failed',
-        data.filesScanned || 0,
-        data.threatsFound || 0,
-        data.note || data.error || '',
-        canceled,
-        scanHistoryEnabled
-      );
+      setComplete({ ...data, progress: data.pct ?? (data.status === 'completed' ? 100 : activeProgress) }, undefined, undefined, undefined, undefined, scanHistoryEnabled);
       loadSchedule();
     }));
 
@@ -436,29 +574,24 @@ window.Pages['scanner'] = {
         return;
       }
       activeAction = 'definitions';
-      isScanRunning = true;
       showReportButton = false;
-      updateFooterButtons();
-      scanCard.style.display = 'block';
-      scanStatus.textContent = t('scanner.updatingDefs');
-      scanDetail.textContent = t('scanner.downloadingDefs');
-      setProgress(10);
+      renderLiveSnapshot({
+        scanType: 'definitions',
+        pct: 10,
+        phase: 'updating-definitions',
+        startedAt: new Date().toISOString(),
+        message: t('scanner.downloadingDefs')
+      });
       updateDefinitionsButton.disabled = true;
       try {
         const res = await window.api.invoke('scan:updateDefinitions');
         if (!hasView()) return;
         if (!res.success) throw new Error(res.error || t('scanner.defsUpdateFailed'));
-        scanStatus.textContent = t('scanner.defsUpdated');
-        scanDetail.textContent = t('scanner.defsReady');
-        setProgress(100);
         await refreshStatus();
       } catch (e) {
-        setError(e.message);
+        await refreshStatus();
+        if (hasView() && (!scanCard || scanCard.style.display === 'none')) setError(e.message);
       } finally {
-        isScanRunning = false;
-        activeAction = null;
-        showReportButton = false;
-        updateFooterButtons();
         if (hasView() && updateDefinitionsButton) updateDefinitionsButton.disabled = false;
       }
     });
@@ -471,8 +604,6 @@ window.Pages['scanner'] = {
       scanDetail.textContent = t('scanner.detailCanceling');
       try {
         await window.api.invoke('scan:abort');
-        if (!hasView()) return;
-        setComplete(false, 0, 0, '', true);
       } catch (e) {
         cancelButton.disabled = false;
         perCardCancelButtons.forEach((btn) => { btn.disabled = false; });
@@ -485,43 +616,62 @@ window.Pages['scanner'] = {
 
     reportButton.addEventListener('click', () => window.AppRouter.navigate('reports'));
 
-    async function startScan(runner, beforeStart) {
+    async function startScan(scanType, runner, beforeStart) {
       if (isScanRunning) {
         setError(t('scanner.scanAlreadyRunning'));
         return;
       }
       activeAction = 'virus';
       showReportButton = false;
-      setScanning(true);
+      renderLiveSnapshot({
+        scanType,
+        pct: 0,
+        phase: 'preparing',
+        startedAt: new Date().toISOString(),
+        filesScanned: 0,
+        threatsFound: 0,
+        progressEstimated: scanType === 'full',
+        message: t('scanner.phasePreparing')
+      });
       if (beforeStart) beforeStart();
       try {
         const res = await runner();
         if (!hasView()) return;
-        setComplete(!!res.success, res.filesScanned || 0, res.threatsFound || 0, res.note || res.error, !!res.canceled);
         await refreshStatus();
+        if (!isScanRunning && scanCard && scanCard.style.display === 'none') {
+          setComplete(!!res.success, res.filesScanned || 0, res.threatsFound || 0, res.note || res.error, !!res.canceled);
+        }
       } catch (e) {
         setError(e.message);
       }
     }
 
     document.getElementById('btnScannerQuick').addEventListener('click', async () => {
-      startScan(() => window.api.invoke('scan:quick'));
+      startScan('quick', () => window.api.invoke('scan:quick'));
     });
 
     document.getElementById('btnScannerFull').addEventListener('click', async () => {
-      startScan(() => window.api.invoke('scan:full'));
+      startScan('full', () => window.api.invoke('scan:full'));
     });
 
     document.getElementById('btnScannerCustom').addEventListener('click', async () => {
       const folder = await window.api.invoke('dialog:pickFolder');
       if (!folder) return;
-      startScan(() => window.api.invoke('scan:custom', [folder]), () => {
+      startScan('custom', () => window.api.invoke('scan:custom', [folder]), () => {
         scanDetail.textContent = t('scanner.detailCustom', { folder });
       });
     });
 
     updateFooterButtons();
-    refreshStatus();
+    (async () => {
+      try {
+        const settings = await Api.getSettings();
+        scanHistoryEnabled = !!settings.features.scanHistory;
+      } catch (_) {
+        scanHistoryEnabled = true;
+      }
+      await refreshStatus();
+    })();
     loadSchedule();
   }
 };
