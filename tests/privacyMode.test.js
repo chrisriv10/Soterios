@@ -8,7 +8,7 @@ const {
   snapshotFeatures,
   buildDisablePatch,
   buildRestorePatch,
-} = require('../src/tools/privacyMode');
+} = require('../src/core/privacyMode');
 
 describe('privacyMode PRIVACY_SENSITIVE_FEATURES', () => {
   it('covers the data-sharing and retention features', () => {

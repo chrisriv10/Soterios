@@ -22,7 +22,7 @@ const { loadRegistry } = require('../../scripts/scriptRunner');
 const i18n = require('../../i18n');
 const { requestText } = require('./_shared');
 const featureFlags = require('../../core/featureFlags');
-const privacyMode = require('../../tools/privacyMode');
+const privacyMode = require('../../core/privacyMode');
 
 function deleteFileIfSafe(filePath) {
   if (!filePath) return;
