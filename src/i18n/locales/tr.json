@@ -1334,5 +1334,18 @@
   "scanner.phaseCanceling": "İptal ediliyor",
   "scanner.phaseCompleted": "Tamamlandı",
   "scanner.phaseFailed": "Başarısız",
-  "scanner.phaseCanceled": "İptal edildi"
+  "scanner.phaseCanceled": "İptal edildi",
+  "scanner.expandDetails": "Ayrıntıları genişlet",
+  "scanner.collapseDetails": "Ayrıntıları daralt",
+  "scanner.startedAt": "Başlangıç",
+  "scanner.completedAt": "Tamamlanma",
+  "scanner.scannedTargets": "Taranan hedefler",
+  "scanner.detections": "Algılamalar",
+  "scanner.notesAndErrors": "Notlar ve hatalar",
+  "scanner.inProgress": "Devam ediyor",
+  "scanner.noTargets": "Tarama hedefi kaydedilmedi",
+  "scanner.noDetections": "Tehdit algılanmadı",
+  "scanner.unknownThreat": "Bilinmeyen tehdit",
+  "scanner.resultThreats": "{count} tehdit bulundu",
+  "scanner.resultClean": "Tehdit bulunamadı"
 }

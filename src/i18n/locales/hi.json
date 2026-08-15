@@ -1334,5 +1334,18 @@
   "scanner.phaseCanceling": "रद्द हो रहा है",
   "scanner.phaseCompleted": "पूर्ण",
   "scanner.phaseFailed": "विफल",
-  "scanner.phaseCanceled": "रद्द"
+  "scanner.phaseCanceled": "रद्द",
+  "scanner.expandDetails": "विवरण फैलाएँ",
+  "scanner.collapseDetails": "विवरण समेटें",
+  "scanner.startedAt": "शुरू हुआ",
+  "scanner.completedAt": "पूर्ण हुआ",
+  "scanner.scannedTargets": "स्कैन किए गए लक्ष्य",
+  "scanner.detections": "पहचान",
+  "scanner.notesAndErrors": "नोट और त्रुटियाँ",
+  "scanner.inProgress": "प्रगति पर है",
+  "scanner.noTargets": "कोई स्कैन लक्ष्य दर्ज नहीं",
+  "scanner.noDetections": "कोई खतरा नहीं मिला",
+  "scanner.unknownThreat": "अज्ञात खतरा",
+  "scanner.resultThreats": "{count} खतरे मिले",
+  "scanner.resultClean": "कोई खतरा नहीं मिला"
 }

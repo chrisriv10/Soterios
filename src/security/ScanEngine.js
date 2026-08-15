@@ -105,6 +105,7 @@ class ScanEngine {
       currentTarget: null,
       targetIndex: 0,
       targetCount: 0,
+      completedTargets: [],
       progressEstimated: false,
       lastResult: null
     };
@@ -122,6 +123,7 @@ class ScanEngine {
       currentTarget: null,
       targetIndex: 0,
       targetCount: 0,
+      completedTargets: [],
       progressEstimated: false,
       lastResult: null
     };
@@ -211,6 +213,7 @@ class ScanEngine {
     scanState.currentTarget = null;
     scanState.targetIndex = 0;
     scanState.targetCount = paths.length;
+    scanState.completedTargets = [];
     scanState.progressEstimated = scanType === 'full';
     if (!isFolderWatch) scanState.lastResult = null;
 
@@ -219,6 +222,7 @@ class ScanEngine {
     let totalThreatsFound = 0;
     const threats = [];
     const errors = [];
+    const completedTargets = [];
     let wasCanceled = false;
 
     // Progress must never move backward within a single scan. Previously,
@@ -245,6 +249,7 @@ class ScanEngine {
       }
       if (Number.isFinite(extra.targetIndex)) scanState.targetIndex = extra.targetIndex;
       if (Number.isFinite(extra.targetCount)) scanState.targetCount = extra.targetCount;
+      if (Array.isArray(extra.completedTargets)) scanState.completedTargets = extra.completedTargets.slice();
       scanState.lastMessage = message || scanState.lastMessage;
       this.eventBus.emit('scan:progress', {
         scanType,
@@ -253,8 +258,10 @@ class ScanEngine {
         phase: scanState.phase,
         startedAt: scanState.currentScan.startedAt,
         currentTarget: scanState.currentTarget,
+        targetPaths: scanState.currentScan.targetPaths,
         targetIndex: scanState.targetIndex,
         targetCount: scanState.targetCount,
+        completedTargets: scanState.completedTargets.slice(),
         filesScanned: scanState.filesScanned,
         threatsFound: scanState.threatsFound,
         progressEstimated: scanState.progressEstimated,
@@ -400,6 +407,16 @@ class ScanEngine {
               }
             }
           }
+          completedTargets.push(targetPath);
+          emitProgress(maxEmittedPct, 'Finished scanning ' + targetPath, {
+            phase: 'scanning',
+            currentTarget: targetPath,
+            targetIndex: i + 1,
+            targetCount: paths.length,
+            completedTargets,
+            filesScanned: scanState.filesScanned,
+            threatsFound: totalThreatsFound
+          });
         } else {
           if (wasCanceled || result.canceled) {
             wasCanceled = true;
@@ -426,6 +443,7 @@ class ScanEngine {
         startedAt: scanState.currentScan ? scanState.currentScan.startedAt : new Date(startTime).toISOString(),
         completedAt: new Date().toISOString(),
         targetPaths: paths,
+        completedTargets: completedTargets.slice(),
         filesScanned: finalFilesScanned,
         threatsFound: totalThreatsFound,
         durationMs,
@@ -454,8 +472,10 @@ class ScanEngine {
         startedAt: reportPayload.startedAt,
         completedAt: reportPayload.completedAt,
         targetPaths: paths,
+        completedTargets: completedTargets.slice(),
         filesScanned: finalFilesScanned,
         threatsFound: totalThreatsFound,
+        threats: threats.slice(),
         progress: status === 'completed' ? 100 : maxEmittedPct,
         durationMs,
         errors: errors.slice(),
@@ -474,12 +494,17 @@ class ScanEngine {
       }
       this.eventBus.emit('scan:complete', {
         scanType,
+        startedAt: reportPayload.startedAt,
+        completedAt: reportPayload.completedAt,
+        targetPaths: paths,
+        completedTargets: completedTargets.slice(),
         filesScanned: finalFilesScanned,
         threatsFound: totalThreatsFound,
         pct: status === 'completed' ? 100 : maxEmittedPct,
         durationMs,
         threats,
         errors,
+        note: lastResult.note,
         status,
         report
       });
@@ -493,6 +518,7 @@ class ScanEngine {
       status: wasCanceled ? 'canceled' : (errors.length === 0 ? 'completed' : 'failed'),
       filesScanned: Math.max(totalFilesScanned, cumulativeFiles),
       threatsFound: totalThreatsFound,
+      completedTargets: completedTargets.slice(),
       threats,
       errors,
       error: errors[0],
@@ -524,8 +550,10 @@ class ScanEngine {
       phase: target.phase,
       startedAt: target.currentScan && target.currentScan.startedAt,
       currentTarget: target.currentTarget,
+      targetPaths: target.currentScan && target.currentScan.targetPaths,
       targetIndex: target.targetIndex,
       targetCount: target.targetCount,
+      completedTargets: target.completedTargets.slice(),
       filesScanned: target.filesScanned,
       threatsFound: target.threatsFound,
       progressEstimated: target.progressEstimated
@@ -556,6 +584,7 @@ class ScanEngine {
       currentTarget: activeScan ? activeScan.currentTarget : null,
       targetIndex: activeScan ? activeScan.targetIndex : 0,
       targetCount: activeScan ? activeScan.targetCount : 0,
+      completedTargets: activeScan ? activeScan.completedTargets.slice() : [],
       progressEstimated: activeScan ? activeScan.progressEstimated : false,
       startedAt: activeScan && activeScan.currentScan ? activeScan.currentScan.startedAt : null,
       lastResult: this.userScan.lastResult

@@ -8,21 +8,79 @@ window.Pages['scanner'] = {
   render(container) {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     container.innerHTML = `
-      <div style="overflow-y: auto; max-height: calc(100vh - 80px); padding-right: 8px;">
-      <header class="page-header">
+      <div class="scanner-page" id="scannerPage">
+      <header class="page-header" id="scannerPageHeader">
         <h1 class="page-title">${escapeHtml(t('scanner.title'))}</h1>
         <p class="page-subtitle">${escapeHtml(t('scanner.subtitle'))}</p>
       </header>
-      <div class="card" id="clamStatusCard" style="margin-bottom:24px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:16px;">
-          <div>
-            <h3 style="margin:0;">${escapeHtml(t('scanner.clamavEngine'))}</h3>
-            <p class="page-subtitle" id="clamStatusText" style="margin:4px 0 0;">${escapeHtml(t('scanner.checkingStatus'))}</p>
+
+      <section class="card scan-progress-panel" id="scanStatusCard" style="display:none;" aria-labelledby="scanProgressTitle" data-view="progress">
+        <div class="scan-progress-header">
+          <div class="status-icon info" id="scanIcon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </div>
-          <button class="btn" id="btnUpdateDefinitions">${escapeHtml(t('scanner.updateDefinitions'))}</button>
+          <div class="scan-progress-heading">
+            <div class="scan-progress-kicker" id="scanTypeText">${escapeHtml(t('scanner.progressScan'))}</div>
+            <div id="scanProgressTitle" class="scan-progress-title">${escapeHtml(t('scanner.statusReady'))}</div>
+          </div>
+          <span class="scan-phase-badge" id="scanPhaseBadge">${escapeHtml(t('scanner.phaseReady'))}</span>
+          <div class="scan-progress-percent" id="scanProgressPct">0%</div>
+          <button class="scan-progress-expand" id="btnExpandScanProgress" type="button" aria-expanded="false" aria-controls="scanExpandedDetails">
+            <span id="scanExpandLabel">${escapeHtml(t('scanner.expandDetails'))}</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
         </div>
-      </div>
-      <div class="scanner-grid">
+
+        <div class="scan-progress-overview">
+          <div class="scan-progress-label-row">
+            <span>${escapeHtml(t('scanner.overallProgress'))}</span>
+            <span class="scan-progress-estimate" id="scanProgressEstimate" style="display:none;">${escapeHtml(t('scanner.estimatedProgress'))}</span>
+          </div>
+          <div class="stat-bar-track scan-progress-track" id="progressTrack" role="progressbar" aria-label="${escapeHtml(t('scanner.overallProgress'))}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="stat-bar-fill" id="scanProgressFill" style="width:0%;"></div>
+          </div>
+        </div>
+
+        <div class="scan-activity" aria-live="polite" aria-atomic="true">
+          <div class="scan-activity-label" id="scanStatus">${escapeHtml(t('scanner.currentActivity'))}</div>
+          <div class="scan-activity-value" id="scanDetail">${escapeHtml(t('scanner.detailWait'))}</div>
+          <div class="scan-target-path" id="scanProgressTarget" style="display:none;"></div>
+        </div>
+
+        <div class="scan-progress-metrics" id="scanProgressMetrics">
+          <div class="scan-progress-metric"><span>${escapeHtml(t('scanner.filesScanned'))}</span><strong id="scanFilesMetric">0</strong></div>
+          <div class="scan-progress-metric"><span>${escapeHtml(t('scanner.threatsFoundLabel'))}</span><strong id="scanThreatsMetric">0</strong></div>
+          <div class="scan-progress-metric"><span>${escapeHtml(t('scanner.elapsedTime'))}</span><strong id="scanElapsedMetric">0:00</strong></div>
+          <div class="scan-progress-metric"><span>${escapeHtml(t('scanner.scanTargets'))}</span><strong id="scanTargetsMetric">—</strong></div>
+        </div>
+
+        <div class="scan-expanded-details" id="scanExpandedDetails" hidden>
+          <div class="scan-result-timeline">
+            <div><span>${escapeHtml(t('scanner.startedAt'))}</span><strong id="scanStartedAt">—</strong></div>
+            <div><span>${escapeHtml(t('scanner.completedAt'))}</span><strong id="scanCompletedAt">—</strong></div>
+          </div>
+          <section class="scan-detail-section" id="scanTargetsSection">
+            <h3>${escapeHtml(t('scanner.scannedTargets'))}</h3>
+            <ul class="scan-detail-list scan-detail-list--paths" id="scanTargetsList"></ul>
+          </section>
+          <section class="scan-detail-section" id="scanDetectionsSection">
+            <h3>${escapeHtml(t('scanner.detections'))}</h3>
+            <div class="scan-detail-list" id="scanDetectionsList"></div>
+          </section>
+          <section class="scan-detail-section" id="scanIssuesSection">
+            <h3>${escapeHtml(t('scanner.notesAndErrors'))}</h3>
+            <ul class="scan-detail-list" id="scanIssuesList"></ul>
+          </section>
+        </div>
+
+        <div class="scan-progress-actions">
+          <button class="btn btn-sm" id="btnCancelScan" disabled>${escapeHtml(t('scanner.cancelScan'))}</button>
+          <button class="btn btn-sm" id="btnOpenScanReports">${escapeHtml(t('scanner.viewReports'))}</button>
+          <button class="btn btn-sm" id="btnDismissScanResult">${escapeHtml(t('common.close'))}</button>
+        </div>
+      </section>
+
+      <div class="scanner-grid" id="scanChoiceGrid">
         <div class="card">
           <h3>${escapeHtml(t('scanner.quickScan'))}</h3>
           <p class="page-subtitle">${escapeHtml(t('scanner.quickDesc'))}</p>
@@ -48,7 +106,8 @@ window.Pages['scanner'] = {
           </div>
         </div>
       </div>
-      <div class="card" id="scheduleCard" style="margin-top:24px;">
+
+      <div class="card scanner-bottom-card" id="scheduleCard">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
           <div>
             <h3 style="margin:0;">${escapeHtml(t('scanner.scheduledScans'))}</h3>
@@ -83,47 +142,16 @@ window.Pages['scanner'] = {
           </div>
         </div>
       </div>
-      <section class="card scan-progress-panel" id="scanStatusCard" style="margin-top:24px; display:none;" tabindex="-1" aria-labelledby="scanProgressTitle">
-        <div class="scan-progress-header">
-          <div class="status-icon info" id="scanIcon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          </div>
-          <div class="scan-progress-heading">
-            <div class="scan-progress-kicker" id="scanTypeText">${escapeHtml(t('scanner.progressScan'))}</div>
-            <div id="scanProgressTitle" class="scan-progress-title">${escapeHtml(t('scanner.statusReady'))}</div>
-          </div>
-          <span class="scan-phase-badge" id="scanPhaseBadge">${escapeHtml(t('scanner.phaseReady'))}</span>
-          <div class="scan-progress-percent" id="scanProgressPct">0%</div>
-        </div>
 
-        <div class="scan-progress-overview">
-          <div class="scan-progress-label-row">
-            <span>${escapeHtml(t('scanner.overallProgress'))}</span>
-            <span class="scan-progress-estimate" id="scanProgressEstimate" style="display:none;">${escapeHtml(t('scanner.estimatedProgress'))}</span>
+      <div class="card scanner-bottom-card" id="clamStatusCard">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:16px;">
+          <div>
+            <h3 style="margin:0;">${escapeHtml(t('scanner.clamavEngine'))}</h3>
+            <p class="page-subtitle" id="clamStatusText" style="margin:4px 0 0;">${escapeHtml(t('scanner.checkingStatus'))}</p>
           </div>
-          <div class="stat-bar-track scan-progress-track" id="progressTrack" role="progressbar" aria-label="${escapeHtml(t('scanner.overallProgress'))}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-            <div class="stat-bar-fill" id="scanProgressFill" style="width:0%;"></div>
-          </div>
+          <button class="btn" id="btnUpdateDefinitions">${escapeHtml(t('scanner.updateDefinitions'))}</button>
         </div>
-
-        <div class="scan-activity" aria-live="polite" aria-atomic="true">
-          <div class="scan-activity-label" id="scanStatus">${escapeHtml(t('scanner.currentActivity'))}</div>
-          <div class="scan-activity-value" id="scanDetail">${escapeHtml(t('scanner.detailWait'))}</div>
-          <div class="scan-target-path" id="scanProgressTarget" style="display:none;"></div>
-        </div>
-
-        <div class="scan-progress-metrics" id="scanProgressMetrics">
-          <div class="scan-progress-metric"><span>${escapeHtml(t('scanner.filesScanned'))}</span><strong id="scanFilesMetric">0</strong></div>
-          <div class="scan-progress-metric"><span>${escapeHtml(t('scanner.threatsFoundLabel'))}</span><strong id="scanThreatsMetric">0</strong></div>
-          <div class="scan-progress-metric"><span>${escapeHtml(t('scanner.elapsedTime'))}</span><strong id="scanElapsedMetric">0:00</strong></div>
-          <div class="scan-progress-metric"><span>${escapeHtml(t('scanner.scanTargets'))}</span><strong id="scanTargetsMetric">—</strong></div>
-        </div>
-
-        <div class="scan-progress-actions">
-          <button class="btn btn-sm" id="btnCancelScan" disabled>${escapeHtml(t('scanner.cancelScan'))}</button>
-          <button class="btn btn-sm" id="btnOpenScanReports">${escapeHtml(t('scanner.viewReports'))}</button>
-        </div>
-      </section>
+      </div>
       </div>`;
 
     const progressFill = document.getElementById('scanProgressFill');
@@ -133,6 +161,7 @@ window.Pages['scanner'] = {
     const scanStatus = document.getElementById('scanStatus');
     const scanDetail = document.getElementById('scanDetail');
     const scanTarget = document.getElementById('scanProgressTarget');
+    const scanProgressTitle = document.getElementById('scanProgressTitle');
     const scanTypeText = document.getElementById('scanTypeText');
     const scanPhaseBadge = document.getElementById('scanPhaseBadge');
     const scanFilesMetric = document.getElementById('scanFilesMetric');
@@ -141,6 +170,21 @@ window.Pages['scanner'] = {
     const scanTargetsMetric = document.getElementById('scanTargetsMetric');
     const scanProgressMetrics = document.getElementById('scanProgressMetrics');
     const scanCard = document.getElementById('scanStatusCard');
+    const scannerPage = document.getElementById('scannerPage');
+    const scanChoiceGrid = document.getElementById('scanChoiceGrid');
+    const scheduleCard = document.getElementById('scheduleCard');
+    const clamStatusCard = document.getElementById('clamStatusCard');
+    const expandButton = document.getElementById('btnExpandScanProgress');
+    const expandLabel = document.getElementById('scanExpandLabel');
+    const expandedDetails = document.getElementById('scanExpandedDetails');
+    const scanStartedAt = document.getElementById('scanStartedAt');
+    const scanCompletedAt = document.getElementById('scanCompletedAt');
+    const scanTargetsSection = document.getElementById('scanTargetsSection');
+    const scanTargetsList = document.getElementById('scanTargetsList');
+    const scanDetectionsSection = document.getElementById('scanDetectionsSection');
+    const scanDetectionsList = document.getElementById('scanDetectionsList');
+    const scanIssuesSection = document.getElementById('scanIssuesSection');
+    const scanIssuesList = document.getElementById('scanIssuesList');
     const scanIcon = document.getElementById('scanIcon');
     const clamStatusText = document.getElementById('clamStatusText');
     const updateDefinitionsButton = document.getElementById('btnUpdateDefinitions');
@@ -154,6 +198,7 @@ window.Pages['scanner'] = {
     const scheduleFolderLabel = document.getElementById('scheduleFolderLabel');
     const cancelButton = document.getElementById('btnCancelScan');
     const reportButton = document.getElementById('btnOpenScanReports');
+    const dismissResultButton = document.getElementById('btnDismissScanResult');
     const scanButtons = Array.from(document.querySelectorAll('#btnScannerQuick, #btnScannerFull, #btnScannerCustom'));
     const perCardCancelButtons = Array.from(document.querySelectorAll('#btnCancelQuick, #btnCancelFull, #btnCancelCustom'));
     const scanButtonOriginalLabels = {};
@@ -167,17 +212,23 @@ window.Pages['scanner'] = {
     let completedDurationMs = null;
     let activeProgress = 0;
     let elapsedTimer = null;
+    let isExpanded = false;
+    let hasResult = false;
+    let activeSnapshot = null;
+    let currentResult = null;
     this.cleanups.push(() => {
       alive = false;
       if (elapsedTimer) clearInterval(elapsedTimer);
+      if (window.ScannerProgressView?.owner === container) delete window.ScannerProgressView;
     });
 
     function updateFooterButtons() {
-      if (!cancelButton || !reportButton) return;
+      if (!cancelButton || !reportButton || !dismissResultButton) return;
       const showCancel = activeAction === 'virus' && isScanRunning;
       const showReports = activeAction === 'virus' && showReportButton;
       cancelButton.style.display = showCancel ? 'inline-block' : 'none';
       reportButton.style.display = showReports ? 'inline-block' : 'none';
+      dismissResultButton.style.display = hasResult ? 'inline-block' : 'none';
       cancelButton.disabled = !showCancel;
       reportButton.disabled = !showReports;
       perCardCancelButtons.forEach((btn) => {
@@ -190,12 +241,142 @@ window.Pages['scanner'] = {
       return alive && document.body.contains(container);
     }
 
+    function formatTimestamp(value, fallback = '—') {
+      if (!value) return fallback;
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? fallback : date.toLocaleString();
+    }
+
+    function replaceList(list, items, emptyLabel, renderer) {
+      if (!list) return;
+      list.replaceChildren();
+      if (!items.length) {
+        const empty = document.createElement('li');
+        empty.className = 'scan-detail-empty';
+        empty.textContent = emptyLabel;
+        list.appendChild(empty);
+        return;
+      }
+      items.forEach((item) => list.appendChild(renderer(item)));
+    }
+
+    function renderExpandedData(data, resultMode) {
+      if (!data) return;
+      const scanType = data.scanType || data.currentScan?.scanType;
+      const isDefinitions = scanType === 'definitions';
+      if (scanStartedAt) scanStartedAt.textContent = formatTimestamp(data.startedAt || data.currentScan?.startedAt);
+      if (scanCompletedAt) {
+        scanCompletedAt.textContent = resultMode
+          ? formatTimestamp(data.completedAt)
+          : t('scanner.inProgress');
+      }
+
+      const paths = Array.isArray(data.targetPaths)
+        ? data.targetPaths
+        : Array.isArray(data.currentScan?.targetPaths)
+          ? data.currentScan.targetPaths
+          : Array.isArray(data.currentScan?.paths)
+            ? data.currentScan.paths
+            : data.currentTarget ? [data.currentTarget] : [];
+      const completedTargets = Array.isArray(data.completedTargets)
+        ? data.completedTargets
+        : resultMode && data.status === 'completed'
+          ? paths
+          : [];
+      const completedTargetSet = new Set(completedTargets.map((targetPath) => String(targetPath)));
+      if (scanTargetsSection) scanTargetsSection.style.display = isDefinitions ? 'none' : '';
+      replaceList(scanTargetsList, paths, t('scanner.noTargets'), (targetPath) => {
+        const row = document.createElement('li');
+        row.className = 'scan-detail-path';
+        row.title = targetPath;
+        const pathLabel = document.createElement('span');
+        pathLabel.className = 'scan-detail-path-label';
+        pathLabel.textContent = targetPath;
+        row.appendChild(pathLabel);
+        if (completedTargetSet.has(String(targetPath))) {
+          row.classList.add('scan-detail-path--complete');
+          row.setAttribute('aria-label', `${targetPath} — ${t('scanner.phaseCompleted')}`);
+          const checkmark = document.createElement('span');
+          checkmark.className = 'scan-detail-path-check';
+          checkmark.setAttribute('aria-hidden', 'true');
+          checkmark.textContent = '✓';
+          row.appendChild(checkmark);
+        }
+        return row;
+      });
+
+      const threats = resultMode
+        ? (Array.isArray(data.threats) ? data.threats : Array.isArray(data.report?.threats) ? data.report.threats : [])
+        : [];
+      if (scanDetectionsSection) scanDetectionsSection.style.display = resultMode && !isDefinitions ? '' : 'none';
+      if (scanDetectionsList) {
+        scanDetectionsList.replaceChildren();
+        if (!threats.length) {
+          const empty = document.createElement('div');
+          empty.className = 'scan-detail-empty';
+          empty.textContent = t('scanner.noDetections');
+          scanDetectionsList.appendChild(empty);
+        } else {
+          threats.forEach((threat) => {
+            const row = document.createElement('div');
+            row.className = 'scan-detection-row';
+            const name = document.createElement('strong');
+            name.textContent = threat.name || t('scanner.unknownThreat');
+            const threatPath = document.createElement('span');
+            threatPath.textContent = threat.path || '';
+            threatPath.title = threat.path || '';
+            row.append(name, threatPath);
+            scanDetectionsList.appendChild(row);
+          });
+        }
+      }
+
+      const issues = [];
+      if (data.note) issues.push(data.note);
+      if (Array.isArray(data.errors)) issues.push(...data.errors.filter(Boolean));
+      if (scanIssuesSection) scanIssuesSection.style.display = resultMode && issues.length ? '' : 'none';
+      replaceList(scanIssuesList, issues, '', (issue) => {
+        const row = document.createElement('li');
+        row.textContent = issue;
+        return row;
+      });
+    }
+
+    function applyPageState() {
+      const mode = hasResult ? 'result' : isScanRunning ? 'scanning' : 'idle';
+      const focusMode = isExpanded && mode !== 'idle';
+      if (scannerPage) {
+        scannerPage.dataset.state = mode;
+        scannerPage.classList.toggle('scanner-page--expanded', focusMode);
+      }
+      if (scanChoiceGrid) scanChoiceGrid.style.display = isScanRunning || focusMode ? 'none' : 'grid';
+      if (clamStatusCard) clamStatusCard.style.display = isScanRunning || focusMode ? 'none' : 'block';
+      if (scheduleCard) scheduleCard.style.display = focusMode ? 'none' : 'block';
+      if (scanCard) {
+        scanCard.classList.toggle('scan-progress-panel--expanded', focusMode);
+        scanCard.classList.toggle('scan-progress-panel--result', hasResult);
+        scanCard.dataset.view = hasResult ? 'result' : 'progress';
+      }
+      if (expandedDetails) expandedDetails.hidden = !focusMode;
+      if (expandButton) expandButton.setAttribute('aria-expanded', String(focusMode));
+      if (expandLabel) expandLabel.textContent = focusMode ? t('scanner.collapseDetails') : t('scanner.expandDetails');
+      renderExpandedData(hasResult ? currentResult : activeSnapshot, hasResult);
+    }
+
+    function setExpanded(expanded) {
+      if ((!isScanRunning && !hasResult) || !scanCard || scanCard.style.display === 'none') return false;
+      isExpanded = !!expanded;
+      applyPageState();
+      if (isExpanded) scanCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return true;
+    }
+
     function focusProgressPanelIfRequested() {
       if (!window.AppState?.focusScanProgress || !scanCard || scanCard.style.display === 'none') return;
       requestAnimationFrame(() => {
         if (!hasView()) return;
         scanCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        scanCard.focus({ preventScroll: true });
+        if (expandButton) expandButton.focus({ preventScroll: true });
         window.AppState.focusScanProgress = false;
       });
     }
@@ -266,11 +447,21 @@ window.Pages['scanner'] = {
       if (!hasView() || !snapshot) return;
       const scanType = snapshot.scanType || snapshot.currentScan?.scanType || 'quick';
       const isDefinitions = scanType === 'definitions';
+      const startingNewView = !isScanRunning;
+      if (startingNewView) {
+        hasResult = false;
+        currentResult = null;
+        if (scanCard) delete scanCard.dataset.result;
+        isExpanded = !!window.AppState?.expandScanProgress;
+        if (window.AppState) window.AppState.expandScanProgress = false;
+      }
+      activeSnapshot = { ...(activeSnapshot || {}), ...snapshot };
       activeAction = isDefinitions ? 'definitions' : 'virus';
       activeStartedAt = snapshot.startedAt || snapshot.currentScan?.startedAt || activeStartedAt || new Date().toISOString();
       completedDurationMs = null;
       setScanning(true);
       if (scanTypeText) scanTypeText.textContent = scanTypeLabel(scanType);
+      if (scanProgressTitle) scanProgressTitle.textContent = isDefinitions ? t('scanner.updatingDefs') : t('scanner.statusScanning');
       if (scanPhaseBadge) {
         scanPhaseBadge.textContent = phaseLabel(snapshot.phase);
         scanPhaseBadge.dataset.phase = snapshot.phase || 'scanning';
@@ -297,6 +488,7 @@ window.Pages['scanner'] = {
         : snapshot.pct;
       setProgress(nextProgress);
       updateElapsed();
+      applyPageState();
     }
 
     function setScanning(active) {
@@ -323,11 +515,12 @@ window.Pages['scanner'] = {
         if (updateDefinitionsButton) updateDefinitionsButton.disabled = false;
       }
       updateFooterButtons();
+      applyPageState();
     }
 
     function setComplete(success, filesScanned, threatsFound, note, canceled, historyEnabled = true) {
       if (!hasView()) return;
-      const result = (typeof success === 'object' && success) || {
+      const baseResult = (typeof success === 'object' && success) || {
         scanType: activeAction === 'definitions' ? 'definitions' : 'quick',
         status: canceled ? 'canceled' : success ? 'completed' : 'failed',
         filesScanned,
@@ -336,12 +529,24 @@ window.Pages['scanner'] = {
         durationMs: completedDurationMs || 0,
         progress: canceled ? activeProgress : 100
       };
+      const result = {
+        ...baseResult,
+        startedAt: baseResult.startedAt || baseResult.report?.startedAt,
+        completedAt: baseResult.completedAt || baseResult.report?.completedAt,
+        targetPaths: baseResult.targetPaths || baseResult.report?.targetPaths || [],
+        completedTargets: baseResult.completedTargets || baseResult.report?.completedTargets || [],
+        threats: baseResult.threats || baseResult.report?.threats || [],
+        errors: baseResult.errors || baseResult.report?.errors || []
+      };
       const isDefinitions = result.scanType === 'definitions';
       activeAction = isDefinitions ? 'definitions' : 'virus';
       const wasCanceled = result.status === 'canceled';
       const wasSuccessful = result.status === 'completed';
       const resultFiles = Number(result.filesScanned || 0);
       const resultThreats = Number(result.threatsFound || 0);
+      hasResult = true;
+      currentResult = result;
+      activeSnapshot = null;
       if (!isDefinitions) {
         showReportButton = historyEnabled && (wasCanceled || wasSuccessful);
       } else {
@@ -356,6 +561,15 @@ window.Pages['scanner'] = {
         scanPhaseBadge.textContent = phaseLabel(result.status);
         scanPhaseBadge.dataset.phase = result.status;
       }
+      if (scanCard) {
+        const resultKind = isDefinitions
+          ? (wasSuccessful ? 'definitions' : 'failed')
+          : wasCanceled ? 'canceled'
+          : !wasSuccessful ? 'failed'
+          : resultThreats > 0 ? 'threats'
+          : 'clean';
+        scanCard.dataset.result = resultKind;
+      }
       if (progressEstimate) progressEstimate.style.display = result.scanType === 'full' ? 'inline-flex' : 'none';
       if (scanFilesMetric) scanFilesMetric.textContent = resultFiles.toLocaleString();
       if (scanThreatsMetric) scanThreatsMetric.textContent = resultThreats.toLocaleString();
@@ -368,6 +582,7 @@ window.Pages['scanner'] = {
       updateElapsed();
 
       if (isDefinitions) {
+        if (scanProgressTitle) scanProgressTitle.textContent = wasSuccessful ? t('scanner.defsUpdated') : t('scanner.defsUpdateFailed');
         if (scanStatus) scanStatus.textContent = wasSuccessful ? t('scanner.defsUpdated') : t('scanner.defsUpdateFailed');
         if (scanDetail) scanDetail.textContent = result.note || (wasSuccessful ? t('scanner.defsReady') : t('scanner.defsUpdateFailed'));
         if (scanIcon) {
@@ -377,10 +592,12 @@ window.Pages['scanner'] = {
             : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
         }
         updateFooterButtons();
+        applyPageState();
         return;
       }
 
       if (wasCanceled) {
+        if (scanProgressTitle) scanProgressTitle.textContent = t('scanner.statusScanCanceled');
         if (scanStatus) scanStatus.textContent = t('scanner.statusScanCanceled');
         if (scanDetail) scanDetail.textContent = t('scanner.detailCanceled', { count: resultFiles }) + (historyEnabled ? ' ' + t('common.scanReportSaved') : '');
         if (scanIcon) {
@@ -388,9 +605,13 @@ window.Pages['scanner'] = {
           scanIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="13"/><circle cx="12" cy="16.5" r="1" fill="currentColor" stroke="none"/></svg>';
         }
         updateFooterButtons();
+        applyPageState();
         return;
       }
       if (wasSuccessful) {
+        if (scanProgressTitle) scanProgressTitle.textContent = resultThreats > 0
+          ? t('scanner.resultThreats', { count: resultThreats })
+          : t('scanner.resultClean');
         if (scanStatus) scanStatus.textContent = t('scanner.statusScanComplete');
         if (scanDetail) scanDetail.textContent = t('scanner.detailComplete', { count: resultFiles, threats: resultThreats }) + (result.note ? ' ' + result.note : '');
         if (scanIcon) {
@@ -400,6 +621,7 @@ window.Pages['scanner'] = {
             : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:24px;height:24px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
         }
       } else {
+        if (scanProgressTitle) scanProgressTitle.textContent = t('scanner.statusScanFailed');
         if (scanStatus) scanStatus.textContent = t('scanner.statusScanFailed');
         if (scanDetail) scanDetail.textContent = result.note || result.error || (result.errors && result.errors[0]) || t('scanner.statusScanFailed');
         if (scanIcon) {
@@ -408,6 +630,7 @@ window.Pages['scanner'] = {
         }
       }
       updateFooterButtons();
+      applyPageState();
     }
 
     async function refreshStatus() {
@@ -419,8 +642,13 @@ window.Pages['scanner'] = {
         } else if (status.scan && status.scan.lastResult) {
           setComplete(status.scan.lastResult, undefined, undefined, undefined, undefined, scanHistoryEnabled);
         } else {
+          hasResult = false;
+          currentResult = null;
+          activeSnapshot = null;
+          isExpanded = false;
           setScanning(false);
           if (scanCard) scanCard.style.display = 'none';
+          applyPageState();
         }
         focusProgressPanelIfRequested();
         const engine = status.engine || status;
@@ -528,7 +756,30 @@ window.Pages['scanner'] = {
 
     function setError(msg) {
       if (!hasView()) return;
+      const errorResult = {
+        scanType: activeAction === 'definitions' ? 'definitions' : activeSnapshot?.scanType || 'quick',
+        status: 'failed',
+        startedAt: activeStartedAt,
+        completedAt: new Date().toISOString(),
+        durationMs: activeStartedAt ? Date.now() - new Date(activeStartedAt).getTime() : 0,
+        filesScanned: Number(activeSnapshot?.filesScanned || 0),
+        threatsFound: Number(activeSnapshot?.threatsFound || 0),
+        targetPaths: activeSnapshot?.targetPaths || [],
+        completedTargets: activeSnapshot?.completedTargets || [],
+        threats: [],
+        errors: [msg],
+        progress: activeProgress
+      };
+      hasResult = true;
+      currentResult = errorResult;
+      activeSnapshot = null;
       if (scanCard) scanCard.style.display = 'block';
+      if (scanCard) scanCard.dataset.result = 'failed';
+      if (scanProgressTitle) scanProgressTitle.textContent = t('scanner.statusScanFailed');
+      if (scanPhaseBadge) {
+        scanPhaseBadge.textContent = phaseLabel('failed');
+        scanPhaseBadge.dataset.phase = 'failed';
+      }
       if (scanStatus) scanStatus.textContent = t('scanner.statusError');
       if (scanDetail) scanDetail.textContent = msg;
       if (scanIcon) {
@@ -542,7 +793,31 @@ window.Pages['scanner'] = {
       isScanRunning = false;
       showReportButton = false;
       updateFooterButtons();
+      applyPageState();
     }
+
+    function isInteractiveTarget(target) {
+      return !!target?.closest?.('button, a, input, select, textarea, label');
+    }
+
+    scanCard.addEventListener('click', (event) => {
+      if (isInteractiveTarget(event.target)) return;
+      setExpanded(!isExpanded);
+    });
+    expandButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      setExpanded(!isExpanded);
+    });
+    window.ScannerProgressView = {
+      owner: container,
+      expand() {
+        const expanded = setExpanded(true);
+        if (expanded && window.AppState) window.AppState.expandScanProgress = false;
+        return expanded;
+      },
+      collapse() { setExpanded(false); },
+      isExpanded() { return isExpanded; }
+    };
 
     // Subscribe to scan progress events from main process
     this.cleanups.push(window.api.on('scan:progress', (data) => {
@@ -615,6 +890,30 @@ window.Pages['scanner'] = {
     perCardCancelButtons.forEach((btn) => btn.addEventListener('click', () => requestCancelScan(btn)));
 
     reportButton.addEventListener('click', () => window.AppRouter.navigate('reports'));
+
+    dismissResultButton.addEventListener('click', async () => {
+      if (!hasResult) return;
+      try {
+        await window.api.invoke('scan:dismissResult');
+      } catch (_) {
+        return;
+      }
+      hasResult = false;
+      currentResult = null;
+      activeSnapshot = null;
+      activeAction = null;
+      showReportButton = false;
+      isExpanded = false;
+      activeStartedAt = null;
+      completedDurationMs = null;
+      if (scanCard) {
+        scanCard.style.display = 'none';
+        delete scanCard.dataset.result;
+      }
+      window.ScanIndicatorView?.dismiss();
+      updateFooterButtons();
+      applyPageState();
+    });
 
     async function startScan(scanType, runner, beforeStart) {
       if (isScanRunning) {

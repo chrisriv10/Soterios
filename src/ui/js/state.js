@@ -2,5 +2,6 @@ window.AppState = {
   lastScanSummary: null,
   lastPasswordScore: null,
   currentTheme: null,
-  focusScanProgress: false
+  focusScanProgress: false,
+  expandScanProgress: false
 };

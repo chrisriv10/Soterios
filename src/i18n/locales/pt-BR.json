@@ -1334,5 +1334,18 @@
   "scanner.phaseCanceling": "Cancelando",
   "scanner.phaseCompleted": "Concluído",
   "scanner.phaseFailed": "Falhou",
-  "scanner.phaseCanceled": "Cancelado"
+  "scanner.phaseCanceled": "Cancelado",
+  "scanner.expandDetails": "Expandir detalhes",
+  "scanner.collapseDetails": "Recolher detalhes",
+  "scanner.startedAt": "Iniciado",
+  "scanner.completedAt": "Concluído",
+  "scanner.scannedTargets": "Alvos verificados",
+  "scanner.detections": "Detecções",
+  "scanner.notesAndErrors": "Notas e erros",
+  "scanner.inProgress": "Em andamento",
+  "scanner.noTargets": "Nenhum alvo registrado",
+  "scanner.noDetections": "Nenhuma ameaça detectada",
+  "scanner.unknownThreat": "Ameaça desconhecida",
+  "scanner.resultThreats": "{count} ameaça(s) encontrada(s)",
+  "scanner.resultClean": "Nenhuma ameaça encontrada"
 }

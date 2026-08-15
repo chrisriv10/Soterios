@@ -1334,5 +1334,18 @@
   "scanner.phaseCanceling": "Annuleren",
   "scanner.phaseCompleted": "Voltooid",
   "scanner.phaseFailed": "Mislukt",
-  "scanner.phaseCanceled": "Geannuleerd"
+  "scanner.phaseCanceled": "Geannuleerd",
+  "scanner.expandDetails": "Details uitvouwen",
+  "scanner.collapseDetails": "Details invouwen",
+  "scanner.startedAt": "Gestart",
+  "scanner.completedAt": "Voltooid",
+  "scanner.scannedTargets": "Gescande doelen",
+  "scanner.detections": "Detecties",
+  "scanner.notesAndErrors": "Notities en fouten",
+  "scanner.inProgress": "Bezig",
+  "scanner.noTargets": "Geen scandoelen vastgelegd",
+  "scanner.noDetections": "Geen bedreigingen gedetecteerd",
+  "scanner.unknownThreat": "Onbekende bedreiging",
+  "scanner.resultThreats": "{count} bedreiging(en) gevonden",
+  "scanner.resultClean": "Geen bedreigingen gevonden"
 }

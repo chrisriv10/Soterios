@@ -1334,5 +1334,18 @@
   "scanner.phaseCanceling": "キャンセル中",
   "scanner.phaseCompleted": "完了",
   "scanner.phaseFailed": "失敗",
-  "scanner.phaseCanceled": "キャンセル済み"
+  "scanner.phaseCanceled": "キャンセル済み",
+  "scanner.expandDetails": "詳細を展開",
+  "scanner.collapseDetails": "詳細を折りたたむ",
+  "scanner.startedAt": "開始",
+  "scanner.completedAt": "完了",
+  "scanner.scannedTargets": "スキャン対象",
+  "scanner.detections": "検出結果",
+  "scanner.notesAndErrors": "メモとエラー",
+  "scanner.inProgress": "進行中",
+  "scanner.noTargets": "スキャン対象の記録はありません",
+  "scanner.noDetections": "脅威は検出されませんでした",
+  "scanner.unknownThreat": "不明な脅威",
+  "scanner.resultThreats": "{count} 件の脅威を検出",
+  "scanner.resultClean": "脅威は見つかりませんでした"
 }

@@ -1334,5 +1334,18 @@
   "scanner.phaseCanceling": "취소 중",
   "scanner.phaseCompleted": "완료됨",
   "scanner.phaseFailed": "실패",
-  "scanner.phaseCanceled": "취소됨"
+  "scanner.phaseCanceled": "취소됨",
+  "scanner.expandDetails": "세부 정보 펼치기",
+  "scanner.collapseDetails": "세부 정보 접기",
+  "scanner.startedAt": "시작",
+  "scanner.completedAt": "완료",
+  "scanner.scannedTargets": "검사한 대상",
+  "scanner.detections": "탐지 결과",
+  "scanner.notesAndErrors": "메모 및 오류",
+  "scanner.inProgress": "진행 중",
+  "scanner.noTargets": "기록된 검사 대상 없음",
+  "scanner.noDetections": "탐지된 위협 없음",
+  "scanner.unknownThreat": "알 수 없는 위협",
+  "scanner.resultThreats": "위협 {count}개 발견",
+  "scanner.resultClean": "발견된 위협 없음"
 }

@@ -42,6 +42,7 @@ function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputation
       currentTarget: null,
       targetIndex: 0,
       targetCount: 0,
+      completedTargets: [],
       progressEstimated: false,
       startedAt: current ? current.startedAt : null,
       lastResult: definitionState.lastResult,
@@ -88,8 +89,10 @@ function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputation
         phase: definitionState.phase,
         startedAt,
         currentTarget: null,
+        targetPaths: [],
         targetIndex: 0,
         targetCount: 0,
+        completedTargets: [],
         filesScanned: 0,
         threatsFound: 0,
         progressEstimated: false,
@@ -124,8 +127,10 @@ function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputation
       startedAt,
       completedAt,
       targetPaths: [],
+      completedTargets: [],
       filesScanned: 0,
       threatsFound: 0,
+      threats: [],
       progress: 100,
       durationMs,
       errors: result.success ? [] : [result.error || 'Definition update failed'],
@@ -141,6 +146,7 @@ function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputation
       completedAt,
       durationMs,
       phase: status,
+      completedTargets: [],
       progressEstimated: false,
       errors: result.success ? [] : [result.error || 'Definition update failed'],
       error: result.error,
@@ -165,6 +171,12 @@ function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputation
 
   ipcMain.handle('scan:abort', () => {
     return scanEngine.abortScan();
+  });
+
+  ipcMain.handle('scan:dismissResult', () => {
+    definitionState.lastResult = null;
+    if (typeof scanEngine.clearLastResult === 'function') scanEngine.clearLastResult();
+    return { success: true };
   });
 
   // -- Reputation --

@@ -14,7 +14,9 @@
   let doneTimer = null;
   let progressTimer = null;
   let currentScanType = null;
+  let completedOperationStartedAt = null;
   const PROGRESS_THROTTLE_MS = 500;
+  const DONE_DISPLAY_MS = 3000;
 
   function show() {
     el.style.display = 'block';
@@ -29,6 +31,19 @@
     if (cancelBtn) cancelBtn.style.display = 'none';
   }
 
+  function dismiss() {
+    clearTimeout(doneTimer);
+    clearTimeout(progressTimer);
+    hide();
+    el.classList.remove('scan-indicator--done');
+    el.style.borderColor = '';
+    el.style.background = '';
+    if (dot) dot.style.background = '';
+    if (pct) pct.style.color = '';
+    label.textContent = t('scanIndicator.scanning');
+    setProgress(0, '');
+  }
+
   function setProgress(percent, message) {
     if (percent === null) return;
     const p = Math.max(0, Math.min(100, percent || 0));
@@ -37,12 +52,13 @@
     if (message) msg.textContent = message;
   }
 
-  function markDone(status, threatsFound = 0, scanType = null) {
+  function markDone(status, threatsFound = 0, scanType = null, startedAt = null) {
     clearTimeout(doneTimer);
     clearTimeout(progressTimer);
     el.classList.add('scan-indicator--done');
     if (cancelBtn) cancelBtn.style.display = 'none';
     const isDefs = scanType === 'definitions';
+    completedOperationStartedAt = startedAt || null;
     if (status === 'canceled') {
       fill.style.width = pct.textContent;
       label.textContent = t('scanIndicator.canceled');
@@ -73,20 +89,17 @@
       msg.textContent = '';
     }
     doneTimer = setTimeout(() => {
-      hide();
-      el.classList.remove('scan-indicator--done');
-      el.style.borderColor = '';
-      el.style.background = '';
-      if (dot) dot.style.background = '';
-      if (pct) pct.style.color = '';
-      label.textContent = t('scanIndicator.scanning');
-      setProgress(0, '');
-    }, 3000);
+      dismiss();
+    }, DONE_DISPLAY_MS);
   }
+
+  window.ScanIndicatorView = { dismiss };
 
   window.api.on('scan:progress', (data) => {
     // Folder-watch scans run in the background and must not show the bar.
     if (data && data.scanType === 'folderwatch') return;
+    if (data?.startedAt && data.startedAt === completedOperationStartedAt) return;
+    if (data?.startedAt && data.startedAt !== completedOperationStartedAt) completedOperationStartedAt = null;
     clearTimeout(doneTimer);
     el.classList.remove('scan-indicator--done');
     el.style.borderColor = '';
@@ -107,18 +120,23 @@
   window.api.on('scan:complete', (data) => {
     // Folder-watch scans run in the background and must not touch the bar.
     if (data && data.scanType === 'folderwatch') return;
-    markDone(data && data.status, data && data.threatsFound, data && data.scanType);
+    markDone(data && data.status, data && data.threatsFound, data && data.scanType, data && data.startedAt);
   });
 
   function openScanDetails() {
     if (!window.AppRouter) return;
-    if (window.AppState) window.AppState.focusScanProgress = true;
+    if (window.AppState) {
+      window.AppState.focusScanProgress = true;
+      window.AppState.expandScanProgress = true;
+    }
     window.AppRouter.navigate('scanner');
     requestAnimationFrame(() => {
+      if (window.ScannerProgressView) window.ScannerProgressView.expand();
       const panel = document.getElementById('scanStatusCard');
       if (!panel || panel.style.display === 'none') return;
       panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      panel.focus({ preventScroll: true });
+      const focusTarget = document.getElementById('btnExpandScanProgress');
+      if (focusTarget) focusTarget.focus({ preventScroll: true });
       if (window.AppState) window.AppState.focusScanProgress = false;
     });
   }

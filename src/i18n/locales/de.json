@@ -1334,5 +1334,18 @@
   "scanner.phaseCanceling": "Abbruch läuft",
   "scanner.phaseCompleted": "Abgeschlossen",
   "scanner.phaseFailed": "Fehlgeschlagen",
-  "scanner.phaseCanceled": "Abgebrochen"
+  "scanner.phaseCanceled": "Abgebrochen",
+  "scanner.expandDetails": "Details erweitern",
+  "scanner.collapseDetails": "Details einklappen",
+  "scanner.startedAt": "Gestartet",
+  "scanner.completedAt": "Abgeschlossen",
+  "scanner.scannedTargets": "Gescannte Ziele",
+  "scanner.detections": "Erkennungen",
+  "scanner.notesAndErrors": "Hinweise und Fehler",
+  "scanner.inProgress": "In Bearbeitung",
+  "scanner.noTargets": "Keine Scanziele aufgezeichnet",
+  "scanner.noDetections": "Keine Bedrohungen erkannt",
+  "scanner.unknownThreat": "Unbekannte Bedrohung",
+  "scanner.resultThreats": "{count} Bedrohung(en) gefunden",
+  "scanner.resultClean": "Keine Bedrohungen gefunden"
 }

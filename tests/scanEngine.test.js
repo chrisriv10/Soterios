@@ -280,6 +280,8 @@ describe('ScanEngine', () => {
     assert.equal(result.success, true);
     assert.equal(result.threatsFound, 1);
     assert.equal(result.threats.length, 1);
+    assert.equal(engine.getStatus().lastResult.threats.length, 1);
+    assert.equal(engine.getStatus().lastResult.threats[0].name, 'Eicar-Test-Signature');
   });
 
   it('runScan skips quarantining files whose hash is trusted', async () => {
@@ -594,12 +596,15 @@ describe('ScanEngine', () => {
     assert.equal(scanningEvent.targetCount, 1);
     assert.equal(scanningEvent.progressEstimated, false);
     assert.ok(scanningEvent.startedAt);
+    const targetCompleteEvent = progressEvents.find((event) => event.completedTargets?.includes(tmp));
+    assert.ok(targetCompleteEvent, 'expected progress after the target finished scanning');
 
     const status = engine.getStatus();
     assert.equal(status.isScanning, false);
     assert.equal(status.lastResult.status, 'completed');
     assert.equal(status.lastResult.filesScanned, 3);
     assert.equal(status.lastResult.progress, 100);
+    assert.deepEqual(status.lastResult.completedTargets, [tmp]);
   });
 
   it('clears the retained result when the next scan starts', async () => {

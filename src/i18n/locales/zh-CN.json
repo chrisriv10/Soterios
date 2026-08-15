@@ -1334,5 +1334,18 @@
   "scanner.phaseCanceling": "正在取消",
   "scanner.phaseCompleted": "已完成",
   "scanner.phaseFailed": "失败",
-  "scanner.phaseCanceled": "已取消"
+  "scanner.phaseCanceled": "已取消",
+  "scanner.expandDetails": "展开详情",
+  "scanner.collapseDetails": "收起详情",
+  "scanner.startedAt": "开始时间",
+  "scanner.completedAt": "完成时间",
+  "scanner.scannedTargets": "已扫描目标",
+  "scanner.detections": "检测结果",
+  "scanner.notesAndErrors": "备注和错误",
+  "scanner.inProgress": "进行中",
+  "scanner.noTargets": "未记录扫描目标",
+  "scanner.noDetections": "未检测到威胁",
+  "scanner.unknownThreat": "未知威胁",
+  "scanner.resultThreats": "发现 {count} 个威胁",
+  "scanner.resultClean": "未发现威胁"
 }

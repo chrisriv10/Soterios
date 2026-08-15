@@ -1334,5 +1334,18 @@
   "scanner.phaseCanceling": "Отмена",
   "scanner.phaseCompleted": "Завершено",
   "scanner.phaseFailed": "Ошибка",
-  "scanner.phaseCanceled": "Отменено"
+  "scanner.phaseCanceled": "Отменено",
+  "scanner.expandDetails": "Развернуть сведения",
+  "scanner.collapseDetails": "Свернуть сведения",
+  "scanner.startedAt": "Начато",
+  "scanner.completedAt": "Завершено",
+  "scanner.scannedTargets": "Проверенные цели",
+  "scanner.detections": "Обнаружения",
+  "scanner.notesAndErrors": "Примечания и ошибки",
+  "scanner.inProgress": "Выполняется",
+  "scanner.noTargets": "Цели сканирования не записаны",
+  "scanner.noDetections": "Угрозы не обнаружены",
+  "scanner.unknownThreat": "Неизвестная угроза",
+  "scanner.resultThreats": "Обнаружено угроз: {count}",
+  "scanner.resultClean": "Угрозы не найдены"
 }

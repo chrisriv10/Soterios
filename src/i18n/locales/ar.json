@@ -1417,5 +1417,18 @@
   "scanner.phaseCanceling": "جارٍ الإلغاء",
   "scanner.phaseCompleted": "مكتمل",
   "scanner.phaseFailed": "فشل",
-  "scanner.phaseCanceled": "ملغى"
+  "scanner.phaseCanceled": "ملغى",
+  "scanner.expandDetails": "توسيع التفاصيل",
+  "scanner.collapseDetails": "طي التفاصيل",
+  "scanner.startedAt": "بدأ",
+  "scanner.completedAt": "اكتمل",
+  "scanner.scannedTargets": "أهداف الفحص",
+  "scanner.detections": "الاكتشافات",
+  "scanner.notesAndErrors": "الملاحظات والأخطاء",
+  "scanner.inProgress": "قيد التنفيذ",
+  "scanner.noTargets": "لم تُسجل أهداف فحص",
+  "scanner.noDetections": "لم تُكتشف تهديدات",
+  "scanner.unknownThreat": "تهديد غير معروف",
+  "scanner.resultThreats": "تم العثور على {count} تهديد",
+  "scanner.resultClean": "لم يتم العثور على تهديدات"
 }
