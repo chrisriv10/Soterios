@@ -34,6 +34,15 @@ function positionIcon(icon, input) {
   icon.style.left = `${rect.right + window.scrollX - 20}px`;
 }
 
+async function trackReuse(password, hostname) {
+  const hash = await computeSha256(password);
+  const { reuseMap } = await chrome.storage.local.get('reuseMap');
+  const map = reuseMap || {};
+  const reuse = checkReuse(map, hash, hostname);
+  await chrome.storage.local.set({ reuseMap: storeReuse(map, hash, hostname, Date.now()) });
+  return reuse;
+}
+
 async function onIconClick(e) {
   const input = e.target.dataset.forInput;
   const el = document.querySelector(`[data-soterios-id="${input}"]`);
@@ -44,7 +53,8 @@ async function onIconClick(e) {
 
   try {
     const result = await chrome.runtime.sendMessage({ type: 'CHECK_PASSWORD', password });
-    showResult(el, result);
+    const reuse = await trackReuse(password, location.hostname);
+    showResult(el, result, reuse);
     // Forward breach to desktop app for alerting
     if (notifyDesktopEnabled && result && result.pwned && result.count > 0) {
       await chrome.runtime.sendMessage({
@@ -52,34 +62,60 @@ async function onIconClick(e) {
         payload: { domain: location.hostname, count: result.count }
       });
     }
+    if (reuse.reused) {
+      await chrome.runtime.sendMessage({ type: 'REUSE_DETECTED', domain: location.hostname });
+    }
   } catch (err) {
     console.error('[Soterios] Check failed:', err);
   }
 }
 
-function showResult(input, result) {
+function showResult(input, result, reuse) {
   removeResult(input);
 
-  const badge = document.createElement('span');
-  badge.dataset.soteriosBadge = input.dataset.soteriosId;
-  badge.style.cssText = `
-    position: absolute;
-    top: -20px; right: -20px;
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-size: 11px;
-    font-weight: 600;
-    color: white;
-    z-index: 2147483647;
-    background: ${result.pwned ? '#dc3545' : '#28a745'};
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-  `;
-  badge.textContent = result.pwned ? `Pwned ${result.count}x` : 'Safe';
-  badge.title = result.pwned
-    ? `Found in ${result.count} breach${result.count !== 1 ? 'es' : ''}. Change immediately.`
-    : 'Not found in known breaches (HIBP)';
-  input.parentElement.style.position = 'relative';
-  input.parentElement.appendChild(badge);
+  const badges = [];
+  if (result && result.pwned) {
+    badges.push({
+      text: `Pwned ${result.count}x`,
+      bg: '#dc3545',
+      title: `Found in ${result.count} breach${result.count !== 1 ? 'es' : ''}. Change immediately.`
+    });
+  }
+  if (reuse && reuse.reused) {
+    badges.push({
+      text: `Reused on ${reuse.otherDomain}`,
+      bg: '#f59e0b',
+      title: `Same password used on ${reuse.otherDomain}. Consider a unique password.`
+    });
+  }
+  if (badges.length === 0) {
+    badges.push({
+      text: 'Safe',
+      bg: '#28a745',
+      title: 'Not found in known breaches (HIBP)'
+    });
+  }
+
+  badges.forEach((badgeSpec, i) => {
+    const badge = document.createElement('span');
+    badge.dataset.soteriosBadge = input.dataset.soteriosId;
+    badge.style.cssText = `
+      position: absolute;
+      top: ${-20 - i * 24}px; right: -20px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 600;
+      color: white;
+      z-index: 2147483647;
+      background: ${badgeSpec.bg};
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    `;
+    badge.textContent = badgeSpec.text;
+    badge.title = badgeSpec.title;
+    input.parentElement.style.position = 'relative';
+    input.parentElement.appendChild(badge);
+  });
 
   setTimeout(() => removeResult(input), 5000);
 }
@@ -127,12 +163,17 @@ function setupAutoCheck(input) {
         if (!password) return;
         try {
           const result = await chrome.runtime.sendMessage({ type: 'CHECK_PASSWORD', password });
+          const reuse = await trackReuse(password, location.hostname);
+          showResult(input, result, reuse);
           if (notifyDesktopEnabled && result && result.pwned && result.count > 0) {
             // Forward breach to desktop app for alerting
             await chrome.runtime.sendMessage({
               type: 'FORWARD_CREDENTIAL_LEAK',
               payload: { domain: location.hostname, count: result.count }
             });
+          }
+          if (reuse.reused) {
+            await chrome.runtime.sendMessage({ type: 'REUSE_DETECTED', domain: location.hostname });
           }
         } catch (err) {
           console.error('[Soterios] Auto-check failed:', err);
