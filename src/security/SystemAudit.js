@@ -198,7 +198,7 @@ class SystemAudit {
   }
 
   async checkDefenderHardening() {
-    const h = await this.runPowerShell(`$pref = Get-MpPreference -ErrorAction SilentlyContinue; $status = Get-MpComputerStatus -ErrorAction SilentlyContinue; $cloud = if ($pref) { [int]$pref.MAPSReporting } else { $null }; $netProt = if ($pref -and $pref.PSObject.Properties.Name -contains 'EnableNetworkProtection') { [bool]$pref.EnableNetworkProtection } else { $null }; $tamper = if ($status) { [bool]$status.IsTamperProtected } else { $null }; [PSCustomObject]@{ tamperProtected = $tamper; cloudProtectionLevel = $cloud; networkProtection = $netProt } | ConvertTo-Json -Depth 6`);
+    const h = await this.runPowerShell(`$pref = Get-MpPreference -ErrorAction SilentlyContinue; $status = Get-MpComputerStatus -ErrorAction SilentlyContinue; $cloud = if ($pref -and $pref.PSObject.Properties.Name -contains 'MAPSReporting' -and $null -ne $pref.MAPSReporting) { [int]$pref.MAPSReporting } else { $null }; $netFromPref = if ($pref -and $pref.PSObject.Properties.Name -contains 'EnableNetworkProtection') { $pref.EnableNetworkProtection } else { $null }; $netFromReg = $null; try { $regVal = (Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows Defender\\Windows Defender Exploit Guard\\Network Protection' -ErrorAction Stop).EnableNetworkProtection; if ($null -ne $regVal) { $netFromReg = [int]$regVal } } catch { }; function Get-NetMode([object]$val) { if ($null -eq $val) { return 'unknown' }; if ($val -is [bool]) { if ($val) { return 'block' } else { return 'off' } }; if ($val -is [string]) { switch ($val.Trim().ToLower()) { '1' { return 'block' } 'true' { return 'block' } 'enabled' { return 'block' } '2' { return 'audit' } '0' { return 'off' } 'false' { return 'off' } 'disabled' { return 'off' } default { return 'unknown' } } }; $n = 0; if ($val -is [int] -or $val -is [long] -or $val -is [double] -or $val -is [decimal]) { $n = [int]$val } else { return 'unknown' }; if ($n -eq 1) { return 'block' }; if ($n -eq 2) { return 'audit' }; if ($n -eq 0) { return 'off' }; return 'unknown' }; $netMode = Get-NetMode $netFromPref; if ($netMode -eq 'unknown') { $netMode = Get-NetMode $netFromReg }; $tamper = if ($status) { [bool]$status.IsTamperProtected } else { $null }; [PSCustomObject]@{ tamperProtected = $tamper; cloudProtectionLevel = $cloud; networkProtectionMode = $netMode } | ConvertTo-Json -Depth 6`);
     const errorRow = (name) => ({
       name, section: 'antivirus', status: 'error',
       message: 'Could not query Defender hardening settings.',
@@ -231,15 +231,19 @@ class SystemAudit {
     }
     if (Number(data.cloudProtectionLevel) > 0) {
       out.push({ name: 'Cloud-delivered Protection', section: 'antivirus', status: 'pass', message: 'Cloud-delivered protection is active.', detail: 'New threats are blocked using up-to-the-minute cloud intelligence.', recommendation: '', actionUri: 'ms-settings:windowsdefender' });
-    } else {
+    } else if (data.cloudProtectionLevel === 0) {
       out.push({ name: 'Cloud-delivered Protection', section: 'antivirus', status: 'fail', message: 'Cloud-delivered protection is off!', detail: 'Protection relies only on locally installed signatures.', recommendation: 'Turn on cloud-delivered protection in Windows Security > Virus & threat protection > Manage settings.', actionUri: 'ms-settings:windowsdefender' });
+    } else {
+      out.push({ name: 'Cloud-delivered Protection', section: 'antivirus', status: 'info', message: 'Cloud-delivered protection status could not be determined.', detail: 'This setting may not be reported on this system.', actionUri: 'ms-settings:windowsdefender' });
     }
-    if (data.networkProtection === true) {
+    if (data.networkProtectionMode === 'block') {
       out.push({ name: 'Network Protection', section: 'antivirus', status: 'pass', message: 'Network protection is on.', detail: 'Malicious connections and phishing sites are blocked.', recommendation: '', actionUri: 'ms-settings:windowsdefender' });
-    } else if (data.networkProtection === false) {
+    } else if (data.networkProtectionMode === 'audit') {
+      out.push({ name: 'Network Protection', section: 'antivirus', status: 'info', message: 'Network protection is in audit mode.', detail: 'Malicious connections are logged but not blocked.', recommendation: 'Enable block mode in Windows Security > App & browser control.', actionUri: 'ms-settings:windowsdefender' });
+    } else if (data.networkProtectionMode === 'off') {
       out.push({ name: 'Network Protection', section: 'antivirus', status: 'fail', message: 'Network protection is off!', detail: 'Malicious network connections are not blocked.', recommendation: 'Enable network protection in Windows Security > App & browser control.', actionUri: 'ms-settings:windowsdefender' });
     } else {
-      out.push({ name: 'Network Protection', section: 'antivirus', status: 'info', message: 'Network protection status could not be determined.', detail: 'This setting is not available on this system.', actionUri: 'ms-settings:windowsdefender' });
+      out.push({ name: 'Network Protection', section: 'antivirus', status: 'info', message: 'Network protection status could not be determined.', detail: 'Windows did not report a network protection state.', actionUri: 'ms-settings:windowsdefender' });
     }
     return out;
   }

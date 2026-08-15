@@ -33,7 +33,7 @@ describe('SystemAudit', () => {
           stdout: JSON.stringify({
             tamperProtected: true,
             cloudProtectionLevel: 2,
-            networkProtection: true
+            networkProtectionMode: 'block'
           }),
           stderr: ''
         };
@@ -440,7 +440,7 @@ describe('SystemAudit', () => {
   it('checkDefenderHardening flags tamper protection off', async () => {
     currentExecHandler = async () => {
       return {
-        stdout: JSON.stringify({ tamperProtected: false, cloudProtectionLevel: 2, networkProtection: true }),
+        stdout: JSON.stringify({ tamperProtected: false, cloudProtectionLevel: 2, networkProtectionMode: 'block' }),
         stderr: ''
       };
     };
@@ -454,7 +454,7 @@ describe('SystemAudit', () => {
   it('checkDefenderHardening flags cloud protection off', async () => {
     currentExecHandler = async () => {
       return {
-        stdout: JSON.stringify({ tamperProtected: true, cloudProtectionLevel: 0, networkProtection: true }),
+        stdout: JSON.stringify({ tamperProtected: true, cloudProtectionLevel: 0, networkProtectionMode: 'block' }),
         stderr: ''
       };
     };
@@ -467,7 +467,7 @@ describe('SystemAudit', () => {
   it('checkDefenderHardening flags network protection off', async () => {
     currentExecHandler = async () => {
       return {
-        stdout: JSON.stringify({ tamperProtected: true, cloudProtectionLevel: 2, networkProtection: false }),
+        stdout: JSON.stringify({ tamperProtected: true, cloudProtectionLevel: 2, networkProtectionMode: 'off' }),
         stderr: ''
       };
     };
@@ -475,6 +475,45 @@ describe('SystemAudit', () => {
     const results = await audit.checkDefenderHardening();
     assert.equal(results[2].status, 'fail');
     assert.ok(results[2].message.includes('off'));
+  });
+
+  it('checkDefenderHardening reports audit mode as info, not pass', async () => {
+    currentExecHandler = async () => {
+      return {
+        stdout: JSON.stringify({ tamperProtected: true, cloudProtectionLevel: 2, networkProtectionMode: 'audit' }),
+        stderr: ''
+      };
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkDefenderHardening();
+    assert.equal(results[2].status, 'info');
+    assert.ok(results[2].message.includes('audit mode'));
+  });
+
+  it('checkDefenderHardening reports unknown network protection as info, not fail', async () => {
+    currentExecHandler = async () => {
+      return {
+        stdout: JSON.stringify({ tamperProtected: true, cloudProtectionLevel: 2, networkProtectionMode: 'unknown' }),
+        stderr: ''
+      };
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkDefenderHardening();
+    assert.equal(results[2].status, 'info');
+    assert.ok(results[2].message.includes('could not be determined'));
+  });
+
+  it('checkDefenderHardening reports unreported cloud protection as info, not fail', async () => {
+    currentExecHandler = async () => {
+      return {
+        stdout: JSON.stringify({ tamperProtected: true, cloudProtectionLevel: null, networkProtectionMode: 'block' }),
+        stderr: ''
+      };
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkDefenderHardening();
+    assert.equal(results[1].status, 'info');
+    assert.ok(results[1].message.includes('could not be determined'));
   });
 
   it('checkDefenderHardening handles query failures with manage URI', async () => {
