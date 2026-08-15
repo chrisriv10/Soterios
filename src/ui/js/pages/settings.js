@@ -466,6 +466,7 @@ window.Pages.settings = {
       input.disabled = true;
       try {
         await Api.updateSettings({ features: { [key]: value } });
+        window.DashboardCache?.invalidate?.();
         statusEl.textContent = t('settings.featureSaved');
         if (showToast) {
           const featureName = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim();
