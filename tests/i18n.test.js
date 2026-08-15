@@ -37,7 +37,20 @@ const visualizationKeys = [
   'network.heatmapStatesPorts',
   'network.heatmapEndpoints',
   'network.heatmapFocusCluster',
-  'network.heatmapNone'
+  'network.heatmapNone',
+  'network.historyHeading',
+  'network.historyRestore',
+  'network.historyRangeAria',
+  'network.historyRange1h',
+  'network.historyRange6h',
+  'network.historyRange24h',
+  'network.historyRange7d',
+  'network.historyCurrent',
+  'network.historyAverage',
+  'network.historyPeakBoth',
+  'network.historyPeakCallout',
+  'network.historyKeyboardHelp',
+  'network.historySummary'
 ];
 
 describe('i18n - missing translation detection', () => {

@@ -3,7 +3,10 @@ window.Pages['network'] = {
   REFRESH_INTERVAL_MS: 3000,
   CHART_REFRESH_INTERVAL_MS: 30000,
   _connectionQuery: '',
-  _lastChartSeries: null,
+  _historyRangeHours: 24,
+  _historyCache: new Map(),
+  _historyRequestToken: 0,
+  _historyInspectIndex: null,
   _connectionRiskFilter: 'all',
   _connectionStateFilter: 'all',
   _geoCache: {},
@@ -517,6 +520,22 @@ window.Pages['network'] = {
       content.addEventListener('click', (e) => {
         if (window.Pages['network']._heatmapSuppressClick) {
           window.Pages['network']._heatmapSuppressClick = false;
+          return;
+        }
+        const historyRange = e.target.closest('[data-history-hours]');
+        if (historyRange) {
+          const page = window.Pages['network'];
+          const hours = Number(historyRange.dataset.historyHours);
+          if (page._historyRangePayload(hours).hours !== page._historyRangeHours) {
+            page._historyRangeHours = hours;
+            page._historyInspectIndex = null;
+            content.querySelectorAll('[data-history-hours]').forEach((button) => {
+              const active = Number(button.dataset.historyHours) === hours;
+              button.classList.toggle('is-active', active);
+              button.setAttribute('aria-pressed', active ? 'true' : 'false');
+            });
+            page.paintHistoryChart(content).catch(() => {});
+          }
           return;
         }
         const zoomIn = e.target.closest('#heatmapZoomIn');
@@ -1075,14 +1094,22 @@ if (content) this.paintHistoryChart(content).catch(() => {});
 
       if (networkTrafficHistoryEnabled) {
         const histMin = this._minimized.has('history');
-        html += '<div class="card" style="padding:16px 18px 14px; margin-bottom:18px;">';
-        html += `<div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:${histMin ? '0' : '12px'};"><div style="display:flex; align-items:center; gap:18px; flex-wrap:wrap;"><h3 style="margin:0; font-size:1rem;">${escapeHtml(t('network.historyTitle'))}</h3><div id="networkHistoryLegend" style="display:${histMin ? 'none' : 'flex'}; align-items:center; gap:18px; font-size:0.78rem; color:var(--text-dim);"></div></div><button class="card-minimize-btn" data-card-id="history" title="${histMin ? 'Restore' : 'Minimize'}" style="background:none; border:none; cursor:pointer; color:var(--text-dim); font-size:1rem; padding:0 4px; line-height:1; transition:transform 0.2s;" aria-label="${histMin ? 'Restore' : 'Minimize'}">${histMin ? '&#9660;' : '&#9650;'}</button></div>`;
+        const historyMinimizeLabel = histMin ? t('network.historyRestore') : t('common.minimize');
+        const historyRanges = [1, 6, 24, 168].map((hours) => {
+          const key = hours === 168 ? '7d' : `${hours}h`;
+          const active = hours === this._historyRangeHours;
+          return `<button type="button" class="history-range-btn${active ? ' is-active' : ''}" data-history-hours="${hours}" aria-pressed="${active ? 'true' : 'false'}">${escapeHtml(t(`network.historyRange${key}`))}</button>`;
+        }).join('');
+        html += '<div class="card history-card">';
+        html += `<div class="history-heading"><div><h3>${escapeHtml(t('network.historyHeading'))}</h3>${histMin ? '' : `<div class="history-range-selector" role="group" aria-label="${escapeHtml(t('network.historyRangeAria'))}">${historyRanges}</div>`}</div><button class="card-minimize-btn" data-card-id="history" title="${escapeHtml(historyMinimizeLabel)}" aria-label="${escapeHtml(historyMinimizeLabel)}">${histMin ? '&#9660;' : '&#9650;'}</button></div>`;
         if (!histMin) {
-          html += '<div id="networkHistoryChartWrap" style="position:relative;">';
-          html += '<canvas id="networkHistoryChart" style="width:100%; height:190px; display:block; cursor:crosshair;"></canvas>';
-          html += '<div id="networkHistoryTooltip" style="position:absolute; top:0; left:0; display:none; pointer-events:none; transform:translate(-50%, -110%); background:var(--bg-base); border:1px solid var(--glass-border); border-radius:8px; padding:7px 10px; font-size:0.72rem; line-height:1.5; box-shadow:0 8px 24px rgba(0,0,0,0.35); white-space:nowrap; z-index:5;"></div>';
+          html += '<div id="networkHistoryLegend" class="history-legend"></div>';
+          html += '<div id="networkHistoryChartWrap" class="history-chart-wrap">';
+          html += `<canvas id="networkHistoryChart" tabindex="0" role="img" aria-describedby="networkHistoryKeyboardHelp"></canvas>`;
+          html += '<div id="networkHistoryTooltip" class="history-tooltip" hidden></div>';
           html += '</div>';
-          html += `<div id="networkHistoryEmpty" class="empty-state" style="font-size:0.85rem; display:none;">${escapeHtml(t('network.historyEmpty'))}</div>`;
+          html += `<div id="networkHistoryKeyboardHelp" class="history-keyboard-help">${escapeHtml(t('network.historyKeyboardHelp'))}</div>`;
+          html += `<div id="networkHistoryEmpty" class="empty-state history-empty" hidden>${escapeHtml(t('network.historyEmpty'))}</div>`;
         }
         html += '</div>';
       }
@@ -1378,285 +1405,387 @@ if (content) this.paintHistoryChart(content).catch(() => {});
     return niceNorm * base;
   },
 
+  _historyRangePayload(hours = this._historyRangeHours) {
+    const value = Number(hours);
+    return { hours: [1, 6, 24, 168].includes(value) ? value : 24 };
+  },
+
+  _beginHistoryRequest(hours = this._historyRangeHours) {
+    const payload = this._historyRangePayload(hours);
+    return { token: ++this._historyRequestToken, hours: payload.hours, payload };
+  },
+
+  _resolveHistoryRequest(request, rows, failed = false) {
+    if (!request || request.token !== this._historyRequestToken) return { stale: true, rows: [] };
+    if (failed) return { stale: false, rows: this._historyCache.get(request.hours) || [], fromCache: true };
+    const safeRows = Array.isArray(rows) ? rows : [];
+    this._historyCache.set(request.hours, safeRows);
+    return { stale: false, rows: safeRows, fromCache: false };
+  },
+
+  _normalizeHistoryRows(rows) {
+    const buckets = new Map();
+    for (const row of rows || []) {
+      const rawTime = row?.recorded_at ?? row?.t;
+      const ms = rawTime instanceof Date ? rawTime.getTime() : Date.parse(rawTime);
+      if (!Number.isFinite(ms)) continue;
+      const point = buckets.get(ms) || { t: new Date(ms).toISOString(), ms, rx: 0, tx: 0 };
+      point.rx += Math.max(0, Number(row.rx_sec ?? row.rx) || 0);
+      point.tx += Math.max(0, Number(row.tx_sec ?? row.tx) || 0);
+      buckets.set(ms, point);
+    }
+    return Array.from(buckets.values()).sort((a, b) => a.ms - b.ms);
+  },
+
+  _historyMetrics(series) {
+    if (!series.length) return null;
+    let rxTotal = 0, txTotal = 0;
+    let rxPeak = { value: -1, index: 0, point: series[0] };
+    let txPeak = { value: -1, index: 0, point: series[0] };
+    series.forEach((point, index) => {
+      rxTotal += point.rx;
+      txTotal += point.tx;
+      if (point.rx > rxPeak.value) rxPeak = { value: point.rx, index, point };
+      if (point.tx > txPeak.value) txPeak = { value: point.tx, index, point };
+    });
+    return {
+      current: series[series.length - 1],
+      average: { rx: rxTotal / series.length, tx: txTotal / series.length },
+      peak: { rx: rxPeak, tx: txPeak }
+    };
+  },
+
+  _downsampleHistory(series, maxBuckets) {
+    const limit = Math.max(1, Math.floor(Number(maxBuckets) || 1));
+    if (series.length <= limit) {
+      return series.map((point, index) => ({
+        ...point, rawStart: index, rawEnd: index,
+        rxPeak: { value: point.rx, index, point },
+        txPeak: { value: point.tx, index, point }
+      }));
+    }
+    const result = [];
+    for (let bucketIndex = 0; bucketIndex < limit; bucketIndex++) {
+      const start = Math.floor((bucketIndex / limit) * series.length);
+      const endExclusive = Math.floor(((bucketIndex + 1) / limit) * series.length);
+      const end = Math.max(start, endExclusive - 1);
+      const slice = series.slice(start, end + 1);
+      if (!slice.length) continue;
+      let rx = 0, tx = 0, ms = 0;
+      let rxPeak = { value: -1, index: start, point: slice[0] };
+      let txPeak = { value: -1, index: start, point: slice[0] };
+      slice.forEach((point, offset) => {
+        const rawIndex = start + offset;
+        rx += point.rx;
+        tx += point.tx;
+        ms += point.ms;
+        if (point.rx > rxPeak.value) rxPeak = { value: point.rx, index: rawIndex, point };
+        if (point.tx > txPeak.value) txPeak = { value: point.tx, index: rawIndex, point };
+      });
+      const averageMs = ms / slice.length;
+      result.push({
+        t: new Date(averageMs).toISOString(), ms: averageMs,
+        rx: rx / slice.length, tx: tx / slice.length,
+        rawStart: start, rawEnd: end, rxPeak, txPeak
+      });
+    }
+    return result;
+  },
+
+  _historyLabelMode(hours = this._historyRangeHours) {
+    return Number(hours) === 168 ? 'date' : 'time';
+  },
+
+  _formatHistoryTimestamp(value, hours = this._historyRangeHours, detailed = false) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (!Number.isFinite(date.getTime())) return '';
+    if (this._historyLabelMode(hours) === 'date') {
+      return date.toLocaleString([], detailed
+        ? { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }
+        : { month: 'short', day: 'numeric' });
+    }
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  },
+
   async paintHistoryChart(content) {
+    return this._paintHistoryCanvas(content);
+  },
+  async _paintHistoryCanvas(content) {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const canvas = content.querySelector('#networkHistoryChart');
     const empty = content.querySelector('#networkHistoryEmpty');
     const legend = content.querySelector('#networkHistoryLegend');
     const tooltip = content.querySelector('#networkHistoryTooltip');
     if (!canvas) return;
-    const networkTrafficHistoryEnabled = await window.api.invoke('db:getSetting', 'feature.networkTrafficHistory', true);
-    if (!networkTrafficHistoryEnabled) return;
+    const enabled = await window.api.invoke('db:getSetting', 'feature.networkTrafficHistory', true);
+    if (!enabled || !canvas.isConnected) return;
+
+    const hours = this._historyRangePayload().hours;
+    const request = this._beginHistoryRequest(hours);
     let rows = [];
+    let failed = false;
     try {
-      rows = await window.api.invoke('network:history', { hours: 24 }) || [];
+      rows = await window.api.invoke('network:history', request.payload) || [];
     } catch (_) {
-      rows = [];
+      failed = true;
     }
-
-    // Use cached data if fetch returns empty but we have previous data
-    if (!rows.length) {
-      if (this._lastChartSeries && this._lastChartSeries.length) {
-        rows = this._lastChartSeries; // use cached series format
-      } else {
-        if (empty) empty.style.display = '';
-        canvas.style.display = 'none';
-        if (legend) legend.innerHTML = '';
-        if (tooltip) tooltip.style.display = 'none';
-        return;
-      }
+    const resolved = this._resolveHistoryRequest(request, rows, failed);
+    if (resolved.stale || !canvas.isConnected) return;
+    const series = this._normalizeHistoryRows(resolved.rows);
+    if (!series.length) {
+      if (empty) empty.hidden = false;
+      canvas.hidden = true;
+      if (legend) legend.innerHTML = '';
+      if (tooltip) tooltip.hidden = true;
+      return;
     }
+    if (empty) empty.hidden = true;
+    canvas.hidden = false;
 
-    if (empty) empty.style.display = 'none';
-    canvas.style.display = 'block';
-
-    const buckets = new Map();
-    for (const row of rows) {
-      const key = row.recorded_at;
-      const cur = buckets.get(key) || { t: key, rx: 0, tx: 0 };
-      cur.rx += Number(row.rx_sec) || 0;
-      cur.tx += Number(row.tx_sec) || 0;
-      buckets.set(key, cur);
-    }
-    const series = [...buckets.values()].sort((a, b) => a.t.localeCompare(b.t));
-
-    // Cache successful data for timer refreshes
-    this._lastChartSeries = rows;
-
-    const allValues = series.flatMap((p) => [p.rx, p.tx]);
-    const dataMin = allValues.length ? Math.min(...allValues, 0) : 0;
-    const dataMax = allValues.length ? Math.max(...allValues, 0.1) : 0.1;
-    const dataRange = dataMax - dataMin || 0.1;
-
-    // --- legend: current + 24h peak for each direction ---
-    const last = series[series.length - 1];
-    const peakRx = Math.max(...series.map((p) => p.rx));
-    const peakTx = Math.max(...series.map((p) => p.tx));
+    const metrics = this._historyMetrics(series);
+    const rangeKey = hours === 168 ? '7d' : `${hours}h`;
+    const rate = (value) => `${formatBytes(value)}/s`;
     if (legend) {
-      const legendRow = (color, glow, label, current, peak) => `
-        <span style="display:flex; align-items:center; gap:6px;">
-          <span style="width:8px; height:8px; border-radius:50%; background:${color}; box-shadow:0 0 6px ${glow}; display:inline-block; flex-shrink:0;"></span>
-          ${escapeHtml(label)}
-          <strong style="color:var(--text-main); font-weight:600;">${escapeHtml(formatBytes(current))}/s</strong>
-          <span style="opacity:0.7;">${escapeHtml(t('network.historyPeak', { value: `${formatBytes(peak)}/s` }))}</span>
-        </span>`;
+      const legendRow = (directionClass, label, current, average, peak) => `
+        <div class="history-legend-series ${directionClass}">
+          <span class="history-legend-name"><i></i>${escapeHtml(label)}</span>
+          <span>${escapeHtml(t('network.historyCurrent', { value: rate(current) }))}</span>
+          <span>${escapeHtml(t('network.historyAverage', { value: rate(average) }))}</span>
+          <span>${escapeHtml(t('network.historyPeak', { value: rate(peak) }))}</span>
+        </div>`;
       legend.innerHTML =
-        legendRow('var(--accent-primary)', 'var(--accent-primary-glow)', t('network.historyDownload'), last.rx, peakRx) +
-        legendRow('var(--ok)', 'var(--ok-glow)', t('network.historyUpload'), last.tx, peakTx);
+        legendRow('history-download', t('network.historyDownload'), metrics.current.rx, metrics.average.rx, metrics.peak.rx.value) +
+        legendRow('history-upload', t('network.historyUpload'), metrics.current.tx, metrics.average.tx, metrics.peak.tx.value);
     }
 
-    // --- high-DPI canvas sizing ---
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
     const cssW = Math.max(1, Math.round(rect.width) || canvas.parentElement.clientWidth || 600);
-    const cssH = Math.max(1, Math.round(rect.height) || 190);
+    const cssH = Math.max(1, Math.round(rect.height) || 220);
     canvas.width = Math.round(cssW * dpr);
     canvas.height = Math.round(cssH * dpr);
     const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const padL = 64, padR = 8, padT = 10, padB = 20;
+    const padL = 64, padR = 12, padT = 38, padB = 23;
     const plotW = Math.max(1, cssW - padL - padR);
     const plotH = Math.max(1, cssH - padT - padB);
-    const xAt = (i) => padL + (series.length > 1 ? (i / (series.length - 1)) * plotW : plotW / 2);
-    const yAt = (v) => {
-      const norm = (v - dataMin) / dataRange;
-      return padT + plotH - plotH * 0.075 - norm * plotH * 0.85;
-    };
+    const rendered = this._downsampleHistory(series, Math.max(1, Math.round(plotW)));
+    const startMs = series[0].ms;
+    const endMs = series[series.length - 1].ms;
+    const timeSpan = endMs - startMs;
+    const xAtMs = (ms) => timeSpan > 0 ? padL + ((ms - startMs) / timeSpan) * plotW : padL + plotW / 2;
+    const axisMax = this._niceAxisMax(Math.max(metrics.peak.rx.value, metrics.peak.tx.value));
+    const yAt = (value) => padT + plotH - (Math.max(0, value) / axisMax) * plotH;
 
     const rootStyle = getComputedStyle(canvas);
-    const cssVar = (name, fallback) => {
-      const v = rootStyle.getPropertyValue(name).trim();
-      return v && !v.includes('var(') ? v : fallback;
+    const cssVar = (name, fallbackName) => {
+      const value = rootStyle.getPropertyValue(name).trim();
+      if (value && !value.includes('var(')) return value;
+      return fallbackName ? rootStyle.getPropertyValue(fallbackName).trim() : '';
     };
-    const colorRx = cssVar('--accent-primary', '#58A6FF');
-    const colorTx = cssVar('--accent-success', '#3FB950');
-    const textDim = cssVar('--text-dim', cssVar('--text-muted', 'rgba(139,148,158,0.85)'));
-    const fontFamily = 'Inter, -apple-system, BlinkMacSystemFont, Arial, sans-serif';
-    const gridColor = 'rgba(127,135,150,0.14)';
+    const colorRx = cssVar('--accent-primary', '--text-main');
+    const colorTx = cssVar('--ok', '--accent-primary');
+    const textDim = cssVar('--text-dim', '--text-muted');
+    const textMain = cssVar('--text-main', '--text-primary');
+    const gridColor = cssVar('--glass-border', '--text-dim');
+    const surfaceColor = cssVar('--bg-surface', '--bg-base');
+    const fontFamily = rootStyle.fontFamily || 'sans-serif';
 
-    const pathThrough = (pts) => {
-      const p = new Path2D();
-      if (!pts.length) return p;
-      p.moveTo(pts[0].x, pts[0].y);
-      for (let i = 1; i < pts.length - 1; i++) {
-        const xc = (pts[i].x + pts[i + 1].x) / 2;
-        const yc = (pts[i].y + pts[i + 1].y) / 2;
-        p.quadraticCurveTo(pts[i].x, pts[i].y, xc, yc);
+    const pathThrough = (points) => {
+      const path = new Path2D();
+      if (!points.length) return path;
+      path.moveTo(points[0].x, points[0].y);
+      for (let index = 1; index < points.length - 1; index++) {
+        const midpointX = (points[index].x + points[index + 1].x) / 2;
+        const midpointY = (points[index].y + points[index + 1].y) / 2;
+        path.quadraticCurveTo(points[index].x, points[index].y, midpointX, midpointY);
       }
-      if (pts.length > 1) {
-        const a = pts[pts.length - 2];
-        const b = pts[pts.length - 1];
-        p.quadraticCurveTo(a.x, a.y, b.x, b.y);
+      if (points.length > 1) {
+        const beforeLast = points[points.length - 2];
+        const last = points[points.length - 1];
+        path.quadraticCurveTo(beforeLast.x, beforeLast.y, last.x, last.y);
       }
-      return p;
+      return path;
     };
 
-    const draw = (hoverIdx) => {
+    const rxPoints = rendered.map((point) => ({ x: xAtMs(point.ms), y: yAt(point.rx) }));
+    const txPoints = rendered.map((point) => ({ x: xAtMs(point.ms), y: yAt(point.tx) }));
+    const drawArea = (points, color) => {
+      if (!points.length) return;
+      const path = new Path2D(pathThrough(points));
+      path.lineTo(points[points.length - 1].x, padT + plotH);
+      path.lineTo(points[0].x, padT + plotH);
+      path.closePath();
+      ctx.save();
+      ctx.globalAlpha = .12;
+      ctx.fillStyle = color;
+      ctx.fill(path);
+      ctx.restore();
+    };
+    const drawLine = (points, color) => {
+      if (!points.length) return;
+      ctx.save();
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 7;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.2;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.stroke(pathThrough(points));
+      ctx.restore();
+    };
+    const drawPoint = (x, y, color, radius = 3) => {
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    };
+    const drawCallout = (x, y, label, color) => {
+      ctx.save();
+      ctx.font = `10px ${fontFamily}`;
+      const width = Math.min(plotW, ctx.measureText(label).width + 14);
+      const left = Math.max(padL, Math.min(padL + plotW - width, x - width / 2));
+      const top = Math.max(3, y - 27);
+      ctx.fillStyle = surfaceColor;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(left, top, width, 18, 5);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = textMain;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, left + width / 2, top + 9, width - 8);
+      ctx.restore();
+    };
+    const renderedBucketIndex = (rawIndex) => rendered.findIndex((bucket) => rawIndex >= bucket.rawStart && rawIndex <= bucket.rawEnd);
+
+    const draw = (inspectIndex = null) => {
       ctx.clearRect(0, 0, cssW, cssH);
       ctx.font = `11px ${fontFamily}`;
       ctx.textBaseline = 'middle';
-
-      // horizontal grid + y-axis labels
-      const ySteps = [0, 0.5, 1];
-      ySteps.forEach((frac) => {
-        const y = padT + plotH - frac * plotH;
+      [0, .5, 1].forEach((fraction) => {
+        const y = yAt(axisMax * fraction);
         ctx.strokeStyle = gridColor;
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(padL, Math.round(y) + 0.5);
-        ctx.lineTo(padL + plotW, Math.round(y) + 0.5);
+        ctx.moveTo(padL, Math.round(y) + .5);
+        ctx.lineTo(padL + plotW, Math.round(y) + .5);
         ctx.stroke();
         ctx.fillStyle = textDim;
         ctx.textAlign = 'right';
-        const labelVal = dataMin + frac * dataRange;
-        ctx.fillText(`${formatBytes(labelVal)}/s`, padL - 8, y);
+        ctx.fillText(rate(axisMax * fraction), padL - 8, y);
       });
 
-      // x-axis time labels
       const tickCount = Math.min(5, series.length);
       ctx.fillStyle = textDim;
       ctx.textBaseline = 'alphabetic';
-      for (let i = 0; i < tickCount; i++) {
-        const idx = tickCount > 1 ? Math.round((i / (tickCount - 1)) * (series.length - 1)) : 0;
-        const label = new Date(series[idx].t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        ctx.textAlign = i === 0 ? 'left' : (i === tickCount - 1 ? 'right' : 'center');
-        ctx.fillText(label, xAt(idx), cssH - 4);
+      for (let tick = 0; tick < tickCount; tick++) {
+        const index = tickCount > 1 ? Math.round((tick / (tickCount - 1)) * (series.length - 1)) : 0;
+        ctx.textAlign = tick === 0 ? 'left' : (tick === tickCount - 1 ? 'right' : 'center');
+        ctx.fillText(this._formatHistoryTimestamp(series[index].t, hours), xAtMs(series[index].ms), cssH - 5);
       }
       ctx.textBaseline = 'middle';
 
-      const movingAvg = (arr, window = 7) => {
-        const result = [];
-        for (let i = 0; i < arr.length; i++) {
-          let sum = 0, count = 0;
-          for (let j = Math.max(0, i - window + 1); j <= Math.min(arr.length - 1, i + window - 1); j++) {
-            sum += arr[j];
-            count++;
-          }
-          result.push(sum / count);
-        }
-        return result;
-      };
-      const rxSmoothed = movingAvg(series.map((p) => p.rx));
-      const txSmoothed = movingAvg(series.map((p) => p.tx));
-      const rxPts = series.map((p, i) => ({ x: xAt(i), y: yAt(rxSmoothed[i]) }));
-      const txPts = series.map((p, i) => ({ x: xAt(i), y: yAt(txSmoothed[i]) }));
+      drawArea(txPoints, colorTx);
+      drawArea(rxPoints, colorRx);
+      drawLine(txPoints, colorTx);
+      drawLine(rxPoints, colorRx);
+      drawPoint(xAtMs(metrics.current.ms), yAt(metrics.current.tx), colorTx, 3.2);
+      drawPoint(xAtMs(metrics.current.ms), yAt(metrics.current.rx), colorRx, 3.2);
 
-      const fillArea = (pts, color) => {
-        if (!pts.length) return;
-        const areaPath = new Path2D(pathThrough(pts));
-        areaPath.lineTo(pts[pts.length - 1].x, padT + plotH);
-        areaPath.lineTo(pts[0].x, padT + plotH);
-        areaPath.closePath();
-        const grad = ctx.createLinearGradient(0, padT, 0, padT + plotH);
-        grad.addColorStop(0, color.replace('__A__', '0.30'));
-        grad.addColorStop(1, color.replace('__A__', '0'));
-        ctx.fillStyle = grad;
-        ctx.fill(areaPath);
-      };
-      const strokeLine = (pts, color) => {
-        if (!pts.length) return;
+      const rxBucket = renderedBucketIndex(metrics.peak.rx.index);
+      const txBucket = renderedBucketIndex(metrics.peak.tx.index);
+      if (rxBucket === txBucket) {
+        const peakX = (xAtMs(metrics.peak.rx.point.ms) + xAtMs(metrics.peak.tx.point.ms)) / 2;
+        const peakY = Math.min(yAt(metrics.peak.rx.value), yAt(metrics.peak.tx.value));
+        drawPoint(xAtMs(metrics.peak.rx.point.ms), yAt(metrics.peak.rx.value), colorRx, 4);
+        drawPoint(xAtMs(metrics.peak.tx.point.ms), yAt(metrics.peak.tx.value), colorTx, 4);
+        drawCallout(peakX, peakY, t('network.historyPeakBoth', { time: this._formatHistoryTimestamp(rendered[rxBucket].t, hours, true) }), colorRx);
+      } else {
+        const peaks = [
+          { metric: metrics.peak.rx, color: colorRx, label: t('network.historyDownload') },
+          { metric: metrics.peak.tx, color: colorTx, label: t('network.historyUpload') }
+        ];
+        peaks.forEach(({ metric, color, label }) => {
+          const x = xAtMs(metric.point.ms), y = yAt(metric.value);
+          drawPoint(x, y, color, 4);
+          drawCallout(x, y, t('network.historyPeakCallout', { label, time: this._formatHistoryTimestamp(metric.point.t, hours, true) }), color);
+        });
+      }
+
+      if (inspectIndex != null && series[inspectIndex]) {
+        const point = series[inspectIndex];
+        const x = xAtMs(point.ms);
         ctx.save();
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 6;
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2.25;
-        ctx.lineJoin = 'round';
-        ctx.lineCap = 'round';
-        ctx.stroke(pathThrough(pts));
-        ctx.restore();
-      };
-      const toRgba = (hex, a) => {
-        const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-        if (!m) return `rgba(88,166,255,${a})`;
-        return `rgba(${parseInt(m[1], 16)},${parseInt(m[2], 16)},${parseInt(m[3], 16)},${a})`;
-      };
-
-      fillArea(txPts, toRgba(colorTx, '__A__'));
-      fillArea(rxPts, toRgba(colorRx, '__A__'));
-      strokeLine(txPts, colorTx);
-      strokeLine(rxPts, colorRx);
-
-      // glowing marker on the latest sample of each series
-      [{ pts: rxPts, color: colorRx }, { pts: txPts, color: colorTx }].forEach(({ pts, color }) => {
-        const p = pts[pts.length - 1];
-        if (!p) return;
-        ctx.save();
-        ctx.fillStyle = toRgba(color, 0.25);
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      });
-
-      // hover crosshair + point markers
-      if (hoverIdx != null && series[hoverIdx]) {
-        const x = xAt(hoverIdx);
-        ctx.save();
-        ctx.strokeStyle = 'rgba(200,205,215,0.35)';
+        ctx.strokeStyle = textDim;
         ctx.lineWidth = 1;
         ctx.setLineDash([3, 3]);
         ctx.beginPath();
         ctx.moveTo(x, padT);
         ctx.lineTo(x, padT + plotH);
         ctx.stroke();
-        ctx.setLineDash([]);
-        [{ y: yAt(series[hoverIdx].rx), color: colorRx }, { y: yAt(series[hoverIdx].tx), color: colorTx }].forEach(({ y, color }) => {
-          ctx.beginPath();
-          ctx.arc(x, y, 4, 0, Math.PI * 2);
-          ctx.fillStyle = color;
-          ctx.fill();
-          ctx.lineWidth = 1.5;
-          ctx.strokeStyle = '#0B0E14';
-          ctx.stroke();
-        });
         ctx.restore();
+        drawPoint(x, yAt(point.rx), colorRx, 4);
+        drawPoint(x, yAt(point.tx), colorTx, 4);
       }
     };
 
-    draw(null);
+    const showInspection = (index) => {
+      const safeIndex = Math.max(0, Math.min(series.length - 1, index));
+      this._historyInspectIndex = safeIndex;
+      draw(safeIndex);
+      if (!tooltip) return;
+      const point = series[safeIndex];
+      tooltip.innerHTML = `
+        <div class="history-tooltip-time">${escapeHtml(this._formatHistoryTimestamp(point.t, hours, true))}</div>
+        <div class="history-download"><i></i>${escapeHtml(t('network.historyDownload'))} <strong>${escapeHtml(rate(point.rx))}</strong></div>
+        <div class="history-upload"><i></i>${escapeHtml(t('network.historyUpload'))} <strong>${escapeHtml(rate(point.tx))}</strong></div>`;
+      tooltip.style.left = `${Math.max(55, Math.min(cssW - 55, xAtMs(point.ms)))}px`;
+      tooltip.style.top = `${Math.max(48, Math.min(yAt(point.rx), yAt(point.tx)))}px`;
+      tooltip.hidden = false;
+    };
 
-    // --- interactive tooltip ---
-    let rafPending = false;
-    const handleMove = (evt) => {
-      const r = canvas.getBoundingClientRect();
-      const x = evt.clientX - r.left;
-      let idx = 0;
-      let bestDist = Infinity;
-      for (let i = 0; i < series.length; i++) {
-        const d = Math.abs(xAt(i) - x);
-        if (d < bestDist) { bestDist = d; idx = i; }
-      }
-      if (rafPending) return;
-      rafPending = true;
+    draw(this._historyInspectIndex);
+    const summary = t('network.historySummary', {
+      range: t(`network.historyRange${rangeKey}`),
+      downloadCurrent: rate(metrics.current.rx), uploadCurrent: rate(metrics.current.tx),
+      downloadAverage: rate(metrics.average.rx), uploadAverage: rate(metrics.average.tx),
+      downloadPeak: rate(metrics.peak.rx.value), uploadPeak: rate(metrics.peak.tx.value)
+    });
+    canvas.setAttribute('aria-label', summary);
+
+    let framePending = false;
+    canvas.onmousemove = (event) => {
+      if (framePending) return;
+      framePending = true;
       requestAnimationFrame(() => {
-        rafPending = false;
-        draw(idx);
-        if (tooltip) {
-          const p = series[idx];
-          const timeLabel = new Date(p.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          tooltip.innerHTML = `
-            <div style="color:var(--text-dim); margin-bottom:3px;">${escapeHtml(timeLabel)}</div>
-            <div style="display:flex; align-items:center; gap:6px;"><span style="width:7px; height:7px; border-radius:50%; background:${colorRx}; display:inline-block;"></span>${escapeHtml(t('network.historyDownload'))} <strong>${escapeHtml(formatBytes(p.rx))}/s</strong></div>
-            <div style="display:flex; align-items:center; gap:6px;"><span style="width:7px; height:7px; border-radius:50%; background:${colorTx}; display:inline-block;"></span>${escapeHtml(t('network.historyUpload'))} <strong>${escapeHtml(formatBytes(p.tx))}/s</strong></div>`;
-          const px = xAt(idx);
-          const py = Math.min(yAt(p.rx), yAt(p.tx));
-          tooltip.style.left = `${Math.max(50, Math.min(cssW - 50, px))}px`;
-          tooltip.style.top = `${Math.max(46, py)}px`;
-          tooltip.style.display = 'block';
-        }
+        framePending = false;
+        const bounds = canvas.getBoundingClientRect();
+        const ratio = Math.max(0, Math.min(1, (event.clientX - bounds.left - padL) / plotW));
+        showInspection(Math.round(ratio * (series.length - 1)));
       });
     };
-    const handleLeave = () => {
+    canvas.onmouseleave = () => {
+      this._historyInspectIndex = null;
       draw(null);
-      if (tooltip) tooltip.style.display = 'none';
+      if (tooltip) tooltip.hidden = true;
     };
-    canvas.addEventListener('mousemove', handleMove);
-    canvas.addEventListener('mouseleave', handleLeave);
+    canvas.onkeydown = (event) => {
+      const current = this._historyInspectIndex == null ? series.length - 1 : this._historyInspectIndex;
+      let next = current;
+      if (event.key === 'ArrowLeft') next--;
+      else if (event.key === 'ArrowRight') next++;
+      else if (event.key === 'Home') next = 0;
+      else if (event.key === 'End') next = series.length - 1;
+      else return;
+      event.preventDefault();
+      showInspection(next);
+    };
   },
 
   async renderAlertHits(content) {
@@ -1841,6 +1970,10 @@ if (content) this.paintHistoryChart(content).catch(() => {});
     this._heatmapData = null;
     this._heatmapArcSignature = '';
     this._heatmapWidgetEl = null;
+    this._historyRequestToken++;
+    this._historyRangeHours = 24;
+    this._historyCache.clear();
+    this._historyInspectIndex = null;
     this._alertsPanelEl = null;
     this._alertsExpanded = false;
     this._lastAlertHitsKey = null;

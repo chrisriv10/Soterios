@@ -145,3 +145,99 @@ describe('adaptive geo activity model', () => {
     assert.equal(/#[\da-f]{6}\b|#[\da-f]{3}(?![\da-f])|rgba?\s*\(/i.test(css.slice(cssStart)), false);
   });
 });
+
+describe('network traffic history model', () => {
+  it('maps the four controls to unchanged history IPC payloads', () => {
+    const page = makePage();
+    assert.deepEqual(plain(page._historyRangePayload(1)), { hours: 1 });
+    assert.deepEqual(plain(page._historyRangePayload(6)), { hours: 6 });
+    assert.deepEqual(plain(page._historyRangePayload(24)), { hours: 24 });
+    assert.deepEqual(plain(page._historyRangePayload(168)), { hours: 168 });
+    assert.deepEqual(plain(page._historyRangePayload(12)), { hours: 24 });
+  });
+
+  it('caches successful rows by range and never crosses ranges on failure', () => {
+    const page = makePage();
+    const oneHourRows = [{ recorded_at: '2026-01-01T00:00:00Z', rx_sec: 1, tx_sec: 2 }];
+    const sixHourRows = [{ recorded_at: '2026-01-01T01:00:00Z', rx_sec: 3, tx_sec: 4 }];
+    const oneHour = page._beginHistoryRequest(1);
+    page._resolveHistoryRequest(oneHour, oneHourRows, false);
+    const sixHour = page._beginHistoryRequest(6);
+    page._resolveHistoryRequest(sixHour, sixHourRows, false);
+
+    const failedOneHour = page._beginHistoryRequest(1);
+    assert.deepEqual(plain(page._resolveHistoryRequest(failedOneHour, [], true).rows), oneHourRows);
+    const failedDay = page._beginHistoryRequest(24);
+    assert.deepEqual(plain(page._resolveHistoryRequest(failedDay, [], true).rows), []);
+  });
+
+  it('discards stale asynchronous responses', () => {
+    const page = makePage();
+    const older = page._beginHistoryRequest(1);
+    const newer = page._beginHistoryRequest(7 * 24);
+    assert.equal(page._resolveHistoryRequest(older, [{ recorded_at: '2026-01-01T00:00:00Z' }]).stale, true);
+    assert.equal(page._resolveHistoryRequest(newer, []).stale, false);
+    assert.equal(page._historyCache.has(1), false);
+    assert.equal(page._historyCache.has(168), true);
+  });
+
+  it('normalizes interface rows into ordered timestamp totals', () => {
+    const page = makePage();
+    const normalized = page._normalizeHistoryRows([
+      { recorded_at: '2026-01-01T00:01:00Z', rx_sec: 5, tx_sec: 2, iface: 'wifi' },
+      { recorded_at: '2026-01-01T00:00:00Z', rx_sec: 3, tx_sec: 4, iface: 'ethernet' },
+      { recorded_at: '2026-01-01T00:01:00Z', rx_sec: 7, tx_sec: 8, iface: 'ethernet' },
+      { recorded_at: 'not-a-date', rx_sec: 100, tx_sec: 100 }
+    ]);
+    assert.equal(normalized.length, 2);
+    assert.equal(normalized[0].rx, 3);
+    assert.equal(normalized[1].rx, 12);
+    assert.equal(normalized[1].tx, 10);
+  });
+
+  it('downsamples averages while retaining raw peak points', () => {
+    const page = makePage();
+    const start = Date.parse('2026-01-01T00:00:00Z');
+    const series = Array.from({ length: 100 }, (_, index) => ({
+      t: new Date(start + index * 1000).toISOString(),
+      ms: start + index * 1000,
+      rx: index === 47 ? 9000 : index,
+      tx: index === 72 ? 7000 : index * 2
+    }));
+    const sampled = page._downsampleHistory(series, 10);
+    assert.equal(sampled.length, 10);
+    assert.equal(Math.max(...sampled.map((bucket) => bucket.rxPeak.value)), 9000);
+    assert.equal(Math.max(...sampled.map((bucket) => bucket.txPeak.value)), 7000);
+    assert.ok(sampled.every((bucket) => bucket.rawEnd >= bucket.rawStart));
+  });
+
+  it('selects current, average, and raw peaks without smoothing distortion', () => {
+    const page = makePage();
+    const series = [
+      { t: 'a', ms: 1, rx: 10, tx: 30 },
+      { t: 'b', ms: 2, rx: 100, tx: 20 },
+      { t: 'c', ms: 3, rx: 20, tx: 90 }
+    ];
+    const metrics = page._historyMetrics(series);
+    assert.equal(metrics.current.rx, 20);
+    assert.equal(metrics.average.rx, 130 / 3);
+    assert.equal(metrics.peak.rx.index, 1);
+    assert.equal(metrics.peak.tx.index, 2);
+    assert.equal(page._niceAxisMax(101), 200);
+    assert.equal(page._niceAxisMax(0), 1);
+  });
+
+  it('uses date labels only for the seven-day range', () => {
+    const page = makePage();
+    assert.equal(page._historyLabelMode(1), 'time');
+    assert.equal(page._historyLabelMode(24), 'time');
+    assert.equal(page._historyLabelMode(168), 'date');
+  });
+
+  it('keeps literal colors out of the history visualization implementation', () => {
+    const historyStart = networkSource.indexOf('  _historyRangePayload(');
+    const historyEnd = networkSource.indexOf('  async renderAlertHits(', historyStart);
+    const historySource = networkSource.slice(historyStart, historyEnd);
+    assert.equal(/#[\da-f]{6}\b|#[\da-f]{3}(?![\da-f])|rgba?\s*\(/i.test(historySource), false);
+  });
+});
