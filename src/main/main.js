@@ -643,14 +643,16 @@ function handleCredentialLeakDeepLink(url) {
   try {
     const parsed = new URL(url.replace('soterios:', 'soterios://'));
     const count = parseInt(parsed.searchParams.get('count') || '1', 10);
+    const domain = parsed.searchParams.get('domain') || '';
+    const domainSuffix = domain ? ` on ${domain}` : '';
     dbRef.addAlert({
       level: 'danger',
       source: 'Browser Extension',
       title: 'Credential Leak Detected',
-      message: `Password found in ${count} breach${count > 1 ? 'es' : ''} via browser extension`,
-      detail: `Breaches: ${count}`,
+      message: `Password found in ${count} breach${count > 1 ? 'es' : ''}${domainSuffix} via browser extension`,
+      detail: `Breaches: ${count}${domain ? ` | Domain: ${domain}` : ''}`,
       timestamp: new Date().toISOString(),
-      metadata: { source: 'browser-extension', count }
+      metadata: { source: 'browser-extension', count, ...(domain ? { domain } : {}) }
     });
     if (eventBus) eventBus.emit('alert:new', { level: 'danger', source: 'Browser Extension' });
   } catch (e) {
