@@ -2,7 +2,8 @@ const DEFAULTS = {
   hibpEnabled: true,
   autoCheck: true,
   showIcon: true,
-  notifyDesktop: true
+  notifyDesktop: true,
+  checkOnType: false
 };
 
 function loadSettings() {

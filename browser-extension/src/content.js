@@ -8,6 +8,8 @@ let passwordFields = new Map();
 let observer = null;
 let autoCheckEnabled = false;
 let notifyDesktopEnabled = true;
+let checkOnTypeEnabled = false;
+const autoCheckListeners = new WeakMap();
 
 function createIcon() {
   const icon = document.createElement('img');
@@ -152,35 +154,58 @@ function scanForPasswordFields() {
   }
 }
 
-function setupAutoCheck(input) {
-  if (!input.dataset.soteriosAutoCheck) {
-    input.dataset.soteriosAutoCheck = 'true';
-    let debounceTimer = null;
-    input.addEventListener('input', () => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(async () => {
-        const password = input.value;
-        if (!password) return;
-        try {
-          const result = await chrome.runtime.sendMessage({ type: 'CHECK_PASSWORD', password });
-          const reuse = await trackReuse(password, location.hostname);
-          showResult(input, result, reuse);
-          if (notifyDesktopEnabled && result && result.pwned && result.count > 0) {
-            // Forward breach to desktop app for alerting
-            await chrome.runtime.sendMessage({
-              type: 'FORWARD_CREDENTIAL_LEAK',
-              payload: { domain: location.hostname, count: result.count }
-            });
-          }
-          if (reuse.reused) {
-            await chrome.runtime.sendMessage({ type: 'REUSE_DETECTED', domain: location.hostname });
-          }
-        } catch (err) {
-          console.error('[Soterios] Auto-check failed:', err);
-        }
-      }, 1000);
-    });
+async function runAutoCheck(input) {
+  const password = input.value;
+  if (!password) return;
+  try {
+    const result = await chrome.runtime.sendMessage({ type: 'CHECK_PASSWORD', password });
+    const reuse = await trackReuse(password, location.hostname);
+    showResult(input, result, reuse);
+    if (notifyDesktopEnabled && result && result.pwned && result.count > 0) {
+      // Forward breach to desktop app for alerting
+      await chrome.runtime.sendMessage({
+        type: 'FORWARD_CREDENTIAL_LEAK',
+        payload: { domain: location.hostname, count: result.count }
+      });
+    }
+    if (reuse.reused) {
+      await chrome.runtime.sendMessage({ type: 'REUSE_DETECTED', domain: location.hostname });
+    }
+  } catch (err) {
+    console.error('[Soterios] Auto-check failed:', err);
   }
+}
+
+function setupAutoCheck(input) {
+  if (autoCheckListeners.has(input)) return;
+
+  const state = {};
+  if (checkOnTypeEnabled) {
+    state.onInput = () => {
+      if (state.timer) clearTimeout(state.timer);
+      state.timer = setTimeout(() => runAutoCheck(input), 1000);
+    };
+    input.addEventListener('input', state.onInput);
+  } else {
+    state.onBlur = () => runAutoCheck(input);
+    input.addEventListener('blur', state.onBlur);
+  }
+  autoCheckListeners.set(input, state);
+}
+
+function teardownAutoCheck(input) {
+  const state = autoCheckListeners.get(input);
+  if (!state) return;
+  if (state.onInput) input.removeEventListener('input', state.onInput);
+  if (state.onBlur) input.removeEventListener('blur', state.onBlur);
+  autoCheckListeners.delete(input);
+}
+
+function resyncAutoChecks() {
+  document.querySelectorAll('input[type="password"]').forEach(input => {
+    teardownAutoCheck(input);
+    setupAutoCheck(input);
+  });
 }
 
 function init() {
@@ -213,9 +238,10 @@ function init() {
 
 async function loadSettings() {
   try {
-    const { autoCheck, showIcon, notifyDesktop } = await chrome.storage.sync.get(['autoCheck', 'showIcon', 'notifyDesktop']);
+    const { autoCheck, showIcon, notifyDesktop, checkOnType } = await chrome.storage.sync.get(['autoCheck', 'showIcon', 'notifyDesktop', 'checkOnType']);
     autoCheckEnabled = autoCheck !== false;
     notifyDesktopEnabled = notifyDesktop !== false;
+    checkOnTypeEnabled = checkOnType === true;
     if (showIcon === false) {
       passwordFields.forEach((icon, input) => icon.remove());
       passwordFields.clear();
@@ -223,6 +249,7 @@ async function loadSettings() {
   } catch (e) {
     autoCheckEnabled = true;
     notifyDesktopEnabled = true;
+    checkOnTypeEnabled = false;
   }
 }
 
@@ -239,6 +266,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (autoCheckEnabled) {
         document.querySelectorAll('input[type="password"]').forEach(setupAutoCheck);
       }
+    }
+    if (msg.settings.checkOnType !== undefined && msg.settings.checkOnType !== checkOnTypeEnabled) {
+      checkOnTypeEnabled = msg.settings.checkOnType;
+      if (autoCheckEnabled) resyncAutoChecks();
     }
     if (msg.settings.notifyDesktop !== undefined) {
       notifyDesktopEnabled = msg.settings.notifyDesktop;
