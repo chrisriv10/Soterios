@@ -22,6 +22,7 @@ const { loadRegistry } = require('../../scripts/scriptRunner');
 const i18n = require('../../i18n');
 const { requestText } = require('./_shared');
 const featureFlags = require('../../core/featureFlags');
+const privacyMode = require('../../tools/privacyMode');
 
 function deleteFileIfSafe(filePath) {
   if (!filePath) return;
@@ -655,6 +656,14 @@ function register(mainWindow, {
       return { ok: false, error: err.message };
     }
   });
+
+  // -- Privacy Mode --
+  ipcMain.handle('privacy:helpers', () => ({
+    sensitiveFeatures: [...privacyMode.PRIVACY_SENSITIVE_FEATURES],
+    disablePatch: privacyMode.buildDisablePatch(),
+  }));
+
+  ipcMain.handle('privacy:restorePatch', (_event, snapshot) => privacyMode.buildRestorePatch(snapshot));
 
   // -- Tools --
   ipcMain.handle('tools:list', async () => {

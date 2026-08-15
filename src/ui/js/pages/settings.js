@@ -241,6 +241,18 @@ window.Pages.settings = {
         </div>
 
         <div class="card">
+          <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.privacy'))}</div>
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">${escapeHtml(t('settings.privacyMode.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.privacyMode.desc'))}</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="privacyModeToggle" ${settings.features.privacyMode ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+          </div>
+          <div id="privacyModeStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);">${escapeHtml(t('settings.privacyMode.checking'))}</div>
+        </div>
+
+        <div class="card">
           <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.startup'))}</div>
           <div class="toggle-row">
             <div>
@@ -485,6 +497,66 @@ window.Pages.settings = {
     container.querySelector('#externalLookupsToggle').addEventListener('change', (event) => saveFeature('externalLookups', event.target.checked, event.target));
     container.querySelector('#geoLookupToggle').addEventListener('change', (event) => saveFeature('geoLookup', event.target.checked, event.target));
     container.querySelector('#networkPerimeterMapToggle').addEventListener('change', (event) => saveFeature('networkPerimeterMap', event.target.checked, event.target));
+
+    const privacyModeToggle = container.querySelector('#privacyModeToggle');
+    const privacyModeStatus = container.querySelector('#privacyModeStatus');
+    async function updatePrivacyModeStatus() {
+      if (!privacyModeStatus) return;
+      try {
+        const helpers = await window.api.invoke('privacy:helpers');
+        let disabledCount = 0;
+        for (const key of helpers.sensitiveFeatures) {
+          const value = await window.api.invoke('db:getSetting', `feature.${key}`, true);
+          if (!value) disabledCount++;
+        }
+        if (disabledCount === 0) {
+          privacyModeStatus.textContent = t('settings.privacyMode.allEnabled');
+        } else {
+          privacyModeStatus.textContent = t('settings.privacyMode.someDisabled', {
+            count: String(disabledCount),
+            total: String(helpers.sensitiveFeatures.length)
+          });
+        }
+      } catch (_) {
+        privacyModeStatus.textContent = '';
+      }
+    }
+    privacyModeToggle.addEventListener('change', async (event) => {
+      const input = event.target;
+      const enable = input.checked;
+      input.disabled = true;
+      privacyModeStatus.textContent = t('settings.privacyMode.applying');
+      try {
+        const helpers = await window.api.invoke('privacy:helpers');
+        if (enable) {
+          const snapshot = {};
+          for (const key of helpers.sensitiveFeatures) {
+            snapshot[key] = Boolean(await window.api.invoke('db:getSetting', `feature.${key}`, true));
+          }
+          await window.api.invoke('db:setSetting', 'privacy.snapshot', JSON.stringify(snapshot));
+          await Api.updateSettings({ features: helpers.disablePatch });
+          await Api.updateSettings({ features: { privacyMode: true } });
+        } else {
+          let snapshot = {};
+          try {
+            snapshot = JSON.parse(await window.api.invoke('db:getSetting', 'privacy.snapshot', '{}')) || {};
+          } catch (_) {}
+          const restorePatch = await window.api.invoke('privacy:restorePatch', snapshot);
+          if (Object.keys(restorePatch).length > 0) {
+            await Api.updateSettings({ features: restorePatch });
+          }
+          await window.api.invoke('db:setSetting', 'privacy.snapshot', '');
+          await Api.updateSettings({ features: { privacyMode: false } });
+        }
+        await updatePrivacyModeStatus();
+      } catch (err) {
+        input.checked = !enable;
+        privacyModeStatus.textContent = err.message || String(err);
+      } finally {
+        input.disabled = false;
+      }
+    });
+    updatePrivacyModeStatus();
 
     async function renderBrowserExtensionSection(container) {
       const body = container.querySelector('#browserExtensionBody');

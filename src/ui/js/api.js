@@ -91,6 +91,7 @@ const Api = {
     const networkAlerts = await window.api.invoke('db:getSetting', 'feature.networkAlerts', true);
     const networkTrafficHistory = await window.api.invoke('db:getSetting', 'feature.networkTrafficHistory', true);
     const aiAssistant = await window.api.invoke('db:getSetting', 'feature.aiAssistant', true);
+    const privacyMode = await window.api.invoke('db:getSetting', 'feature.privacyMode', false);
     const dbTheme = await window.api.invoke('db:getSetting', 'ui.theme', 'dark');
     const savedLanguage = await window.api.invoke('db:getSetting', 'ui.language', '');
     let language = savedLanguage;
@@ -135,7 +136,8 @@ const Api = {
         networkAlerts,
         networkTrafficHistory,
         aiAssistant,
-        emergencyLockdown
+        emergencyLockdown,
+        privacyMode
       },      ui: { theme, language }
     };
   },
@@ -183,6 +185,9 @@ const Api = {
       }
       if (Object.prototype.hasOwnProperty.call(f, 'emergencyLockdown')) {
         await window.api.invoke('db:setSetting', 'feature.emergencyLockdown', !!f.emergencyLockdown);
+      }
+      if (Object.prototype.hasOwnProperty.call(f, 'privacyMode')) {
+        await window.api.invoke('db:setSetting', 'feature.privacyMode', !!f.privacyMode);
       }
     }
     if (patch.ui) {

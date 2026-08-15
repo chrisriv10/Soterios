@@ -30,6 +30,19 @@ Default Electron startup disables background networking.
 
 Disable breach checks and geo lookup in **Settings** to keep the app fully offline after definitions are current.
 
+## Privacy Mode
+
+The **Privacy Mode** toggle in **Settings > Privacy** disables Soterios's own data-sharing and history features in one switch:
+
+- External password/breach lookups (HIBP, XposedOrNot)
+- Geo IP lookups
+- AI assistant context
+- Network traffic history
+- Scan history
+- Automatic reports
+
+Enabling the toggle snapshots the current state of those features and turns them off; disabling it restores the previous settings. Individual feature toggles remain usable while Privacy Mode is on.
+
 ## Data storage locations
 
 | Data | Location |
