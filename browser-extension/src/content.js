@@ -267,6 +267,102 @@ if (typeof window !== 'undefined') {
   });
 }
 
+let threatCheckTimer = null;
+
+function showThreatBanner(threatType) {
+  if (document.getElementById('soterios-threat-banner')) return;
+
+  const labels = {
+    'social-engineering': 'phishing',
+    'malware': 'malware',
+    'unwanted-software': 'unwanted software',
+    'potentially-harmful-applications': 'a potentially harmful application'
+  };
+  const label = labels[threatType] || 'malicious content';
+
+  const banner = document.createElement('div');
+  banner.id = 'soterios-threat-banner';
+  banner.setAttribute('role', 'alert');
+  banner.style.cssText = `
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    padding: 12px 16px;
+    background: #b91c1c;
+    color: #ffffff;
+    font: 14px/1.5 system-ui, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    z-index: 2147483647;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  `;
+
+  const text = document.createElement('span');
+  text.textContent = `Warning: this site is reported to contain ${label}. Proceed with caution.`;
+
+  const dismiss = document.createElement('button');
+  dismiss.textContent = 'Dismiss';
+  dismiss.style.cssText = `
+    flex-shrink: 0;
+    padding: 4px 12px;
+    border: 1px solid rgba(255,255,255,0.6);
+    border-radius: 4px;
+    background: transparent;
+    color: #ffffff;
+    font: inherit;
+    cursor: pointer;
+  `;
+  dismiss.addEventListener('click', () => banner.remove());
+
+  banner.appendChild(text);
+  banner.appendChild(dismiss);
+  document.documentElement.appendChild(banner);
+}
+
+function runThreatCheck() {
+  chrome.runtime.sendMessage({ type: 'CHECK_URL_THREAT', url: window.location.href }, (response) => {
+    if (chrome.runtime.lastError) return;
+    if (response && response.status === 'unsafe') {
+      showThreatBanner(response.threatType);
+    }
+  });
+}
+
+function queueThreatCheck() {
+  clearTimeout(threatCheckTimer);
+  threatCheckTimer = setTimeout(runThreatCheck, 300);
+}
+
+function monitorNavigation() {
+  if (window.top !== window) return;
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', runThreatCheck, { once: true });
+  } else {
+    runThreatCheck();
+  }
+
+  const originalPushState = history.pushState;
+  const originalReplaceState = history.replaceState;
+  history.pushState = function (...args) {
+    const result = originalPushState.apply(this, args);
+    queueThreatCheck();
+    return result;
+  };
+  history.replaceState = function (...args) {
+    const result = originalReplaceState.apply(this, args);
+    queueThreatCheck();
+    return result;
+  };
+  window.addEventListener('pageshow', queueThreatCheck);
+  window.addEventListener('popstate', queueThreatCheck);
+}
+
+if (typeof window !== 'undefined' && window.top === window) {
+  monitorNavigation();
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'SETTINGS_UPDATED') {
     if (msg.settings.autoCheck !== undefined) {
