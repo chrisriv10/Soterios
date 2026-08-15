@@ -130,10 +130,6 @@ async function runHibpCheck({ password, fetchFn }) {
   }
 }
 
-async function runSafeBrowsingCheck() {
-  return { status: 'not_configured' };
-}
-
 async function runThreatChecks({ password, url, config, fetchFn, now }) {
   if (config.privacyMode === true) {
     return {
