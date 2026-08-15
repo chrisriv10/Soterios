@@ -106,9 +106,9 @@ async function handleMessage(msg) {
 
   switch (msg.type) {
     case 'CREDENTIAL_LEAK': {
-      const deepLinkUrl = `soterios://credential-leak?count=${encodeURIComponent(msg.count || 1)}`;
+      const deepLinkUrl = `soterios://credential-leak?count=${encodeURIComponent(msg.count || 1)}&domain=${encodeURIComponent(msg.domain || '')}`;
       await launchDesktopApp(deepLinkUrl);
-      send({ type: 'LEAK_NOTIFIED', ok: true, original: msg });
+      send({ type: 'LEAK_NOTIFIED', ok: true, domain: msg.domain, count: msg.count });
       break;
     }
     case 'PING': {
