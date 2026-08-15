@@ -1,6 +1,7 @@
 const HIBP_API = 'https://api.pwnedpasswords.com/range/';
 const SAFE_BROWSING_API = 'https://safebrowsing.googleapis.com/v5/hashes:search';
 const MAX_THREAT_AGE_MS = 30 * 60 * 1000;
+const THREAT_CHECK_TIMEOUT_MS = 5000;
 
 async function sha256Hex(input) {
   const data = new TextEncoder().encode(input);
@@ -67,13 +68,17 @@ function parseExpireTime(raw, now) {
 
 async function runSafeBrowsingCheck({ url, apiKey, fetchFn, now }) {
   if (!apiKey) return { status: 'not_configured' };
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), THREAT_CHECK_TIMEOUT_MS);
   try {
     const { prefixB64, fullB64 } = await urlHashPrefix(url);
     const resp = await fetchFn(`${SAFE_BROWSING_API}?key=${encodeURIComponent(apiKey)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hashPrefixes: [prefixB64] })
+      body: JSON.stringify({ hashPrefixes: [prefixB64] }),
+      signal: controller.signal
     });
+    if (resp.status === 429) return { status: 'unknown', reason: 'rate limited' };
     if (!resp.ok) return { status: 'unknown', reason: `HTTP ${resp.status}` };
     const data = await resp.json();
     const hashes = Array.isArray(data.hashes) ? data.hashes : [];
@@ -90,7 +95,10 @@ async function runSafeBrowsingCheck({ url, apiKey, fetchFn, now }) {
     }
     return { status: 'safe', expiresAt: now + MAX_THREAT_AGE_MS };
   } catch (e) {
-    return { status: 'unknown', reason: e.message };
+    const reason = e && e.name === 'AbortError' ? 'timeout' : (e && e.message ? e.message : String(e));
+    return { status: 'unknown', reason };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -149,6 +157,7 @@ if (typeof module !== 'undefined' && module.exports) {
     HIBP_API,
     SAFE_BROWSING_API,
     MAX_THREAT_AGE_MS,
+    THREAT_CHECK_TIMEOUT_MS,
     sha1Hex,
     sha256Hex,
     canonicalizeUrl,
