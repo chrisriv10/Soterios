@@ -6,6 +6,27 @@ const fs = require('fs');
 const path = require('path');
 const { listAvailableLocales, loadCatalog, t } = require('../src/i18n');
 
+const visualizationKeys = [
+  'firewall.perimeterBandSafe',
+  'firewall.perimeterBandUnknown',
+  'firewall.perimeterBandMalicious',
+  'firewall.perimeterHubCount',
+  'firewall.perimeterNodeAria',
+  'firewall.perimeterEndpointSummary',
+  'firewall.perimeterDurationSeconds',
+  'firewall.perimeterDurationMinutes',
+  'firewall.perimeterDurationHours',
+  'firewall.perimeterDirectionMixed',
+  'firewall.perimeterSockets',
+  'firewall.perimeterObservedFor',
+  'firewall.perimeterRecentActivity',
+  'firewall.perimeterPollWindow',
+  'firewall.perimeterActivityAria',
+  'firewall.perimeterServices',
+  'firewall.perimeterStates',
+  'firewall.perimeterMemberConnections'
+];
+
 describe('i18n - missing translation detection', () => {
   it('should have all translation keys used in code defined in English locale', async () => {
     // This test scans the codebase for translation key usages and verifies they exist
@@ -72,6 +93,16 @@ describe('i18n - missing translation detection', () => {
         keyCount >= threshold,
         `Locale "${locale}" has only ${keyCount} keys vs ${enKeyCount} in English (below ${threshold} threshold)`
       );
+    }
+  });
+
+  it('defines every visualization string in every locale', () => {
+    for (const locale of listAvailableLocales()) {
+      const catalog = loadCatalog(locale);
+      for (const key of visualizationKeys) {
+        assert.equal(typeof catalog[key], 'string', `Missing visualization key "${key}" in locale "${locale}"`);
+        assert.ok(catalog[key].length > 0, `Empty visualization key "${key}" in locale "${locale}"`);
+      }
     }
   });
 });
