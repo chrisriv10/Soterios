@@ -43,10 +43,10 @@ async function runThreatChecks({ password, url, config, fetchFn, now }) {
   const checks = { privacyMode: false };
   checks.hibp = config.hibpEnabled === false
     ? { error: 'HIBP checks disabled' }
-    : runHibpCheck({ password, fetchFn });
+    : await runHibpCheck({ password, fetchFn });
   checks.safeBrowsing = config.safeBrowsingEnabled === false || !config.safeBrowsingApiKey
     ? { status: 'not_configured' }
-    : runSafeBrowsingCheck({ url, apiKey: config.safeBrowsingApiKey, fetchFn, now });
+    : await runSafeBrowsingCheck({ url, apiKey: config.safeBrowsingApiKey, fetchFn, now });
   return checks;
 }
 
