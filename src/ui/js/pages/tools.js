@@ -432,10 +432,7 @@ window.Pages.tools = {
             const folder = await Api.pickFolder();
             if (folder) {
               this._duplicateScanPath = folder;
-              const scanPathInput = container.querySelector('#scanPathInput');
-              if (scanPathInput) {
-                scanPathInput.value = folder;
-              }
+              browseFilesBtn.textContent = this.t('tools.changeFolder');
             }
           } catch (err) {
             console.error('Folder picker error:', err);
@@ -472,8 +469,7 @@ window.Pages.tools = {
         <button class="btn btn-sm" id="largeFilesBrowseBtn" style="padding:4px 10px;">${this._largeFilesScanPath ? escapeHtml(this.t('tools.changeFolder')) : escapeHtml(this.t('tools.selectFolder'))}</button>
       </div>` : s.id === 'duplicate-finder' ? `
 <div class="tool-input-inline">
-  <input type="text" id="scanPathInput" placeholder="${escapeHtml(this.t('tools.selectFolder'))}" value="${escapeHtml(this._duplicateScanPath || '')}" style="flex:1; padding:7px 12px; border-radius:8px; border:1px solid var(--glass-border); background:var(--glass-bg,rgba(255,255,255,0.05)); color:inherit;" readonly />
-  <button class="btn btn-sm" id="browseFilesBtn" style="padding:4px 10px;">${escapeHtml(this.t('tools.browse'))}</button>
+  <button class="btn btn-sm" id="browseFilesBtn" style="flex:1; padding:4px 10px;">${this._duplicateScanPath ? escapeHtml(this.t('tools.changeFolder')) : escapeHtml(this.t('tools.selectFolder'))}</button>
 </div>` : '';
 
     // Translate tool names and descriptions
