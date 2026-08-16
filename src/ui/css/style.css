@@ -1799,6 +1799,53 @@ body {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Loading wordmark animation (additive, below spinner) */
+.loading-wordmark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 24px;
+  pointer-events: none;
+}
+
+.loading-wordmark-icon {
+  width: 120px;
+  height: auto;
+  filter: drop-shadow(0 0 16px var(--accent-primary));
+}
+
+.loading-wordmark-icon::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(255,255,255,0.5) 50%, 
+    transparent 100%);
+  background-size: 200% 100%;
+  animation: wordmark-sweep 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.loading-wordmark-message {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes wordmark-sweep {
+  0% { background-position: 200% 0; opacity: 0; }
+  50% { opacity: 1; }
+  100% { background-position: -200% 0; opacity: 0; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
 /* Progress bar */
 .stat-bar-track { 
   position: relative;
@@ -3443,7 +3490,7 @@ body.setup-mode .sidebar { display: none; }
 body.setup-mode .app-shell { display: block; }
 
 .setup-wizard {
-  max-width: 760px;
+  max-width: 900px;
   margin: 0 auto;
   padding: 48px 24px 64px;
 }
@@ -3477,19 +3524,23 @@ body.setup-mode .app-shell { display: block; }
 .setup-step { display: none; }
 
 .setup-logo {
-  width: 92px;
-  height: 92px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
   margin: 0 auto 24px;
-  border-radius: 22px;
-  background: linear-gradient(135deg, var(--accent-primary), #2B6CB0);
-  box-shadow: 0 0 24px var(--accent-primary-glow), 0 0 48px rgba(88, 166, 255, 0.12);
 }
 
 .setup-logo img {
-  width: 100%;
-  height: 100%;
+  height: 48px;
+  width: auto;
   object-fit: contain;
-  border-radius: 22px;
+}
+
+.setup-logo .setup-wordmark {
+  height: 36px;
+  width: auto;
+  object-fit: contain;
 }
 
 .setup-title {

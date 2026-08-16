@@ -51,7 +51,10 @@ window.Pages = window.Pages || {};
           <div class="setup-dots" aria-hidden="true">${dots}</div>
 
           <section class="setup-step" id="setupStep-welcome">
-            <div class="setup-logo"><img src="../../../assets/icon.png" alt="Soterios" /></div>
+            <div class="setup-logo">
+              <img src="../../../assets/brand-logo.png" alt="" aria-hidden="true" />
+              <img class="setup-wordmark" src="../../../assets/brand-wordmark.png" alt="Soterios" />
+            </div>
             <h1 class="setup-title">${escapeHtml(t('setup.title'))}</h1>
             <p class="setup-subtitle">${escapeHtml(t('setup.subtitle'))}</p>
             <button type="button" class="btn btn-primary setup-skip-setup" id="setupSkipSetup">${escapeHtml(t('setup.skipSetup'))}</button>

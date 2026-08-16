@@ -504,14 +504,20 @@ window.Pages['network'] = {
     this._renderAsync(container, t);
   },
 
-  async _renderAsync(container, t) {
+async _renderAsync(container, t) {
     container.innerHTML = `
       <header class="page-header">
         <h1 class="page-title">${escapeHtml(t('network.title'))}</h1>
         <p class="page-subtitle">${escapeHtml(t('network.subtitle'))}</p>
       </header>
       <div id="networkContent">
-        <div class="empty-state"><span class="spinner"></span>&nbsp;${escapeHtml(t('network.loading'))}</div>
+        <div class="empty-state">
+          <span class="spinner"></span>&nbsp;${escapeHtml(t('network.loading'))}
+          <div style="margin-top: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+            <img src="../../../assets/soteriosTextLogo.png" alt="Soterios" style="width: 120px; height: auto; filter: drop-shadow(0 0 16px var(--accent-primary));" />
+            <div class="loading-wordmark-message" id="networkLoadingMessage">${escapeHtml(t('loading.loadingConnections'))}</div>
+          </div>
+        </div>
       </div>
     `;
     await this.load(container, true);

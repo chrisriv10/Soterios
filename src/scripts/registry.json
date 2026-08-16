@@ -7,7 +7,7 @@
     },
     {
       "id": "large-files-report", "name": "Large Files", "description": "Find, sort, reveal, and vault large files without a hidden result limit.",
-      "file": "safeScripts/largeFilesReport.js", "runner": "script", "category": "cleanup-storage", "impact": "low", "icon": "file-weight",
+      "file": "safeScripts/largeFilesReport.js", "runner": "script", "category": "cleanup-storage", "impact": "low", "icon": "file",
       "inputs": ["scanPath", "thresholdMB", "page", "pageSize"], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
     },
     {

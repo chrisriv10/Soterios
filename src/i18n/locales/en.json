@@ -41,6 +41,8 @@
   "setup.privacyDesc": "Privacy Mode turns off external lookups (HIBP, XposedOrNot, geo lookup), AI, and traffic history.",
   "setup.extensionTitle": "Browser extension",
   "setup.extensionDesc": "Optional: keep your credentials safe while browsing with the Soterios extension.",
+  "setup.languageTitle": "Choose your language",
+  "setup.languageDesc": "Soterios will use this language everywhere. You can change it anytime in Settings.",
   "setup.scanTitle": "First scan",
   "setup.scanDesc": "Run a quick scan of common infection spots now, or skip it and scan later.",
   "setup.scanRun": "Run quick scan",

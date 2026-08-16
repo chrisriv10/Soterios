@@ -192,7 +192,8 @@ describe('first-run setup wizard source', () => {
   it('shows the logo, welcome heading and subtitle on the first step', () => {
     const welcomeStep = setupSource.slice(setupSource.indexOf("setupStep-welcome"), setupSource.indexOf("setupStep-language"));
     assert.match(welcomeStep, /setup-logo/);
-    assert.match(welcomeStep, /\.\.\/\.\.\/\.\.\/assets\/icon\.png/);
+    assert.match(welcomeStep, /\.\.\/\.\.\/\.\.\/assets\/brand-logo\.png/);
+    assert.match(welcomeStep, /\.\.\/\.\.\/\.\.\/assets\/brand-wordmark\.png/);
     assert.match(welcomeStep, /setup\.title/);
     assert.match(welcomeStep, /setup\.subtitle/);
     assert.match(welcomeStep, /setup\.skipSetup/);
