@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, nativeImage, screen, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, nativeImage, screen, powerMonitor, safeStorage } = require('electron');
 const { execFileSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -53,9 +53,14 @@ const eventBus = require('../core/eventBus');
 const { registerIpcHandlers } = require('./ipcHandlers');
 const serviceRegistry = require('./serviceRegistry');
 const { MaintenanceScheduler } = require('./maintenanceScheduler');
+const ToolRunManager = require('./toolRunManager');
+const { MaintenanceSafetyVault } = require('./maintenanceSafetyVault');
+const { PersistenceMonitor } = require('./persistenceMonitor');
+const { ProcessReputationService } = require('./processReputationService');
 const { initTrayDashboard } = require('./trayDashboard');
 const updater = require('./updater');
 const { getTrayHealthSummary } = require('./healthSummary');
+const { ExtensionBridge } = require('./extensionBridge');
 
 // Legacy utilities
 const { loadPlugins } = require('../core/pluginLoader');
@@ -75,6 +80,10 @@ let startupLocale = 'en'; // set from peekUiLanguage() before the DB is ready,
 let isQuitting = false;
 const lifecycleRefs = {
   maintenanceScheduler: null,
+  maintenanceSafetyVault: null,
+  persistenceMonitor: null,
+  extensionBridge: null,
+  processService: null,
   trayController: null,
   networkStatsTimer: null,
   pruneTimer: null
@@ -779,8 +788,16 @@ app.whenReady().then(async () => {
   // 2. Security Engines (Dependency Injection)
   const services = serviceRegistry.create(db, eventBus, {
     userDataPath: app.getPath('userData'),
+    resourcesPath: process.resourcesPath,
+    requireProcessCollectorIntegrity: app.isPackaged,
     locale: getLocale(),
     notify: (title, body, level) => showNotification(t(title), t(body), level),
+  });
+  lifecycleRefs.processService = services.processService;
+  services.processReputation = new ProcessReputationService({
+    db,
+    processService: services.processService,
+    safeStorage,
   });
 
   // Network stats timer control (for feature toggle)
@@ -814,9 +831,41 @@ app.whenReady().then(async () => {
   const featureFlags = require('../core/featureFlags');
   const { getFlag: getFeatureFlag } = featureFlags;
 
+  const toolRunManager = new ToolRunManager({
+    db: services.db,
+    toolRegistry: services.toolRegistry,
+    contextFactory: () => ({
+      processService: services.processService,
+      log: (level, message, meta) => logLine(level, message, meta)
+    })
+  });
+  services.toolRunManager = toolRunManager;
+
+  const maintenanceSafetyVault = new MaintenanceSafetyVault({
+    db: services.db,
+    rootPath: path.join(app.getPath('userData'), 'MaintenanceVault'),
+    applicationDataPath: app.getPath('userData'),
+    log: (level, message, meta) => logLine(level, message, meta)
+  });
+  maintenanceSafetyVault.start();
+  services.maintenanceSafetyVault = maintenanceSafetyVault;
+  lifecycleRefs.maintenanceSafetyVault = maintenanceSafetyVault;
+
+  const persistenceMonitor = new PersistenceMonitor({
+    db: services.db,
+    toolRegistry: services.toolRegistry,
+    notify: (title, body, level) => showNotification(title, body, level),
+    log: (level, message, meta) => logLine(level, message, meta)
+  });
+  persistenceMonitor.start();
+  services.persistenceMonitor = persistenceMonitor;
+  lifecycleRefs.persistenceMonitor = persistenceMonitor;
+
   const maintenanceScheduler = new MaintenanceScheduler({
     db: services.db,
     toolRegistry: services.toolRegistry,
+    toolRunManager,
+    isScanActive: () => !!services.scanEngine?.isScanning,
     getIdleTimeSeconds: () => {
       try { return powerMonitor.getSystemIdleTime(); } catch (_) { return 0; }
     },
@@ -856,6 +905,23 @@ app.whenReady().then(async () => {
   buildAppMenu();
   createWindow();
   sendSplashProgress(9, t('splash.buildingInterface'));
+
+  const extensionBridge = new ExtensionBridge({
+    db,
+    eventBus,
+    getTheme: () => db.getSetting('ui.theme', 'system'),
+    openApp: () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    },
+    log: (level, message, meta) => logLine(level, message, meta)
+  });
+  extensionBridge.start();
+  services.extensionBridge = extensionBridge;
+  lifecycleRefs.extensionBridge = extensionBridge;
 
   // Register IPC handlers only once mainWindow actually exists. Previously
   // this ran before createWindow(), so the mainWindow parameter passed in
@@ -1017,13 +1083,16 @@ app.whenReady().then(async () => {
   sendSplashProgress(15, t('splash.loadingDashboard'));
 
   // Extract icons from executable paths for the processes page
-  const _processIconCache = {};
+  const _processIconCache = new Map();
   ipcMain.handle('process:getIcons', async (_event, exePaths) => {
-    const unique = [...new Set((exePaths || []).filter(Boolean))];
+    const unique = [...new Set((Array.isArray(exePaths) ? exePaths : [])
+      .filter((value) => typeof value === 'string' && value.length <= 32767)
+      .filter((value) => path.isAbsolute(value) && !value.startsWith('\\\\'))
+      .slice(0, 64))];
     const result = {};
     for (const exePath of unique) {
-      if (exePath in _processIconCache) {
-        result[exePath] = _processIconCache[exePath];
+      if (_processIconCache.has(exePath)) {
+        result[exePath] = _processIconCache.get(exePath);
         continue;
       }
       try {
@@ -1031,23 +1100,24 @@ app.whenReady().then(async () => {
           ? exePath.replace(/%SystemRoot%/gi, process.env.SystemRoot)
           : exePath;
         if (!fs.existsSync(expandedPath)) {
-          _processIconCache[exePath] = null;
+          _processIconCache.set(exePath, null);
           result[exePath] = null;
           continue;
         }
         const nativeImg = await app.getFileIcon(expandedPath);
         const dataUrl = nativeImg.toDataURL();
         if (dataUrl && dataUrl.length > 100) {
-          _processIconCache[exePath] = dataUrl;
+          _processIconCache.set(exePath, dataUrl);
           result[exePath] = dataUrl;
         } else {
-          _processIconCache[exePath] = null;
+          _processIconCache.set(exePath, null);
           result[exePath] = null;
         }
       } catch (_) {
-        _processIconCache[exePath] = null;
+        _processIconCache.set(exePath, null);
         result[exePath] = null;
       }
+      while (_processIconCache.size > 512) _processIconCache.delete(_processIconCache.keys().next().value);
     }
     return result;
   });
@@ -1128,6 +1198,10 @@ process.on('unhandledRejection', (err) => {
 app.on('before-quit', () => {
   isQuitting = true;
   lifecycleRefs.maintenanceScheduler?.stop();
+  lifecycleRefs.maintenanceSafetyVault?.stop();
+  lifecycleRefs.persistenceMonitor?.stop();
+  lifecycleRefs.extensionBridge?.stop();
+  lifecycleRefs.processService?.stop().catch(() => {});
   lifecycleRefs.trayController?.dispose();
   if (lifecycleRefs.networkStatsTimer) clearInterval(lifecycleRefs.networkStatsTimer);
   if (lifecycleRefs.pruneTimer) clearInterval(lifecycleRefs.pruneTimer);

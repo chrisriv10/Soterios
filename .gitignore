@@ -1,5 +1,9 @@
 node_modules/
 dist/
+/build/native-host/
+/build/native/
+/native/process-inspector/target/
+/build/feed-smoke/
 build/win-unpacked/
 .tmp-user-data/
 *.log

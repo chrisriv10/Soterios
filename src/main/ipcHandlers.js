@@ -22,6 +22,9 @@ function registerIpcHandlers(mainWindow, services) {
 
   const servicesForProcess = {
     processInspector: services.processInspector,
+    processService: services.processService,
+    processReputation: services.processReputation,
+    db: services.db,
   };
 
   const servicesForFirewall = {
@@ -45,6 +48,11 @@ function registerIpcHandlers(mainWindow, services) {
     db: services.db,
     eventBus: services.eventBus,
     toolRegistry: services.toolRegistry,
+    toolRunManager: services.toolRunManager,
+    maintenanceSafetyVault: services.maintenanceSafetyVault,
+    persistenceMonitor: services.persistenceMonitor,
+    extensionBridge: services.extensionBridge,
+    processService: services.processService,
     maintenanceScheduler: services.maintenanceScheduler,
     firewallManager: services.firewallManager,
     networkMonitor: services.networkMonitor,

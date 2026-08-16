@@ -61,6 +61,26 @@ const Api = {
     if (!result.ok) throw new Error(result.error || `Tool "${toolId}" failed`);
     return result.data;
   },
+  async startTool(toolId, args, options) {
+    const result = await window.soterios.tools.start(toolId, args, options);
+    if (!result.ok) throw new Error(result.error || `Tool "${toolId}" could not start`);
+    return result.data;
+  },
+  async cancelTool(runId) {
+    const result = await window.soterios.tools.cancel(runId);
+    if (!result.ok) throw new Error(result.error || 'Tool run could not be canceled');
+    return true;
+  },
+  async getActiveTools() {
+    const result = await window.soterios.tools.getActive();
+    return result.ok ? result.data : [];
+  },
+  async getToolHistory(limit, toolId) {
+    const result = await window.soterios.tools.getHistory(limit || 50, toolId || null);
+    return result.ok ? result.data : [];
+  },
+  onToolRunProgress(callback) { return window.soterios.tools.onRunProgress(callback); },
+  onToolRunComplete(callback) { return window.soterios.tools.onRunComplete(callback); },
   onToolProgress(toolId, callback) { return window.soterios.tools.onProgress(toolId, callback); },
   async pickFolder() { return window.soterios.dialog.pickFolder(); },
   async pickFiles() { return window.soterios.dialog.pickFiles(); },
