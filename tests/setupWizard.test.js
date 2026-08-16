@@ -108,8 +108,11 @@ function createHarness() {
       api: { invoke: apiInvoke },
       I18n: {
         t: (key) => key,
-        setLocale: async (code) => localeCalls.push(code),
-        locale: 'en'
+        locale: 'en',
+        setLocale: async (code) => {
+          localeCalls.push(code);
+          sandbox.window.I18n.locale = code;
+        }
       },
       AppRouter: { navigate: (page) => navCalls.push(page) },
       AppState: {},
@@ -360,6 +363,8 @@ describe('first-run setup wizard behavior', () => {
     assert.ok(h.settingsCalls.some((p) => p.ui && p.ui.language === 'fr'));
     assert.equal(h.activeStep(), 'language', 'wizard must stay on the language step after re-render');
     assert.deepEqual(h.navCalls, [], 'changing language must not leave the wizard');
+    assert.equal(h.registry.get('setupLangBtn-fr').classList.contains('active'), true, 'chosen language card must be highlighted');
+    assert.match(h.registry.get('setupLangGrid').innerHTML, /id="setupLangBtn-fr"[^>]*aria-pressed="true"/, 'chosen language card must be announced as pressed');
   });
 
   it('applies and persists the theme from the theme step', async () => {

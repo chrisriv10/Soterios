@@ -286,14 +286,16 @@ window.Pages = window.Pages || {};
       if (!Array.isArray(locales) || locales.length === 0) {
         locales = [{ code: 'en', label: 'English' }];
       }
+      const currentLocale = (window.I18n && window.I18n.locale) || 'en';
       grid.innerHTML = locales.map((l) => `
-        <button type="button" class="setup-lang-card" id="setupLangBtn-${escapeHtml(l.code)}" data-lang="${escapeHtml(l.code)}">
+        <button type="button" class="setup-lang-card" id="setupLangBtn-${escapeHtml(l.code)}" data-lang="${escapeHtml(l.code)}" aria-pressed="${l.code === currentLocale ? 'true' : 'false'}">
           <img class="setup-lang-flag" src="../../../assets/flags/${escapeHtml(l.code)}.png" alt="" loading="lazy" />
           <span class="setup-lang-name">${escapeHtml(l.label)}</span>
         </button>`).join('');
       for (const l of locales) {
         const btn = grid.querySelector('#setupLangBtn-' + l.code);
         if (!btn) continue;
+        if (l.code === currentLocale) btn.classList.add('active');
         btn.addEventListener('click', async () => {
           await this._applyLanguage(l.code, container, t);
         });
