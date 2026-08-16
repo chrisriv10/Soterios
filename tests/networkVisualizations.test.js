@@ -141,6 +141,15 @@ describe('adaptive geo activity model', () => {
     assert.deepEqual({ x: cluster.x, y: cluster.y }, plain(expected));
   });
 
+  it('stretches the map mask over the same coordinate plane as markers', () => {
+    const css = fs.readFileSync(path.join(__dirname, '..', 'src', 'ui', 'css', 'visualizations.css'), 'utf8');
+    const mapStart = css.indexOf('.heatmap-map-skin::before');
+    const mapEnd = css.indexOf('.heatmap-map-skin::after', mapStart);
+    const mapRules = css.slice(mapStart, mapEnd);
+    assert.match(mapRules, /mask:\s*url\('\.\.\/img\/world-map\.svg'\) center \/ 100% 100% no-repeat/);
+    assert.doesNotMatch(mapRules, /contain/);
+  });
+
   it('centers focus targets while clamping pan to the viewport', () => {
     const page = makePage();
     page._heatmapZoom = 1;
