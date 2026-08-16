@@ -2,6 +2,8 @@ window.Pages = window.Pages || {};
 window.Pages['audit'] = {
   _cachedResults: null,
   _cacheTimestamp: null,
+  _loadRequestId: 0,
+  _isLoading: false,
   CACHE_TTL_MS: 5 * 60 * 1000, // 5 minutes
   t(key, vars) {
     return window.I18n?.t(key, vars) ?? key;
@@ -52,6 +54,7 @@ window.Pages['audit'] = {
     'Network protection status could not be determined.': 'audit.check.networkProtection.unknown.msg',
     'This setting is not available on this system.': 'audit.check.networkProtection.unknown.detail',
     'Enable network protection in Windows Security > App & browser control.': 'audit.check.networkProtection.rec',
+    'Enable network protection block mode with PowerShell or Group Policy.': 'audit.check.networkProtection.recPowerShell',
     'Could not query Defender hardening settings.': 'audit.check.hardening.queryError.msg',
     'The Get-MpPreference cmdlet may not be available on this system.': 'audit.check.hardening.queryError.detail',
     'UAC is enabled.': 'audit.check.uac.enabled.msg',
@@ -159,27 +162,100 @@ window.Pages['audit'] = {
   },
   SECTION_ORDER: ['antivirus', 'system', 'accounts', 'updates'],
 
-  // Shared handler for the generic Manage button: open a settings URI or a
-  // special action (open-powershell) exposed by the backend result.
+  manageLabelKey(result) {
+    if (result.manageAction === 'open-powershell') return 'audit.action.inspectPowerShell';
+    if (result.manageContext === 'uac') return 'audit.action.openUac';
+    if (result.manageContext === 'windows-features') return 'audit.action.openWindowsFeatures';
+    const uri = result.actionUri || '';
+    if (/^windowsdefender:/i.test(uri) || uri === 'ms-settings:windowsdefender') return 'audit.action.openDefender';
+    if (uri === 'ms-settings:windowsupdate') return 'audit.action.openWindowsUpdate';
+    if (uri === 'ms-settings:recovery') return 'audit.action.openRecovery';
+    if (uri === 'ms-settings:remotedesktop') return 'audit.action.openRemoteDesktop';
+    if (uri === 'ms-settings:deviceencryption') return 'audit.action.openDeviceEncryption';
+    if (uri === 'control /name Microsoft.BitLockerDriveEncryption') return 'audit.action.openBitLocker';
+    if (uri === 'control userpasswords2') return 'audit.action.openUserAccounts';
+    return 'audit.manage';
+  },
+
+  async invokeManageAction(action, context, uri) {
+    let result;
+    if (action === 'open-powershell') {
+      result = await window.soterios.shell.openPowerShell(context);
+    } else if (action === 'open-windows-utility') {
+      result = await window.soterios.shell.openWindowsUtility(context);
+    } else if (uri) {
+      result = /^control(\s|$)/i.test(uri)
+        ? await window.soterios.shell.openControlPanel(uri)
+        : await window.soterios.shell.openExternal(uri);
+    } else {
+      throw new Error(this.t('audit.unsupportedAction'));
+    }
+    if (!result || result.success !== true) {
+      throw new Error(result?.error || this.t('audit.openSettingsError'));
+    }
+    return result;
+  },
+
+  // Shared handler for settings, allowlisted Windows utilities and read-only
+  // PowerShell inspection actions exposed by backend audit results.
   bindManageButtons(scope) {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     scope.querySelectorAll('.audit-open-settings').forEach((btn) => btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      btn.setAttribute('aria-busy', 'true');
       try {
-        if (btn.dataset.action === 'open-powershell') {
-          await window.soterios.shell.openPowerShell();
-        } else if (btn.dataset.uri) {
-          // Control Panel applets (e.g. "control userpasswords2") are not
-          // URLs and cannot go through shell.openExternal.
-          if (/^control(\s|$)/i.test(btn.dataset.uri)) {
-            await window.soterios.shell.openControlPanel(btn.dataset.uri);
-          } else {
-            await window.soterios.shell.openExternal(btn.dataset.uri);
-          }
-        }
+        await this.invokeManageAction(btn.dataset.action, btn.dataset.context, btn.dataset.uri);
       } catch (err) {
         alert(err.message || t('audit.openSettingsError'));
+      } finally {
+        btn.disabled = false;
+        btn.removeAttribute('aria-busy');
       }
     }));
+  },
+
+  resultCounts(results) {
+    const counts = { pass: 0, fail: 0, warn: 0, error: 0, info: 0 };
+    for (const result of results || []) {
+      if (Object.prototype.hasOwnProperty.call(counts, result.status)) counts[result.status]++;
+    }
+    return counts;
+  },
+
+  buildSummaryHtml(results) {
+    const counts = this.resultCounts(results);
+    const tile = (status, label, color) => `<div class="stat-tile"><div class="stat-label">${escapeHtml(label)}</div><div class="stat-value" data-audit-stat="${status}" style="color:${color};">${counts[status]}</div></div>`;
+    return `<div id="auditSummary" class="grid" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); margin-bottom:18px;">
+      ${tile('pass', this.t('audit.passed'), 'var(--ok)')}
+      ${tile('fail', this.t('audit.failed'), 'var(--danger)')}
+      ${tile('warn', this.t('audit.warnings'), 'var(--warn)')}
+      ${tile('error', this.t('audit.errors'), 'var(--danger)')}
+      ${tile('info', this.t('audit.info'), 'var(--text-dim)')}
+    </div>`;
+  },
+
+  updateSummary(container, results) {
+    const counts = this.resultCounts(results);
+    for (const [status, count] of Object.entries(counts)) {
+      const value = container.querySelector(`[data-audit-stat="${status}"]`);
+      if (value) value.textContent = String(count);
+    }
+  },
+
+  setAuditLoading(container, active) {
+    const refreshBtn = container.querySelector('#auditRefreshBtn');
+    const content = container.querySelector('#auditContent');
+    if (refreshBtn) {
+      refreshBtn.disabled = active;
+      refreshBtn.setAttribute('aria-busy', active ? 'true' : 'false');
+    }
+    if (content) content.setAttribute('aria-busy', active ? 'true' : 'false');
+  },
+
+  loadingHtml() {
+    return `<div class="empty-state">${escapeHtml(this.t('audit.running'))}</div>
+      <div class="loading-progress" style="margin-top:8px;"><div class="loading-progress-bar"></div></div>
+      <div id="auditProgressLabel" class="page-subtitle" style="margin-top:6px; font-size:0.8rem; opacity:0.85;"></div>`;
   },
 
   render(container) {
@@ -190,57 +266,40 @@ window.Pages['audit'] = {
             <h1 class="page-title">${escapeHtml(this.t('audit.title'))}</h1>
             <p class="page-subtitle">${escapeHtml(this.t('audit.subtitle'))}</p>
           </div>
-          <button id="auditRefreshBtn" class="btn btn-secondary" style="font-size:0.85rem; padding:6px 12px;" title="${escapeHtml(this.t('audit.refreshTooltip'))}">
+          <button type="button" id="auditRefreshBtn" class="btn btn-secondary" style="font-size:0.85rem; padding:6px 12px;" title="${escapeHtml(this.t('audit.refreshTooltip'))}">
             ${escapeHtml(this.t('audit.refresh'))}
           </button>
         </div>
       </header>
-      <div id="auditContent">
-        <div class="empty-state">${escapeHtml(this.t('audit.running'))}</div>
-        <div class="loading-progress" style="margin-top:8px;">
-          <div class="loading-progress-bar"></div>
-        </div>
-        <div id="auditProgressLabel" class="page-subtitle" style="margin-top:6px; font-size:0.8rem; opacity:0.85;"></div>
-      </div>
+      <div id="auditContent">${this.loadingHtml()}</div>
     `;
-    const refreshBtn = container.querySelector('#auditRefreshBtn');
-    if (refreshBtn) {
-      refreshBtn.addEventListener('click', () => this.load(container, true));
-    }
+    container.querySelector('#auditRefreshBtn')?.addEventListener('click', () => {
+      if (!this._isLoading) this.load(container, true);
+    });
     this.load(container, false);
   },
+
   async load(container, forceRefresh = false) {
     const self = this;
+    const requestId = ++self._loadRequestId;
     const content = container.querySelector('#auditContent');
-    const progressBar = content?.querySelector('.loading-progress-bar');
+    let progressBar = null;
     let creepTimer = null;
     let currentPct = 0;
     let ceilingPct = 4;
     let unsubscribeProgress = null;
     let lastProgress = null;
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
 
-    // Check cache first (unless forced)
-    const now = Date.now();
-    const cacheFresh = self._cachedResults && self._cacheTimestamp && (now - self._cacheTimestamp) < self.CACHE_TTL_MS;
-    if (!forceRefresh && cacheFresh) {
-      // Use cached results directly
-      const ignored = await window.api.invoke('warnings:listIgnored');
-      const ignoredIds = new Set((ignored || []).map((w) => w.id));
-      self._currentTranslatedResults = self._cachedResults;
-      self.renderCachedResults(container, self._cachedResults, ignoredIds);
-      return;
-    }
-
+    const isCurrent = () => requestId === self._loadRequestId && container.isConnected;
     const stopCreeping = () => {
-      if (creepTimer) {
-        clearInterval(creepTimer);
-        creepTimer = null;
-      }
+      if (creepTimer) clearInterval(creepTimer);
+      creepTimer = null;
     };
-
     const startCreeping = () => {
       stopCreeping();
       creepTimer = setInterval(() => {
+        if (!isCurrent()) return;
         if (currentPct < ceilingPct) {
           currentPct = Math.min(ceilingPct, currentPct + 1);
           if (progressBar) progressBar.style.width = `${currentPct}%`;
@@ -248,311 +307,203 @@ window.Pages['audit'] = {
       }, 200);
     };
 
-    const setLoadingState = (active) => {
-      if (active) {
-        startCreeping();
-        if (progressBar) progressBar.style.opacity = '1';
-      } else {
-        stopCreeping();
-        if (progressBar) progressBar.style.opacity = '0';
-      }
-    };
-
-    setLoadingState(true);
-    unsubscribeProgress = window.api.on('audit:progress', (event) => {
-      const labelEl = container.querySelector('#auditProgressLabel');
-      if (!event) return;
-      lastProgress = event;
-      const { type, label, completed, total } = event;
-      if (labelEl) {
-        const translatedLabel = this.translateAuditLabel(label);
-        labelEl.textContent = type === 'complete'
-          ? this.t('audit.completed', { label: translatedLabel, completed, total })
-          : this.t('audit.checking', { label: translatedLabel });
-      }
-      if (typeof completed === 'number' && typeof total === 'number' && total > 0) {
-        if (type === 'complete') {
-          // Use actual progress percentage instead of creeping animation for accuracy
-          currentPct = Math.max(4, Math.round((completed / total) * 100));
-          if (progressBar) progressBar.style.width = `${currentPct}%`;
-          // Set ceiling to actual progress to prevent bar from jumping ahead
-          ceilingPct = currentPct;
-        }
-        const nextMilestone = Math.min(total, completed + 1);
-        // Only set ceiling for next milestone if we haven't completed all checks
-        if (nextMilestone < total) {
-          ceilingPct = Math.max(currentPct + 1, Math.round((nextMilestone / total) * 100) - 1);
-        }
-      }
-    });
-    
-    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
-
+    self._isLoading = true;
+    self.setAuditLoading(container, true);
     try {
+      const now = Date.now();
+      const cacheFresh = self._cachedResults && self._cacheTimestamp && (now - self._cacheTimestamp) < self.CACHE_TTL_MS;
+      if (!forceRefresh && cacheFresh) {
+        const ignored = await window.api.invoke('warnings:listIgnored');
+        if (!isCurrent()) return;
+        self.renderPageResults(container, self._cachedResults, ignored || []);
+        return;
+      }
+
+      content.innerHTML = self.loadingHtml();
+      progressBar = content.querySelector('.loading-progress-bar');
+      startCreeping();
+      unsubscribeProgress = window.api.on('audit:progress', (event) => {
+        if (!event || !isCurrent()) return;
+        lastProgress = event;
+        const labelEl = container.querySelector('#auditProgressLabel');
+        const { type, label, completed, total } = event;
+        if (labelEl) {
+          const translatedLabel = self.translateAuditLabel(label);
+          labelEl.textContent = type === 'complete'
+            ? self.t('audit.completed', { label: translatedLabel, completed, total })
+            : self.t('audit.checking', { label: translatedLabel });
+        }
+        if (typeof completed === 'number' && typeof total === 'number' && total > 0) {
+          if (type === 'complete') {
+            currentPct = Math.max(4, Math.round((completed / total) * 100));
+            ceilingPct = currentPct;
+            if (progressBar) progressBar.style.width = `${currentPct}%`;
+          }
+          const nextMilestone = Math.min(total, completed + 1);
+          if (nextMilestone < total) {
+            ceilingPct = Math.max(currentPct + 1, Math.round((nextMilestone / total) * 100) - 1);
+          }
+        }
+      });
+
       const [results, ignored] = await Promise.all([
         window.api.invoke('audit:run'),
         window.api.invoke('warnings:listIgnored')
       ]);
-      const ignoredIds = new Set((ignored || []).map((w) => w.id));
+      if (!isCurrent()) return;
       if (!results || results.length === 0) {
-        content.innerHTML = `<div class="empty-state">${escapeHtml(this.t('audit.noResults'))}</div>`;
+        content.innerHTML = `<div class="empty-state">${escapeHtml(self.t('audit.noResults'))}</div>`;
         return;
       }
 
-      // Translate audit results from backend
-      const translatedResults = results.map(r => this.translateAuditResult(r));
-      self._currentTranslatedResults = translatedResults;
-      // Cache the results
+      const translatedResults = results.map((result) => self.translateAuditResult(result));
       self._cachedResults = translatedResults;
       self._cacheTimestamp = Date.now();
 
-      let pass = 0, fail = 0, warn = 0, err = 0;
-      const visibleResults = translatedResults.filter((r) => !ignoredIds.has(this.warningId(r)));
-      visibleResults.forEach(r => { if (r.status === 'pass') pass++; else if (r.status === 'fail') fail++; else if (r.status === 'warn') warn++; else if (r.status === 'error') err++; });
-      let html = `<div class="grid grid-4" style="margin-bottom:18px;">
-        <div class="stat-tile"><div class="stat-label">${escapeHtml(this.t('audit.passed'))}</div><div class="stat-value" style="color:var(--ok);">${pass}</div></div>
-        <div class="stat-tile"><div class="stat-label">${escapeHtml(this.t('audit.failed'))}</div><div class="stat-value" style="color:var(--danger);">${fail}</div></div>
-        <div class="stat-tile"><div class="stat-label">${escapeHtml(this.t('audit.warnings'))}</div><div class="stat-value" style="color:var(--warn);">${warn}</div></div>
-        <div class="stat-tile"><div class="stat-label">${escapeHtml(this.t('audit.errors'))}</div><div class="stat-value" style="color:var(--text-dim);">${err}</div></div>
-      </div>`;
-      html += '<div id="auditResultsContainer" style="max-height:calc(100vh - 260px); overflow-y:auto; padding-right:8px; display:flex; flex-direction:column; gap:12px;">';
-      html += `<div class="dashboard-grid">${this.buildResultsGrid(visibleResults)}</div>`;
-      html += '</div>';
-      if ((ignored || []).some((w) => String(w.id || '').startsWith('audit:'))) {
-        html += `<div class="panel" style="margin-top:18px;"><div class="panel-title">${escapeHtml(this.t('audit.ignoredWarnings'))}</div>
-          <div class="history-list">${ignored.filter((w) => String(w.id || '').startsWith('audit:')).map((w) => `
-            <div class="history-item"><div><div class="history-title">${escapeHtml(w.title)}</div><div class="history-meta">${escapeHtml(w.detail || '')}</div></div>
-            <button class="btn btn-sm audit-restore" data-id="${escapeHtml(w.id)}">${escapeHtml(this.t('audit.restore'))}</button></div>`).join('')}</div></div>`;
-      }
-
-      // The final progress event (e.g. "6/6") and the audit:run reply arrive in
-      // the same IPC batch, so replacing the content here would wipe the bar
-      // before it ever painted a frame. Hold the finished state long enough
-      // for one paint, then swap in the results.
       const labelEl = content.querySelector('#auditProgressLabel');
-      if (lastProgress && lastProgress.type === 'complete'
+      if (lastProgress?.type === 'complete'
         && typeof lastProgress.completed === 'number' && typeof lastProgress.total === 'number'
         && lastProgress.total > 0 && lastProgress.completed >= lastProgress.total) {
         stopCreeping();
-        currentPct = 100;
-        ceilingPct = 100;
         if (progressBar) {
           progressBar.style.width = '100%';
           progressBar.style.opacity = '1';
         }
         if (labelEl) {
-          labelEl.textContent = this.t('audit.completed', {
-            label: this.translateAuditLabel(lastProgress.label),
+          labelEl.textContent = self.t('audit.completed', {
+            label: self.translateAuditLabel(lastProgress.label),
             completed: lastProgress.completed,
             total: lastProgress.total
           });
         }
         await new Promise((resolve) => setTimeout(resolve, 400));
-        if (!container.isConnected) return;
+        if (!isCurrent()) return;
       }
 
-      content.innerHTML = html;
-      content.querySelectorAll('.copy-command-btn').forEach((btn) => btn.addEventListener('click', async () => {
-        const codeEl = content.querySelector(`#${btn.dataset.target}`);
-        if (!codeEl) return;
-        try {
-          await navigator.clipboard.writeText(codeEl.textContent);
-          const original = btn.textContent;
-          btn.textContent = t('audit.copied');
-          setTimeout(() => { btn.textContent = original; }, 1500);
-        } catch (err) {
-          alert(t('audit.copyError'));
-        }
-      }));
-      self.bindManageButtons(content);
-      content.querySelectorAll('.audit-ignore').forEach((btn) => btn.addEventListener('click', async () => {
-        const card = btn.closest('.card');
-        btn.disabled = true;
-        try {
-          await window.api.invoke('warnings:ignore', { id: btn.dataset.id, title: btn.dataset.title, detail: btn.dataset.detail });
-          if (card) card.remove();
-          // Update ignored warnings section immediately without re-running audit
-          self.updateIgnoredWarningsSection(container);
-        } catch (err) {
-          btn.disabled = false;
-          alert(err.message || t('audit.ignoreError'));
-        }
-      }));
-      content.querySelectorAll('.audit-restore').forEach((btn) => btn.addEventListener('click', async () => {
-        const item = btn.closest('.history-item');
-        btn.disabled = true;
-        try {
-          await window.api.invoke('warnings:unignore', btn.dataset.id);
-          if (item) item.remove();
-          // Update UI immediately without re-running full audit
-          const ignored = await window.api.invoke('warnings:listIgnored');
-          const ignoredIds = new Set((ignored || []).map((w) => w.id));
-          self._currentTranslatedResults = self._currentTranslatedResults || [];
-          const visibleResults = self._currentTranslatedResults.filter((r) => !ignoredIds.has(self.warningId(r)));
-          self.renderResults(container, visibleResults);
-          self.updateIgnoredWarningsSection(container);
-        } catch (err) {
-          btn.disabled = false;
-          alert(err.message || t('audit.restoreError'));
-        }
-      }));
-    } catch (e) {
-      content.innerHTML = `<div class="empty-state">${escapeHtml(t('audit.error', { error: e.message }))}</div>`;
+      self.renderPageResults(container, translatedResults, ignored || []);
+    } catch (error) {
+      if (isCurrent()) content.innerHTML = `<div class="empty-state">${escapeHtml(t('audit.error', { error: error.message }))}</div>`;
     } finally {
       if (typeof unsubscribeProgress === 'function') unsubscribeProgress();
-      setLoadingState(false);
+      stopCreeping();
+      if (requestId === self._loadRequestId) {
+        self._isLoading = false;
+        self.setAuditLoading(container, false);
+      }
     }
   },
 
-  // Render cached results without loading state
-  renderCachedResults(container, translatedResults, ignoredIds) {
-    const self = this;
-    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+  renderPageResults(container, translatedResults, ignored) {
     const content = container.querySelector('#auditContent');
     if (!content) return;
+    this._currentTranslatedResults = translatedResults;
+    const ignoredIds = new Set((ignored || []).map((warning) => warning.id));
+    const visibleResults = translatedResults.filter((result) => !ignoredIds.has(this.warningId(result)));
+    content.innerHTML = `${this.buildSummaryHtml(visibleResults)}
+      <div id="auditResultsContainer" style="max-height:calc(100vh - 260px); overflow-y:auto; padding-right:8px; display:flex; flex-direction:column; gap:12px;">
+        <div class="dashboard-grid">${this.buildResultsGrid(visibleResults)}</div>
+      </div>`;
+    this.bindResultActions(content, container);
+    this.updateIgnoredWarningsSection(container, ignored || []).catch((err) => {
+      alert(err.message || this.t('audit.restoreError'));
+    });
+  },
 
-    self._currentTranslatedResults = translatedResults;
+  renderCachedResults(container, translatedResults, ignoredIds) {
+    const ignored = [...(ignoredIds || [])].map((id) => ({ id }));
+    this.renderPageResults(container, translatedResults, ignored);
+  },
 
-    let pass = 0, fail = 0, warn = 0, err = 0;
-    const visibleResults = translatedResults.filter((r) => !ignoredIds.has(this.warningId(r)));
-    visibleResults.forEach(r => { if (r.status === 'pass') pass++; else if (r.status === 'fail') fail++; else if (r.status === 'warn') warn++; else if (r.status === 'error') err++; });
-
-    let html = `<div class="grid grid-4" style="margin-bottom:18px;">
-      <div class="stat-tile"><div class="stat-label">${escapeHtml(this.t('audit.passed'))}</div><div class="stat-value" style="color:var(--ok);">${pass}</div></div>
-      <div class="stat-tile"><div class="stat-label">${escapeHtml(this.t('audit.failed'))}</div><div class="stat-value" style="color:var(--danger);">${fail}</div></div>
-      <div class="stat-tile"><div class="stat-label">${escapeHtml(this.t('audit.warnings'))}</div><div class="stat-value" style="color:var(--warn);">${warn}</div></div>
-      <div class="stat-tile"><div class="stat-label">${escapeHtml(this.t('audit.errors'))}</div><div class="stat-value" style="color:var(--text-dim);">${err}</div></div>
-    </div>`;
-    html += '<div id="auditResultsContainer" style="max-height:calc(100vh - 260px); overflow-y:auto; padding-right:8px; display:flex; flex-direction:column; gap:12px;">';
-    html += `<div class="dashboard-grid">${self.buildResultsGrid(visibleResults)}</div>`;
-    html += '</div>';
-
-    // Ignored warnings section
-    if ((ignoredIds && ignoredIds.size > 0)) {
-      // Note: we don't have the full ignored objects here, just IDs
-      // We'll let updateIgnoredWarningsSection handle fetching and rendering
-      html += `<div class="panel" style="margin-top:18px;"><div class="panel-title">${escapeHtml(this.t('audit.ignoredWarnings'))}</div>
-        <div class="history-list" id="ignoredWarningsList"></div></div>`;
-    }
-
-    content.innerHTML = html;
-
-    // Bind event listeners for the rendered content
-    content.querySelectorAll('.copy-command-btn').forEach((btn) => btn.addEventListener('click', async () => {
-      const codeEl = content.querySelector(`#${btn.dataset.target}`);
+  bindCopyButtons(scope) {
+    scope.querySelectorAll('.copy-command-btn').forEach((btn) => btn.addEventListener('click', async () => {
+      const codeEl = scope.closest?.('#auditContent')?.querySelector(`#${btn.dataset.target}`)
+        || scope.querySelector(`#${btn.dataset.target}`);
       if (!codeEl) return;
       try {
         await navigator.clipboard.writeText(codeEl.textContent);
         const original = btn.textContent;
-        btn.textContent = t('audit.copied');
+        btn.textContent = this.t('audit.copied');
         setTimeout(() => { btn.textContent = original; }, 1500);
-      } catch (err) {
-        alert(t('audit.copyError'));
+      } catch (_) {
+        alert(this.t('audit.copyError'));
       }
     }));
-    self.bindManageButtons(content);
-    content.querySelectorAll('.audit-ignore').forEach((btn) => btn.addEventListener('click', async () => {
-      const card = btn.closest('.card');
-      btn.disabled = true;
-      try {
-        await window.api.invoke('warnings:ignore', { id: btn.dataset.id, title: btn.dataset.title, detail: btn.dataset.detail });
-        if (card) card.remove();
-        self.updateIgnoredWarningsSection(container);
-      } catch (err) {
-        btn.disabled = false;
-        alert(err.message || t('audit.ignoreError'));
-      }
-    }));
-
-    // Load and render ignored warnings section
-    self.updateIgnoredWarningsSection(container);
   },
 
-  // Render audit results into the container (incremental update)
+  bindIgnoreButtons(scope, container) {
+    scope.querySelectorAll('.audit-ignore').forEach((btn) => btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        await window.api.invoke('warnings:ignore', {
+          id: btn.dataset.id,
+          title: btn.dataset.title,
+          detail: btn.dataset.detail
+        });
+        await this.refreshVisibleResults(container);
+      } catch (err) {
+        btn.disabled = false;
+        alert(err.message || this.t('audit.ignoreError'));
+      }
+    }));
+  },
+
+  bindResultActions(scope, container) {
+    this.bindManageButtons(scope);
+    this.bindCopyButtons(scope);
+    this.bindIgnoreButtons(scope, container);
+  },
+
+  async refreshVisibleResults(container) {
+    const ignored = await window.api.invoke('warnings:listIgnored');
+    const ignoredIds = new Set((ignored || []).map((warning) => warning.id));
+    const visibleResults = (this._currentTranslatedResults || [])
+      .filter((result) => !ignoredIds.has(this.warningId(result)));
+    this.renderResults(container, visibleResults);
+    await this.updateIgnoredWarningsSection(container, ignored || []);
+  },
+
   renderResults(container, visibleResults) {
-    const self = this;
-    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const resultsContainer = container.querySelector('#auditResultsContainer .dashboard-grid');
     if (!resultsContainer) return;
-
-    resultsContainer.innerHTML = self.buildResultsGrid(visibleResults);
-
-    // Re-bind event listeners for newly added buttons
-    self.bindManageButtons(resultsContainer);
-    resultsContainer.querySelectorAll('.copy-command-btn').forEach((btn) => btn.addEventListener('click', async () => {
-      const codeEl = container.querySelector(`#${btn.dataset.target}`);
-      if (!codeEl) return;
-      try {
-        await navigator.clipboard.writeText(codeEl.textContent);
-        const original = btn.textContent;
-        btn.textContent = t('audit.copied');
-        setTimeout(() => { btn.textContent = original; }, 1500);
-      } catch (err) {
-        alert(t('audit.copyError'));
-      }
-    }));
-    resultsContainer.querySelectorAll('.audit-ignore').forEach((btn) => btn.addEventListener('click', async () => {
-      const card = btn.closest('.card');
-      btn.disabled = true;
-      try {
-        await window.api.invoke('warnings:ignore', { id: btn.dataset.id, title: btn.dataset.title, detail: btn.dataset.detail });
-        if (card) card.remove();
-        self.updateIgnoredWarningsSection(container);
-      } catch (err) {
-        btn.disabled = false;
-        alert(err.message || t('audit.ignoreError'));
-      }
-    }));
+    resultsContainer.innerHTML = this.buildResultsGrid(visibleResults);
+    this.updateSummary(container, visibleResults);
+    this.bindResultActions(resultsContainer, container);
   },
 
-  // Update the ignored warnings section at the bottom of the audit page
-  updateIgnoredWarningsSection(container) {
-    const self = this;
-    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+  async updateIgnoredWarningsSection(container, ignoredRows) {
     const content = container.querySelector('#auditContent');
     if (!content) return;
+    const ignored = ignoredRows || await window.api.invoke('warnings:listIgnored');
+    const auditIgnored = (ignored || []).filter((warning) => String(warning.id || '').startsWith('audit:'));
+    let ignoredSection = content.querySelector('#auditIgnoredWarnings');
 
-    // Re-fetch ignored warnings and update the section
-    window.api.invoke('warnings:listIgnored').then(ignored => {
-      const auditIgnored = (ignored || []).filter((w) => String(w.id || '').startsWith('audit:'));
-      let ignoredSection = content.querySelector('.panel:has(.history-list)'); // more specific selector
+    if (!auditIgnored.length) {
+      ignoredSection?.remove();
+      return;
+    }
+    if (!ignoredSection) {
+      ignoredSection = document.createElement('div');
+      ignoredSection.id = 'auditIgnoredWarnings';
+      ignoredSection.className = 'panel';
+      ignoredSection.style.marginTop = '18px';
+      content.appendChild(ignoredSection);
+    }
+    ignoredSection.innerHTML = `
+      <div class="panel-title">${escapeHtml(this.t('audit.ignoredWarnings'))}</div>
+      <div class="history-list">${auditIgnored.map((warning) => `
+        <div class="history-item"><div><div class="history-title">${escapeHtml(warning.title)}</div><div class="history-meta">${escapeHtml(warning.detail || '')}</div></div>
+        <button type="button" class="btn btn-sm audit-restore" data-id="${escapeHtml(warning.id)}">${escapeHtml(this.t('audit.restore'))}</button></div>`).join('')}</div>`;
 
-      if (auditIgnored.length > 0) {
-        // Create the section if it doesn't exist
-        if (!ignoredSection) {
-          ignoredSection = document.createElement('div');
-          ignoredSection.className = 'panel';
-          ignoredSection.style.marginTop = '18px';
-          content.appendChild(ignoredSection);
-        }
-        ignoredSection.innerHTML = `
-          <div class="panel-title">${escapeHtml(self.t('audit.ignoredWarnings'))}</div>
-          <div class="history-list">${auditIgnored.map((w) => `
-            <div class="history-item"><div><div class="history-title">${escapeHtml(w.title)}</div><div class="history-meta">${escapeHtml(w.detail || '')}</div></div>
-            <button class="btn btn-sm audit-restore" data-id="${escapeHtml(w.id)}">${escapeHtml(self.t('audit.restore'))}</button></div>`).join('')}
-          `;
-
-        // Re-bind restore buttons for the ignored section
-        ignoredSection.querySelectorAll('.audit-restore').forEach((btn) => btn.addEventListener('click', async () => {
-          const item = btn.closest('.history-item');
-          btn.disabled = true;
-          try {
-            await window.api.invoke('warnings:unignore', btn.dataset.id);
-            if (item) item.remove();
-            const ignored = await window.api.invoke('warnings:listIgnored');
-            const ignoredIds = new Set((ignored || []).map((w) => w.id));
-            const visibleResults = self._currentTranslatedResults.filter((r) => !ignoredIds.has(self.warningId(r)));
-            self.renderResults(container, visibleResults);
-            self.updateIgnoredWarningsSection(container);
-          } catch (err) {
-            btn.disabled = false;
-            alert(err.message || self.t('audit.restoreError'));
-          }
-        }));
-      } else if (ignoredSection) {
-        ignoredSection.remove();
+    ignoredSection.querySelectorAll('.audit-restore').forEach((btn) => btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        await window.api.invoke('warnings:unignore', btn.dataset.id);
+        await this.refreshVisibleResults(container);
+      } catch (err) {
+        btn.disabled = false;
+        alert(err.message || this.t('audit.restoreError'));
       }
-    });
+    }));
   },
 
   warningId(result) {
@@ -623,6 +574,11 @@ window.Pages['audit'] = {
     else if (res.status === 'fail') { iconClass = 'danger'; iconSvg = '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>'; statusLabel = this.t('audit.statusFailed'); }
     else if (res.status === 'warn') { iconClass = 'warning'; iconSvg = '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="13"/><circle cx="12" cy="16.5" r="1" fill="currentColor" stroke="none"/>'; statusLabel = this.t('audit.statusWarning'); }
     else if (res.status === 'error') { iconClass = 'danger'; iconSvg = '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>'; statusLabel = this.t('audit.statusError'); }
+    const statusColor = iconClass === 'safe' ? 'var(--ok)'
+      : iconClass === 'danger' ? 'var(--danger)'
+        : iconClass === 'warning' ? 'var(--warn)' : 'var(--text-dim)';
+    const manageLabel = this.t(this.manageLabelKey(res));
+    const manageAriaLabel = this.t('audit.action.forCheck', { action: manageLabel, check: res.name });
     return `<div class="card" style="display:flex; flex-direction:column; gap:12px;">
       <div style="display:flex; align-items:center; gap:16px;">
         <div class="status-icon ${iconClass}" style="width:40px;height:40px;">
@@ -631,15 +587,15 @@ window.Pages['audit'] = {
         <div style="flex:1;">
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <div style="font-weight:600; font-size:1.1rem;">${escapeHtml(res.name)}</div>
-            <span style="font-size:0.8rem; font-weight:600; text-transform:uppercase; color:${iconClass === 'safe' ? 'var(--ok)' : iconClass === 'danger' ? 'var(--danger)' : 'var(--warn)'};">${statusLabel}</span>
+            <span style="font-size:0.8rem; font-weight:600; text-transform:uppercase; color:${statusColor};">${statusLabel}</span>
           </div>
           <div class="page-subtitle" style="font-size:0.9rem; margin-top:4px;">${escapeHtml(res.message)}</div>
         </div>
       </div>
       ${res.detail ? `<div style="font-size:0.85rem; color:var(--text-dim); padding:8px; background:var(--bg-surface); border-radius:6px; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; white-space:pre-wrap; word-break:break-word;">${escapeHtml(res.detail)}</div>` : ''}
       ${res.recommendation ? this.renderRecommendation(res.recommendation) : ''}
-      ${(res.actionUri || res.manageAction) ? `<button class="btn btn-sm audit-open-settings" data-uri="${escapeHtml(res.actionUri || '')}" data-action="${escapeHtml(res.manageAction || '')}">${escapeHtml(this.t('audit.manage'))}</button>` : ''}
-      ${res.status === 'warn' || res.status === 'fail' ? `<button class="btn btn-sm audit-ignore" data-id="${escapeHtml(this.warningId(res))}" data-title="${escapeHtml(res.name)}" data-detail="${escapeHtml(res.message || res.detail || '')}">${escapeHtml(this.t('audit.ignoreWarning'))}</button>` : ''}
+      ${(res.actionUri || res.manageAction) ? `<button type="button" class="btn btn-sm audit-open-settings" data-uri="${escapeHtml(res.actionUri || '')}" data-action="${escapeHtml(res.manageAction || '')}" data-context="${escapeHtml(res.manageContext || '')}" aria-label="${escapeHtml(manageAriaLabel)}">${escapeHtml(manageLabel)}</button>` : ''}
+      ${res.status === 'warn' || res.status === 'fail' ? `<button type="button" class="btn btn-sm audit-ignore" data-id="${escapeHtml(this.warningId(res))}" data-title="${escapeHtml(res.name)}" data-detail="${escapeHtml(res.message || res.detail || '')}">${escapeHtml(this.t('audit.ignoreWarning'))}</button>` : ''}
     </div>`;
   },
 

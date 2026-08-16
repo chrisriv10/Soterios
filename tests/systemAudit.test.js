@@ -168,7 +168,7 @@ describe('SystemAudit', () => {
   it('checkDefender results carry Windows Security manage URI', async () => {
     const audit = new SystemAudit();
     const results = await audit.checkDefender();
-    assert.ok(results.every((r) => r.actionUri === 'ms-settings:windowsdefender'));
+    assert.ok(results.every((r) => r.actionUri === 'windowsdefender://threatsettings/'));
   });
 
   it('checkDefender error branches carry Windows Security manage URI', async () => {
@@ -231,10 +231,11 @@ describe('SystemAudit', () => {
     assert.ok(results[0].message.includes('enabled'));
   });
 
-  it('checkUac results carry UAC settings manage URI', async () => {
+  it('checkUac results carry the UAC utility manage action', async () => {
     const audit = new SystemAudit();
     const results = await audit.checkUac();
-    assert.equal(results[0].actionUri, 'control userpasswords2');
+    assert.equal(results[0].manageAction, 'open-windows-utility');
+    assert.equal(results[0].manageContext, 'uac');
   });
 
   it('checkUac returns fail when UAC is disabled', async () => {
@@ -343,6 +344,7 @@ describe('SystemAudit', () => {
     const results = await audit.checkBitLocker();
     assert.equal(results[0].status, 'info');
     assert.ok(results[0].message.includes('not available'));
+    assert.equal(results[0].actionUri, 'ms-settings:deviceencryption');
   });
 
   it('checkExecutionPolicy returns pass for secure policies', async () => {
@@ -356,6 +358,7 @@ describe('SystemAudit', () => {
     const audit = new SystemAudit();
     const results = await audit.checkExecutionPolicy();
     assert.equal(results[0].manageAction, 'open-powershell');
+    assert.equal(results[0].manageContext, 'execution-policy');
   });
 
   it('checkExecutionPolicy error branch carries open-powershell manage action', async () => {
@@ -366,6 +369,7 @@ describe('SystemAudit', () => {
     const results = await audit.checkExecutionPolicy();
     assert.equal(results[0].status, 'warn');
     assert.equal(results[0].manageAction, 'open-powershell');
+    assert.equal(results[0].manageContext, 'execution-policy');
   });
 
   it('checkExecutionPolicy returns warn for insecure policies', async () => {
@@ -434,7 +438,9 @@ describe('SystemAudit', () => {
     assert.equal(results[2].name, 'Network Protection');
     assert.ok(results.every((r) => r.status === 'pass'));
     assert.ok(results.every((r) => r.section === 'antivirus'));
-    assert.ok(results.every((r) => r.actionUri === 'ms-settings:windowsdefender'));
+    assert.ok(results.slice(0, 2).every((r) => r.actionUri === 'windowsdefender://threatsettings/'));
+    assert.equal(results[2].manageAction, 'open-powershell');
+    assert.equal(results[2].manageContext, 'network-protection');
   });
 
   it('checkDefenderHardening flags tamper protection off', async () => {
@@ -524,7 +530,9 @@ describe('SystemAudit', () => {
     const results = await audit.checkDefenderHardening();
     assert.equal(results.length, 3);
     assert.ok(results.every((r) => r.status === 'error'));
-    assert.ok(results.every((r) => r.actionUri === 'ms-settings:windowsdefender'));
+    assert.ok(results.slice(0, 2).every((r) => r.actionUri === 'windowsdefender://threatsettings/'));
+    assert.equal(results[2].manageAction, 'open-powershell');
+    assert.equal(results[2].manageContext, 'network-protection');
   });
 
   it('checkSmb1 returns pass when SMBv1 is disabled', async () => {
@@ -533,7 +541,8 @@ describe('SystemAudit', () => {
     assert.equal(results[0].status, 'pass');
     assert.equal(results[0].name, 'SMBv1');
     assert.equal(results[0].section, 'system');
-    assert.equal(results[0].actionUri, 'control /name Microsoft.WindowsOptionalFeatures');
+    assert.equal(results[0].manageAction, 'open-windows-utility');
+    assert.equal(results[0].manageContext, 'windows-features');
   });
 
   it('checkSmb1 returns fail when SMBv1 is enabled', async () => {
@@ -595,7 +604,7 @@ describe('SystemAudit', () => {
     assert.equal(results[0].status, 'pass');
     assert.equal(results[0].name, 'Remote Desktop');
     assert.equal(results[0].section, 'system');
-    assert.equal(results[0].actionUri, 'ms-settings:system-remote-desktop');
+    assert.equal(results[0].actionUri, 'ms-settings:remotedesktop');
   });
 
   it('checkRemoteDesktop warns when enabled with NLA', async () => {
@@ -630,6 +639,7 @@ describe('SystemAudit', () => {
     assert.equal(results[0].status, 'pass');
     assert.equal(results[0].name, 'LSA Protection');
     assert.equal(results[0].manageAction, 'open-powershell');
+    assert.equal(results[0].manageContext, 'lsa-protection');
   });
 
   it('checkLsaProtection fails when RunAsPPL is off', async () => {
@@ -659,6 +669,8 @@ describe('SystemAudit', () => {
     assert.equal(results[1].name, 'Guest Account');
     assert.ok(results.every((r) => r.section === 'accounts'));
     assert.ok(results.every((r) => r.manageAction === 'open-powershell'));
+    assert.equal(results[0].manageContext, 'password-policy');
+    assert.equal(results[1].manageContext, 'guest-account');
     assert.ok(results.every((r) => r.status === 'pass'));
   });
 

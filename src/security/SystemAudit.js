@@ -51,11 +51,11 @@ class SystemAudit {
       try {
         const s = JSON.parse(def.stdout);
         if (s.AntivirusEnabled) {
-          out.push({ name: 'Windows Defender Antivirus', section: 'antivirus', status: 'pass', message: 'Defender antivirus is enabled and running.', detail: `Engine: ${s.AMEngineVersion || 'N/A'} | Signatures: ${s.AntivirusSignatureVersion || 'N/A'} (${s.AntivirusSignatureAge || 0} days old)`, recommendation: '', actionUri: 'ms-settings:windowsdefender' });
+          out.push({ name: 'Windows Defender Antivirus', section: 'antivirus', status: 'pass', message: 'Defender antivirus is enabled and running.', detail: `Engine: ${s.AMEngineVersion || 'N/A'} | Signatures: ${s.AntivirusSignatureVersion || 'N/A'} (${s.AntivirusSignatureAge || 0} days old)`, recommendation: '', actionUri: 'windowsdefender://threatsettings/' });
         } else {
-          out.push({ name: 'Windows Defender Antivirus', section: 'antivirus', status: 'fail', message: 'Defender antivirus is disabled!', detail: 'Antivirus protection is turned off.', recommendation: 'Open Windows Security > Virus & threat protection and turn on real-time protection.', actionUri: 'ms-settings:windowsdefender' });
+          out.push({ name: 'Windows Defender Antivirus', section: 'antivirus', status: 'fail', message: 'Defender antivirus is disabled!', detail: 'Antivirus protection is turned off.', recommendation: 'Open Windows Security > Virus & threat protection and turn on real-time protection.', actionUri: 'windowsdefender://threatsettings/' });
         }
-        out.push({ name: 'Real-Time Protection', section: 'antivirus', status: s.RealTimeProtectionEnabled ? 'pass' : 'fail', message: s.RealTimeProtectionEnabled ? 'Real-time protection is active.' : 'Real-time protection is off!', detail: s.RealTimeProtectionEnabled ? 'Threats are blocked as they appear.' : 'Your system is vulnerable to active threats.', recommendation: s.RealTimeProtectionEnabled ? '' : 'Enable real-time protection in Windows Security settings.', actionUri: 'ms-settings:windowsdefender' });
+        out.push({ name: 'Real-Time Protection', section: 'antivirus', status: s.RealTimeProtectionEnabled ? 'pass' : 'fail', message: s.RealTimeProtectionEnabled ? 'Real-time protection is active.' : 'Real-time protection is off!', detail: s.RealTimeProtectionEnabled ? 'Threats are blocked as they appear.' : 'Your system is vulnerable to active threats.', recommendation: s.RealTimeProtectionEnabled ? '' : 'Enable real-time protection in Windows Security settings.', actionUri: 'windowsdefender://threatsettings/' });
       } catch (e) {
         out.push({ name: 'Windows Defender', section: 'antivirus', status: 'error', message: 'Could not parse Defender status.', detail: e.message, actionUri: 'ms-settings:windowsdefender' });
       }
@@ -74,10 +74,11 @@ class SystemAudit {
         message: enabled ? 'UAC is enabled.' : 'UAC is disabled! This is a severe security risk.',
         detail: enabled ? 'UAC prompts before making system-level changes.' : 'All programs run with full administrator privileges.',
         recommendation: enabled ? '' : 'Enable UAC via Control Panel > User Accounts > Change User Account Control settings.',
-        actionUri: 'control userpasswords2'
+        manageAction: 'open-windows-utility',
+        manageContext: 'uac'
       }];
     }
-    return [{ name: 'User Account Control', section: 'system', status: 'error', message: 'Could not check UAC status.', actionUri: 'control userpasswords2' }];
+    return [{ name: 'User Account Control', section: 'system', status: 'error', message: 'Could not check UAC status.', manageAction: 'open-windows-utility', manageContext: 'uac' }];
   }
 
   async checkWindowsUpdate() {
@@ -162,7 +163,7 @@ class SystemAudit {
         return [{ name: 'BitLocker', section: 'system', status: 'info', message: 'BitLocker status unavailable (may not be supported on this edition).', detail: 'BitLocker requires Windows Pro or Enterprise.', actionUri: 'control /name Microsoft.BitLockerDriveEncryption' }];
       }
     }
-    return [{ name: 'BitLocker', section: 'system', status: 'info', message: 'BitLocker is not available on this system.', detail: 'Requires Windows Pro/Enterprise and a TPM chip.', actionUri: 'control /name Microsoft.BitLockerDriveEncryption' }];
+    return [{ name: 'BitLocker', section: 'system', status: 'info', message: 'BitLocker is not available on this system.', detail: 'Requires Windows Pro/Enterprise and a TPM chip.', actionUri: 'ms-settings:deviceencryption' }];
   }
 
   async checkExecutionPolicy() {
@@ -176,10 +177,11 @@ class SystemAudit {
         message: policy ? `Policy: ${policy}` : 'Policy could not be determined.',
         detail: pass ? 'Only signed or locally authored scripts can run.' : 'Less restrictive execution policy may allow untrusted scripts.',
         recommendation: pass ? '' : 'Consider setting to RemoteSigned: Set-ExecutionPolicy RemoteSigned -Scope LocalMachine',
-        manageAction: 'open-powershell'
+        manageAction: 'open-powershell',
+        manageContext: 'execution-policy'
       }];
     }
-    return [{ name: 'PowerShell Execution Policy', section: 'updates', status: 'warn', message: 'PowerShell execution policy query failed.', detail: ep.error || 'Unable to query execution policy.', recommendation: 'Check execution policy with Get-ExecutionPolicy -List in PowerShell.', manageAction: 'open-powershell' }];
+    return [{ name: 'PowerShell Execution Policy', section: 'updates', status: 'warn', message: 'PowerShell execution policy query failed.', detail: ep.error || 'Unable to query execution policy.', recommendation: 'Check execution policy with Get-ExecutionPolicy -List in PowerShell.', manageAction: 'open-powershell', manageContext: 'execution-policy' }];
   }
 
   async checkSecureBoot() {
@@ -203,7 +205,9 @@ class SystemAudit {
       name, section: 'antivirus', status: 'error',
       message: 'Could not query Defender hardening settings.',
       detail: h.error || 'The Get-MpPreference cmdlet may not be available on this system.',
-      actionUri: 'ms-settings:windowsdefender'
+      ...(name === 'Network Protection'
+        ? { manageAction: 'open-powershell', manageContext: 'network-protection' }
+        : { actionUri: 'windowsdefender://threatsettings/' })
     });
     if (!h.ok) {
       return [
@@ -223,27 +227,27 @@ class SystemAudit {
     }
     const out = [];
     if (data.tamperProtected === true) {
-      out.push({ name: 'Tamper Protection', section: 'antivirus', status: 'pass', message: 'Tamper protection is enabled.', detail: 'Malware cannot disable Defender protections.', recommendation: '', actionUri: 'ms-settings:windowsdefender' });
+      out.push({ name: 'Tamper Protection', section: 'antivirus', status: 'pass', message: 'Tamper protection is enabled.', detail: 'Malware cannot disable Defender protections.', recommendation: '', actionUri: 'windowsdefender://threatsettings/' });
     } else if (data.tamperProtected === false) {
-      out.push({ name: 'Tamper Protection', section: 'antivirus', status: 'fail', message: 'Tamper protection is off!', detail: 'Malware can disable Defender protections without warning.', recommendation: 'Enable tamper protection in Windows Security > Virus & threat protection > Manage settings.', actionUri: 'ms-settings:windowsdefender' });
+      out.push({ name: 'Tamper Protection', section: 'antivirus', status: 'fail', message: 'Tamper protection is off!', detail: 'Malware can disable Defender protections without warning.', recommendation: 'Enable tamper protection in Windows Security > Virus & threat protection > Manage settings.', actionUri: 'windowsdefender://threatsettings/' });
     } else {
-      out.push({ name: 'Tamper Protection', section: 'antivirus', status: 'info', message: 'Tamper protection status could not be determined.', detail: 'This check may not be supported on this system.', actionUri: 'ms-settings:windowsdefender' });
+      out.push({ name: 'Tamper Protection', section: 'antivirus', status: 'info', message: 'Tamper protection status could not be determined.', detail: 'This check may not be supported on this system.', actionUri: 'windowsdefender://threatsettings/' });
     }
     if (Number(data.cloudProtectionLevel) > 0) {
-      out.push({ name: 'Cloud-delivered Protection', section: 'antivirus', status: 'pass', message: 'Cloud-delivered protection is active.', detail: 'New threats are blocked using up-to-the-minute cloud intelligence.', recommendation: '', actionUri: 'ms-settings:windowsdefender' });
+      out.push({ name: 'Cloud-delivered Protection', section: 'antivirus', status: 'pass', message: 'Cloud-delivered protection is active.', detail: 'New threats are blocked using up-to-the-minute cloud intelligence.', recommendation: '', actionUri: 'windowsdefender://threatsettings/' });
     } else if (data.cloudProtectionLevel === 0) {
-      out.push({ name: 'Cloud-delivered Protection', section: 'antivirus', status: 'fail', message: 'Cloud-delivered protection is off!', detail: 'Protection relies only on locally installed signatures.', recommendation: 'Turn on cloud-delivered protection in Windows Security > Virus & threat protection > Manage settings.', actionUri: 'ms-settings:windowsdefender' });
+      out.push({ name: 'Cloud-delivered Protection', section: 'antivirus', status: 'fail', message: 'Cloud-delivered protection is off!', detail: 'Protection relies only on locally installed signatures.', recommendation: 'Turn on cloud-delivered protection in Windows Security > Virus & threat protection > Manage settings.', actionUri: 'windowsdefender://threatsettings/' });
     } else {
-      out.push({ name: 'Cloud-delivered Protection', section: 'antivirus', status: 'info', message: 'Cloud-delivered protection status could not be determined.', detail: 'This setting may not be reported on this system.', actionUri: 'ms-settings:windowsdefender' });
+      out.push({ name: 'Cloud-delivered Protection', section: 'antivirus', status: 'info', message: 'Cloud-delivered protection status could not be determined.', detail: 'This setting may not be reported on this system.', actionUri: 'windowsdefender://threatsettings/' });
     }
     if (data.networkProtectionMode === 'block') {
-      out.push({ name: 'Network Protection', section: 'antivirus', status: 'pass', message: 'Network protection is on.', detail: 'Malicious connections and phishing sites are blocked.', recommendation: '', actionUri: 'ms-settings:windowsdefender' });
+      out.push({ name: 'Network Protection', section: 'antivirus', status: 'pass', message: 'Network protection is on.', detail: 'Malicious connections and phishing sites are blocked.', recommendation: '', manageAction: 'open-powershell', manageContext: 'network-protection' });
     } else if (data.networkProtectionMode === 'audit') {
-      out.push({ name: 'Network Protection', section: 'antivirus', status: 'info', message: 'Network protection is in audit mode.', detail: 'Malicious connections are logged but not blocked.', recommendation: 'Enable block mode in Windows Security > App & browser control.', actionUri: 'ms-settings:windowsdefender' });
+      out.push({ name: 'Network Protection', section: 'antivirus', status: 'info', message: 'Network protection is in audit mode.', detail: 'Malicious connections are logged but not blocked.', recommendation: 'Enable network protection block mode with PowerShell or Group Policy.', manageAction: 'open-powershell', manageContext: 'network-protection' });
     } else if (data.networkProtectionMode === 'off') {
-      out.push({ name: 'Network Protection', section: 'antivirus', status: 'fail', message: 'Network protection is off!', detail: 'Malicious network connections are not blocked.', recommendation: 'Enable network protection in Windows Security > App & browser control.', actionUri: 'ms-settings:windowsdefender' });
+      out.push({ name: 'Network Protection', section: 'antivirus', status: 'fail', message: 'Network protection is off!', detail: 'Malicious network connections are not blocked.', recommendation: 'Enable network protection block mode with PowerShell or Group Policy.', manageAction: 'open-powershell', manageContext: 'network-protection' });
     } else {
-      out.push({ name: 'Network Protection', section: 'antivirus', status: 'info', message: 'Network protection status could not be determined.', detail: 'Windows did not report a network protection state.', actionUri: 'ms-settings:windowsdefender' });
+      out.push({ name: 'Network Protection', section: 'antivirus', status: 'info', message: 'Network protection status could not be determined.', detail: 'Windows did not report a network protection state.', manageAction: 'open-powershell', manageContext: 'network-protection' });
     }
     return out;
   }
@@ -253,14 +257,14 @@ class SystemAudit {
     if (r.ok) {
       const v = r.stdout.trim();
       if (v === '0') {
-        return [{ name: 'SMBv1', section: 'system', status: 'pass', message: 'SMBv1 is disabled.', detail: 'The legacy SMBv1 protocol with known wormable vulnerabilities is off.', recommendation: '', actionUri: 'control /name Microsoft.WindowsOptionalFeatures' }];
+        return [{ name: 'SMBv1', section: 'system', status: 'pass', message: 'SMBv1 is disabled.', detail: 'The legacy SMBv1 protocol with known wormable vulnerabilities is off.', recommendation: '', manageAction: 'open-windows-utility', manageContext: 'windows-features' }];
       }
       if (v === '1') {
-        return [{ name: 'SMBv1', section: 'system', status: 'fail', message: 'SMBv1 is enabled!', detail: 'SMBv1 has known wormable vulnerabilities (WannaCry, SMBGhost).', recommendation: 'Disable SMBv1: Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -NoRestart', actionUri: 'control /name Microsoft.WindowsOptionalFeatures' }];
+        return [{ name: 'SMBv1', section: 'system', status: 'fail', message: 'SMBv1 is enabled!', detail: 'SMBv1 has known wormable vulnerabilities (WannaCry, SMBGhost).', recommendation: 'Disable SMBv1: Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -NoRestart', manageAction: 'open-windows-utility', manageContext: 'windows-features' }];
       }
-      return [{ name: 'SMBv1', section: 'system', status: 'warn', message: 'SMBv1 may be enabled.', detail: 'Could not confirm SMBv1 is disabled — it may be enabled by default.', recommendation: 'Check SMBv1 status: Get-SmbServerConfiguration | Select SMB1Protocol', actionUri: 'control /name Microsoft.WindowsOptionalFeatures' }];
+      return [{ name: 'SMBv1', section: 'system', status: 'warn', message: 'SMBv1 may be enabled.', detail: 'Could not confirm SMBv1 is disabled — it may be enabled by default.', recommendation: 'Check SMBv1 status: Get-SmbServerConfiguration | Select SMB1Protocol', manageAction: 'open-windows-utility', manageContext: 'windows-features' }];
     }
-    return [{ name: 'SMBv1', section: 'system', status: 'warn', message: 'SMBv1 status could not be determined.', detail: r.error || 'Registry query failed.', recommendation: 'Check SMBv1 status: Get-SmbServerConfiguration | Select SMB1Protocol', actionUri: 'control /name Microsoft.WindowsOptionalFeatures' }];
+    return [{ name: 'SMBv1', section: 'system', status: 'warn', message: 'SMBv1 status could not be determined.', detail: r.error || 'Registry query failed.', recommendation: 'Check SMBv1 status: Get-SmbServerConfiguration | Select SMB1Protocol', manageAction: 'open-windows-utility', manageContext: 'windows-features' }];
   }
 
   async checkAutoLogon() {
@@ -288,17 +292,17 @@ class SystemAudit {
       try {
         const d = JSON.parse(r.stdout);
         if (d && d.rdpEnabled === false) {
-          return [{ name: 'Remote Desktop', section: 'system', status: 'pass', message: 'Remote Desktop is disabled.', detail: 'No remote desktop attack surface is exposed.', recommendation: '', actionUri: 'ms-settings:system-remote-desktop' }];
+          return [{ name: 'Remote Desktop', section: 'system', status: 'pass', message: 'Remote Desktop is disabled.', detail: 'No remote desktop attack surface is exposed.', recommendation: '', actionUri: 'ms-settings:remotedesktop' }];
         }
         if (d && d.rdpEnabled === true) {
           if (d.nlaEnabled) {
-            return [{ name: 'Remote Desktop', section: 'system', status: 'warn', message: 'Remote Desktop is enabled (NLA on).', detail: 'Remote connections require network-level authentication.', recommendation: 'Turn off Remote Desktop when not needed: Settings > System > Remote Desktop.', actionUri: 'ms-settings:system-remote-desktop' }];
+            return [{ name: 'Remote Desktop', section: 'system', status: 'warn', message: 'Remote Desktop is enabled (NLA on).', detail: 'Remote connections require network-level authentication.', recommendation: 'Turn off Remote Desktop when not needed: Settings > System > Remote Desktop.', actionUri: 'ms-settings:remotedesktop' }];
           }
-          return [{ name: 'Remote Desktop', section: 'system', status: 'fail', message: 'Remote Desktop is enabled WITHOUT Network Level Authentication!', detail: 'Attackers can attempt password brute force over the network.', recommendation: 'Enable NLA: Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp" -Name UserAuthentication -Value 1', actionUri: 'ms-settings:system-remote-desktop' }];
+          return [{ name: 'Remote Desktop', section: 'system', status: 'fail', message: 'Remote Desktop is enabled WITHOUT Network Level Authentication!', detail: 'Attackers can attempt password brute force over the network.', recommendation: 'Enable NLA: Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp" -Name UserAuthentication -Value 1', actionUri: 'ms-settings:remotedesktop' }];
         }
       } catch (e) { /* fall through to error */ }
     }
-    return [{ name: 'Remote Desktop', section: 'system', status: 'info', message: 'Remote Desktop status could not be determined.', detail: r.error || 'Terminal Server registry query failed.', actionUri: 'ms-settings:system-remote-desktop' }];
+    return [{ name: 'Remote Desktop', section: 'system', status: 'info', message: 'Remote Desktop status could not be determined.', detail: r.error || 'Terminal Server registry query failed.', actionUri: 'ms-settings:remotedesktop' }];
   }
 
   async checkLsaProtection() {
@@ -306,29 +310,29 @@ class SystemAudit {
     if (r.ok) {
       const v = r.stdout.trim();
       if (v === '1' || v === '2') {
-        return [{ name: 'LSA Protection', section: 'system', status: 'pass', message: 'LSA protection is enabled.', detail: 'Credential-dumping tools cannot read Local Security Authority memory.', recommendation: '', manageAction: 'open-powershell' }];
+        return [{ name: 'LSA Protection', section: 'system', status: 'pass', message: 'LSA protection is enabled.', detail: 'Credential-dumping tools cannot read Local Security Authority memory.', recommendation: '', manageAction: 'open-powershell', manageContext: 'lsa-protection' }];
       }
       if (v === '0') {
-        return [{ name: 'LSA Protection', section: 'system', status: 'fail', message: 'LSA protection is off!', detail: 'Credential-theft tools can read LSA memory and steal password hashes.', recommendation: 'Enable LSA protection: Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa" -Name RunAsPPL -Value 1', manageAction: 'open-powershell' }];
+        return [{ name: 'LSA Protection', section: 'system', status: 'fail', message: 'LSA protection is off!', detail: 'Credential-theft tools can read LSA memory and steal password hashes.', recommendation: 'Enable LSA protection: Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa" -Name RunAsPPL -Value 1', manageAction: 'open-powershell', manageContext: 'lsa-protection' }];
       }
     }
-    return [{ name: 'LSA Protection', section: 'system', status: 'info', message: 'LSA protection status could not be determined.', detail: r.error || 'The RunAsPPL registry value is not set on this system.', manageAction: 'open-powershell' }];
+    return [{ name: 'LSA Protection', section: 'system', status: 'info', message: 'LSA protection status could not be determined.', detail: r.error || 'The RunAsPPL registry value is not set on this system.', manageAction: 'open-powershell', manageContext: 'lsa-protection' }];
   }
 
   async checkAccounts() {
     const r = await this.runPowerShell(`$ads = $null; try { $ads = [adsi]('WinNT://' + $env:COMPUTERNAME) } catch { }; $min = $null; $lock = $null; $comp = $null; if ($ads) { try { $min = [int]$ads.MinimumPasswordLength } catch { }; try { $lock = [int]$ads.LockoutThreshold } catch { }; try { $comp = [bool]$ads.PasswordComplexity } catch { } }; if ($null -eq $min) { $lsa = Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -ErrorAction SilentlyContinue; if ($lsa -and $lsa.PSObject.Properties.Name -contains 'MinPwdLen') { $min = [int]$lsa.MinPwdLen }; if ($lsa -and $lsa.PSObject.Properties.Name -contains 'LockoutBadCount') { $lock = [int]$lsa.LockoutBadCount } }; $gd = $null; try { $guest = Get-LocalUser -Name 'Guest' -ErrorAction Stop; $gd = -not [bool]$guest.Enabled } catch { try { $g = [adsi]('WinNT://' + $env:COMPUTERNAME + '/Guest'); $gd = [bool]$g.Disabled } catch { } }; [PSCustomObject]@{ minLength = $min; lockout = $lock; complexity = $comp; guestDisabled = $gd } | ConvertTo-Json -Depth 6`);
     if (!r.ok) {
       return [
-        { name: 'Password Policy', section: 'accounts', status: 'warn', message: 'Password policy could not be determined.', detail: r.error || 'Local policy query failed.', recommendation: 'Check the policy: net accounts', manageAction: 'open-powershell' },
-        { name: 'Guest Account', section: 'accounts', status: 'info', message: 'Guest account status could not be determined.', detail: r.error || 'Local accounts query failed.', manageAction: 'open-powershell' }
+        { name: 'Password Policy', section: 'accounts', status: 'warn', message: 'Password policy could not be determined.', detail: r.error || 'Local policy query failed.', recommendation: 'Check the policy: net accounts', manageAction: 'open-powershell', manageContext: 'password-policy' },
+        { name: 'Guest Account', section: 'accounts', status: 'info', message: 'Guest account status could not be determined.', detail: r.error || 'Local accounts query failed.', manageAction: 'open-powershell', manageContext: 'guest-account' }
       ];
     }
     let d;
     try { d = JSON.parse(r.stdout); } catch (e) { d = null; }
     if (!d) {
       return [
-        { name: 'Password Policy', section: 'accounts', status: 'warn', message: 'Password policy could not be determined.', detail: 'The local policy query returned an unexpected response.', recommendation: 'Check the policy: net accounts', manageAction: 'open-powershell' },
-        { name: 'Guest Account', section: 'accounts', status: 'info', message: 'Guest account status could not be determined.', detail: 'Could not query the local Guest account.', manageAction: 'open-powershell' }
+        { name: 'Password Policy', section: 'accounts', status: 'warn', message: 'Password policy could not be determined.', detail: 'The local policy query returned an unexpected response.', recommendation: 'Check the policy: net accounts', manageAction: 'open-powershell', manageContext: 'password-policy' },
+        { name: 'Guest Account', section: 'accounts', status: 'info', message: 'Guest account status could not be determined.', detail: 'Could not query the local Guest account.', manageAction: 'open-powershell', manageContext: 'guest-account' }
       ];
     }
 
@@ -340,14 +344,14 @@ class SystemAudit {
     const complexity = rawComplex === null || rawComplex === undefined ? null : Boolean(rawComplex);
 
     const guestRow = d.guestDisabled === true
-      ? { name: 'Guest Account', section: 'accounts', status: 'pass', message: 'Guest account is disabled.', detail: 'No anonymous local access to this PC.', recommendation: '', manageAction: 'open-powershell' }
+      ? { name: 'Guest Account', section: 'accounts', status: 'pass', message: 'Guest account is disabled.', detail: 'No anonymous local access to this PC.', recommendation: '', manageAction: 'open-powershell', manageContext: 'guest-account' }
       : d.guestDisabled === false
-        ? { name: 'Guest Account', section: 'accounts', status: 'fail', message: 'Guest account is enabled!', detail: 'Anonymous users can log on locally.', recommendation: 'Disable the Guest account: net user Guest /active:no', manageAction: 'open-powershell' }
-        : { name: 'Guest Account', section: 'accounts', status: 'info', message: 'Guest account status could not be determined.', detail: 'Could not query the local Guest account.', manageAction: 'open-powershell' };
+        ? { name: 'Guest Account', section: 'accounts', status: 'fail', message: 'Guest account is enabled!', detail: 'Anonymous users can log on locally.', recommendation: 'Disable the Guest account: net user Guest /active:no', manageAction: 'open-powershell', manageContext: 'guest-account' }
+        : { name: 'Guest Account', section: 'accounts', status: 'info', message: 'Guest account status could not be determined.', detail: 'Could not query the local Guest account.', manageAction: 'open-powershell', manageContext: 'guest-account' };
 
     if (minLength === null && lockout === null && complexity === null) {
       return [
-        { name: 'Password Policy', section: 'accounts', status: 'warn', message: 'Password policy could not be determined.', detail: 'The local password policy could not be read on this system.', recommendation: 'Check the policy: net accounts', manageAction: 'open-powershell' },
+        { name: 'Password Policy', section: 'accounts', status: 'warn', message: 'Password policy could not be determined.', detail: 'The local password policy could not be read on this system.', recommendation: 'Check the policy: net accounts', manageAction: 'open-powershell', manageContext: 'password-policy' },
         guestRow
       ];
     }
@@ -373,11 +377,11 @@ class SystemAudit {
 
     let policyRow;
     if (policyStatus === 'pass') {
-      policyRow = { name: 'Password Policy', section: 'accounts', status: 'pass', message: 'Password policy meets recommendations.', detail: detailParts.join(' | '), recommendation: '', manageAction: 'open-powershell' };
+      policyRow = { name: 'Password Policy', section: 'accounts', status: 'pass', message: 'Password policy meets recommendations.', detail: detailParts.join(' | '), recommendation: '', manageAction: 'open-powershell', manageContext: 'password-policy' };
     } else if (policyStatus === 'fail') {
-      policyRow = { name: 'Password Policy', section: 'accounts', status: 'fail', message: 'Password policy is weak.', detail: detailParts.join(' | '), recommendation: 'Require longer passwords and a lockout threshold: net accounts /minpwlen:12 /lockoutthreshold:5', manageAction: 'open-powershell' };
+      policyRow = { name: 'Password Policy', section: 'accounts', status: 'fail', message: 'Password policy is weak.', detail: detailParts.join(' | '), recommendation: 'Require longer passwords and a lockout threshold: net accounts /minpwlen:12 /lockoutthreshold:5', manageAction: 'open-powershell', manageContext: 'password-policy' };
     } else {
-      policyRow = { name: 'Password Policy', section: 'accounts', status: 'warn', message: 'Password policy could be stronger.', detail: detailParts.join(' | '), recommendation: 'Consider requiring longer passwords: net accounts /minpwlen:12', manageAction: 'open-powershell' };
+      policyRow = { name: 'Password Policy', section: 'accounts', status: 'warn', message: 'Password policy could be stronger.', detail: detailParts.join(' | '), recommendation: 'Consider requiring longer passwords: net accounts /minpwlen:12', manageAction: 'open-powershell', manageContext: 'password-policy' };
     }
 
     return [policyRow, guestRow];
