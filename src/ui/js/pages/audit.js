@@ -319,8 +319,9 @@ window.Pages['audit'] = {
         return;
       }
 
-      content.innerHTML = self.loadingHtml();
+content.innerHTML = self.loadingHtml();
       progressBar = content.querySelector('.loading-progress-bar');
+      if (progressBar) progressBar.style.opacity = '1';
       startCreeping();
       unsubscribeProgress = window.api.on('audit:progress', (event) => {
         if (!event || !isCurrent()) return;

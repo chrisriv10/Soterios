@@ -26,7 +26,8 @@ function loadAuditPage(shellOverrides = {}, apiOverrides = {}) {
     'audit.action.inspectPowerShell': 'Inspect in PowerShell',
     'audit.action.forCheck': '{action} for {check}',
     'audit.unsupportedAction': 'Unsupported action.',
-    'audit.openSettingsError': 'Could not open settings.'
+    'audit.openSettingsError': 'Could not open settings.',
+    'audit.completed': 'Completed {label} ({completed}/{total})'
   };
   const sandbox = {
     window: {
@@ -208,6 +209,46 @@ describe('audit page', () => {
 
     assert.deepEqual(rendered, [['Newer result']]);
     assert.equal(page._cachedResults[0].name, 'Newer result');
+    assert.equal(page._isLoading, false);
+  });
+
+  it('shows the progress bar fill and advances it as checks complete', async () => {
+    const progressBar = { style: {} };
+    const label = { textContent: '' };
+    const content = {
+      innerHTML: '',
+      querySelector(selector) {
+        if (selector === '.loading-progress-bar') return progressBar;
+        if (selector === '#auditProgressLabel') return label;
+        return null;
+      },
+      setAttribute() {}
+    };
+    const refreshButton = { disabled: false, setAttribute() {} };
+    const container = {
+      isConnected: true,
+      querySelector(selector) {
+        if (selector === '#auditContent') return content;
+        if (selector === '#auditRefreshBtn') return refreshButton;
+        if (selector === '#auditProgressLabel') return label;
+        return null;
+      }
+    };
+    let progressListener = null;
+    const { page } = loadAuditPage({}, {
+      invoke: async (channel) => (channel === 'warnings:listIgnored' ? [] : [{ status: 'pass', name: 'X', message: 'ok' }]),
+      on: (channel, listener) => { progressListener = listener; return () => {}; }
+    });
+    page.renderPageResults = () => {};
+    page.updateIgnoredWarningsSection = async () => {};
+
+    const loading = page.load(container, true);
+    assert.equal(progressBar.style.opacity, '1', 'fill must be visible while the audit runs');
+    progressListener({ type: 'start', label: 'UAC', completed: 0, total: 12 });
+    progressListener({ type: 'complete', label: 'UAC', completed: 2, total: 12 });
+    assert.equal(progressBar.style.width, '17%', 'fill must advance as checks complete');
+    assert.equal(label.textContent, 'Completed UAC (2/12)');
+    await loading;
     assert.equal(page._isLoading, false);
   });
 });
