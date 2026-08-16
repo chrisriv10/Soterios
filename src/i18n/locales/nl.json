@@ -45,6 +45,8 @@
   "setup.scanDesc": "Voer nu een snelle scan uit van veelvoorkomende infectieplaatsen of sla over en scan later.",
   "setup.scanRun": "Snelle scan uitvoeren",
   "setup.scanLater": "Later scannen",
+  "setup.languageTitle": "Kies je taal",
+  "setup.languageDesc": "Soterios gebruikt deze taal overal. Je kunt hem op elk moment wijzigen in Instellingen.",
   "setup.title": "Welkom bij Soterios",
   "setup.subtitle": "Een paar snelle keuzes om Soterios van jou te maken. Elke stap is optioneel - je kunt later alles aanpassen in Instellingen.",
   "setup.skip": "Overslaan",

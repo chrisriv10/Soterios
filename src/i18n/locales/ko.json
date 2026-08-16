@@ -45,6 +45,8 @@
   "setup.scanDesc": "지금 일반적인 감염 지점에 대한 빠른 검사를 실행하거나 건너뛰고 나중에 검사하세요.",
   "setup.scanRun": "빠른 검사 실행",
   "setup.scanLater": "나중에 검사",
+  "setup.languageTitle": "언어 선택",
+  "setup.languageDesc": "Soterios는 이 언어를 모든 곳에서 사용합니다. 나중에 언제든지 설정에서 변경할 수 있습니다.",
   "setup.title": "Soterios에 오신 것을 환영합니다",
   "setup.subtitle": "Soterios를 나만의 앱으로 만들기 위한 몇 가지 빠른 선택입니다. 모든 단계는 선택 사항이며 나중에 설정에서 변경할 수 있습니다.",
   "setup.skip": "건너뛰기",

@@ -45,6 +45,8 @@
   "setup.scanDesc": "Esegui ora una scansione rapida dei punti di infezione comuni oppure saltala e scansiona più tardi.",
   "setup.scanRun": "Avvia scansione rapida",
   "setup.scanLater": "Scansiona più tardi",
+  "setup.languageTitle": "Scegli la tua lingua",
+  "setup.languageDesc": "Soterios userà questa lingua ovunque. Potrai cambiarla in qualsiasi momento nelle Impostazioni.",
   "setup.title": "Benvenuto in Soterios",
   "setup.subtitle": "Alcune scelte rapide per rendere Soterios tuo. Ogni passaggio è facoltativo: potrai modificare tutto in seguito nelle Impostazioni.",
   "setup.skip": "Salta",

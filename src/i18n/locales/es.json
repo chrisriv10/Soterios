@@ -45,6 +45,8 @@
   "setup.scanDesc": "Ejecuta ahora un escaneo rápido de los puntos de infección habituales, u omítelo y escanea más tarde.",
   "setup.scanRun": "Ejecutar escaneo rápido",
   "setup.scanLater": "Escaneo más tarde",
+  "setup.languageTitle": "Elige tu idioma",
+  "setup.languageDesc": "Soterios usará este idioma en todas partes. Puedes cambiarlo cuando quieras en Ajustes.",
   "setup.title": "Bienvenido a Soterios",
   "setup.subtitle": "Unas pocas decisiones rápidas para que Soterios sea tuyo. Cada paso es opcional: puedes cambiar todo más tarde en Ajustes.",
   "setup.skip": "Omitir",

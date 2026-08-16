@@ -45,6 +45,8 @@
   "setup.scanDesc": "Execute agora uma varredura rápida dos pontos comuns de infecção ou pule e varra depois.",
   "setup.scanRun": "Executar varredura rápida",
   "setup.scanLater": "Varrer depois",
+  "setup.languageTitle": "Escolha seu idioma",
+  "setup.languageDesc": "O Soterios usará este idioma em todos os lugares. Você pode alterá-lo a qualquer momento em Configurações.",
   "setup.title": "Bem-vindo ao Soterios",
   "setup.subtitle": "Algumas escolhas rápidas para o Soterios ser seu. Cada etapa é opcional - você pode mudar tudo depois em Configurações.",
   "setup.skip": "Pular",

@@ -45,6 +45,8 @@
   "setup.scanDesc": "Uruchom szybki skan typowych miejsc infekcji teraz lub pomiń i zeskanuj później.",
   "setup.scanRun": "Uruchom szybki skan",
   "setup.scanLater": "Zeskanuj później",
+  "setup.languageTitle": "Wybierz język",
+  "setup.languageDesc": "Soterios będzie używać tego języka wszędzie. Możesz go zmienić w dowolnym momencie w Ustawieniach.",
   "setup.title": "Witamy w Soterios",
   "setup.subtitle": "Kilka szybkich wyborów, aby Soterios pasował do Ciebie. Każdy krok jest opcjonalny - wszystko możesz zmienić później w Ustawieniach.",
   "setup.skip": "Pomiń",

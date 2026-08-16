@@ -45,6 +45,8 @@
   "setup.scanDesc": "一般的な感染箇所のクイックスキャンを今すぐ実行するか、スキップして後でスキャンします。",
   "setup.scanRun": "クイックスキャンを実行",
   "setup.scanLater": "後でスキャン",
+  "setup.languageTitle": "言語を選択",
+  "setup.languageDesc": "Soterios はこの言語をすべての画面に使用します。後でいつでも設定から変更できます。",
   "setup.title": "Soterios へようこそ",
   "setup.subtitle": "Soterios を使いやすくするための簡単な設定です。すべて任意 - 後で設定からいつでも変更できます。",
   "setup.skip": "スキップ",

@@ -45,6 +45,8 @@
   "setup.scanDesc": "Yaygın bulaşma noktalarını hemen hızlı tarayın veya atlayıp daha sonra tarayın.",
   "setup.scanRun": "Hızlı taramayı çalıştır",
   "setup.scanLater": "Daha sonra tara",
+  "setup.languageTitle": "Dilinizi seçin",
+  "setup.languageDesc": "Soterios bu dili her yerde kullanır. İstediğiniz zaman Ayarlar'dan değiştirebilirsiniz.",
   "setup.title": "Soterios'a hoş geldiniz",
   "setup.subtitle": "Soterios'u size göre yapmak için birkaç hızlı seçim. Her adım isteğe bağlıdır - her şeyi daha sonra Ayarlar'dan değiştirebilirsiniz.",
   "setup.skip": "Atla",

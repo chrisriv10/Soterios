@@ -45,6 +45,8 @@
   "setup.scanDesc": "现在对常见感染点运行快速扫描，或跳过并稍后扫描。",
   "setup.scanRun": "运行快速扫描",
   "setup.scanLater": "稍后扫描",
+  "setup.languageTitle": "选择语言",
+  "setup.languageDesc": "Soterios 将在所有位置使用此语言。你可以随时在设置中更改。",
   "setup.title": "欢迎使用 Soterios",
   "setup.subtitle": "几个快速选项，让 Soterios 更合你心意。每一步都是可选的——之后随时可以在设置中更改。",
   "setup.skip": "跳过",
