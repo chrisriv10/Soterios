@@ -74,16 +74,23 @@ describe('dashboard warning metadata', () => {
   });
 
   it('should fetch the ignored list from the DB, not from cached recommendations', () => {
-    const cacheBranch = source.slice(source.indexOf('let data = dashboardCache.overview.data'));
+    // The ignored list is always fetched from DB via renderIgnoredList(), which is called
+    // from loadWarnings() and from ignore/restore handlers
     assert.ok(
-      cacheBranch.includes("await window.api.invoke('warnings:listIgnored')"),
+      source.includes("await window.api.invoke('warnings:listIgnored')"),
       'ignored warnings must be re-fetched from the DB on every load'
     );
-    const dbFetchIdx = cacheBranch.indexOf("await window.api.invoke('warnings:listIgnored')");
-    assert.ok(dbFetchIdx !== -1);
-    const ignoredRenderBlock = cacheBranch.slice(dbFetchIdx, cacheBranch.indexOf('ignoredList.querySelectorAll', dbFetchIdx));
+    const loadWarningsBody = source.slice(source.indexOf('async function loadWarnings()'));
     assert.ok(
-      !ignoredRenderBlock.includes('dashboardCache'),
+      loadWarningsBody.includes('renderIgnoredList()'),
+      'loadWarnings must call renderIgnoredList to refresh the ignored section'
+    );
+    const renderFn = source.slice(source.indexOf('async function renderIgnoredList()'));
+    const dbFetchIdx = renderFn.indexOf("await window.api.invoke('warnings:listIgnored')");
+    assert.ok(dbFetchIdx !== -1, 'renderIgnoredList must fetch ignored warnings from DB');
+    const renderSlice = renderFn.slice(dbFetchIdx, renderFn.indexOf('ignoredList.querySelectorAll', dbFetchIdx));
+    assert.ok(
+      !renderSlice.includes('dashboardCache'),
       'ignored list must be rendered from the DB fetch, not from cached recommendations'
     );
   });
@@ -121,6 +128,19 @@ describe('dashboard warning metadata', () => {
     assert.ok(
       moduleHead.includes('dashboardCacheTtl'),
       'dashboard cache TTL must be declared at module scope'
+    );
+  });
+
+  it('should move an ignored warning into the ignored section before the slow overview reload', () => {
+    const ignoreHandler = source.slice(source.indexOf("warnings:ignore'"));
+    const renderIdx = ignoreHandler.indexOf('renderIgnoredList()');
+    assert.ok(
+      renderIdx !== -1 && renderIdx < ignoreHandler.indexOf('invalidateDashboardCache()'),
+      'the ignore handler must refresh the ignored section before reloading the overview'
+    );
+    assert.ok(
+      ignoreHandler.includes('if (item) item.remove();'),
+      'the ignore handler must still remove the card from the active list immediately'
     );
   });
 });

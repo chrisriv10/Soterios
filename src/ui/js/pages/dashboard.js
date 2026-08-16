@@ -519,6 +519,40 @@ window.Pages['dashboard'] = {
         : t('dashboard.lastScanNever');
     }
 
+async function renderIgnoredList() {
+      const ignoredList = document.getElementById('ignoredWarningList');
+      if (!ignoredList) return;
+      const ignored = await window.api.invoke('warnings:listIgnored');
+      // Also translate ignored warnings if they match our known warnings
+      const translatedIgnored = ignored.map(w => {
+        const meta = warningActions[w.title];
+        if (meta) return { ...w, title: t(meta.title), detail: t(meta.detail) };
+        return w;
+      });
+      ignoredList.innerHTML = translatedIgnored.length ? translatedIgnored.map((w) => `
+          <div class="history-item">
+            <div>
+              <div class="history-title">${escapeHtml(w.title)}</div>
+              <div class="history-meta">${escapeHtml(w.detail || '')}</div>
+            </div>
+            <button class="btn btn-sm" data-unignore-warning="${escapeHtml(w.id)}">${escapeHtml(t('dashboard.warningRestore'))}</button>
+          </div>`).join('') : `<div class="empty-state">${escapeHtml(t('dashboard.noIgnoredWarnings'))}</div>`;
+      ignoredList.querySelectorAll('[data-unignore-warning]').forEach((btn) => btn.addEventListener('click', async () => {
+        const item = btn.closest('.history-item');
+        btn.disabled = true;
+        try {
+          await window.api.invoke('warnings:unignore', btn.dataset.unignoreWarning);
+          if (item) item.remove();
+          await renderIgnoredList();
+          invalidateDashboardCache();
+          await loadWarnings();
+        } catch (err) {
+          btn.disabled = false;
+          alert(err.message || t('common.failed'));
+        }
+      }));
+    }
+
 async function loadWarnings() {
       const warningList = document.getElementById('warningList');
       const ignoredList = document.getElementById('ignoredWarningList');
@@ -583,6 +617,7 @@ async function loadWarnings() {
           try {
             await window.api.invoke('warnings:ignore', { id: btn.dataset.ignoreWarning, title: btn.dataset.title, detail: btn.dataset.detail });
             if (item) item.remove();
+            await renderIgnoredList();
             invalidateDashboardCache();
             await loadWarnings();
           } catch (err) {
@@ -591,34 +626,7 @@ async function loadWarnings() {
           }
         }));
 
-        const ignored = await window.api.invoke('warnings:listIgnored');
-        // Also translate ignored warnings if they match our known warnings
-        const translatedIgnored = ignored.map(w => {
-          const meta = warningActions[w.title];
-          if (meta) return { ...w, title: t(meta.title), detail: t(meta.detail) };
-          return w;
-        });
-        ignoredList.innerHTML = translatedIgnored.length ? translatedIgnored.map((w) => `
-          <div class="history-item">
-            <div>
-              <div class="history-title">${escapeHtml(w.title)}</div>
-              <div class="history-meta">${escapeHtml(w.detail || '')}</div>
-            </div>
-            <button class="btn btn-sm" data-unignore-warning="${escapeHtml(w.id)}">${escapeHtml(t('dashboard.warningRestore'))}</button>
-          </div>`).join('') : `<div class="empty-state">${escapeHtml(t('dashboard.noIgnoredWarnings'))}</div>`;
-        ignoredList.querySelectorAll('[data-unignore-warning]').forEach((btn) => btn.addEventListener('click', async () => {
-          const item = btn.closest('.history-item');
-          btn.disabled = true;
-          try {
-            await window.api.invoke('warnings:unignore', btn.dataset.unignoreWarning);
-            if (item) item.remove();
-            invalidateDashboardCache();
-            await loadWarnings();
-          } catch (err) {
-            btn.disabled = false;
-            alert(err.message || t('common.failed'));
-          }
-        }));
+        await renderIgnoredList();
       } catch (err) {
         if (warningList) warningList.innerHTML = `<div class="empty-state">${escapeHtml(t('common.error') + ': ' + err.message)}</div>`;
       }
