@@ -3,40 +3,22 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const os = require('os');
+const {
+  assessMutation,
+  defaultMutationRoots,
+  hasReparseAncestor,
+  isInside,
+  isProtectedPath
+} = require('./pathSafety');
 
 const DEFAULT_MAX_DEPTH = 12;
-const DEFAULT_MIN_SIZE = 1; // bytes
-const DEFAULT_MAX_SIZE = 100 * 1024 * 1024; // 100MB
-
-const SAFE_ROOTS = [
-  os.homedir(),
-  path.join(os.homedir(), 'Downloads'),
-  path.join(os.homedir(), 'Documents'),
-  path.join(os.homedir(), 'Desktop'),
-  os.tmpdir(),
-  process.env.TEMP,
-  process.env.TMP
-].filter(Boolean);
-
-const PROTECTED_PATHS = [
-  path.join(os.homedir(), 'AppData'),
-  path.join(os.homedir(), '.ssh'),
-  path.join(os.homedir(), '.gnupg'),
-  path.join(os.homedir(), '.config'),
-  process.env.ProgramData,
-  process.env.WINDIR
-].filter(Boolean);
-
+const DEFAULT_MIN_SIZE = 1024 * 1024;
+const DEFAULT_MAX_SIZE = Number.POSITIVE_INFINITY;
+const SAFE_ROOTS = defaultMutationRoots();
+const PROTECTED_PATHS = [];
 const SKIP_DIRS = new Set([
-  'node_modules',
-  '.git',
-  '.svn',
-  'Windows',
-  '$Recycle.Bin',
-  'System Volume Information'
+  'node_modules', '.git', '.svn', 'windows', '$recycle.bin', 'system volume information'
 ]);
-
 const FILE_CATEGORIES = {
   images: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff', 'heic', 'svg'],
   videos: ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'm4v'],
@@ -45,75 +27,52 @@ const FILE_CATEGORIES = {
 };
 
 function getFileCategory(ext) {
-  if (!ext) return 'other';
-  const e = ext.toLowerCase().replace('.', '');
-  for (const [cat, exts] of Object.entries(FILE_CATEGORIES)) {
-    if (exts.includes(e)) return cat;
-  }
-  return 'other';
-}
-
-function shouldSkipDir(fullPath, name) {
-  if (SKIP_DIRS.has(name)) return true;
-  const lower = fullPath.toLowerCase();
-  return lower.includes('\\appdata\\local\\packages\\')
-    || lower.includes('\\appdata\\local\\microsoft\\windowsapps\\')
-    || lower.includes('/.git/')
-    || lower.includes('\\.git\\');
+  const value = String(ext || '').toLowerCase().replace('.', '');
+  return Object.entries(FILE_CATEGORIES).find(([, extensions]) => extensions.includes(value))?.[0] || 'other';
 }
 
 function isPathInsideDir(filePath, rootDir) {
-  if (!filePath || !rootDir) return false;
-  const resolved = path.resolve(filePath);
-  const root = path.resolve(rootDir);
-  const relative = path.relative(root, resolved);
-  if (relative === '') return true;
-  return relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+  return isInside(filePath, rootDir);
 }
 
 function isSafePath(filePath) {
-  const normalized = path.resolve(filePath);
-  
-  // Check SAFE_ROOTS first - explicit safe locations override protected paths
-  for (const root of SAFE_ROOTS) {
-    if (isPathInsideDir(normalized, root)) {
-      return true;
-    }
-  }
-  
-  // Then check PROTECTED_PATHS
-  for (const protectedPath of PROTECTED_PATHS) {
-    if (isPathInsideDir(normalized, protectedPath)) {
-      return false;
-    }
-  }
-  
-  return false;
+  return assessMutation(filePath).ok;
 }
 
 function normalizeExtensions(exts) {
   if (!exts) return null;
-  const list = Array.isArray(exts)
-    ? exts
-    : String(exts).split(/[,;\s]+/).filter(Boolean);
+  const list = exts instanceof Set
+    ? [...exts]
+    : (Array.isArray(exts) ? exts : String(exts).split(/[,;\s]+/).filter(Boolean));
   if (!list.length) return null;
-  return new Set(list.map((e) => {
-    const s = String(e).trim().toLowerCase();
-    return s.startsWith('.') ? s : `.${s}`;
+  return new Set(list.map((entry) => {
+    const value = String(entry).trim().toLowerCase();
+    return value.startsWith('.') ? value : `.${value}`;
   }));
 }
 
-function calculateHash(filePath, algorithm = 'sha256') {
+function shouldSkipDir(fullPath, name) {
+  const lowerName = String(name || '').toLowerCase();
+  if (SKIP_DIRS.has(lowerName) || lowerName.startsWith('.')) return true;
+  const normalized = String(fullPath).toLowerCase();
+  return normalized.includes('\\appdata\\local\\packages\\')
+    || normalized.includes('\\appdata\\local\\microsoft\\windowsapps\\');
+}
+
+function calculateHash(filePath, algorithm = 'sha256', onChunk) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash(algorithm);
     const stream = fs.createReadStream(filePath);
-    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('data', (chunk) => {
+      hash.update(chunk);
+      onChunk?.(chunk.length);
+    });
     stream.on('error', reject);
     stream.on('end', () => resolve(hash.digest('hex')));
   });
 }
 
-function scanDirectory(dir, options = {}) {
+async function scanDirectory(dir, options = {}) {
   const {
     maxDepth = DEFAULT_MAX_DEPTH,
     currentDepth = 0,
@@ -121,77 +80,67 @@ function scanDirectory(dir, options = {}) {
     maxSize = DEFAULT_MAX_SIZE,
     extensions = null,
     skipProtected = true,
-    onProgress
+    onProgress,
+    root = dir,
+    stats = { indexed: 0, skipped: 0, errors: 0 }
   } = options;
-
   const results = [];
-
-  if (currentDepth >= maxDepth) return Promise.resolve(results);
+  if (currentDepth > maxDepth) return results;
+  if (hasReparseAncestor(dir, root)) {
+    stats.skipped += 1;
+    return results;
+  }
 
   let entries;
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
   } catch (_) {
-    return Promise.resolve(results);
+    stats.errors += 1;
+    return results;
   }
 
-  // Process directories first (async for recursion)
-  const dirPromises = [];
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
-
     try {
+      if (entry.isSymbolicLink()) {
+        stats.skipped += 1;
+        continue;
+      }
       if (entry.isDirectory()) {
-        if (entry.name.startsWith('.') ||
-            entry.name.toLowerCase() === 'node_modules' ||
-            entry.name.toLowerCase() === 'git' ||
-            entry.name.toLowerCase() === '.git') {
+        if (shouldSkipDir(fullPath, entry.name) || (skipProtected && isProtectedPath(fullPath))) {
+          stats.skipped += 1;
           continue;
         }
-        if (skipProtected && isSafePath(fullPath) === false) {
-          continue;
-        }
-        if (!shouldSkipDir(fullPath, entry.name)) {
-          dirPromises.push(
-            scanDirectory(fullPath, {
-              ...options,
-              currentDepth: currentDepth + 1
-            }).then(subResults => results.push(...subResults))
-          );
-        }
+        results.push(...await scanDirectory(fullPath, {
+          ...options,
+          root,
+          currentDepth: currentDepth + 1,
+          stats
+        }));
         continue;
       }
       if (!entry.isFile()) continue;
-      if (extensions) {
-        const ext = path.extname(entry.name).toLowerCase();
-        if (!extensions.has(ext)) continue;
-      }
-      try {
-        const st = fs.statSync(fullPath);
-        if (st.size < minSize || st.size > maxSize) continue;
-        if (skipProtected && !isSafePath(fullPath)) continue;
-        results.push({
-          path: fullPath,
-          size: st.size,
-          modified: st.mtime
+      if (extensions && !extensions.has(path.extname(entry.name).toLowerCase())) continue;
+      const stat = fs.statSync(fullPath);
+      if (stat.size < minSize || stat.size > maxSize) continue;
+      stats.indexed += 1;
+      results.push({ path: fullPath, size: stat.size, modified: stat.mtime.toISOString() });
+      if (stats.indexed === 1 || stats.indexed % 25 === 0) {
+        onProgress?.({
+          phase: 'indexing', label: 'Indexing files', count: stats.indexed,
+          currentActivity: fullPath, cancelable: true
         });
-      } catch (_) {
-        // Skip unreadable
       }
     } catch (_) {
-      // Skip errors
+      stats.errors += 1;
     }
   }
-
-  return Promise.all(dirPromises).then(() => results);
+  return results;
 }
 
 async function findDuplicates(options = {}) {
   const {
-    roots,
-    paths,
-    path: singlePath,
-    scanPath,
+    roots, paths, path: singlePath, scanPath,
     maxDepth = DEFAULT_MAX_DEPTH,
     minSize = DEFAULT_MIN_SIZE,
     maxSize = DEFAULT_MAX_SIZE,
@@ -200,171 +149,117 @@ async function findDuplicates(options = {}) {
     skipProtected = true,
     onProgress
   } = options;
-
-  // Accept multiple path parameter aliases for backward compatibility
-  const customPathsProvided = roots || paths || singlePath || scanPath;
-  const resolvedRoots = roots
-    || paths
-    || (singlePath ? [singlePath] : null)
-    || (scanPath ? [scanPath] : null)
-    || SAFE_ROOTS.filter(p => fs.existsSync(p));
-
-  // When custom paths are explicitly provided, don't enforce safe-path restrictions
-  // Also disable restrictions when using default SAFE_ROOTS since they're already defined as safe
-  const effectiveSkipProtected = customPathsProvided ? false : false;
-
+  const requested = roots || paths || (singlePath ? [singlePath] : null) || (scanPath ? [scanPath] : null) || SAFE_ROOTS;
+  const resolvedRoots = [...new Set((Array.isArray(requested) ? requested : [requested])
+    .filter(Boolean).map((entry) => path.resolve(entry)))]
+    .filter((entry) => fs.existsSync(entry) && !isProtectedPath(entry));
   if (!resolvedRoots.length) {
-    return { 
-      success: false, 
-      error: 'At least one scan path is required.',
-      totalFilesScanned: 0,
-      duplicateGroups: [],
-      totalDuplicates: 0,
-      totalWastedSpace: 0
+    return {
+      success: false,
+      error: 'Choose an accessible, non-system folder to scan.',
+      totalFilesScanned: 0, duplicateGroups: [], totalDuplicates: 0, totalWastedSpace: 0,
+      statistics: { indexed: 0, hashed: 0, skipped: 0, errors: 0 }
     };
   }
 
-  let allFiles = [];
-  let scanned = 0;
-
+  const scanStats = { indexed: 0, skipped: 0, errors: 0 };
+  const allFiles = [];
+  const extensionSet = normalizeExtensions(extensions);
   for (const root of resolvedRoots) {
-    if (!fs.existsSync(root)) continue;
-    const files = await scanDirectory(root, {
-      maxDepth,
-      minSize,
-      maxSize,
-      extensions,
-      skipProtected: effectiveSkipProtected,
-      onProgress: (p) => {
-        if (onProgress) onProgress({ label: 'Indexing files', count: ++scanned });
-      }
-    });
-    allFiles.push(...files);
+    allFiles.push(...await scanDirectory(root, {
+      root,
+      maxDepth: Number(maxDepth),
+      minSize: Math.max(0, Number(minSize) || DEFAULT_MIN_SIZE),
+      maxSize: Number.isFinite(Number(maxSize)) ? Number(maxSize) : DEFAULT_MAX_SIZE,
+      extensions: extensionSet,
+      skipProtected: skipProtected !== false,
+      onProgress,
+      stats: scanStats
+    }));
   }
 
-  // Deduplicate by resolved path (case-insensitive on Windows)
-  const uniqueFiles = [...new Map(
-    allFiles.map((file) => {
-      const resolved = path.resolve(file.path);
-      const key = process.platform === 'win32' ? resolved.toLowerCase() : resolved;
-      return [key, file];
-    })
-  ).values()];
-
-  // Group by size first (optimization)
+  const uniqueFiles = [...new Map(allFiles.map((file) => {
+    const resolved = path.resolve(file.path);
+    return [(process.platform === 'win32' ? resolved.toLowerCase() : resolved), file];
+  })).values()];
   const bySize = new Map();
   for (const file of uniqueFiles) {
-    if (!bySize.has(file.size)) {
-      bySize.set(file.size, []);
-    }
-    bySize.get(file.size).push(file);
+    const group = bySize.get(file.size) || [];
+    group.push(file);
+    bySize.set(file.size, group);
   }
-
-  // Only hash files that share size with others
-  const potentialDuplicates = [];
-  for (const [size, files] of bySize) {
-    if (files.length > 1) {
-      potentialDuplicates.push(...files);
-    }
-  }
-
-  // Calculate hashes for potential duplicates
+  const candidates = [...bySize.values()].filter((files) => files.length > 1).flat();
   const byHash = new Map();
-  const toHash = potentialDuplicates.length;
   let hashed = 0;
-
-  for (const file of potentialDuplicates) {
+  let hashedBytes = 0;
+  const totalHashBytes = candidates.reduce((sum, file) => sum + file.size, 0);
+  for (const file of candidates) {
     try {
-      const hash = await calculateHash(file.path, algorithm);
-      hashed++;
-      if (onProgress && (hashed % 20 === 0 || hashed === toHash)) {
-        onProgress({ label: 'Hashing candidates', count: hashed, total: toHash });
-      }
-      if (!byHash.has(hash)) {
-        byHash.set(hash, []);
-      }
-      byHash.get(hash).push(file);
-    } catch (_) {
-      // Skip unreadable
-    }
-  }
-
-  // Extract actual duplicates (hash groups with >1 file)
-  const duplicates = [];
-  for (const [hash, files] of byHash) {
-    if (files.length > 1) {
-      // Sort by path to have consistent "original" (first in list)
-      files.sort((a, b) => a.path.localeCompare(b.path));
-      duplicates.push({
-        hash,
-        size: files[0].size,
-        files: files.map(f => {
-          const ext = path.extname(f.path).toLowerCase();
-          return {
-            path: f.path,
-            size: f.size,
-            modified: f.modified,
-            extension: ext,
-            category: getFileCategory(ext),
-            parentFolder: path.basename(path.dirname(f.path))
-          };
-        })
+      const hash = await calculateHash(file.path, algorithm, (bytes) => { hashedBytes += bytes; });
+      hashed += 1;
+      const group = byHash.get(hash) || [];
+      group.push(file);
+      byHash.set(hash, group);
+      onProgress?.({
+        phase: 'hashing', label: 'Hashing candidate files', count: hashed, total: candidates.length,
+        pct: totalHashBytes ? Math.round((hashedBytes / totalHashBytes) * 100) : 100,
+        currentActivity: file.path, cancelable: true
       });
+    } catch (_) {
+      scanStats.errors += 1;
     }
   }
 
-  // Sort by total wasted space (descending)
-  duplicates.sort((a, b) => (b.size * (b.files.length - 1)) - (a.size * (a.files.length - 1)));
-
+  const duplicateGroups = [];
+  for (const [hash, files] of byHash) {
+    if (files.length < 2) continue;
+    files.sort((a, b) => a.path.localeCompare(b.path));
+    duplicateGroups.push({
+      id: `${hash}:${files[0].size}`,
+      hash,
+      size: files[0].size,
+      files: files.map((file) => {
+        const extension = path.extname(file.path).toLowerCase();
+        return { ...file, extension, category: getFileCategory(extension), parentFolder: path.dirname(file.path) };
+      })
+    });
+  }
+  duplicateGroups.sort((a, b) => (b.size * (b.files.length - 1)) - (a.size * (a.files.length - 1)));
+  onProgress?.({ phase: 'complete', label: 'Duplicate scan complete', pct: 100, count: uniqueFiles.length, cancelable: false });
   return {
+    success: true,
+    scanPaths: resolvedRoots,
     totalFilesScanned: uniqueFiles.length,
-    duplicateGroups: duplicates,
-    totalDuplicates: duplicates.reduce((sum, group) => sum + group.files.length - 1, 0),
-    totalWastedSpace: duplicates.reduce((sum, group) => sum + group.size * (group.files.length - 1), 0)
+    duplicateGroups,
+    totalDuplicates: duplicateGroups.reduce((sum, group) => sum + group.files.length - 1, 0),
+    totalWastedSpace: duplicateGroups.reduce((sum, group) => sum + group.size * (group.files.length - 1), 0),
+    statistics: { ...scanStats, hashed }
   };
 }
 
 async function deleteFiles(filePaths) {
   const deleted = [];
   const failed = [];
-
-  for (const filePath of filePaths) {
+  for (const filePath of filePaths || []) {
+    const safety = assessMutation(filePath);
+    if (!safety.ok) {
+      failed.push({ path: filePath, error: safety.reason });
+      continue;
+    }
     try {
-      if (!isSafePath(filePath)) {
-        failed.push({ path: filePath, error: 'Path is not safe for deletion' });
-        continue;
-      }
-
-      fs.unlinkSync(filePath);
-      deleted.push(filePath);
+      fs.unlinkSync(safety.path);
+      deleted.push(safety.path);
     } catch (err) {
-      failed.push({ path: filePath, error: err.message });
+      failed.push({ path: safety.path, error: err.message });
     }
   }
-
   return { deleted, failed };
 }
 
-function deleteFilesWithPaths(deletePaths) {
-  return deleteFiles(deletePaths);
-}
+const deleteFilesWithPaths = deleteFiles;
 
 module.exports = {
-  SAFE_ROOTS,
-  PROTECTED_PATHS,
-  DEFAULT_MAX_DEPTH,
-  DEFAULT_MIN_SIZE,
-  DEFAULT_MAX_SIZE,
-  SKIP_DIRS,
-  FILE_CATEGORIES,
-  getFileCategory,
-  shouldSkipDir,
-  isPathInsideDir,
-  isSafePath,
-  normalizeExtensions,
-  calculateHash,
-  scanDirectory,
-  findDuplicates,
-  deleteFiles,
-  deleteFilesWithPaths
+  SAFE_ROOTS, PROTECTED_PATHS, DEFAULT_MAX_DEPTH, DEFAULT_MIN_SIZE, DEFAULT_MAX_SIZE,
+  SKIP_DIRS, FILE_CATEGORIES, getFileCategory, shouldSkipDir, isPathInsideDir, isSafePath,
+  normalizeExtensions, calculateHash, scanDirectory, findDuplicates, deleteFiles, deleteFilesWithPaths
 };

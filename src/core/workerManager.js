@@ -36,8 +36,11 @@ class WorkerManager {
       if (typeof timer.unref === 'function') timer.unref();
 
       const onAbort = () => {
-        try { worker.terminate(); } catch (_) {}
-        finish(reject, new Error('Task canceled'));
+        try { worker.postMessage({ type: 'cancel' }); } catch (_) {}
+        setTimeout(() => {
+          try { worker.terminate(); } catch (_) {}
+          finish(reject, new Error('Task canceled'));
+        }, 300);
       };
 
       if (signal) {
@@ -79,8 +82,8 @@ class WorkerManager {
   cancel(taskId) {
     const task = this._tasks.get(taskId);
     if (!task) return false;
-    try { task.worker.terminate(); } catch (_) {}
-    this._tasks.delete(taskId);
+    try { task.worker.postMessage({ type: 'cancel' }); } catch (_) {}
+    setTimeout(() => { try { task.worker.terminate(); } catch (_) {} }, 300);
     return true;
   }
 }

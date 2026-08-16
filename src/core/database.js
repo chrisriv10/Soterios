@@ -118,6 +118,46 @@ class DatabaseService {
       )
     `);
 
+    // Unified history for interactive and scheduled maintenance tools.
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS tool_runs (
+        run_id TEXT PRIMARY KEY,
+        tool_id TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'manual',
+        status TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        duration_ms INTEGER,
+        summary_json TEXT,
+        warnings_json TEXT,
+        errors_json TEXT
+      )
+    `);
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_tool_runs_started_at
+      ON tool_runs(started_at DESC)
+    `);
+
+    // Seven-day reversible storage used by user-selected maintenance actions.
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS maintenance_vault (
+        id TEXT PRIMARY KEY,
+        original_path TEXT NOT NULL,
+        vault_path TEXT NOT NULL,
+        item_type TEXT NOT NULL,
+        operation TEXT NOT NULL,
+        size_bytes INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        status TEXT NOT NULL,
+        metadata_json TEXT
+      )
+    `);
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_maintenance_vault_expiry
+      ON maintenance_vault(status, expires_at)
+    `);
+
     // Reputation Cache (VirusTotal)
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS reputation_cache (
@@ -369,6 +409,113 @@ class DatabaseService {
     `).run(deleteCount);
   }
 
+  // --- Unified tool run history ---
+  startToolRun({ runId, toolId, source = 'manual', startedAt }) {
+    return this.db.prepare(`
+      INSERT INTO tool_runs (run_id, tool_id, source, status, started_at)
+      VALUES (@runId, @toolId, @source, 'running', @startedAt)
+    `).run({ runId, toolId, source, startedAt });
+  }
+
+  finishToolRun({ runId, status, completedAt, durationMs, summary, warnings, errors }) {
+    return this.db.prepare(`
+      UPDATE tool_runs SET
+        status = @status,
+        completed_at = @completedAt,
+        duration_ms = @durationMs,
+        summary_json = @summaryJson,
+        warnings_json = @warningsJson,
+        errors_json = @errorsJson
+      WHERE run_id = @runId
+    `).run({
+      runId,
+      status,
+      completedAt,
+      durationMs,
+      summaryJson: JSON.stringify(summary || {}),
+      warningsJson: JSON.stringify(warnings || []),
+      errorsJson: JSON.stringify(errors || [])
+    });
+  }
+
+  getToolHistory(limit = 50, toolId = null) {
+    const bounded = Math.max(1, Math.min(Number(limit) || 50, 250));
+    const rows = toolId
+      ? this.db.prepare('SELECT * FROM tool_runs WHERE tool_id = ? ORDER BY started_at DESC LIMIT ?').all(toolId, bounded)
+      : this.db.prepare('SELECT * FROM tool_runs ORDER BY started_at DESC LIMIT ?').all(bounded);
+    return rows.map((row) => ({
+      runId: row.run_id,
+      toolId: row.tool_id,
+      source: row.source,
+      status: row.status,
+      startedAt: row.started_at,
+      completedAt: row.completed_at,
+      durationMs: row.duration_ms,
+      summary: this._parseJson(row.summary_json, {}),
+      warnings: this._parseJson(row.warnings_json, []),
+      errors: this._parseJson(row.errors_json, [])
+    }));
+  }
+
+  addVaultItem(item) {
+    return this.db.prepare(`
+      INSERT INTO maintenance_vault (
+        id, original_path, vault_path, item_type, operation, size_bytes,
+        created_at, expires_at, status, metadata_json
+      ) VALUES (
+        @id, @originalPath, @vaultPath, @itemType, @operation, @sizeBytes,
+        @createdAt, @expiresAt, @status, @metadataJson
+      )
+    `).run({
+      ...item,
+      metadataJson: JSON.stringify(item.metadata || {})
+    });
+  }
+
+  updateVaultItem(id, status, metadata = null) {
+    if (metadata === null) {
+      return this.db.prepare('UPDATE maintenance_vault SET status = ? WHERE id = ?').run(status, id);
+    }
+    return this.db.prepare('UPDATE maintenance_vault SET status = ?, metadata_json = ? WHERE id = ?')
+      .run(status, JSON.stringify(metadata), id);
+  }
+
+  getVaultItem(id) {
+    const row = this.db.prepare('SELECT * FROM maintenance_vault WHERE id = ?').get(id);
+    return row ? this._mapVaultRow(row) : null;
+  }
+
+  getVaultItems({ status = null, expiredBefore = null } = {}) {
+    let rows;
+    if (status && expiredBefore) {
+      rows = this.db.prepare('SELECT * FROM maintenance_vault WHERE status = ? AND expires_at <= ? ORDER BY created_at DESC').all(status, expiredBefore);
+    } else if (status) {
+      rows = this.db.prepare('SELECT * FROM maintenance_vault WHERE status = ? ORDER BY created_at DESC').all(status);
+    } else {
+      rows = this.db.prepare('SELECT * FROM maintenance_vault ORDER BY created_at DESC').all();
+    }
+    return rows.map((row) => this._mapVaultRow(row));
+  }
+
+  _mapVaultRow(row) {
+    return {
+      id: row.id,
+      originalPath: row.original_path,
+      vaultPath: row.vault_path,
+      itemType: row.item_type,
+      operation: row.operation,
+      sizeBytes: row.size_bytes,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+      status: row.status,
+      metadata: this._parseJson(row.metadata_json, {})
+    };
+  }
+
+  _parseJson(value, fallback) {
+    try { return value ? JSON.parse(value) : fallback; } catch (_) { return fallback; }
+  }
+
   ignoreWarning(warning) {
     const stmt = this.db.prepare('INSERT OR REPLACE INTO ignored_warnings (id, title, detail) VALUES (@id, @title, @detail)');
     return stmt.run(warning);
@@ -428,6 +575,33 @@ class DatabaseService {
         fetched_at = CURRENT_TIMESTAMP
     `);
     return stmt.run({ ip, rawData });
+  }
+
+  getProcessReputationCache(hash) {
+    if (!hash) return null;
+    return this.db.prepare(`
+      SELECT hash, malicious, suspicious, undetected, last_checked
+      FROM reputation_cache
+      WHERE hash = ?
+    `).get(hash) || null;
+  }
+
+  setProcessReputationCache(hash, counts) {
+    if (!hash) return { changes: 0 };
+    return this.db.prepare(`
+      INSERT INTO reputation_cache (hash, malicious, suspicious, undetected, last_checked)
+      VALUES (@hash, @malicious, @suspicious, @undetected, CURRENT_TIMESTAMP)
+      ON CONFLICT(hash) DO UPDATE SET
+        malicious = excluded.malicious,
+        suspicious = excluded.suspicious,
+        undetected = excluded.undetected,
+        last_checked = CURRENT_TIMESTAMP
+    `).run({
+      hash,
+      malicious: Number(counts?.malicious) || 0,
+      suspicious: Number(counts?.suspicious) || 0,
+      undetected: Number(counts?.undetected) || 0,
+    });
   }
 
   getReputationHash(hash) {

@@ -7,7 +7,7 @@ const ReputationEngine = require('../security/ReputationEngine');
 const QuarantineManager = require('../security/QuarantineManager');
 const ScanEngine = require('../security/ScanEngine');
 const RealTimeWatcher = require('../security/RealTimeWatcher');
-const ProcessInspector = require('../security/ProcessInspector');
+const { ProcessService } = require('./processService');
 const SystemAudit = require('../security/SystemAudit');
 const FirewallManager = require('../security/FirewallManager');
 const NetworkMonitor = require('../security/NetworkMonitor');
@@ -52,7 +52,15 @@ class ServiceRegistry {
       quarantineManager
     );
     const realtimeWatcher = new RealTimeWatcher(db, eventBus, scanEngine);
-    const processInspector = new ProcessInspector();
+    const processService = new ProcessService({
+      db,
+      userDataPath,
+      resourcesPath: options.resourcesPath || null,
+      requireIntegrityManifest: !!options.requireProcessCollectorIntegrity
+    });
+    // Compatibility alias for NetworkAlertMonitor, ProcessResolver, AI
+    // context, and older IPC consumers while they migrate to ProcessService.
+    const processInspector = processService;
     const systemAudit = new SystemAudit();
     systemAudit.setLocale(locale);
     const firewallManager = new FirewallManager();
@@ -72,6 +80,7 @@ class ServiceRegistry {
       networkMonitor,
       blocklistService,
       processInspector,
+      processService,
       db,
       notify
     });
@@ -88,6 +97,7 @@ class ServiceRegistry {
       scanEngine,
       realtimeWatcher,
       processInspector,
+      processService,
       systemAudit,
       firewallManager,
       networkMonitor,

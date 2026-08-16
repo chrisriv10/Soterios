@@ -298,6 +298,7 @@ window.Pages.settings = {
           </div>
           <button class="btn btn-primary" id="saveMaintenance" style="margin-top:12px;">${escapeHtml(t('settings.saveMaintenance'))}</button>
           <button class="btn btn-secondary" id="runMaintenanceNow" style="margin-top:12px; margin-left:8px;">${escapeHtml(t('settings.runNow'))}</button>
+          <button class="btn btn-ghost" id="cancelMaintenance" style="margin-top:12px; margin-left:8px; display:none;">${escapeHtml(t('common.cancel'))}</button>
           <div id="maintenanceOutput" style="margin-top:12px; display:none;">
             <div class="output-panel" style="height:300px; border-radius:8px;">
               <div class="output-header">
@@ -608,22 +609,33 @@ updatePrivacyModeStatus();
           const status = b.loaded
             ? `<span style="color:var(--success, #28a745);">&#9679; ${escapeHtml(t('settings.browserExtension.loaded'))}</span>`
             : `<span style="color:var(--text-muted);">&#9675; ${escapeHtml(t('settings.browserExtension.notLoaded'))}</span>`;
+          const hostStatus = b.nativeHostActive
+            ? '<span style="color:var(--success, #28a745);">Native host registered</span>'
+            : '<span style="color:var(--text-muted);">Native host not registered</span>';
           return `
           <div class="browser-ext-row" style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--border, rgba(128,128,128,0.2));">
             <div style="min-width:0;">
               <div class="toggle-label">${escapeHtml(b.name)} &nbsp; ${status}</div>
               <div class="toggle-desc">${escapeHtml(t('settings.browserExtension.extensionId', { id: state.extensionId }))}</div>
+              <div class="toggle-desc">${hostStatus}</div>
             </div>
-            <button class="btn btn-sm browser-ext-install" data-browser="${escapeHtml(b.id)}" style="flex-shrink:0;">${escapeHtml(t('settings.browserExtension.installBtn'))}</button>
+            <button class="btn btn-sm browser-ext-install" data-browser="${escapeHtml(b.id)}" style="flex-shrink:0;" disabled>${escapeHtml(t('settings.browserExtension.installBtn'))}</button>
           </div>`;
         }).join('');
         body.innerHTML = `
+          <div style="padding:12px; margin-bottom:10px; background:var(--panel-bg-alt, rgba(128,128,128,0.08)); border:1px solid var(--border, rgba(128,128,128,0.2)); border-radius:8px;">
+            <div class="toggle-label" style="margin-bottom:6px;">Privacy disclosure before installation</div>
+            <div class="toggle-desc">Soterios records no analytics, product telemetry, tracking identifiers, passwords, or browsing history. HIBP and signed-feed updates are selected by default in the extension, but no external request occurs until you confirm its first-run choices. Google Safe Browsing stays off until you add your own key. Continuous access to sites is optional; on-demand protection remains available.</div>
+            <label style="display:flex; align-items:flex-start; gap:8px; margin-top:10px; font-size:0.85rem;"><input type="checkbox" id="browserExtDisclosureConfirm" style="margin-top:3px;"> <span>I understand that online protection services are separate from telemetry and will be controlled in the extension.</span></label>
+          </div>
+          <div class="toggle-desc" style="margin-bottom:8px;">Bundled extension: ${escapeHtml(state.bundledVersion || 'unavailable')} &nbsp;·&nbsp; Installed: ${escapeHtml(state.installedVersion || 'not staged')} &nbsp;·&nbsp; Native binary: ${state.nativeHostBinaryPresent ? 'present' : 'not staged'} &nbsp;·&nbsp; Desktop bridge: ${state.bridge?.connected ? 'host connected' : state.bridge?.listening ? 'ready' : 'unavailable'}</div>
           ${rows}
           <div id="browserExtSteps" style="display:none; margin-top:12px; padding:12px; background:var(--panel-bg-alt, rgba(128,128,128,0.08)); border-radius:6px;">
             <div class="toggle-desc" style="margin-bottom:8px;">${escapeHtml(t('settings.browserExtension.stepsIntro'))}</div>
             <ol style="margin:0 0 12px 18px; padding:0; font-size:0.85rem; line-height:1.8;">
               <li>${escapeHtml(t('settings.browserExtension.stepDevMode'))}</li>
               <li>${escapeHtml(t('settings.browserExtension.stepLoadUnpacked'))}</li>
+              <li>After an update, return to this page and click the extension card's Reload button.</li>
             </ol>
             <div style="font-size:0.85rem; word-break:break-all; margin-bottom:12px;"><code id="browserExtFolder" style="background:var(--panel-bg, rgba(128,128,128,0.12)); padding:2px 6px; border-radius:4px;">${escapeHtml(state.extDir || '')}</code></div>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -634,6 +646,10 @@ updatePrivacyModeStatus();
           </div>
           <div id="browserExtStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
         `;
+        const disclosure = body.querySelector('#browserExtDisclosureConfirm');
+        if (disclosure) disclosure.addEventListener('change', () => {
+          body.querySelectorAll('.browser-ext-install').forEach((button) => { button.disabled = !disclosure.checked; });
+        });
         body.querySelectorAll('.browser-ext-install').forEach((btn) => {
           btn.addEventListener('click', async () => {
             const browserId = btn.dataset.browser;
@@ -647,6 +663,7 @@ updatePrivacyModeStatus();
               const folder = body.querySelector('#browserExtFolder');
               if (folder) folder.textContent = result.extDir;
               if (steps) steps.style.display = 'block';
+              status.textContent = `Extension ${result.installedVersion || '2.0.0'} staged. Native host ${result.nativeHostOk ? 'registered' : 'registration needs attention'}.`;
               // Don't re-render - keep the steps visible so user can follow them
             } catch (err) {
               status.textContent = err.message || String(err);
@@ -757,17 +774,24 @@ updatePrivacyModeStatus();
     }
 
     const scriptListEl = container.querySelector('#maintenanceScriptList');
-    const selectedScriptIds = new Set((maintenanceConfig && maintenanceConfig.scriptIds) || ['clear-temp-files', 'disk-space-report']);
+    const selectedPolicies = (maintenanceConfig && maintenanceConfig.policies) || {
+      'clear-temp-files': 'analyze',
+      'disk-space-report': 'analyze'
+    };
     if (maintenanceScripts.length) {
       scriptListEl.innerHTML = maintenanceScripts.map((script) => {
         const trans = MAINTENANCE_SCRIPT_TRANSLATIONS[script.id];
         const name = trans ? t(trans.name, script.name) : script.name;
         const desc = trans ? t(trans.desc, script.description) : script.description;
         return `
-        <label style="display:flex; align-items:flex-start; gap:8px; margin-bottom:8px; cursor:pointer;">
-          <input type="checkbox" class="maintenance-script-checkbox" value="${escapeHtml(script.id)}" ${selectedScriptIds.has(script.id) ? 'checked' : ''} />
+        <div style="display:grid; grid-template-columns:minmax(0,1fr) 150px; align-items:start; gap:12px; margin-bottom:10px;">
           <span><strong>${escapeHtml(name)}</strong><br /><span style="color:var(--text-muted);">${escapeHtml(desc)}</span></span>
-        </label>`;
+          <select class="maintenance-policy-select field-input" data-script-id="${escapeHtml(script.id)}" aria-label="${escapeHtml(name)} policy">
+            <option value="off" ${!selectedPolicies[script.id] ? 'selected' : ''}>Off</option>
+            <option value="analyze" ${selectedPolicies[script.id] === 'analyze' ? 'selected' : ''}>Analyze only</option>
+            ${script.autoCleanAllowed ? `<option value="auto-clean" ${selectedPolicies[script.id] === 'auto-clean' ? 'selected' : ''}>Auto-clean (opt in)</option>` : ''}
+          </select>
+        </div>`;
       }).join('');
     } else {
       scriptListEl.textContent = t('settings.maintenanceUnavailable');
@@ -787,7 +811,9 @@ updatePrivacyModeStatus();
       container.querySelector('#maintenanceNotifyToggle').checked = maintenanceConfig.notifyOnComplete !== false;
       syncPresetUi(presetEl.value);
       if (maintenanceConfig.lastRun) {
-        container.querySelector('#maintenanceStatus').textContent = t('settings.lastRun', { when: new Date(maintenanceConfig.lastRun).toLocaleString() });
+        const next = maintenanceConfig.nextEligibleRun ? ` · Next eligible ${new Date(maintenanceConfig.nextEligibleRun).toLocaleString()}` : '';
+        const reclaimed = maintenanceConfig.lastResult?.reclaimedBytes ? ` · Reclaimed ${(maintenanceConfig.lastResult.reclaimedBytes / 1024 / 1024).toFixed(1)} MB` : '';
+        container.querySelector('#maintenanceStatus').textContent = `${t('settings.lastRun', { when: new Date(maintenanceConfig.lastRun).toLocaleString() })}${next}${reclaimed}`;
       }
     } else {
       syncPresetUi(presetEl.value);
@@ -800,12 +826,14 @@ updatePrivacyModeStatus();
       const btn = container.querySelector('#saveMaintenance');
       setButtonLoading(btn, true, t('common.saving'));
       try {
-        const scriptIds = Array.from(container.querySelectorAll('.maintenance-script-checkbox:checked')).map((el) => el.value);
+        const policies = Object.fromEntries(Array.from(container.querySelectorAll('.maintenance-policy-select'))
+          .filter((el) => el.value !== 'off')
+          .map((el) => [el.dataset.scriptId, el.value]));
         const response = await window.api.invoke('maintenance:set', {
           enabled: container.querySelector('#maintenanceEnabledToggle').checked,
           schedulePreset: presetEl.value,
           intervalHours: Number(container.querySelector('#maintenanceInterval').value || 168),
-          scriptIds,
+          policies,
           notifyOnComplete: container.querySelector('#maintenanceNotifyToggle').checked
         });
         if (!response || !response.ok) throw new Error(response?.error || t('settings.saveMaintenanceError'));
@@ -817,7 +845,7 @@ updatePrivacyModeStatus();
           custom: t('settings.customInterval', { hours: saved.intervalHours })
         }[saved.schedulePreset] || t('settings.customInterval', { hours: saved.intervalHours });
         status.textContent = saved.enabled
-          ? t('settings.maintenanceEnabled', { preset: presetLabel, count: saved.scriptIds.length })
+          ? t('settings.maintenanceEnabled', { preset: presetLabel, count: Object.keys(saved.policies || {}).length })
           : t('settings.maintenanceDisabled');
       } catch (err) {
         status.textContent = err.message || String(err);
@@ -831,7 +859,9 @@ updatePrivacyModeStatus();
       const btn = container.querySelector('#runMaintenanceNow');
       const outputDiv = container.querySelector('#maintenanceOutput');
       const outputBody = container.querySelector('#maintenanceOutputBody');
+      const cancelBtn = container.querySelector('#cancelMaintenance');
       setButtonLoading(btn, true, t('common.running'));
+      cancelBtn.style.display = '';
       outputDiv.style.display = 'block';
       outputBody.innerHTML = '<div class="empty-state"><span class="spinner"></span>&nbsp;Running...</div>';
       try {
@@ -848,7 +878,8 @@ updatePrivacyModeStatus();
           
           let html = `<div class="log-row"><span class="log-tag clean">${t('tools.done')}</span><span class="log-path">${t('settings.maintenanceCompleted', { ok: okCount, total })}</span></div>`;
           (result.results || []).forEach((r) => {
-            html += `<div class="log-row"><span class="log-tag ${r.ok ? 'clean' : 'match'}">${escapeHtml(r.scriptId)}</span><span class="log-path">${r.ok ? t('common.ok') : (r.error || t('common.failed'))}</span></div>`;
+            const summary = Object.entries(r.summary || {}).map(([key, value]) => `${key}: ${value}`).join(' · ');
+            html += `<div class="log-row"><span class="log-tag ${r.ok ? 'clean' : 'match'}">${escapeHtml(r.scriptId)}</span><span class="log-path">${escapeHtml(r.policy || 'analyze')} · ${r.ok ? t('common.ok') : (r.error || t('common.failed'))}${summary ? ` · ${escapeHtml(summary)}` : ''}</span></div>`;
           });
           outputBody.innerHTML = html;
         }
@@ -857,7 +888,13 @@ updatePrivacyModeStatus();
         outputBody.innerHTML = `<div class="log-row"><span class="log-tag match">${t('common.error')}</span><span class="log-path">${escapeHtml(err.message || String(err))}</span></div>`;
       } finally {
         setButtonLoading(btn, false);
+        cancelBtn.style.display = 'none';
       }
+    });
+
+    container.querySelector('#cancelMaintenance').addEventListener('click', async () => {
+      await window.api.invoke('maintenance:cancel');
+      container.querySelector('#maintenanceStatus').textContent = 'Canceling maintenance…';
     });
 
     container.querySelector('#maximizeMaintenanceBtn').addEventListener('click', () => {

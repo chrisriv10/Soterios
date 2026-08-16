@@ -1,6 +1,6 @@
 const fs = require('fs');
 const { makeRisk, recommendationForRisk } = require('../security/riskEngine');
-const { getRegistryRunItems, getStartupFolders, getScheduledTasks, getServices, getSignatureInfo, extractExecutablePath, suspiciousPathSignals, isExecutablePath } = require('../security/windowsChecks');
+const { getRegistryRunItems, getStartupFolders, getScheduledTasks, getServices, runJsonPowerShell, extractExecutablePath, suspiciousPathSignals, isExecutablePath } = require('../security/windowsChecks');
 
 function buildSignals(item, signature) {
   const filePath = item.path || extractExecutablePath(item.command);
@@ -10,7 +10,7 @@ function buildSignals(item, signature) {
     signals.push({ points: 25, message: 'Uses a script host often abused for persistence.' });
   if (command.includes('-encodedcommand') || command.includes('frombase64string'))
     signals.push({ points: 40, message: 'Contains encoded script execution.' });
-  if (filePath && isExecutablePath(filePath) && fs.existsSync(filePath) && signature.status !== 'Valid')
+  if (filePath && isExecutablePath(filePath) && fs.existsSync(filePath) && !['Valid', 'TrustedSystemPath'].includes(signature.status))
     signals.push({ points: 25, message: 'Executable is not digitally signed by a trusted publisher.' });
   if (item.source === 'Scheduled Task' && String(item.location || '').startsWith('\\Microsoft\\'))
     signals.push({ points: -10, message: 'Microsoft scheduled task path lowers risk.' });
@@ -19,15 +19,48 @@ function buildSignals(item, signature) {
   return signals.filter((s) => s.points > 0);
 }
 
-async function enrichStartupItem(item) {
+function enrichStartupItem(item, signatureByPath) {
   const filePath = item.path || extractExecutablePath(item.command);
-  const signature = filePath ? await getSignatureInfo(filePath) : { status: 'Unknown', publisher: null };
+  const signature = filePath
+    ? (signatureByPath.get(String(filePath).toLowerCase()) || { status: 'Unknown', publisher: null })
+    : { status: 'Unknown', publisher: null };
   const risk = makeRisk(buildSignals({ ...item, path: filePath }, signature));
   return {
     ...item, path: filePath, exePath: filePath, exists: filePath ? fs.existsSync(filePath) : false,
     publisher: signature.publisher, signatureStatus: signature.status, risk,
     recommendedAction: recommendationForRisk(risk, 'startup item')
   };
+}
+
+async function getSignatureBatch(items) {
+  const paths = [...new Set(items.map((item) => item.path || extractExecutablePath(item.command)).filter((filePath) => filePath && fs.existsSync(filePath)))];
+  const signatures = new Map();
+  const external = [];
+  for (const filePath of paths) {
+    if (/^(?:%SystemRoot%|C:\\Windows\\)/i.test(filePath)) {
+      signatures.set(filePath.toLowerCase(), { status: 'TrustedSystemPath', publisher: 'Microsoft Windows' });
+    } else if (external.length < 80) {
+      external.push(filePath);
+    }
+  }
+  if (!external.length) return signatures;
+  const literals = external.map((filePath) => `'${String(filePath).replace(/'/g, "''")}'`).join(',');
+  const result = await runJsonPowerShell(`
+    Import-Module (Join-Path $PSHOME 'Modules\\Microsoft.PowerShell.Security\\Microsoft.PowerShell.Security.psd1') -Force -ErrorAction SilentlyContinue
+    $out = foreach ($path in @(${literals})) {
+      $sig = Get-AuthenticodeSignature -LiteralPath $path -ErrorAction SilentlyContinue
+      $file = Get-Item -LiteralPath $path -ErrorAction SilentlyContinue
+      [PSCustomObject]@{
+        path = $path
+        status = $(if ($sig) { $sig.Status.ToString() } else { 'Unknown' })
+        publisher = $(if ($sig -and $sig.SignerCertificate) { $sig.SignerCertificate.Subject } elseif ($file) { [string]$file.VersionInfo.CompanyName } else { $null })
+      }
+    }
+    $out
+  `, [], 60000);
+  const rows = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : []);
+  for (const row of rows) signatures.set(String(row.path).toLowerCase(), { status: row.status || 'Unknown', publisher: row.publisher || null });
+  return signatures;
 }
 
 module.exports = {
@@ -46,8 +79,15 @@ module.exports = {
       if (!seen.has(key)) { seen.add(key); deduped.push(item); }
     }
     const limit = Number(args.limit || 350);
-    const enriched = [];
-    for (const item of deduped.slice(0, limit)) enriched.push(await enrichStartupItem(item));
+    const selected = deduped.slice(0, limit);
+    ctx.sendProgress?.({ phase: 'signatures', pct: 45, count: 0, total: selected.length, currentActivity: 'Checking startup publishers in one local batch' });
+    const signatureByPath = await getSignatureBatch(selected);
+    const enriched = selected.map((item, index) => {
+      if (index === 0 || (index + 1) % 25 === 0 || index + 1 === selected.length) {
+        ctx.sendProgress?.({ phase: 'analyzing', pct: 45 + Math.round(((index + 1) / Math.max(selected.length, 1)) * 54), count: index + 1, total: selected.length, currentActivity: item.name });
+      }
+      return enrichStartupItem(item, signatureByPath);
+    });
     enriched.sort((a, b) => b.risk.score - a.risk.score || String(a.name).localeCompare(String(b.name)));
     const summary = {
       total: enriched.length,
@@ -62,3 +102,5 @@ module.exports = {
     return { scannedAt: new Date().toISOString(), summary, items: enriched };
   }
 };
+
+module.exports.getSignatureBatch = getSignatureBatch;

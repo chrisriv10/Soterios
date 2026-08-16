@@ -2,7 +2,7 @@
 
 const { findDuplicates, deleteFilesWithPaths } = require('../../core/duplicateFinder');
 
-module.exports = async function duplicateFinder(args = {}) {
+module.exports = async function duplicateFinder(args = {}, onProgress) {
   const { scanPath, deletePaths, paths, ...options } = args;
 
   if (deletePaths && Array.isArray(deletePaths)) {
@@ -11,10 +11,5 @@ module.exports = async function duplicateFinder(args = {}) {
 
   // Support both scanPath (single path) and paths (array) for flexibility
   const roots = scanPath ? [scanPath] : (paths ? (Array.isArray(paths) ? paths : [paths]) : undefined);
-  const result = await findDuplicates({ roots, ...options });
-
-  return {
-    ...result,
-    duplicateGroups: result.duplicateGroups.slice(0, 100)
-  };
+  return findDuplicates({ roots, ...options, onProgress });
 };

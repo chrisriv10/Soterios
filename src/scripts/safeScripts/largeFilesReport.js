@@ -1,46 +1,91 @@
+'use strict';
+
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { captureSnapshot, hasReparseAncestor, isProtectedPath } = require('../../core/pathSafety');
 
-const SKIP_DIRS = new Set(['node_modules', '.git', 'AppData\\Local\\Packages']);
+const SKIP_DIRS = new Set(['node_modules', '.git', '.svn', '$recycle.bin', 'system volume information']);
 
 function shouldSkip(fullPath, name) {
-  if (SKIP_DIRS.has(name)) return true;
-  const lower = fullPath.toLowerCase();
-  return lower.includes('\\appdata\\local\\packages\\') || lower.includes('\\appdata\\local\\microsoft\\windowsapps\\');
+  const lower = String(name || '').toLowerCase();
+  return lower.startsWith('.') || SKIP_DIRS.has(lower)
+    || fullPath.toLowerCase().includes('\\appdata\\local\\packages\\')
+    || fullPath.toLowerCase().includes('\\appdata\\local\\microsoft\\windowsapps\\');
 }
 
 module.exports = async function largeFilesReport(args = {}, onProgress) {
-  const root = args.scanPath || args.path || os.homedir();
-  const minSizeMB = Number(args.minSizeMB || 100);
-  const minBytes = minSizeMB * 1024 * 1024;
-  const maxResults = Number(args.maxResults || 40);
+  const root = path.resolve(args.scanPath || args.path || os.homedir());
+  const thresholdMB = Math.max(1, Number(args.thresholdMB || args.minSizeMB || 100));
+  const thresholdBytes = thresholdMB * 1024 * 1024;
+  const page = Math.max(1, Number(args.page) || 1);
+  const pageSize = Math.max(10, Math.min(500, Number(args.pageSize) || 100));
+  const sortBy = ['size', 'modified', 'path'].includes(args.sortBy) ? args.sortBy : 'size';
+  const sortDirection = args.sortDirection === 'asc' ? 'asc' : 'desc';
+  const maxDepth = Math.max(1, Math.min(64, Number(args.maxDepth) || 32));
+  const started = Date.now();
   const files = [];
+  const statistics = { scannedFiles: 0, scannedDirectories: 0, skipped: 0, errors: 0 };
 
-  // Total file count under an arbitrary directory tree isn't known ahead of
-  // time, so this reports a live count rather than a fabricated percentage.
-  // Throttled since a home-directory walk can easily visit tens of
-  // thousands of entries.
-  let scannedCount = 0;
-  const REPORT_EVERY = 200;
+  if (!fs.existsSync(root) || isProtectedPath(root)) {
+    return { root, thresholdMB, count: 0, files: [], error: 'Choose an accessible, non-system folder.' };
+  }
 
   function walk(current, depth) {
-    if (depth > 8) return;
+    if (depth > maxDepth || hasReparseAncestor(current, root)) { statistics.skipped += 1; return; }
     let entries;
-    try { entries = fs.readdirSync(current, { withFileTypes: true }); } catch (err) { return; }
+    try { entries = fs.readdirSync(current, { withFileTypes: true }); }
+    catch (_) { statistics.errors += 1; return; }
+    statistics.scannedDirectories += 1;
     for (const entry of entries) {
       const fullPath = path.join(current, entry.name);
-      if (entry.isDirectory()) { if (!shouldSkip(fullPath, entry.name)) walk(fullPath, depth + 1); continue; }
-      if (!entry.isFile()) continue;
-      scannedCount++;
-      if (onProgress && scannedCount % REPORT_EVERY === 0) {
-        onProgress({ label: 'Scanning files', count: scannedCount });
+      if (entry.isSymbolicLink()) { statistics.skipped += 1; continue; }
+      if (entry.isDirectory()) {
+        if (shouldSkip(fullPath, entry.name) || isProtectedPath(fullPath)) statistics.skipped += 1;
+        else walk(fullPath, depth + 1);
+        continue;
       }
-      try { const stat = fs.statSync(fullPath); if (stat.size >= minBytes) files.push({ path: fullPath, sizeMB: +(stat.size / 1024 / 1024).toFixed(1), modifiedAt: stat.mtime.toISOString() }); } catch (err) {}
+      if (!entry.isFile()) continue;
+      statistics.scannedFiles += 1;
+      try {
+        const stat = fs.statSync(fullPath);
+        if (stat.size >= thresholdBytes) {
+          files.push({
+            path: fullPath,
+            sizeBytes: stat.size,
+            sizeMB: +(stat.size / 1024 / 1024).toFixed(1),
+            modifiedAt: stat.mtime.toISOString(),
+            snapshot: captureSnapshot(fullPath)
+          });
+        }
+      } catch (_) { statistics.errors += 1; }
+      if (statistics.scannedFiles === 1 || statistics.scannedFiles % 100 === 0) {
+        onProgress?.({ phase: 'indexing', label: 'Scanning files', count: statistics.scannedFiles, currentActivity: fullPath, cancelable: true });
+      }
     }
   }
   walk(root, 0);
-  onProgress?.({ label: 'Scan complete', count: scannedCount });
-  files.sort((a, b) => b.sizeMB - a.sizeMB);
-  return { root, minSizeMB, count: files.length, files: files.slice(0, maxResults) };
+  const direction = sortDirection === 'asc' ? 1 : -1;
+  files.sort((a, b) => {
+    if (sortBy === 'path') return a.path.localeCompare(b.path) * direction;
+    if (sortBy === 'modified') return (new Date(a.modifiedAt) - new Date(b.modifiedAt)) * direction;
+    return (a.sizeBytes - b.sizeBytes) * direction;
+  });
+  const offset = (page - 1) * pageSize;
+  const pagedFiles = files.slice(offset, offset + pageSize);
+  const totalSizeBytes = files.reduce((sum, file) => sum + file.sizeBytes, 0);
+  onProgress?.({ phase: 'complete', label: 'Large file report ready', pct: 100, count: statistics.scannedFiles, cancelable: false });
+  return {
+    root,
+    thresholdMB,
+    count: files.length,
+    totalSizeBytes,
+    page,
+    pageSize,
+    pageCount: Math.max(1, Math.ceil(files.length / pageSize)),
+    sortBy,
+    sortDirection,
+    files: pagedFiles,
+    statistics: { ...statistics, durationMs: Date.now() - started }
+  };
 };

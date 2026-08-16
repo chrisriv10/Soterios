@@ -23,6 +23,7 @@ async function runScript(scriptId, args, onProgress, options = {}) {
   const registry = loadRegistry();
   const entry = registry.find((s) => s.id === scriptId);
   if (!entry) throw new Error(`Unknown script: ${scriptId}`);
+  if (entry.runner && entry.runner !== 'script') throw new Error(`Tool "${scriptId}" is provided by an application service.`);
   const scriptPath = path.join(__dirname, entry.file);
   return runScriptInWorker(scriptPath, args || {}, onProgress, options.signal);
 }

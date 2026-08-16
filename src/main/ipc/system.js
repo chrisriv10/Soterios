@@ -1,5 +1,5 @@
 const { ipcMain, dialog, shell, app, BrowserWindow } = require('electron');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -17,10 +17,19 @@ const {
 } = require('../../security/reportExport');
 const updater = require('../updater');
 const { getTrayHealthSummary } = require('../healthSummary');
-const { MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS, ALLOWED_SCRIPT_IDS, SCHEDULE_PRESETS } = require('../maintenanceScheduler');
+const {
+  MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS, ALLOWED_SCRIPT_IDS,
+  AUTO_CLEAN_SCRIPT_IDS, POLICY_MODES, SCHEDULE_PRESETS
+} = require('../maintenanceScheduler');
 const { loadRegistry } = require('../../scripts/scriptRunner');
 const i18n = require('../../i18n');
 const { requestText } = require('./_shared');
+const {
+  openExternal,
+  openPowerShell,
+  openControlPanel,
+  openWindowsUtility
+} = require('../shellLaunchers');
 const featureFlags = require('../../core/featureFlags');
 const privacyMode = require('../../core/privacyMode');
 
@@ -35,6 +44,11 @@ function register(mainWindow, {
   db,
   eventBus,
   toolRegistry,
+  toolRunManager,
+  maintenanceSafetyVault,
+  persistenceMonitor,
+  extensionBridge,
+  processService,
   maintenanceScheduler,
   firewallManager,
   networkMonitor,
@@ -179,13 +193,32 @@ function register(mainWindow, {
         return { ok: false, error: 'Select at least one maintenance script.' };
       }
     }
+    if (Object.prototype.hasOwnProperty.call(next, 'policies')) {
+      if (!next.policies || typeof next.policies !== 'object' || Array.isArray(next.policies)) {
+        return { ok: false, error: 'policies must be an object.' };
+      }
+      const policies = {};
+      for (const [id, mode] of Object.entries(next.policies)) {
+        if (!ALLOWED_SCRIPT_IDS.has(id) || !POLICY_MODES.has(mode) || mode === 'off') continue;
+        policies[id] = mode === 'auto-clean' && !AUTO_CLEAN_SCRIPT_IDS.has(id) ? 'analyze' : mode;
+      }
+      if (!Object.keys(policies).length) return { ok: false, error: 'Select at least one maintenance policy.' };
+      next.policies = policies;
+      delete next.scriptIds;
+    }
     return { ok: true, data: maintenanceScheduler.saveConfig(next) };
   });
 
   ipcMain.handle('maintenance:getScripts', () => {
     const scripts = loadRegistry()
       .filter((entry) => ALLOWED_SCRIPT_IDS.has(entry.id))
-      .map((entry) => ({ id: entry.id, name: entry.name, description: entry.description }));
+      .map((entry) => ({
+        id: entry.id,
+        name: entry.name,
+        description: entry.description,
+        scheduling: entry.scheduling || ['analyze'],
+        autoCleanAllowed: AUTO_CLEAN_SCRIPT_IDS.has(entry.id)
+      }));
     return { ok: true, data: scripts };
   });
 
@@ -211,6 +244,12 @@ function register(mainWindow, {
       };
     }
     return { ok: true, data: result };
+  });
+
+  ipcMain.handle('maintenance:cancel', () => {
+    if (!maintenanceScheduler) return { ok: false, error: 'Maintenance scheduler unavailable.' };
+    const canceled = maintenanceScheduler.cancel();
+    return canceled ? { ok: true } : { ok: false, error: 'No maintenance run is active.' };
   });
 
   // -- Auto-updater (#69) --
@@ -397,31 +436,19 @@ function register(mainWindow, {
     return result.data;
   });
 
-  // -- Browser Extension Credential Leak Notification --
-  ipcMain.handle('credential-leak:notify', async (_event, payload) => {
-    if (!payload?.password) return { ok: false, error: 'Missing password' };
-    const sha = crypto.createHash('sha1').update(payload.password).digest('hex').toUpperCase();
-    const alert = {
-      level: 'danger',
-      source: 'Browser Extension',
-      title: 'Credential Leak Detected',
-      message: `Password found in ${payload.count} breach${payload.count > 1 ? 'es' : ''} via browser extension`,
-      detail: `SHA-1 prefix: ${sha.slice(0, 5)}... | Breaches: ${payload.count}`,
-      timestamp: new Date().toISOString(),
-      metadata: { source: 'browser-extension', hashPrefix: sha.slice(0, 5), count: payload.count }
-    };
-    db.addAlert(alert);
-    if (eventBus) eventBus.emit('alert:new', alert);
-    return { ok: true };
-  });
-
   // -- Browser Extension (manual "Load unpacked" install) --
   const extInstaller = require('../../extension/installer');
 
   function resolveExtensionSourceDir() {
     return app.isPackaged
-      ? path.join(process.resourcesPath, 'app.asar.unpacked', 'browser-extension')
-      : path.join(app.getAppPath(), 'browser-extension');
+      ? path.join(process.resourcesPath, 'browser-extension')
+      : path.join(app.getAppPath(), 'browser-extension', 'dist', 'chromium');
+  }
+
+  function resolveNativeHostBinary() {
+    return app.isPackaged
+      ? path.join(process.resourcesPath, 'app.asar.unpacked', 'build', 'native-host', 'SoteriosNativeHost.exe')
+      : path.join(app.getAppPath(), 'build', 'native-host', 'SoteriosNativeHost.exe');
   }
 
   function resolveAppPath() {
@@ -432,8 +459,8 @@ function register(mainWindow, {
 
   ipcMain.handle('browserExtension:getState', () => {
     try {
-      const state = extInstaller.getState();
-      return { ok: true, ...state, extDir: extInstaller.getNativeHostDir() };
+      const state = extInstaller.getState({ bundledDir: resolveExtensionSourceDir() });
+      return { ok: true, ...state, bridge: extensionBridge?.getStatus() || { listening: false, connected: false } };
     } catch (e) {
       return { ok: false, error: e.message || String(e) };
     }
@@ -444,6 +471,7 @@ function register(mainWindow, {
       const result = extInstaller.install(browserId, {
         srcDir: resolveExtensionSourceDir(),
         appPath: resolveAppPath(),
+        nativeHostBinary: resolveNativeHostBinary(),
       });
       return result;
     } catch (e) {
@@ -505,41 +533,16 @@ function register(mainWindow, {
     return errorMessage ? { success: false, error: errorMessage } : { success: true };
   });
 
-   ipcMain.handle('shell:openExternal', (_event, url) => {
-     if (typeof url !== 'string' || (!/^https?:\/\//i.test(url) && !/^ms-settings:/i.test(url))) {
-       return { success: false, error: 'Invalid URL.' };
-     }
-     shell.openExternal(url);
-     return { success: true };
-   });
+  ipcMain.handle('shell:openExternal', (_event, url) => openExternal(shell, url));
 
-   ipcMain.handle('shell:openPowerShell', () => {
-     const child = spawn('powershell.exe', ['-NoExit'], {
-       detached: true,
-       stdio: 'ignore',
-       windowsHide: false,
-     });
-     child.unref();
-     return { success: true };
-   });
+  ipcMain.handle('shell:openPowerShell', (_event, context) => openPowerShell(spawn, context));
 
-   // Control Panel applets (e.g. "control userpasswords2" or
-   // "control /name Microsoft.BitLockerDriveEncryption") are not URLs, so
-   // they cannot go through shell.openExternal. Spawn control.exe directly.
-   ipcMain.handle('shell:openControlPanel', (_event, command) => {
-     if (typeof command !== 'string'
-       || !/^control [A-Za-z0-9._:/\\-]+( [A-Za-z0-9._:/\\-]+)*$/.test(command)) {
-       return { success: false, error: 'Invalid control panel command.' };
-     }
-     const args = command.replace(/^control\s+/i, '').split(/\s+/).filter(Boolean);
-     const child = spawn('control.exe', args, {
-       detached: true,
-       stdio: 'ignore',
-       windowsHide: false,
-     });
-     child.unref();
-     return { success: true };
-   });
+  // Control Panel applets (e.g. "control userpasswords2" or
+  // "control /name Microsoft.BitLockerDriveEncryption") are not URLs, so
+  // they cannot go through shell.openExternal. Spawn control.exe directly.
+  ipcMain.handle('shell:openControlPanel', (_event, command) => openControlPanel(spawn, command));
+
+  ipcMain.handle('shell:openWindowsUtility', (_event, utility) => openWindowsUtility(spawn, utility));
 
   // -- Emergency Lockdown --
   ipcMain.handle('lockdown:getStatus', async () => {
@@ -684,12 +687,7 @@ function register(mainWindow, {
     const result = await toolRegistry.run(toolId, args || {}, {
       toolRegistry,
       db,
-      log: (level, message, meta) => {
-        // Log to main process logger if available
-        if (typeof logLine === 'function') {
-          logLine(level, message, meta);
-        }
-      },
+      processService,
       sendProgress: (payload) => {
         if (event && event.sender && !event.sender.isDestroyed()) {
           event.sender.send(`tools:progress:${toolId}`, payload);
@@ -697,6 +695,107 @@ function register(mainWindow, {
       }
     });
     return result;
+  });
+
+  if (toolRunManager) {
+    const broadcast = (channel, payload) => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) win.webContents.send(channel, payload);
+      }
+    };
+    toolRunManager.on('progress', (payload) => {
+      broadcast('tools:progress', payload);
+      broadcast(`tools:progress:${payload.toolId}`, payload);
+    });
+    toolRunManager.on('complete', (payload) => {
+      broadcast('tools:complete', payload);
+      broadcast(`tools:complete:${payload.toolId}`, payload);
+    });
+  }
+
+  ipcMain.handle('tools:start', (_event, toolId, args, options) => {
+    if (!toolRunManager) return { ok: false, error: 'Tool run manager unavailable' };
+    try {
+      return { ok: true, data: toolRunManager.start(toolId, args || {}, options || {}) };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('tools:cancel', (_event, runId) => {
+    if (!toolRunManager) return { ok: false, error: 'Tool run manager unavailable' };
+    const canceled = toolRunManager.cancel(String(runId || ''));
+    return canceled ? { ok: true } : { ok: false, error: 'Run is no longer cancelable.' };
+  });
+
+  ipcMain.handle('tools:getActive', () => ({
+    ok: true,
+    data: toolRunManager ? toolRunManager.getActive() : []
+  }));
+
+  ipcMain.handle('tools:getHistory', (_event, limit, toolId) => ({
+    ok: true,
+    data: toolRunManager ? toolRunManager.getHistory(limit, toolId || null) : []
+  }));
+
+  // -- Maintenance Safety Vault --
+  ipcMain.handle('vault:list', () => {
+    if (!maintenanceSafetyVault) return { ok: false, error: 'Safety Vault unavailable' };
+    return { ok: true, data: maintenanceSafetyVault.list() };
+  });
+
+  ipcMain.handle('vault:stage', async (event, items, options) => {
+    if (!maintenanceSafetyVault) return { ok: false, error: 'Safety Vault unavailable' };
+    try {
+      const result = await maintenanceSafetyVault.stage(items, {
+        ...(options || {}),
+        onProgress: (payload) => {
+          if (!event.sender.isDestroyed()) event.sender.send('vault:progress', payload);
+        }
+      });
+      return { ok: true, data: result };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('vault:restore', async (_event, id) => {
+    if (!maintenanceSafetyVault) return { ok: false, error: 'Safety Vault unavailable' };
+    try { return { ok: true, data: await maintenanceSafetyVault.restore(String(id || '')) }; }
+    catch (err) { return { ok: false, error: err.message }; }
+  });
+
+  ipcMain.handle('vault:purge', async (_event, id) => {
+    if (!maintenanceSafetyVault) return { ok: false, error: 'Safety Vault unavailable' };
+    try { return { ok: true, data: await maintenanceSafetyVault.purge(String(id || '')) }; }
+    catch (err) { return { ok: false, error: err.message }; }
+  });
+
+  // -- Persistence Change Monitor --
+  ipcMain.handle('persistence:getStatus', () => {
+    if (!persistenceMonitor) return { ok: false, error: 'Persistence Monitor unavailable' };
+    return { ok: true, data: persistenceMonitor.getStatus() };
+  });
+
+  ipcMain.handle('persistence:scan', async (event) => {
+    if (!persistenceMonitor) return { ok: false, error: 'Persistence Monitor unavailable' };
+    try {
+      const data = await persistenceMonitor.scan({
+        source: 'manual',
+        onProgress: (payload) => {
+          if (!event.sender.isDestroyed()) event.sender.send('persistence:progress', payload);
+        }
+      });
+      return { ok: true, data };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('persistence:approve', (_event, options) => {
+    if (!persistenceMonitor) return { ok: false, error: 'Persistence Monitor unavailable' };
+    try { return { ok: true, data: persistenceMonitor.approve(options || {}) }; }
+    catch (err) { return { ok: false, error: err.message }; }
   });
 
   // -- Startup Items --
@@ -719,17 +818,73 @@ function register(mainWindow, {
 
   ipcMain.handle('startup:toggle', async (_event, item, enable) => {
     if (!item || typeof item !== 'object') return { ok: false, error: 'Invalid item' };
+    const backupKey = 'tools.disabledStartupItems.v1';
+    const backups = db.getSetting(backupKey, {});
+    const runFile = (file, args) => new Promise((resolve, reject) => {
+      execFile(file, args, { windowsHide: true, timeout: 15000 }, (error, stdout, stderr) => {
+        if (error) return reject(new Error(String(stderr || error.message).trim()));
+        resolve(stdout);
+      });
+    });
     try {
-      const { execSync } = require('child_process');
-      if (enable) {
-        execSync(`reg add "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "${item.name}" /t REG_SZ /d "${item.command}" /f`, { stdio: 'ignore' });
+      if (item.source === 'registry') {
+        const allowed = new Set([
+          'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run',
+          'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce',
+          'HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run',
+          'HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce',
+          'HKLM\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run',
+          'HKLM\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\RunOnce'
+        ]);
+        const nativeKey = String(item.location || '').replace(/^HKCU:\\/, 'HKCU\\').replace(/^HKLM:\\/, 'HKLM\\');
+        const valueName = String(item.valueName || item.name || '');
+        if (!allowed.has(nativeKey) || !valueName || /[\r\n]/.test(valueName)) throw new Error('Unsupported startup registry value.');
+        if (enable) {
+          const backup = backups[item.id];
+          if (!backup || backup.source !== 'registry') throw new Error('The original registry value backup was not found.');
+          await runFile('reg.exe', ['add', nativeKey, '/v', valueName, '/t', backup.registryType === 'ExpandString' ? 'REG_EXPAND_SZ' : 'REG_SZ', '/d', backup.command, '/f']);
+          delete backups[item.id];
+        } else {
+          const current = await runFile('reg.exe', ['query', nativeKey, '/v', valueName]);
+          if (item.command && !String(current).includes(item.command)) throw new Error('The startup value changed after it was inspected. Refresh and try again.');
+          backups[item.id] = { ...item, disabledAt: new Date().toISOString(), source: 'registry' };
+          await runFile('reg.exe', ['delete', nativeKey, '/v', valueName, '/f']);
+        }
+      } else if (item.source === 'startup-folder') {
+        const { isInside } = require('../../core/pathSafety');
+        const officialRoots = [
+          path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup'),
+          path.join(process.env.ProgramData || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
+        ].filter(Boolean).map((entry) => path.resolve(entry));
+        if (enable) {
+          const backup = backups[item.id];
+          if (!backup || backup.source !== 'startup-folder' || !fs.existsSync(backup.disabledPath)) throw new Error('The original Startup-folder backup was not found.');
+          if (fs.existsSync(backup.startupPath)) throw new Error('A file already exists at the original Startup-folder location.');
+          fs.renameSync(backup.disabledPath, backup.startupPath);
+          delete backups[item.id];
+        } else {
+          const sourcePath = path.resolve(item.startupPath || '');
+          if (!officialRoots.some((root) => isInside(sourcePath, root))) throw new Error('Unsupported Startup-folder entry.');
+          const disabledRoot = path.join(app.getPath('userData'), 'DisabledStartupItems');
+          fs.mkdirSync(disabledRoot, { recursive: true });
+          const disabledPath = path.join(disabledRoot, `${item.id}-${path.basename(sourcePath)}`);
+          if (fs.existsSync(disabledPath)) throw new Error('A backup for this startup item already exists.');
+          fs.renameSync(sourcePath, disabledPath);
+          backups[item.id] = { ...item, disabledPath, disabledAt: new Date().toISOString(), source: 'startup-folder' };
+        }
       } else {
-        execSync(`reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "${item.name}" /f`, { stdio: 'ignore' });
+        throw new Error('Unsupported startup item source.');
       }
-      return { ok: true };
+      db.setSetting(backupKey, backups);
+      return { ok: true, enabled: !!enable };
     } catch (err) {
       return { ok: false, error: err.message };
     }
+  });
+
+  ipcMain.handle('startup:listDisabled', () => {
+    const backups = db.getSetting('tools.disabledStartupItems.v1', {});
+    return Object.values(backups).map((item) => ({ ...item, enabled: false }));
   });
 }
 

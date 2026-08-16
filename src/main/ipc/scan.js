@@ -120,7 +120,7 @@ function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputation
     definitionState.currentScan = null;
     definitionState.progress = 100;
     definitionState.phase = status;
-    definitionState.message = result.success ? 'Signatures updated' : 'Signature update failed';
+    definitionState.message = result.success ? 'Definitions updated' : 'Definition update failed';
     definitionState.lastResult = {
       scanType: 'definitions',
       status,

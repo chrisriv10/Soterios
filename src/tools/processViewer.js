@@ -209,6 +209,12 @@ module.exports = {
   category: 'System', icon: 'list',
   processSignals,
   run: async (args, context) => {
+    // ProcessService is the canonical collector. Keep the legacy sampler
+    // below only as a compatibility fallback for isolated tests and older
+    // integrations that construct this tool without application services.
+    if (context && context.processService && typeof context.processService.getSnapshot === 'function') {
+      return context.processService.getSnapshot();
+    }
     const db = context && context.db;
     // Get all trusted hashes once (fast database lookup)
     const trustedHashes = new Set();
