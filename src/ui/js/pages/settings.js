@@ -115,6 +115,15 @@ window.Pages.settings = {
         </div>
 
         <div class="card">
+          <div class="panel-title" style="margin-bottom:4px;">${escapeHtml(t('settings.performanceMode.title'))}</div>
+          <div class="toggle-desc" style="margin-bottom:16px;">${escapeHtml(t('settings.performanceMode.desc'))}</div>
+          <div class="grid grid-3" id="performanceModeGrid">
+            <div class="toggle-desc">${escapeHtml(t('common.loading'))}</div>
+          </div>
+          <div id="performanceModeStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
+        </div>
+
+        <div class="card">
           <div class="panel-title" style="margin-bottom:16px;">Privacy, UI & Connectivity</div>
 
           <div class="toggle-row">
@@ -504,6 +513,53 @@ window.Pages.settings = {
     container.querySelector('#geoLookupToggle').addEventListener('change', (event) => saveFeature('geoLookup', event.target.checked, event.target));
     container.querySelector('#networkPerimeterMapToggle').addEventListener('change', (event) => saveFeature('networkPerimeterMap', event.target.checked, event.target));
 
+    const PERFORMANCE_MODE_ORDER = ['balanced', 'gaming', 'quiet'];
+
+    function performanceModeCardHtml(modeId, activeModeId, busy) {
+      const isActive = modeId === activeModeId;
+      const label = escapeHtml(t(`settings.performanceMode.${modeId}.name`));
+      const desc = escapeHtml(t(`settings.performanceMode.${modeId}.desc`));
+      const btnLabel = busy === modeId
+        ? escapeHtml(t('settings.performanceMode.applying'))
+        : (isActive ? escapeHtml(t('settings.performanceMode.active')) : escapeHtml(t('settings.performanceMode.apply')));
+      return `<div class="card" style="display:flex; flex-direction:column; gap:10px; ${isActive ? 'border-color:var(--accent-primary);' : ''}">
+        <div style="font-weight:600;">${label}</div>
+        <div class="toggle-desc" style="flex:1;">${desc}</div>
+        <button class="btn btn-sm ${isActive ? '' : 'btn-primary'}" data-performance-mode="${escapeHtml(modeId)}" ${isActive || busy ? 'disabled' : ''}>${btnLabel}</button>
+      </div>`;
+    }
+
+    async function renderPerformanceModes(container, busyModeId) {
+      const grid = container.querySelector('#performanceModeGrid');
+      const status = container.querySelector('#performanceModeStatus');
+      if (!grid) return;
+      try {
+        const result = await window.api.invoke('performance:getMode');
+        if (!result || !result.ok) throw new Error(result?.error || t('settings.performanceMode.loadError'));
+        grid.innerHTML = PERFORMANCE_MODE_ORDER.map((id) => performanceModeCardHtml(id, result.modeId, busyModeId)).join('');
+        if (status) status.textContent = result.modeId ? '' : t('settings.performanceMode.unknown');
+      } catch (err) {
+        grid.innerHTML = `<div class="toggle-desc">${escapeHtml(t('settings.performanceMode.loadError'))}</div>`;
+        if (status) status.textContent = err.message || '';
+      }
+    }
+
+    container.querySelector('#performanceModeGrid').addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-performance-mode]');
+      if (!btn) return;
+      const modeId = btn.getAttribute('data-performance-mode');
+      await renderPerformanceModes(container, modeId);
+      try {
+        const result = await window.api.invoke('performance:setMode', modeId);
+        if (!result || !result.ok) throw new Error(result?.error || '');
+        await renderPerformanceModes(container);
+      } catch (err) {
+        const status = container.querySelector('#performanceModeStatus');
+        if (status) status.textContent = t('settings.performanceMode.error', { error: err.message || '' });
+        await renderPerformanceModes(container);
+      }
+    });
+
     const privacyModeToggle = container.querySelector('#privacyModeToggle');
     const privacyModeStatus = container.querySelector('#privacyModeStatus');
 
@@ -716,6 +772,7 @@ body.innerHTML = `
       }
     }
     renderBrowserExtensionSection(container);
+    renderPerformanceModes(container);
     container.querySelector('#emergencyLockdownToggle').addEventListener('change', async (event) => {
       const checked = event.target.checked;
       event.target.disabled = true;

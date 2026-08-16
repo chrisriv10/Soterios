@@ -21,6 +21,7 @@ const {
   MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS, ALLOWED_SCRIPT_IDS,
   AUTO_CLEAN_SCRIPT_IDS, POLICY_MODES, SCHEDULE_PRESETS
 } = require('../maintenanceScheduler');
+const performanceModes = require('../performanceModes');
 const { loadRegistry } = require('../../scripts/scriptRunner');
 const i18n = require('../../i18n');
 const { requestText } = require('./_shared');
@@ -250,6 +251,18 @@ function register(mainWindow, {
     if (!maintenanceScheduler) return { ok: false, error: 'Maintenance scheduler unavailable.' };
     const canceled = maintenanceScheduler.cancel();
     return canceled ? { ok: true } : { ok: false, error: 'No maintenance run is active.' };
+  });
+
+  // -- Device Optimization Modes (power plan switching) --
+  ipcMain.handle('performance:getMode', async () => {
+    return performanceModes.getActiveMode();
+  });
+
+  ipcMain.handle('performance:setMode', async (_event, modeId) => {
+    if (typeof modeId !== 'string' || !performanceModes.MODES[modeId]) {
+      return { ok: false, error: 'Unknown optimization mode.' };
+    }
+    return performanceModes.setMode(modeId);
   });
 
   // -- Auto-updater (#69) --
