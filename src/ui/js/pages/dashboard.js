@@ -786,7 +786,18 @@ async function loadWarnings() {
       }
     }
 
-    if (btnRefreshWarnings) btnRefreshWarnings.addEventListener('click', () => { invalidateDashboardCache(); loadWarnings(); });
+    if (btnRefreshWarnings) btnRefreshWarnings.addEventListener('click', async () => {
+      const originalLabel = btnRefreshWarnings.textContent;
+      btnRefreshWarnings.disabled = true;
+      btnRefreshWarnings.textContent = t('common.loading');
+      try {
+        invalidateDashboardCache();
+        await loadWarnings();
+      } finally {
+        btnRefreshWarnings.disabled = false;
+        btnRefreshWarnings.textContent = originalLabel;
+      }
+    });
     const btnRefreshDashboard = container.querySelector('#btnRefreshDashboard');
     if (btnRefreshDashboard) {
       btnRefreshDashboard.addEventListener('click', async () => {

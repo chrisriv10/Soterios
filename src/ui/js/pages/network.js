@@ -1290,7 +1290,17 @@ if (content) this.paintHistoryChart(content).catch(() => {});
           `;
         }
         alertsPanelMount.replaceWith(this._alertsPanelEl);
-        this.renderAlertHits(content).catch(() => {});
+        this.renderAlertHits(content).catch((err) => {
+          console.error('Failed to render network alert hits:', err);
+          if (this._alertsPanelEl) {
+            this._alertsPanelEl.style.display = 'block';
+            const listEl = this._alertsPanelEl.querySelector('#networkAlertsList');
+            if (listEl) {
+              listEl.className = 'empty-state';
+              listEl.textContent = t('network.alertsLoadFailed');
+            }
+          }
+        });
       }
 
       if (prevScrollTop) {
@@ -1788,7 +1798,8 @@ if (content) this.paintHistoryChart(content).catch(() => {});
     };
   },
 
-  async renderAlertHits(content) {
+async renderAlertHits(content) {
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const list = content.querySelector('#networkAlertsList');
     if (!list) return;
     let status = { recentHits: [] };

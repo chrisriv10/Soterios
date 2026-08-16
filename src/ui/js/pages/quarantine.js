@@ -2,20 +2,6 @@ function confirmAction(message) {
   return window.confirm(message);
 }
 
-function formatBytes(bytes) {
-  if (bytes === null || bytes === undefined || isNaN(bytes)) return '—';
-  if (bytes < 1024) return bytes + ' B';
-  const units = ['KB', 'MB', 'GB', 'TB'];
-  let v = bytes;
-  for (let i = 0; i < units.length; i++) {
-    v = v / 1024;
-    if (v < 1024 || i === units.length - 1) {
-      return v.toFixed(v < 10 ? 1 : 0) + ' ' + units[i];
-    }
-  }
-  return '—';
-}
-
 async function copyText(value) {
   if (!value) return false;
   try {

@@ -73,7 +73,7 @@ describe('detailed scan progress UI', () => {
 
   it('stops terminal-state animations and lets results be dismissed', () => {
     assert.match(styles, /\.scan-indicator--done \.scan-indicator-dot[^}]*animation: none/);
-    assert.match(styles, /\.scan-progress-panel--result \.scan-progress-track \.stat-bar-fill::after[^}]*animation: none/);
+    assert.match(styles, /\.scan-progress-panel--result \.scan-progress-track::before[^}]*animation: none/);
     assert.match(scannerSource, /id="btnDismissScanResult"/);
     assert.match(scannerSource, /invoke\('scan:dismissResult'\)/);
     assert.match(scannerSource, /scanCard\.style\.display = 'none'/);

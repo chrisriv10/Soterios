@@ -38,6 +38,8 @@ Online reputation is off by default and runs only when the user clicks **Check h
 
 The current driverless release exposes module and thread enumeration and handle counts. Named-handle search, Windows Wait Chain Traversal, and ETW deep-inspection capture remain capability-gated and are reported as unavailable; Soterios never fabricates partial results. No quarantine, kill-tree, permanent network blocking, kernel driver, or automatic containment is included.
 
+System network throughput comes from Windows interface counters, while per-process network fallback shows active connection counts until ETW byte attribution is enabled. GPU percentages come from Windows GPU Engine counters and may take several seconds to warm up. The inexpensive per-process storage column is deliberately labeled **Process I/O** because Windows process I/O counters can also include pipes and device traffic; Soterios does not mislabel that value as disk-only throughput.
+
 See [Process Inspector protocol](../PROCESS_INSPECTOR_PROTOCOL.md) and [security and privacy model](../PROCESS_INSPECTOR_SECURITY.md).
 
 ---

@@ -256,8 +256,8 @@ window.Pages.processes = {
     if (!header) return;
     header.className = `pi-column-header ${this._mode}`;
     header.innerHTML = this._mode === 'technical'
-      ? `<span>${this.esc(this.t('processes.columnProcess'))}</span><span>PID</span><span>${this.esc(this.t('processes.columnRisk'))}</span><span>CPU</span><span>${this.esc(this.t('processes.columnMemory'))}</span><span>I/O</span><span>${this.esc(this.t('processes.columnNetwork'))}</span><span>${this.esc(this.t('processes.columnUser'))}</span>`
-      : `<span>${this.esc(this.t('processes.columnApplication'))}</span><span>${this.esc(this.t('processes.columnRisk'))}</span><span>CPU</span><span>${this.esc(this.t('processes.columnMemory'))}</span><span>${this.esc(this.t('processes.columnDisk'))}</span><span>${this.esc(this.t('processes.columnActions'))}</span>`;
+      ? `<span>${this.esc(this.t('processes.columnProcess'))}</span><span>PID</span><span>${this.esc(this.t('processes.columnRisk'))}</span><span>CPU</span><span>${this.esc(this.t('processes.columnMemory'))}</span><span>I/O</span><span>${this.esc(this.t('processes.columnNetwork'))}</span><span>GPU</span>`
+      : `<span>${this.esc(this.t('processes.columnApplication'))}</span><span>${this.esc(this.t('processes.columnRisk'))}</span><span>CPU</span><span>${this.esc(this.t('processes.columnMemory'))}</span><span>${this.esc(this.t('processes.columnIo'))}</span><span>${this.esc(this.t('processes.columnActions'))}</span>`;
   },
 
   _scheduleRender(resetScroll) {
@@ -381,11 +381,14 @@ window.Pages.processes = {
     const key = this.keyOf(proc);
     const io = proc.ioReadBytesPerSec == null || proc.ioWriteBytesPerSec == null ? null : proc.ioReadBytesPerSec + proc.ioWriteBytesPerSec;
     const network = proc.networkReceiveBytesPerSec == null || proc.networkSendBytesPerSec == null ? null : proc.networkReceiveBytesPerSec + proc.networkSendBytesPerSec;
+    const networkText = network == null
+      ? (proc.networkConnectionCount == null ? this.t('processes.notAvailable') : this.t('processes.connectionCount', { count: proc.networkConnectionCount }))
+      : this.formatRate(network);
     return `<div class="pi-row technical ${this._selectedKey === key ? 'selected' : ''}" role="row" data-key="${this.esc(key)}" data-index="${index}" tabindex="-1">
       <div class="pi-process-cell technical-name" style="--tree-depth:${Number(proc.depth || 0)}"><button class="pi-tree-toggle" data-collapse="${this.esc(key)}" ${proc.hasChildren ? '' : 'disabled'} aria-label="${this.esc(this.t('processes.toggleTree'))}">${proc.hasChildren ? (this._collapsed.has(key) ? '›' : '⌄') : ''}</button><img class="pi-icon" data-exe="${this.esc(proc.path || '')}" alt=""><span><strong>${this.esc(proc.name || 'unknown')}</strong><small title="${this.esc(proc.path || '')}">${this.esc(proc.path || this.t('processes.notAvailable'))}</small></span></div>
       <div class="pi-metric">${this.esc(proc.pid)}</div><div>${this._riskPill(proc.risk)}</div>
       <div class="pi-metric">${this.esc(this.formatPercent(proc.cpu))}</div><div class="pi-metric">${this.esc(this.formatBytes(proc.workingSetBytes))}</div>
-      <div class="pi-metric">${this.esc(this.formatRate(io))}</div><div class="pi-metric">${this.esc(this.formatRate(network))}</div><div class="pi-user" title="${this.esc(proc.user || '')}">${this.esc(proc.user || this.t('processes.notAvailable'))}</div>
+      <div class="pi-metric">${this.esc(this.formatRate(io))}</div><div class="pi-metric">${this.esc(networkText)}</div><div class="pi-metric">${this.esc(this.formatPercent(proc.gpuPercent))}</div>
     </div>`;
   },
 

@@ -7,7 +7,7 @@
     },
     {
       "id": "large-files-report", "name": "Large Files", "description": "Find, sort, reveal, and vault large files without a hidden result limit.",
-      "file": "safeScripts/largeFilesReport.js", "runner": "script", "category": "cleanup-storage", "impact": "low", "icon": "file-search",
+      "file": "safeScripts/largeFilesReport.js", "runner": "script", "category": "cleanup-storage", "impact": "low", "icon": "file-weight",
       "inputs": ["scanPath", "thresholdMB", "page", "pageSize"], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
     },
     {
@@ -17,7 +17,7 @@
     },
     {
       "id": "disk-space-report", "name": "Disk Space", "description": "Review friendly volume health, filesystem, drive type, and free-space thresholds.",
-      "file": "safeScripts/diskSpaceReport.js", "runner": "script", "category": "cleanup-storage", "impact": "none", "icon": "hard-drive",
+      "file": "safeScripts/diskSpaceReport.js", "runner": "script", "category": "cleanup-storage", "impact": "low", "icon": "hard-drive",
       "inputs": [], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
     },
     {
@@ -32,22 +32,22 @@
     },
     {
       "id": "windows-services-report", "name": "Windows Services", "description": "Inspect auto-start services, publishers, signatures, accounts, paths, and exact risk reasons (read-only).",
-      "file": "safeScripts/windowsServicesReport.js", "runner": "script", "category": "system-integrity", "impact": "none", "icon": "settings-2",
+      "file": "safeScripts/windowsServicesReport.js", "runner": "script", "category": "system-integrity", "impact": "low", "icon": "settings-2",
       "inputs": [], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
     },
     {
       "id": "scheduled-tasks-report", "name": "Scheduled Tasks", "description": "Review friendly task labels, raw identifiers, executable and COM actions, triggers, signatures, and risk reasons (read-only).",
-      "file": "safeScripts/scheduledTasksReport.js", "runner": "script", "category": "system-integrity", "impact": "none", "icon": "calendar-clock",
+      "file": "safeScripts/scheduledTasksReport.js", "runner": "script", "category": "system-integrity", "impact": "low", "icon": "calendar-clock",
       "inputs": [], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
     },
     {
       "id": "hosts-file-check", "name": "Hosts File Integrity", "description": "Verify hosts metadata, permissions, formatting, redirects, duplicates, and approved baseline state (read-only).",
-      "file": "safeScripts/hostsFileCheck.js", "runner": "script", "category": "system-integrity", "impact": "none", "icon": "shield-check",
+      "file": "safeScripts/hostsFileCheck.js", "runner": "script", "category": "system-integrity", "impact": "low", "icon": "shield-check",
       "inputs": [], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
     },
     {
       "id": "persistence-change-monitor", "name": "Persistence Change Monitor", "description": "Detect new or modified startup mechanisms against a baseline you explicitly approve.",
-      "runner": "service", "category": "system-integrity", "impact": "none", "icon": "radar",
+      "runner": "service", "category": "system-integrity", "impact": "low", "icon": "radar",
       "inputs": [], "progress": true, "cancellation": false, "scheduling": ["startup", "daily"], "visible": true
     },
     {
@@ -62,14 +62,14 @@
     },
     {
       "id": "file-shredder", "name": "File Shredder", "description": "Irreversibly delete selected files with storage-aware warnings and protected-path enforcement.",
-      "file": "safeScripts/fileShredder.js", "runner": "script", "category": "privacy-recovery", "impact": "critical", "icon": "file-x-2",
+      "file": "safeScripts/fileShredder.js", "runner": "script", "category": "privacy-recovery", "impact": "high", "icon": "file-x-2",
       "inputs": ["paths", "passes", "confirmation"], "progress": true, "cancellation": true, "scheduling": [], "visible": true
     },
 
-    { "id": "network-report", "name": "Network Report", "description": "Reports network interfaces and connections.", "file": "safeScripts/networkReport.js", "runner": "script", "category": "system-integrity", "impact": "none", "visible": false },
-    { "id": "delete-files", "name": "Delete Selected Files", "description": "Legacy direct deletion action.", "file": "safeScripts/deleteFiles.js", "runner": "script", "category": "internal", "impact": "critical", "visible": false },
-    { "id": "clear-browser-cache", "name": "Clear Browser Cache", "description": "Internal browser cache cleanup action.", "file": "safeScripts/clearBrowserCache.js", "runner": "script", "category": "internal", "impact": "medium", "visible": false },
-    { "id": "launch-uninstaller", "name": "Launch Uninstaller", "description": "Internal native uninstaller action.", "file": "safeScripts/launchUninstaller.js", "runner": "script", "category": "internal", "impact": "medium", "visible": false },
-    { "id": "remove-leftovers", "name": "Remove Leftover Folders", "description": "Legacy leftover removal action.", "file": "safeScripts/removeLeftovers.js", "runner": "script", "category": "internal", "impact": "critical", "visible": false }
+    { "id": "network-report", "name": "Network Report", "description": "Reports network interfaces and connections.", "file": "safeScripts/networkReport.js", "runner": "script", "category": "system-integrity", "impact": "low", "icon": "radio", "visible": false },
+    { "id": "delete-files", "name": "Delete Selected Files", "description": "Legacy direct deletion action.", "file": "safeScripts/deleteFiles.js", "runner": "script", "category": "internal", "impact": "high", "icon": "trash-2", "visible": false },
+    { "id": "clear-browser-cache", "name": "Clear Browser Cache", "description": "Internal browser cache cleanup action.", "file": "safeScripts/clearBrowserCache.js", "runner": "script", "category": "internal", "impact": "medium", "icon": "globe-2", "visible": false },
+    { "id": "launch-uninstaller", "name": "Launch Uninstaller", "description": "Internal native uninstaller action.", "file": "safeScripts/launchUninstaller.js", "runner": "script", "category": "internal", "impact": "medium", "icon": "package-x", "visible": false },
+    { "id": "remove-leftovers", "name": "Remove Leftover Folders", "description": "Legacy leftover removal action.", "file": "safeScripts/removeLeftovers.js", "runner": "script", "category": "internal", "impact": "high", "icon": "folder-minus", "visible": false }
   ]
 }

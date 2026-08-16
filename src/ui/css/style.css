@@ -1534,6 +1534,18 @@ body {
   box-shadow: 0 6px 16px rgba(34,197,94,0.35), inset 0 1px 0 rgba(255,255,255,0.3);
 }
 
+.btn-danger {
+  background: linear-gradient(135deg, var(--accent-danger), var(--accent-danger));
+  color: #fff;
+  border: none;
+  box-shadow: 0 4px 12px var(--accent-danger-glow), inset 0 1px 0 rgba(255,255,255,0.2);
+}
+
+.btn-danger:hover {
+  background: linear-gradient(135deg, var(--accent-danger), var(--accent-danger));
+  box-shadow: 0 6px 20px var(--accent-danger-glow), inset 0 1px 0 rgba(255,255,255,0.3);
+}
+
 .btn-sm { padding: 6px 12px; font-size: 0.85rem; }
 
 /* Log/output styling */
@@ -1789,6 +1801,7 @@ body {
 
 /* Progress bar */
 .stat-bar-track { 
+  position: relative;
   background: var(--bg-surface-hover); 
   border-radius: 4px; 
   overflow: hidden; 
@@ -1799,23 +1812,22 @@ body {
   background: linear-gradient(90deg, var(--accent-primary), var(--accent-primary-glow));
   transition: width 0.3s ease; 
   border-radius: 4px; 
-  position: relative;
 }
 
-.stat-bar-fill::after {
+.stat-bar-track::before {
   content: '';
   position: absolute;
   top: 0;
-  left: 0;
-  right: 0;
   bottom: 0;
+  left: -40%;
+  width: 40%;
   background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-  animation: progressShine 2s linear infinite;
+  animation: progressShineTrack 2s linear infinite;
 }
 
-@keyframes progressShine {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+@keyframes progressShineTrack {
+  0% { left: -40%; }
+  100% { left: 100%; }
 }
 
 /* Passwords page */
@@ -1827,23 +1839,22 @@ body {
   overflow: hidden; 
   margin-top: 6px; 
   box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+  position: relative;
+}
+.strength-meter-track::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -40%;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  animation: progressShineTrack 2s linear infinite;
 }
 .strength-meter-fill { 
   height: 100%; 
   border-radius: 3px; 
   transition: width 0.4s ease, background 0.4s ease; 
-  position: relative;
-}
-
-.strength-meter-fill::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-  animation: progressShine 1.5s linear infinite;
 }
 .issue-list { margin: 8px 0 0; padding-left: 18px; font-size: 0.82rem; color: var(--text-muted); }
 .issue-list li { margin-bottom: 2px; }
@@ -1930,7 +1941,7 @@ body {
 .scan-progress-panel--result[data-result="failed"] #scanProgressFill { background: var(--danger); }
 .scan-progress-panel--result[data-result="canceled"] { border-color: rgba(234,179,8,0.42); }
 .scan-progress-panel--result[data-result="canceled"] #scanProgressFill { background: var(--warn); }
-.scan-progress-panel--result .scan-progress-track .stat-bar-fill::after { animation: none; opacity: 0; }
+.scan-progress-panel--result .scan-progress-track::before { animation: none; opacity: 0; }
 
 @media (max-width: 1000px) {
   .scan-progress-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2327,8 +2338,18 @@ body {
 }
 
 .ai-thinking {
-  color: var(--text-muted);
+  color: transparent;
+  background: linear-gradient(90deg, var(--text-muted) 0%, var(--text-main) 50%, var(--text-muted) 100%);
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
   font-style: italic;
+  animation: thinkingShine 1.6s linear infinite;
+}
+
+@keyframes thinkingShine {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 .ai-bubble code {
@@ -2891,6 +2912,7 @@ body {
 }
 
 .maintenance-state.canceled,
+.tag-high,
 .tag-critical {
   color: var(--danger);
   background: var(--danger-glow);
@@ -2906,6 +2928,8 @@ body {
 .maintenance-workspace-nav {
   margin-bottom: 14px;
 }
+
+.maintenance-workspace-nav .btn { white-space: nowrap; }
 
 .maintenance-workspace-header {
   padding-bottom: 18px;

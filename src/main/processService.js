@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const util = require('util');
 const { EventEmitter } = require('events');
+const si = require('systeminformation');
 const { JavaScriptProcessCollector } = require('./processCollector');
 const { NativeProcessClient } = require('./nativeProcessClient');
 const { assessProcess } = require('../security/processRisk');
@@ -80,7 +81,7 @@ function fingerprint(proc) {
     proc.commitBytes, proc.ioReadBytesPerSec, proc.ioWriteBytesPerSec,
     proc.diskReadBytesPerSec, proc.diskWriteBytesPerSec,
     proc.networkReceiveBytesPerSec, proc.networkSendBytesPerSec,
-    proc.gpuPercent, proc.handles, proc.threads, proc.priority,
+    proc.networkConnectionCount, proc.gpuPercent, proc.handles, proc.threads, proc.priority,
     proc.efficiencyMode, proc.risk && proc.risk.score, proc.trusted,
   ]);
 }
@@ -113,6 +114,22 @@ class ProcessService extends EventEmitter {
     this._knownHashesByPath = new Map();
     this._signatureCache = new Map();
     this._detailsCollector = options.detailsCollector || new JavaScriptProcessCollector();
+    this._auxMetricsEnabled = options.auxMetricsEnabled == null ? !options.collector : !!options.auxMetricsEnabled;
+    this._auxMetrics = {
+      sampledAt: 0,
+      diskReadBytesPerSec: null,
+      diskWriteBytesPerSec: null,
+      networkReceiveBytesPerSec: null,
+      networkSendBytesPerSec: null,
+      connectionsByPid: new Map(),
+      connectionsAvailable: false,
+      gpuByPid: new Map(),
+      gpuPercent: null,
+      gpuAvailable: false,
+    };
+    this._auxMetricsPromise = null;
+    this._gpuMetricsPromise = null;
+    this._gpuSampledAt = 0;
     this._started = false;
     this._diagnostics = { helperRestarts: 0, lastError: null, samples: [] };
   }
@@ -227,6 +244,13 @@ class ProcessService extends EventEmitter {
         ? null : proc.diskReadBytesPerSec + proc.diskWriteBytesPerSec);
       proc.networkIo = proc.networkIo ?? (proc.networkReceiveBytesPerSec == null || proc.networkSendBytesPerSec == null
         ? null : proc.networkReceiveBytesPerSec + proc.networkSendBytesPerSec);
+      if (proc.diskIo == null && proc.ioReadBytesPerSec != null && proc.ioWriteBytesPerSec != null) {
+        proc.diskIo = proc.ioReadBytesPerSec + proc.ioWriteBytesPerSec;
+      }
+      if (this._auxMetrics.gpuByPid.has(pid)) proc.gpuPercent = this._auxMetrics.gpuByPid.get(pid);
+      proc.networkConnectionCount = this._auxMetrics.connectionsAvailable
+        ? (this._auxMetrics.connectionsByPid.get(pid) || 0)
+        : null;
       processes.push(proc);
     }
 
@@ -235,12 +259,30 @@ class ProcessService extends EventEmitter {
       if (risk) return risk;
       return (b.cpu || 0) - (a.cpu || 0);
     });
-    const totals = raw.totals || {};
+    const hasProcessIo = processes.some((proc) => proc.ioReadBytesPerSec != null || proc.ioWriteBytesPerSec != null);
+    const processIoRead = hasProcessIo ? processes.reduce((sum, proc) => sum + (Number(proc.ioReadBytesPerSec) || 0), 0) : null;
+    const processIoWrite = hasProcessIo ? processes.reduce((sum, proc) => sum + (Number(proc.ioWriteBytesPerSec) || 0), 0) : null;
+    const totals = {
+      ...(raw.totals || {}),
+      diskReadBytesPerSec: this._auxMetrics.diskReadBytesPerSec ?? raw.totals?.diskReadBytesPerSec ?? processIoRead,
+      diskWriteBytesPerSec: this._auxMetrics.diskWriteBytesPerSec ?? raw.totals?.diskWriteBytesPerSec ?? processIoWrite,
+      networkReceiveBytesPerSec: this._auxMetrics.networkReceiveBytesPerSec ?? raw.totals?.networkReceiveBytesPerSec ?? null,
+      networkSendBytesPerSec: this._auxMetrics.networkSendBytesPerSec ?? raw.totals?.networkSendBytesPerSec ?? null,
+      gpuPercent: this._auxMetrics.gpuPercent ?? raw.totals?.gpuPercent ?? null,
+    };
+    const capabilities = {
+      ...(raw.capabilities || this.collector?.capabilities || {}),
+      provider: raw.capabilities?.provider || this.collectorKind,
+      connections: this._auxMetrics.connectionsAvailable || raw.capabilities?.connections || false,
+      gpu: this._auxMetrics.gpuAvailable || raw.capabilities?.gpu || false,
+      systemDiskIo: totals.diskReadBytesPerSec != null && totals.diskWriteBytesPerSec != null,
+      systemNetworkIo: totals.networkReceiveBytesPerSec != null && totals.networkSendBytesPerSec != null,
+    };
     return {
       protocolVersion: Number(raw.protocolVersion || 1),
       collectedAt,
       provider: raw.capabilities?.provider || this.collectorKind,
-      capabilities: { ...(raw.capabilities || this.collector?.capabilities || {}), provider: raw.capabilities?.provider || this.collectorKind },
+      capabilities,
       totals,
       totalCpu: totals.cpuPercent ?? null,
       totalMemory: totals.memoryPercent ?? null,
@@ -250,6 +292,74 @@ class ProcessService extends EventEmitter {
         ? null : totals.networkReceiveBytesPerSec + totals.networkSendBytesPerSec,
       processes,
     };
+  }
+
+  async _refreshAuxMetrics() {
+    if (!this._auxMetricsEnabled || process.platform !== 'win32') return this._auxMetrics;
+    if (Date.now() - this._auxMetrics.sampledAt < 2500) return this._auxMetrics;
+    if (this._auxMetricsPromise) return this._auxMetricsPromise;
+    this._auxMetricsPromise = (async () => {
+      const gpuScript = [
+        "$samples = (Get-Counter '\\GPU Engine(*)\\Utilization Percentage' -ErrorAction Stop).CounterSamples",
+        '$byPid = @{}',
+        '$maximum = 0.0',
+        'foreach ($sample in $samples) {',
+        '  if ($sample.InstanceName -match "pid_(\\d+)") {',
+        '    $pidValue = [int]$Matches[1]',
+        '    $value = [Math]::Max(0.0, [double]$sample.CookedValue)',
+        '    if (-not $byPid.ContainsKey($pidValue)) { $byPid[$pidValue] = 0.0 }',
+        '    $byPid[$pidValue] = [Math]::Min(100.0, $byPid[$pidValue] + $value)',
+        '    $maximum = [Math]::Max($maximum, $value)',
+        '  }',
+        '}',
+        '[PSCustomObject]@{ total = [Math]::Min(100.0, $maximum); processes = @($byPid.GetEnumerator() | ForEach-Object { [PSCustomObject]@{ pid = [int]$_.Key; gpu = [double]$_.Value } }) } | ConvertTo-Json -Compress -Depth 4',
+      ].join('; ');
+      this._refreshGpuMetrics(gpuScript);
+      const [diskResult, networkResult, connectionResult] = await Promise.allSettled([
+        si.disksIO(),
+        si.networkStats(),
+        si.networkConnections(),
+      ]);
+      if (diskResult.status === 'fulfilled') {
+        this._auxMetrics.diskReadBytesPerSec = Number.isFinite(Number(diskResult.value?.rIO_sec)) ? Number(diskResult.value.rIO_sec) : null;
+        this._auxMetrics.diskWriteBytesPerSec = Number.isFinite(Number(diskResult.value?.wIO_sec)) ? Number(diskResult.value.wIO_sec) : null;
+      }
+      if (networkResult.status === 'fulfilled') {
+        const rows = Array.isArray(networkResult.value) ? networkResult.value : [];
+        this._auxMetrics.networkReceiveBytesPerSec = rows.some((row) => Number.isFinite(Number(row.rx_sec)))
+          ? rows.reduce((sum, row) => sum + (Number(row.rx_sec) || 0), 0) : null;
+        this._auxMetrics.networkSendBytesPerSec = rows.some((row) => Number.isFinite(Number(row.tx_sec)))
+          ? rows.reduce((sum, row) => sum + (Number(row.tx_sec) || 0), 0) : null;
+      }
+      if (connectionResult.status === 'fulfilled') {
+        const byPid = new Map();
+        for (const row of connectionResult.value || []) {
+          const pid = Number(row.pid || row.processId);
+          if (Number.isInteger(pid) && pid >= 0) byPid.set(pid, (byPid.get(pid) || 0) + 1);
+        }
+        this._auxMetrics.connectionsByPid = byPid;
+        this._auxMetrics.connectionsAvailable = true;
+      }
+      this._auxMetrics.sampledAt = Date.now();
+      return this._auxMetrics;
+    })().finally(() => { this._auxMetricsPromise = null; });
+    return this._auxMetricsPromise;
+  }
+
+  _refreshGpuMetrics(script) {
+    if (this._gpuMetricsPromise || Date.now() - this._gpuSampledAt < 5000) return;
+    this._gpuSampledAt = Date.now();
+    this._gpuMetricsPromise = execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', powershellEncoded(script)], {
+      timeout: 8000,
+      windowsHide: true,
+      maxBuffer: 4 * 1024 * 1024,
+    }).then(({ stdout }) => {
+      const parsed = JSON.parse(String(stdout || '').trim());
+      const rows = Array.isArray(parsed?.processes) ? parsed.processes : (parsed?.processes ? [parsed.processes] : []);
+      this._auxMetrics.gpuByPid = new Map(rows.filter((row) => Number.isInteger(Number(row.pid))).map((row) => [Number(row.pid), Number(row.gpu) || 0]));
+      this._auxMetrics.gpuPercent = Number.isFinite(Number(parsed?.total)) ? Number(parsed.total) : null;
+      this._auxMetrics.gpuAvailable = true;
+    }).catch(() => {}).finally(() => { this._gpuMetricsPromise = null; });
   }
 
   _recordHistory(snapshot) {
@@ -319,6 +429,7 @@ class ProcessService extends EventEmitter {
       const sampleStartedAt = Date.now();
       try {
         const raw = await this.collector.sample(options);
+        this._refreshAuxMetrics().catch(() => {});
         const next = await this._normalizeSnapshot(raw);
         const previous = this.snapshot;
         this.snapshot = next;
@@ -344,6 +455,7 @@ class ProcessService extends EventEmitter {
             }
           }
           const raw = await this.collector.sample(options);
+          this._refreshAuxMetrics().catch(() => {});
           const next = await this._normalizeSnapshot(raw);
           const previous = this.snapshot;
           this.snapshot = next;
