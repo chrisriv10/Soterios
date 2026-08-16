@@ -76,7 +76,15 @@
     }
   }
   const hashPage = (window.location.hash || '').replace(/^#/, '');
-  const initialPage = isKnownPage(hashPage) ? hashPage : 'dashboard';
+  let initialPage = isKnownPage(hashPage) ? hashPage : 'dashboard';
+  // First-run setup wizard: only gate when there is no explicit hash, so
+  // screenshot/capture modes (--screenshot-page=...) keep working.
+  if (!hashPage) {
+    try {
+      const setupComplete = await window.api.invoke('db:getSetting', 'app.setupComplete', false);
+      if (!setupComplete) initialPage = 'setup';
+    } catch (_) {}
+  }
   navigate(initialPage);
 
   // Listen for toast click to navigate to scanner
