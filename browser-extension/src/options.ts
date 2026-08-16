@@ -8,7 +8,7 @@ let currentTheme: ThemeKey = 'system';
 const themeColors: Record<ThemeKey, [string, string]> = {
   system: ['#f5f7fb', '#1d4ed8'], dark: ['#0b0e14', '#58a6ff'], light: ['#f5f7fb', '#2563eb'],
   sunset: ['#1c1214', '#f97316'], violet: ['#140f1f', '#8b5cf6'], crimson: ['#020202', '#dc2626'],
-  'black-red': ['#020202', '#dc2626'], terminal: ['#010201', '#16a34a'], 'black-green': ['#010201', '#16a34a'],
+  terminal: ['#010201', '#16a34a'],
   ocean: ['#07131f', '#2dd4bf'], emerald: ['#0a1f17', '#32e06f'], midnight: ['#0a0e1a', '#38bdf8'],
   bumblebee: ['#0c0b08', '#facc15'], monochrome: ['#0a0a0a', '#e5e5e5'], rose: ['#1a1216', '#f472b6'], aurora: ['#0b1220', '#7dd3fc']
 };

@@ -79,7 +79,7 @@
   --accent-primary-contrast: #fff;
 }
 
-:root[data-theme="crimson"], :root[data-theme="black-red"] {
+:root[data-theme="crimson"] {
   --bg-base: #020202;
   --bg-surface: rgba(12, 4, 5, 0.96);
   --bg-surface-hover: rgba(24, 8, 10, 0.98);
@@ -99,7 +99,7 @@
   --accent-primary-contrast: #fff;
 }
 
-:root[data-theme="terminal"], :root[data-theme="black-green"] {
+:root[data-theme="terminal"] {
   --bg-base: #010201;
   --bg-surface: rgba(5, 12, 7, 0.97);
   --bg-surface-hover: rgba(8, 18, 10, 0.99);

@@ -4,8 +4,8 @@ export const HISTORY_RETENTION_DAYS = 30 as const;
 export const MAX_RUNTIME_MESSAGE_BYTES = 64 * 1024;
 
 export const THEME_KEYS = [
-  'system', 'dark', 'light', 'sunset', 'violet', 'crimson', 'black-red',
-  'terminal', 'black-green', 'ocean', 'emerald', 'midnight', 'bumblebee',
+  'system', 'dark', 'light', 'sunset', 'violet', 'crimson',
+  'terminal', 'ocean', 'emerald', 'midnight', 'bumblebee',
   'monochrome', 'rose', 'aurora'
 ] as const;
 
