@@ -803,7 +803,10 @@ app.whenReady().then(async () => {
   // Network stats timer control (for feature toggle)
   services.startNetworkStatsTimer = () => {
     if (lifecycleRefs.networkStatsTimer) return { running: true };
+    let sampling = false;
     const sampleNetworkStats = async () => {
+      if (sampling) return;
+      sampling = true;
       try {
         const stats = await networkMonitor.getStats();
         const recordedAt = new Date().toISOString();
@@ -812,6 +815,8 @@ app.whenReady().then(async () => {
         }
       } catch (err) {
         logLine('warn', 'Network stats sample failed', { message: err.message });
+      } finally {
+        sampling = false;
       }
     };
     const networkStatsTimer = setInterval(sampleNetworkStats, 30_000);

@@ -543,7 +543,6 @@ async function renderIgnoredList() {
         try {
           await window.api.invoke('warnings:unignore', btn.dataset.unignoreWarning);
           if (item) item.remove();
-          await renderIgnoredList();
           invalidateDashboardCache();
           await loadWarnings();
         } catch (err) {
@@ -617,7 +616,6 @@ async function loadWarnings() {
           try {
             await window.api.invoke('warnings:ignore', { id: btn.dataset.ignoreWarning, title: btn.dataset.title, detail: btn.dataset.detail });
             if (item) item.remove();
-            await renderIgnoredList();
             invalidateDashboardCache();
             await loadWarnings();
           } catch (err) {

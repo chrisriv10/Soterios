@@ -25,9 +25,10 @@ const debugNet = process.env.SOTERIOS_DEBUG_NET === '1';
 let connectionsCache = null;
 let connectionsCacheAt = 0;
 const CONNECTIONS_CACHE_TTL_MS = 5000;
+let statsInFlight = null;
 
 class NetworkMonitor {
-async getConnections() {
+  async getConnections() {
     // Return cached result if within TTL
     if (connectionsCache !== null && Date.now() - connectionsCacheAt < CONNECTIONS_CACHE_TTL_MS) {
       if (debugNet) logger.info('NetworkMonitor: returning cached connections');
@@ -58,6 +59,17 @@ async getConnections() {
   }
 
   async getStats() {
+    if (statsInFlight) return statsInFlight;
+    statsInFlight = this._getStats();
+    try {
+      return await statsInFlight;
+    } finally {
+      statsInFlight = null;
+    }
+  }
+
+  async _getStats() {
+    const start = Date.now();
     try {
       const netStats = await si.networkStats();
       const interfaceStats = (netStats || []).map(s => ({
@@ -74,9 +86,10 @@ async getConnections() {
       if (Date.now() - lastNetPsFailedAt < netPsCooldownMs) {
         if (debugNet) logger.info('NetworkMonitor: skipping Get-NetTCPConnection due to recent failure cooldown');
       } else {
+        const psStart = Date.now();
         try {
           const psScript = `$conns = Get-NetTCPConnection -ErrorAction SilentlyContinue; if ($conns) { $total = $conns.Count; $established = ($conns | Where-Object { $_.State -eq 'Established' }).Count; $listen = ($conns | Where-Object { $_.State -eq 'Listen' }).Count; $timeWait = ($conns | Where-Object { $_.State -eq 'TimeWait' }).Count; $closeWait = ($conns | Where-Object { $_.State -eq 'CloseWait' }).Count; Write-Output ($total, $established, $listen, $timeWait, $closeWait -join '|') } else { Write-Output '0|0|0|0|0' }`;
-          const { stdout } = await runPowerShell(psScript, 65000);
+          const { stdout } = await runPowerShell(psScript, 10000);
           netPsWarned = false;
           const parts = stdout.trim().split('|');
           connections = {
@@ -88,7 +101,7 @@ async getConnections() {
           };
         } catch (psError) {
           lastNetPsFailedAt = Date.now();
-          const psElapsed = psError && psError.elapsed ? psError.elapsed : 'unknown';
+          const psElapsed = Date.now() - psStart;
           if (!netPsWarned) {
             logger.warn('Get-NetTCPConnection failed, using fallback', {
               message: psError.message,
@@ -104,6 +117,7 @@ async getConnections() {
           }
 
           // Fallback: use netstat if Get-NetTCPConnection is not available
+          const netstatStart = Date.now();
           try {
             const { stdout } = await execFilePromise('netstat.exe', ['-an'], { timeout: 10000, windowsHide: true });
             const lines = stdout.split('\n');
@@ -119,7 +133,7 @@ async getConnections() {
             }
             connections = { total, established, listen, timeWait, closeWait };
           } catch (netstatError) {
-            const nsElapsed = netstatError && netstatError.elapsed ? netstatError.elapsed : 'unknown';
+            const nsElapsed = Date.now() - netstatStart;
             if (!netPsWarned) {
               logger.warn('netstat fallback also failed', {
                 message: netstatError.message,
@@ -142,7 +156,7 @@ async getConnections() {
         connections
       };
     } catch (e) {
-      const elapsed = e && e.elapsed ? e.elapsed : 'unknown';
+      const elapsed = Date.now() - start;
       logger.error('Failed to get network stats', {
         message: e.message,
         elapsed,
