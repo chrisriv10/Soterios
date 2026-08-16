@@ -37,12 +37,21 @@ function friendlyFirewallError(e, fallback) {
 }
 
 class FirewallManager {
+  constructor() {
+    // The Windows firewall CIM provider is prone to timing out when several
+    // queries hit it at once (dashboard, AI context, and firewall page).
+    this._powerShellQueue = Promise.resolve();
+  }
+
   async runPowerShell(command) {
-    const { stdout } = await execFilePromise('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command], {
-      timeout: 15000,
-      windowsHide: true
-    });
-    return stdout;
+    const run = () => execFilePromise('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command], {
+      timeout: 30000,
+      windowsHide: true,
+      maxBuffer: 16 * 1024 * 1024
+    }).then(({ stdout }) => stdout);
+    const pending = this._powerShellQueue.then(run, run);
+    this._powerShellQueue = pending.catch(() => {});
+    return pending;
   }
 
   async getStatus() {
@@ -110,9 +119,11 @@ class FirewallManager {
     try {
       const command = [
         '$rules = Get-NetFirewallRule -PolicyStore ActiveStore;',
-        '$appFilters = @{}; Get-NetFirewallApplicationFilter -PolicyStore ActiveStore | ForEach-Object { $appFilters[$_.InstanceID] = $_ };',
-        '$portFilters = @{}; Get-NetFirewallPortFilter -PolicyStore ActiveStore | ForEach-Object { $portFilters[$_.InstanceID] = $_ };',
-        '$addrFilters = @{}; Get-NetFirewallAddressFilter -PolicyStore ActiveStore | ForEach-Object { $addrFilters[$_.InstanceID] = $_ };',
+        // Filter enumeration can be access-denied for a standard user even
+        // though basic rule enumeration is allowed. Preserve the basic list.
+        '$appFilters = @{}; try { Get-NetFirewallApplicationFilter -PolicyStore ActiveStore -ErrorAction Stop | ForEach-Object { $appFilters[$_.InstanceID] = $_ } } catch {};',
+        '$portFilters = @{}; try { Get-NetFirewallPortFilter -PolicyStore ActiveStore -ErrorAction Stop | ForEach-Object { $portFilters[$_.InstanceID] = $_ } } catch {};',
+        '$addrFilters = @{}; try { Get-NetFirewallAddressFilter -PolicyStore ActiveStore -ErrorAction Stop | ForEach-Object { $addrFilters[$_.InstanceID] = $_ } } catch {};',
         '$out = foreach ($r in $rules) {',
         '  $app = $appFilters[$r.InstanceID]; $port = $portFilters[$r.InstanceID]; $addr = $addrFilters[$r.InstanceID];',
         '  [PSCustomObject]@{',

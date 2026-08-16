@@ -9,7 +9,9 @@ const logger = require('../utils/logger');
 
 const PROTOCOL_VERSION = 1;
 const MAX_MESSAGE_BYTES = 8 * 1024 * 1024;
-const REQUEST_TIMEOUT_MS = 5000;
+// A cold Windows API walk can occasionally stall behind WMI/CIM and security
+// software activity. Five seconds caused healthy helpers to be discarded.
+const REQUEST_TIMEOUT_MS = 15000;
 
 function defaultCandidates(resourcesPath) {
   const candidates = [];

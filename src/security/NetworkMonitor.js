@@ -1,8 +1,18 @@
 const logger = require('../utils/logger');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const util = require('util');
 const si = require('systeminformation');
-const execPromise = util.promisify(exec);
+const execFilePromise = util.promisify(execFile);
+
+const POWERSHELL_ARGS = ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command'];
+
+function runPowerShell(script, timeout = 15000) {
+  return execFilePromise('powershell.exe', [...POWERSHELL_ARGS, script], {
+    timeout,
+    windowsHide: true,
+    maxBuffer: 8 * 1024 * 1024
+  });
+}
 
 // Suppress repeated PowerShell/Get-NetTCPConnection warnings and optionally
 // enable extra debug output with SOTERIOS_DEBUG_NET=1
@@ -14,7 +24,7 @@ const debugNet = process.env.SOTERIOS_DEBUG_NET === '1';
 class NetworkMonitor {
   async getConnections() {
     try {
-      const { stdout } = await execPromise(`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Get-NetTCPConnection | Select-Object LocalAddress, LocalPort, RemoteAddress, RemotePort, State, OwningProcess | ConvertTo-Json -Compress"`);
+      const { stdout } = await runPowerShell('Get-NetTCPConnection -ErrorAction Stop | Select-Object LocalAddress, LocalPort, RemoteAddress, RemotePort, State, OwningProcess | ConvertTo-Json -Compress');
       let connections = JSON.parse(stdout || '[]');
       if (!Array.isArray(connections)) connections = [connections];
       return connections;
@@ -43,7 +53,8 @@ class NetworkMonitor {
       } else {
         try {
           const psScript = `$conns = Get-NetTCPConnection -ErrorAction SilentlyContinue; if ($conns) { $total = $conns.Count; $established = ($conns | Where-Object { $_.State -eq 'Established' }).Count; $listen = ($conns | Where-Object { $_.State -eq 'Listen' }).Count; $timeWait = ($conns | Where-Object { $_.State -eq 'TimeWait' }).Count; $closeWait = ($conns | Where-Object { $_.State -eq 'CloseWait' }).Count; Write-Output ($total, $established, $listen, $timeWait, $closeWait -join '|') } else { Write-Output '0|0|0|0|0' }`;
-          const { stdout } = await execPromise(`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "${psScript}"`, { timeout: 10000 });
+          const { stdout } = await runPowerShell(psScript);
+          netPsWarned = false;
           const parts = stdout.trim().split('|');
           connections = {
             total: parseInt(parts[0]) || 0,
@@ -63,7 +74,7 @@ class NetworkMonitor {
 
           // Fallback: use netstat if Get-NetTCPConnection is not available
           try {
-            const { stdout } = await execPromise('netstat -an', { timeout: 10000 });
+            const { stdout } = await execFilePromise('netstat.exe', ['-an'], { timeout: 10000, windowsHide: true });
             const lines = stdout.split('\n');
             let total = 0, established = 0, listen = 0, timeWait = 0, closeWait = 0;
             for (const line of lines) {
