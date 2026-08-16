@@ -256,7 +256,7 @@
 .heatmap-map-skin::before {
   content: '';
   position: absolute;
-  inset: 3%;
+  inset: 0;
   background: color-mix(in srgb, var(--accent-primary) 52%, var(--text-dim));
   filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent-primary) 35%, transparent));
   -webkit-mask: url('../img/world-map.svg') center / contain no-repeat;

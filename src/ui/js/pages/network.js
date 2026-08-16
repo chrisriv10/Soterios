@@ -102,16 +102,18 @@ window.Pages['network'] = {
     return { id: 'world', lonStep: 18, latStep: 12, labelLimit: 0, nextZoom: 1.75 };
   },
 
+  _projectHeatmapCoordinate(lat, lon) {
+    return {
+      x: Math.max(0, Math.min(100, ((lon + 180) / 360) * 100)),
+      y: Math.max(0, Math.min(100, ((90 - lat) / 180) * 100))
+    };
+  },
+
   _validHeatmapHome(location = this._userLocation) {
     if (!location || typeof location.lat !== 'number' || typeof location.lon !== 'number' ||
         !Number.isFinite(location.lat) || !Number.isFinite(location.lon) ||
         location.lat < -90 || location.lat > 90 || location.lon < -180 || location.lon > 180) return null;
-    return {
-      lat: location.lat,
-      lon: location.lon,
-      x: Math.max(0, Math.min(100, ((location.lon + 180) / 360) * 100)),
-      y: Math.max(0, Math.min(100, ((90 - location.lat) / 180) * 100))
-    };
+    return { lat: location.lat, lon: location.lon, ...this._projectHeatmapCoordinate(location.lat, location.lon) };
   },
 
   _buildHeatmapClusters(connections, geoData, zoom) {
@@ -165,8 +167,7 @@ window.Pages['network'] = {
       return {
         ...group,
         lat, lon,
-        x: Math.max(0, Math.min(100, ((lon + 180) / 360) * 100)),
-        y: Math.max(0, Math.min(100, ((90 - lat) / 180) * 100)),
+        ...this._projectHeatmapCoordinate(lat, lon),
         ips: Array.from(group.ips).sort(),
         locations: Array.from(group.locations).sort(),
         processes: top(group.processes), services: top(group.services),

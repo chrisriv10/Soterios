@@ -125,6 +125,22 @@ describe('adaptive geo activity model', () => {
     assert.deepEqual(plain(page._validHeatmapHome({ lat: 0, lon: 0 })), { lat: 0, lon: 0, x: 50, y: 50 });
   });
 
+  it('uses the shared projection for the home marker and endpoint clusters', () => {
+    const page = makePage();
+    const expected = page._projectHeatmapCoordinate(41.88, -87.88);
+    assert.ok(Math.abs(expected.x - 25.5889) < 0.001);
+    assert.ok(Math.abs(expected.y - 26.7333) < 0.001);
+    assert.deepEqual(plain(page._validHeatmapHome({ lat: 41.88, lon: -87.88 })), {
+      lat: 41.88, lon: -87.88, ...plain(expected)
+    });
+    const cluster = page._buildHeatmapClusters(
+      [connection('198.51.100.20')],
+      { '198.51.100.20': { lat: 41.88, lon: -87.88 } },
+      1
+    ).clusters[0];
+    assert.deepEqual({ x: cluster.x, y: cluster.y }, plain(expected));
+  });
+
   it('centers focus targets while clamping pan to the viewport', () => {
     const page = makePage();
     page._heatmapZoom = 1;
