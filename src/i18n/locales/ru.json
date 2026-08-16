@@ -383,6 +383,7 @@
   "settings.toast.featureError": "Не удалось обновить функцию",
   "settings.about": "О программе",
   "settings.aboutDesc": "Локальная платформа безопасности и обслуживания.",
+  "settings.replaySetup": "Повторить мастер настройки",
   "settings.clamavPath": "Движок ClamAV в assets/clamav/",
   "settings.quarantinePath": "Путь карантина: ~/.soterios-quarantine",
   "settings.privacy": "Privacy",

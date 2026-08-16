@@ -383,6 +383,7 @@
   "settings.toast.featureError": "Özellik güncellenemedi",
   "settings.about": "Hakkında",
   "settings.aboutDesc": "Yerel öncelikli güvenlik ve bakım platformu.",
+  "settings.replaySetup": "Kurulum sihirbazını tekrar çalıştır",
   "settings.clamavPath": "ClamAV motoru: assets/clamav/",
   "settings.quarantinePath": "Karantina yolu: ~/.soterios-quarantine",
   "settings.privacy": "Privacy",

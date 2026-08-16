@@ -383,6 +383,7 @@
   "settings.toast.featureError": "Nie udało się zaktualizować funkcji",
   "settings.about": "Informacje",
   "settings.aboutDesc": "Lokalna platforma bezpieczeństwa i konserwacji.",
+  "settings.replaySetup": "Uruchom ponownie kreatora konfiguracji",
   "settings.clamavPath": "Silnik ClamAV w assets/clamav/",
   "settings.quarantinePath": "Ścieżka kwarantanny: ~/.soterios-quarantine",
   "settings.privacy": "Privacy",

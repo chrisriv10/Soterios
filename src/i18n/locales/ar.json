@@ -383,6 +383,7 @@
   "settings.toast.featureError": "فشل تحديث الميزة",
   "settings.about": "حول",
   "settings.aboutDesc": "منصة أمان وصيانة محلية أولاً.",
+  "settings.replaySetup": "إعادة تشغيل معالج الإعداد",
   "settings.clamavPath": "محرك ClamAV في assets/clamav/",
   "settings.quarantinePath": "مسار الحجر الصحي: ~/.soterios-quarantine",
   "settings.privacy": "Privacy",

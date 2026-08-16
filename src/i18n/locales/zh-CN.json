@@ -383,6 +383,7 @@
   "settings.toast.featureError": "更新功能失败",
   "settings.about": "关于",
   "settings.aboutDesc": "本地优先的安全与维护平台。",
+  "settings.replaySetup": "重新运行设置向导",
   "settings.clamavPath": "assets/clamav/ 处的 ClamAV 引擎",
   "settings.quarantinePath": "隔离路径: ~/.soterios-quarantine",
   "settings.privacy": "Privacy",

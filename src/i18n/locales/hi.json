@@ -383,6 +383,7 @@
   "settings.toast.featureError": "फीचर अपडेट करने में विफल",
   "settings.about": "के बारे में",
   "settings.aboutDesc": "लोकल-फर्स्ट सिक्योरिटी और मेंटेनेंस प्लेटफॉर्म।",
+  "settings.replaySetup": "सेटअप विज़ार्ड फिर से चलाएँ",
   "settings.clamavPath": "assets/clamav/ पर ClamAV इंजन",
   "settings.quarantinePath": "क्वारंटाइन पथ: ~/.soterios-quarantine",
   "settings.privacy": "Privacy",

@@ -383,6 +383,7 @@
   "settings.toast.featureError": "Failed to update feature",
   "settings.about": "About",
   "settings.aboutDesc": "Local-first security and maintenance platform.",
+  "settings.replaySetup": "Replay setup wizard",
   "settings.clamavPath": "ClamAV engine at assets/clamav/",
   "settings.quarantinePath": "Quarantine path: ~/.soterios-quarantine",
   "settings.privacy": "Privacy",

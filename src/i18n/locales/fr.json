@@ -383,6 +383,7 @@
   "settings.toast.featureError": "Échec de la mise à jour de la fonction",
   "settings.about": "À propos",
   "settings.aboutDesc": "Plateforme de sécurité et maintenance locale.",
+  "settings.replaySetup": "Relancer l'assistant de configuration",
   "settings.clamavPath": "Moteur ClamAV dans assets/clamav/",
   "settings.quarantinePath": "Chemin de quarantaine : ~/.soterios-quarantine",
   "settings.privacy": "Privacy",

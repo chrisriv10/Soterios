@@ -340,6 +340,7 @@ window.Pages.settings = {
               <div>${escapeHtml(t('settings.clamavPath'))}</div>
               <div>${escapeHtml(t('settings.quarantinePath'))}</div>
             </div>
+            <button class="btn btn-secondary" id="replaySetupBtn" style="margin-top:16px;">${escapeHtml(t('settings.replaySetup'))}</button>
           </div>
         </div>
       </div>`;
@@ -356,6 +357,13 @@ window.Pages.settings = {
         status.textContent = err.message || String(err);
       }
     });
+
+    const replaySetupBtn = container.querySelector('#replaySetupBtn');
+    if (replaySetupBtn) {
+      replaySetupBtn.addEventListener('click', () => {
+        if (window.AppRouter) window.AppRouter.navigate('setup');
+      });
+    }
 
     container.querySelector('#themeSelect').addEventListener('change', (event) => {
       const theme = event.target.value;

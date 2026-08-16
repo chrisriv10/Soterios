@@ -383,6 +383,7 @@
   "settings.toast.featureError": "기능 업데이트 실패",
   "settings.about": "정보",
   "settings.aboutDesc": "로컬 우선 보안 및 유지 관리 플랫폼.",
+  "settings.replaySetup": "설정 마법사 다시 실행",
   "settings.clamavPath": "assets/clamav/에 ClamAV 엔진",
   "settings.quarantinePath": "격리 경로: ~/.soterios-quarantine",
   "settings.privacy": "Privacy",

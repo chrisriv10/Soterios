@@ -383,6 +383,7 @@
   "settings.toast.featureError": "Functie bijwerken mislukt",
   "settings.about": "Over",
   "settings.aboutDesc": "Lokaal-eerste beveiligings- en onderhoudsplatform.",
+  "settings.replaySetup": "Setup-wizard opnieuw starten",
   "settings.clamavPath": "ClamAV-engine in assets/clamav/",
   "settings.quarantinePath": "Quarantainepad: ~/.soterios-quarantine",
   "settings.privacy": "Privacy",

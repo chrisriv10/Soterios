@@ -237,6 +237,13 @@ describe('first-run setup wizard source', () => {
     assert.ok(scriptIdx < routerIdx, 'setup.js must load before router.js');
   });
 
+  it('exposes a replay entry point from Settings', () => {
+    const settingsSource = read('src', 'ui', 'js', 'pages', 'settings.js');
+    assert.match(settingsSource, /id="replaySetupBtn"/);
+    assert.match(settingsSource, /settings\.replaySetup/);
+    assert.match(settingsSource, /AppRouter\.navigate\('setup'\)/);
+  });
+
   it('styles the wizard layout and theme picker', () => {
     for (const selector of ['.setup-wizard', '.setup-dots', '.setup-logo', '.setup-theme-grid', '.setup-theme-card', '.setup-theme-card.active', '.setup-actions']) {
       assert.ok(styles.includes(selector), `style.css must define ${selector}`);

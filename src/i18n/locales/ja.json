@@ -383,6 +383,7 @@
   "settings.toast.featureError": "機能の更新に失敗しました",
   "settings.about": "バージョン情報",
   "settings.aboutDesc": "ローカルファーストのセキュリティおよびメンテナンス プラットフォーム。",
+  "settings.replaySetup": "セットアップウィザードを再度実行",
   "settings.clamavPath": "assets/clamav/ に ClamAV エンジン",
   "settings.quarantinePath": "クアランティン パス: ~/.soterios-quarantine",
   "settings.privacy": "Privacy",

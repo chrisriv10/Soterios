@@ -383,6 +383,7 @@
   "settings.toast.featureError": "Falha ao atualizar o recurso",
   "settings.about": "Sobre",
   "settings.aboutDesc": "Plataforma de segurança e manutenção local-first.",
+  "settings.replaySetup": "Repetir assistente de configuração",
   "settings.clamavPath": "Motor ClamAV em assets/clamav/",
   "settings.quarantinePath": "Caminho da quarentena: ~/.soterios-quarantine",
   "settings.privacy": "Privacy",

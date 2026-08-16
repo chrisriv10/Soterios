@@ -383,6 +383,7 @@
   "settings.toast.featureError": "Impossibile aggiornare la funzionalità",
   "settings.about": "Informazioni",
   "settings.aboutDesc": "Piattaforma sicurezza e manutenzione local-first.",
+  "settings.replaySetup": "Ripeti la configurazione guidata",
   "settings.clamavPath": "Motore ClamAV in assets/clamav/",
   "settings.quarantinePath": "Percorso quarantena: ~/.soterios-quarantine",
   "settings.privacy": "Privacy",
