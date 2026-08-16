@@ -1,0 +1,45 @@
+name: Build signed threat feed
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: soterios-threat-feed
+  cancel-in-progress: false
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fetch CERT Polska phishing domains and active URLhaus indicators
+        env:
+          URLHAUS_AUTH_KEY: ${{ secrets.URLHAUS_AUTH_KEY }}
+        run: |
+          test -n "$URLHAUS_AUTH_KEY"
+          curl --fail --silent --show-error --retry 3 "https://hole.cert.pl/domains/v2/domains.txt" -o certpl-domains.txt
+          curl --fail --silent --show-error --retry 3 -H "Auth-Key: ${URLHAUS_AUTH_KEY}" "https://urlhaus-api.abuse.ch/v2/urls/recent/" -o urlhaus.json
+      - name: Normalize, shard, hash, and sign
+        env:
+          THREAT_FEED_PRIVATE_KEY: ${{ secrets.THREAT_FEED_PRIVATE_KEY }}
+        run: node tools/build-threat-feed.mjs --certpl certpl-domains.txt --urlhaus urlhaus.json --output public/threat-feed
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+      - name: Deploy signed feed to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
