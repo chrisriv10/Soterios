@@ -17,11 +17,25 @@ jobs:
         with:
           node-version: 26
           cache: npm
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.85.1-x86_64-pc-windows-msvc --profile minimal --component clippy,rustfmt
       - run: npm ci
-      - run: npm run dist
+      - run: npm run native:check
+      - run: npm test
+      - run: npm run dist:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate checksums and dependency metadata
+        shell: pwsh
+        run: |
+          Get-ChildItem dist -Filter *.exe | ForEach-Object { "$(($_ | Get-FileHash -Algorithm SHA256).Hash.ToLower())  $($_.Name)" } | Set-Content dist/SHA256SUMS.txt
+          npm sbom --sbom-format cyclonedx | Set-Content dist/soterios-node.cdx.json
+          cargo metadata --locked --format-version 1 --manifest-path native/process-inspector/Cargo.toml | Set-Content dist/soterios-rust-metadata.json
       - uses: actions/upload-artifact@v4
         with:
           name: windows-installer
-          path: dist/*.exe
+          path: |
+            dist/*.exe
+            dist/SHA256SUMS.txt
+            dist/soterios-node.cdx.json
+            dist/soterios-rust-metadata.json
