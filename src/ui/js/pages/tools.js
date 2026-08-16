@@ -70,6 +70,12 @@
       };
     },
 
+    _impactPill(level) {
+      const value = level || 'none';
+      const label = this.t(`tools.impact.${value}`, value);
+      return `<span class="tag-pill tag-${this.e(value)}">${this.e(this.t('tools.impact.label', `${value} impact`, { level: label }))}</span>`;
+    },
+
     icon(name) {
       try { return iconFor(name || 'wrench'); } catch (_) { return ''; }
     },
@@ -216,7 +222,7 @@
             ${run ? `<span class="maintenance-state running">Running · ${this.e(run.phase)}</span>`
               : latest ? `<span class="maintenance-state ${this.e(latest.status)}">Last run ${this.e(latest.status)}</span>`
                 : '<span class="maintenance-state">Not run this session</span>'}
-            <span class="risk-pill risk-${this.e(tool.risk || 'none')}">${this.e(tool.risk || 'none')} risk</span>
+            ${this._impactPill(tool.impact)}
           </span>
         </span>
         <span class="maintenance-card-arrow" aria-hidden="true">${this.icon('chevron-right')}</span>
@@ -237,7 +243,7 @@
         <header class="maintenance-workspace-header">
           <span class="maintenance-workspace-icon">${this.icon(tool.icon)}</span>
           <div class="maintenance-workspace-title"><h2>${this.e(text.name)}</h2><p>${this.e(text.description)}</p></div>
-          <span class="risk-pill risk-${this.e(tool.risk || 'none')}">${this.e(tool.risk || 'none')} risk</span>
+          ${this._impactPill(tool.impact)}
         </header>
         ${this._notice ? `<div class="maintenance-notice ${this.e(this._notice.type || 'info')}" role="status">${this.e(this._notice.message)}</div>` : ''}
         ${this._renderControls(tool, run)}
@@ -284,7 +290,7 @@
         case 'uninstaller-report':
           return `<div class="maintenance-controls maintenance-controls-wrap"><label>Search <input id="softwareSearch" type="search" value="${this.e(this._softwareSearch)}" placeholder="Name or publisher"></label>${runButton('Refresh installed apps')}<button type="button" class="btn btn-ghost" data-action="open-apps-settings">Windows Apps settings</button><label>Recently uninstalled app <input id="leftoverAppName" type="text" value="${this.e(this._leftoverAppName)}" placeholder="Exact application name"></label><button type="button" class="btn btn-ghost" data-action="scan-leftovers">Scan leftovers</button></div>`;
         default:
-          return `<div class="maintenance-controls">${runButton(tool.risk === 'none' ? 'Run check' : 'Run analysis')}</div>`;
+          return `<div class="maintenance-controls">${runButton(tool.impact === 'none' ? 'Run check' : 'Run analysis')}</div>`;
       }
     },
 
@@ -367,7 +373,7 @@
       const all = result.services || [];
       const services = this._serviceRiskFilter === 'flagged' ? all.filter((service) => service.flagged) : all;
       return `${this._summaryTiles([['Services reviewed', result.serviceCount || all.length], ['Auto-start', result.autoStartCount || 0], ['Flagged', result.flaggedCount || 0, result.flaggedCount ? 'warn' : 'ok']])}
-        ${services.length ? `<div class="maintenance-table-wrap"><table class="maintenance-table"><thead><tr><th>Service</th><th>Publisher</th><th>State / start</th><th>Account</th><th>Risk</th><th></th></tr></thead><tbody>${services.map((service) => `<tr><td><strong>${this.e(service.displayName)}</strong><small>${this.e(service.name)}</small><small class="path-cell" title="${this.e(service.pathName)}">${this.e(service.executablePath || service.pathName)}</small></td><td>${this.e(service.publisher || 'Unknown')}<small>${this.e(service.signature || 'Unknown signature')}</small></td><td>${this.e(service.state)}<small>${this.e(service.startType)}</small></td><td>${this.e(service.account)}</td><td><span class="risk-pill risk-${this.e(service.risk)}">${this.e(service.risk)}</span><small>${this.e(service.flagReason || 'No specific risk signal.')}</small></td><td>${service.executablePath ? `<button class="btn btn-xs btn-ghost" data-action="reveal" data-path="${this.e(service.executablePath)}">File</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="maintenance-empty"><h3>No services match this filter</h3></div>'}`;
+        ${services.length ? `<div class="maintenance-table-wrap"><table class="maintenance-table"><thead><tr><th>Service</th><th>Publisher</th><th>State / start</th><th>Account</th><th>Risk</th><th></th></tr></thead><tbody>${services.map((service) => `<tr><td><strong>${this.e(service.displayName)}</strong><small>${this.e(service.name)}</small><small class="path-cell" title="${this.e(service.pathName)}">${this.e(service.executablePath || service.pathName)}</small></td><td>${this.e(service.publisher || 'Unknown')}<small>${this.e(service.signature || 'Unknown signature')}</small></td><td>${this.e(service.state)}<small>${this.e(service.startType)}</small></td><td>${this.e(service.account)}</td><td><span class="tag-pill tag-${this.e(service.risk)}">${this.e(service.risk)}</span><small>${this.e(service.flagReason || 'No specific risk signal.')}</small></td><td>${service.executablePath ? `<button class="btn btn-xs btn-ghost" data-action="reveal" data-path="${this.e(service.executablePath)}">File</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="maintenance-empty"><h3>No services match this filter</h3></div>'}`;
     },
 
     _renderTasks(result) {
@@ -383,7 +389,7 @@
         ${this._summaryTiles([['Custom entries', result.entryCount || 0], ['Flagged', result.flaggedCount || 0, result.flaggedCount ? 'warn' : 'ok'], ['Lines', result.lineCount || 0], ['Size', this.bytes(result.sizeBytes)]])}
         <dl class="metadata-list"><dt>SHA-256</dt><dd class="path-cell" title="${this.e(result.hash)}">${this.e(result.hash)}</dd><dt>Modified</dt><dd>${this.e(result.modifiedAt)}</dd><dt>ACL safety</dt><dd>${this.e(result.acl?.summary || 'Unknown')}</dd><dt>Baseline</dt><dd>${this.e(result.baselineStatus || 'not-set')}</dd></dl>
         <div class="maintenance-result-toolbar"><span>This diagnostic is read-only.</span><button class="btn btn-sm" data-action="approve-hosts-baseline">Approve current hash as baseline</button></div>
-        ${result.entries?.length ? `<div class="maintenance-table-wrap"><table class="maintenance-table"><thead><tr><th>Line</th><th>Destination</th><th>Host</th><th>Assessment</th></tr></thead><tbody>${result.entries.map((entry) => `<tr><td>${entry.line}</td><td>${this.e(entry.ip)}</td><td>${this.e(entry.host)}</td><td><span class="risk-pill risk-${entry.severity === 'high' ? 'critical' : entry.severity}">${this.e(entry.severity)}</span><small>${this.e(entry.flagReason)}</small></td></tr>`).join('')}</tbody></table></div>` : '<div class="maintenance-empty compact"><h3>No custom hosts entries</h3><p>The file was successfully read and verified; an empty custom-entry list is a clean result.</p></div>'}
+        ${result.entries?.length ? `<div class="maintenance-table-wrap"><table class="maintenance-table"><thead><tr><th>Line</th><th>Destination</th><th>Host</th><th>Assessment</th></tr></thead><tbody>${result.entries.map((entry) => `<tr><td>${entry.line}</td><td>${this.e(entry.ip)}</td><td>${this.e(entry.host)}</td><td><span class="tag-pill tag-${entry.severity === 'high' ? 'critical' : entry.severity}">${this.e(entry.severity)}</span><small>${this.e(entry.flagReason)}</small></td></tr>`).join('')}</tbody></table></div>` : '<div class="maintenance-empty compact"><h3>No custom hosts entries</h3><p>The file was successfully read and verified; an empty custom-entry list is a clean result.</p></div>'}
         ${result.malformed?.length ? this._renderIssueList(result.malformed, 'Malformed lines') : ''}${result.duplicates?.length ? this._renderIssueList(result.duplicates, 'Duplicate mappings') : ''}${result.diff?.length ? this._renderIssueList(result.diff, 'Changes from baseline') : ''}`;
     },
 
@@ -402,7 +408,7 @@
     _renderStartup(result) {
       const items = result.items || [];
       return `${this._summaryTiles([['Startup items', items.length], ['Registry', items.filter((item) => item.source === 'registry').length], ['Startup folders', items.filter((item) => item.source === 'startup-folder').length], ['Disabled', items.filter((item) => item.enabled === false).length]])}
-        ${items.length ? `<div class="maintenance-table-wrap"><table class="maintenance-table"><thead><tr><th>Application</th><th>Publisher</th><th>Source</th><th>Command</th><th>Risk</th><th></th></tr></thead><tbody>${items.map((item) => `<tr><td><strong>${this.e(item.friendlyName || item.name)}</strong><small>${this.e(item.name)}</small></td><td>${this.e(item.publisher || 'Unknown')}<small>${this.e(item.signature || 'Unknown signature')}</small></td><td>${this.e(item.scope)}<small>${this.e(item.source)} · ${this.e(item.location)}</small></td><td class="path-cell" title="${this.e(item.command)}">${this.e(item.command)}</td><td><span class="risk-pill risk-${this.e(item.risk || 'medium')}">${this.e(item.risk || 'unknown')}</span><small>${this.e(item.riskReason)}</small></td><td><button class="btn btn-sm ${item.enabled === false ? 'btn-primary' : 'btn-ghost'}" data-action="toggle-startup" data-item-id="${this.e(item.id)}" data-enable="${item.enabled === false}">${item.enabled === false ? 'Enable' : 'Disable'}</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="maintenance-empty"><h3>No startup items found</h3><p>No supported Run, RunOnce, or Startup-folder entries were returned.</p></div>'}`;
+        ${items.length ? `<div class="maintenance-table-wrap"><table class="maintenance-table"><thead><tr><th>Application</th><th>Publisher</th><th>Source</th><th>Command</th><th>Risk</th><th></th></tr></thead><tbody>${items.map((item) => `<tr><td><strong>${this.e(item.friendlyName || item.name)}</strong><small>${this.e(item.name)}</small></td><td>${this.e(item.publisher || 'Unknown')}<small>${this.e(item.signature || 'Unknown signature')}</small></td><td>${this.e(item.scope)}<small>${this.e(item.source)} · ${this.e(item.location)}</small></td><td class="path-cell" title="${this.e(item.command)}">${this.e(item.command)}</td><td><span class="tag-pill tag-${this.e(item.risk || 'medium')}">${this.e(item.risk || 'unknown')}</span><small>${this.e(item.riskReason)}</small></td><td><button class="btn btn-sm ${item.enabled === false ? 'btn-primary' : 'btn-ghost'}" data-action="toggle-startup" data-item-id="${this.e(item.id)}" data-enable="${item.enabled === false}">${item.enabled === false ? 'Enable' : 'Disable'}</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="maintenance-empty"><h3>No startup items found</h3><p>No supported Run, RunOnce, or Startup-folder entries were returned.</p></div>'}`;
     },
 
     _renderSoftware(result) {
@@ -417,7 +423,7 @@
     _renderLeftovers(result) {
       const folders = result.leftovers.filter((item) => item.kind === 'directory');
       const registry = result.leftovers.filter((item) => item.kind === 'registry');
-      return `<section class="leftover-results"><h3>Potential leftovers for ${this.e(result.scannedApp)}</h3><p>Folder suggestions can be staged in the Safety Vault. Registry suggestions are read-only.</p>${folders.map((item) => `<label class="leftover-row"><input type="checkbox" class="leftover-select" data-path="${this.e(item.path)}"><span class="path-cell">${this.e(item.path)}</span><span>${this.bytes(item.sizeBytes)} · ${item.fileCount || 0} files</span></label>`).join('')}${folders.length ? '<button class="btn btn-primary" data-action="vault-leftovers">Stage selected folders</button>' : ''}${registry.map((item) => `<div class="leftover-row"><span class="risk-pill risk-none">Read-only</span><span class="path-cell">${this.e(item.path)}</span></div>`).join('')}</section>`;
+      return `<section class="leftover-results"><h3>Potential leftovers for ${this.e(result.scannedApp)}</h3><p>Folder suggestions can be staged in the Safety Vault. Registry suggestions are read-only.</p>${folders.map((item) => `<label class="leftover-row"><input type="checkbox" class="leftover-select" data-path="${this.e(item.path)}"><span class="path-cell">${this.e(item.path)}</span><span>${this.bytes(item.sizeBytes)} · ${item.fileCount || 0} files</span></label>`).join('')}${folders.length ? '<button class="btn btn-primary" data-action="vault-leftovers">Stage selected folders</button>' : ''}${registry.map((item) => `<div class="leftover-row"><span class="tag-pill tag-none">Read-only</span><span class="path-cell">${this.e(item.path)}</span></div>`).join('')}</section>`;
     },
 
     _renderShredder(result) {
@@ -453,7 +459,7 @@
     },
 
     _renderIssueList(items, title) {
-      return `<section class="maintenance-issues"><h3>${this.e(title)}</h3>${(items || []).slice(0, 200).map((item) => `<div><span class="risk-pill risk-medium">Review</span><span class="path-cell" title="${this.e(item.path || item.line || '')}">${this.e(item.path || item.text || item.line || '')}</span><small>${this.e(item.reason || item.error || item.type || '')}</small></div>`).join('')}</section>`;
+      return `<section class="maintenance-issues"><h3>${this.e(title)}</h3>${(items || []).slice(0, 200).map((item) => `<div><span class="tag-pill tag-medium">Review</span><span class="path-cell" title="${this.e(item.path || item.line || '')}">${this.e(item.path || item.text || item.line || '')}</span><small>${this.e(item.reason || item.error || item.type || '')}</small></div>`).join('')}</section>`;
     },
 
     _renderPathList(paths) {

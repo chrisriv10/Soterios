@@ -2,74 +2,74 @@
   "scripts": [
     {
       "id": "clear-temp-files", "name": "Clear Temp Files", "description": "Analyze protected temp locations, preview removable items, and permanently clear an approved selection.",
-      "file": "safeScripts/clearTemp.js", "runner": "script", "category": "cleanup-storage", "risk": "medium", "icon": "trash-2",
+      "file": "safeScripts/clearTemp.js", "runner": "script", "category": "cleanup-storage", "impact": "medium", "icon": "trash-2",
       "inputs": ["minimumAgeDays", "mode", "selectedPaths"], "progress": true, "cancellation": true, "scheduling": ["analyze", "auto-clean"], "visible": true
     },
     {
       "id": "large-files-report", "name": "Large Files", "description": "Find, sort, reveal, and vault large files without a hidden result limit.",
-      "file": "safeScripts/largeFilesReport.js", "runner": "script", "category": "cleanup-storage", "risk": "low", "icon": "file-search",
+      "file": "safeScripts/largeFilesReport.js", "runner": "script", "category": "cleanup-storage", "impact": "low", "icon": "file-search",
       "inputs": ["scanPath", "thresholdMB", "page", "pageSize"], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
     },
     {
       "id": "browser-cache-report", "name": "Browser Cache", "description": "Measure cache-only data across installed browser profiles without touching history, cookies, passwords, or site storage.",
-      "file": "safeScripts/browserCacheReport.js", "runner": "script", "category": "cleanup-storage", "risk": "medium", "icon": "globe-2",
+      "file": "safeScripts/browserCacheReport.js", "runner": "script", "category": "cleanup-storage", "impact": "medium", "icon": "globe-2",
       "inputs": ["mode", "browserIds"], "progress": true, "cancellation": true, "scheduling": ["analyze", "auto-clean"], "visible": true
     },
     {
       "id": "disk-space-report", "name": "Disk Space", "description": "Review friendly volume health, filesystem, drive type, and free-space thresholds.",
-      "file": "safeScripts/diskSpaceReport.js", "runner": "script", "category": "cleanup-storage", "risk": "none", "icon": "hard-drive",
+      "file": "safeScripts/diskSpaceReport.js", "runner": "script", "category": "cleanup-storage", "impact": "none", "icon": "hard-drive",
       "inputs": [], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
     },
     {
       "id": "duplicate-finder", "name": "Duplicate Finder", "description": "Find duplicate files with streamed SHA-256 hashing and move selected copies to the Safety Vault.",
-      "file": "safeScripts/duplicateFinder.js", "runner": "script", "category": "cleanup-storage", "risk": "medium", "icon": "copy",
+      "file": "safeScripts/duplicateFinder.js", "runner": "script", "category": "cleanup-storage", "impact": "medium", "icon": "copy",
       "inputs": ["scanPath", "minSize", "extensions"], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
     },
     {
       "id": "maintenance-safety-vault", "name": "Maintenance Safety Vault", "description": "Restore or permanently purge user files staged by maintenance during the last seven days.",
-      "runner": "service", "category": "privacy-recovery", "risk": "low", "icon": "archive-restore",
+      "runner": "service", "category": "privacy-recovery", "impact": "low", "icon": "archive-restore",
       "inputs": [], "progress": true, "cancellation": false, "scheduling": [], "visible": true
     },
     {
       "id": "windows-services-report", "name": "Windows Services", "description": "Inspect auto-start services, publishers, signatures, accounts, paths, and exact risk reasons (read-only).",
-      "file": "safeScripts/windowsServicesReport.js", "runner": "script", "category": "system-integrity", "risk": "none", "icon": "settings-2",
+      "file": "safeScripts/windowsServicesReport.js", "runner": "script", "category": "system-integrity", "impact": "none", "icon": "settings-2",
       "inputs": [], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
     },
     {
       "id": "scheduled-tasks-report", "name": "Scheduled Tasks", "description": "Review friendly task labels, raw identifiers, executable and COM actions, triggers, signatures, and risk reasons (read-only).",
-      "file": "safeScripts/scheduledTasksReport.js", "runner": "script", "category": "system-integrity", "risk": "none", "icon": "calendar-clock",
+      "file": "safeScripts/scheduledTasksReport.js", "runner": "script", "category": "system-integrity", "impact": "none", "icon": "calendar-clock",
       "inputs": [], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
     },
     {
       "id": "hosts-file-check", "name": "Hosts File Integrity", "description": "Verify hosts metadata, permissions, formatting, redirects, duplicates, and approved baseline state (read-only).",
-      "file": "safeScripts/hostsFileCheck.js", "runner": "script", "category": "system-integrity", "risk": "none", "icon": "shield-check",
+      "file": "safeScripts/hostsFileCheck.js", "runner": "script", "category": "system-integrity", "impact": "none", "icon": "shield-check",
       "inputs": [], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
     },
     {
       "id": "persistence-change-monitor", "name": "Persistence Change Monitor", "description": "Detect new or modified startup mechanisms against a baseline you explicitly approve.",
-      "runner": "service", "category": "system-integrity", "risk": "none", "icon": "radar",
+      "runner": "service", "category": "system-integrity", "impact": "none", "icon": "radar",
       "inputs": [], "progress": true, "cancellation": false, "scheduling": ["startup", "daily"], "visible": true
     },
     {
       "id": "list-startup-items", "name": "Startup Items", "description": "Inspect comprehensive Run, RunOnce, 32/64-bit registry, and Startup-folder entries with source-aware reversible controls.",
-      "file": "safeScripts/listStartupItems.js", "runner": "script", "category": "app-management", "risk": "medium", "icon": "rocket",
+      "file": "safeScripts/listStartupItems.js", "runner": "script", "category": "app-management", "impact": "medium", "icon": "rocket",
       "inputs": [], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
     },
     {
       "id": "uninstaller-report", "name": "Software Uninstaller", "description": "Search installed desktop and Store apps, launch native uninstallers, and preview safe leftover folders.",
-      "file": "safeScripts/uninstallerReport.js", "runner": "script", "category": "app-management", "risk": "medium", "icon": "package-x",
+      "file": "safeScripts/uninstallerReport.js", "runner": "script", "category": "app-management", "impact": "medium", "icon": "package-x",
       "inputs": [], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
     },
     {
       "id": "file-shredder", "name": "File Shredder", "description": "Irreversibly delete selected files with storage-aware warnings and protected-path enforcement.",
-      "file": "safeScripts/fileShredder.js", "runner": "script", "category": "privacy-recovery", "risk": "critical", "icon": "file-x-2",
+      "file": "safeScripts/fileShredder.js", "runner": "script", "category": "privacy-recovery", "impact": "critical", "icon": "file-x-2",
       "inputs": ["paths", "passes", "confirmation"], "progress": true, "cancellation": true, "scheduling": [], "visible": true
     },
 
-    { "id": "network-report", "name": "Network Report", "description": "Reports network interfaces and connections.", "file": "safeScripts/networkReport.js", "runner": "script", "category": "system-integrity", "risk": "none", "visible": false },
-    { "id": "delete-files", "name": "Delete Selected Files", "description": "Legacy direct deletion action.", "file": "safeScripts/deleteFiles.js", "runner": "script", "category": "internal", "risk": "critical", "visible": false },
-    { "id": "clear-browser-cache", "name": "Clear Browser Cache", "description": "Internal browser cache cleanup action.", "file": "safeScripts/clearBrowserCache.js", "runner": "script", "category": "internal", "risk": "medium", "visible": false },
-    { "id": "launch-uninstaller", "name": "Launch Uninstaller", "description": "Internal native uninstaller action.", "file": "safeScripts/launchUninstaller.js", "runner": "script", "category": "internal", "risk": "medium", "visible": false },
-    { "id": "remove-leftovers", "name": "Remove Leftover Folders", "description": "Legacy leftover removal action.", "file": "safeScripts/removeLeftovers.js", "runner": "script", "category": "internal", "risk": "critical", "visible": false }
+    { "id": "network-report", "name": "Network Report", "description": "Reports network interfaces and connections.", "file": "safeScripts/networkReport.js", "runner": "script", "category": "system-integrity", "impact": "none", "visible": false },
+    { "id": "delete-files", "name": "Delete Selected Files", "description": "Legacy direct deletion action.", "file": "safeScripts/deleteFiles.js", "runner": "script", "category": "internal", "impact": "critical", "visible": false },
+    { "id": "clear-browser-cache", "name": "Clear Browser Cache", "description": "Internal browser cache cleanup action.", "file": "safeScripts/clearBrowserCache.js", "runner": "script", "category": "internal", "impact": "medium", "visible": false },
+    { "id": "launch-uninstaller", "name": "Launch Uninstaller", "description": "Internal native uninstaller action.", "file": "safeScripts/launchUninstaller.js", "runner": "script", "category": "internal", "impact": "medium", "visible": false },
+    { "id": "remove-leftovers", "name": "Remove Leftover Folders", "description": "Legacy leftover removal action.", "file": "safeScripts/removeLeftovers.js", "runner": "script", "category": "internal", "impact": "critical", "visible": false }
   ]
 }

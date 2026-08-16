@@ -111,6 +111,7 @@ window.Pages.settings = {
             </div>
             <label class="toggle"><input type="checkbox" id="scanHistoryToggle" ${settings.features.scanHistory ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
+          <div class="privacy-lock-hint" style="display:none; margin-top:8px; font-size:0.8rem; color:var(--text-dim);"></div>
         </div>
 
         <div class="card">
@@ -163,6 +164,7 @@ window.Pages.settings = {
             </div>
             <label class="toggle"><input type="checkbox" id="vpnAutoConnectToggle" ${settings.features.vpnAutoConnect ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
+          <div class="privacy-lock-hint" style="display:none; margin-top:8px; font-size:0.8rem; color:var(--text-dim);"></div>
         </div>
 
         <div class="card">
@@ -248,7 +250,6 @@ window.Pages.settings = {
             <label class="toggle"><input type="checkbox" id="privacyModeToggle" ${settings.features.privacyMode ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
           <div id="privacyModeStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);">${escapeHtml(t('settings.privacyMode.checking'))}</div>
-          <div id="privacyLockHint" style="display:none; margin-top:8px; font-size:0.8rem; color:var(--text-dim);"></div>
         </div>
 
         <div class="card">
@@ -510,7 +511,7 @@ window.Pages.settings = {
     };
 
     function applyPrivacyModeLock(privacyOn, snapshot) {
-      const hintEl = container.querySelector('#privacyLockHint');
+      const lockedCards = new Set();
       for (const key of Object.keys(privacyLockedToggleIds)) {
         const el = container.querySelector(privacyLockedToggleIds[key]);
         if (!el) continue;
@@ -519,6 +520,8 @@ window.Pages.settings = {
           el.checked = false;
           el.disabled = true;
           if (row) row.style.opacity = '0.55';
+          const card = el.closest('.card');
+          if (card) lockedCards.add(card);
         } else {
           el.disabled = false;
           if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, key)) {
@@ -527,9 +530,11 @@ window.Pages.settings = {
           if (row) row.style.opacity = '';
         }
       }
-      if (hintEl) {
-        hintEl.style.display = privacyOn ? 'block' : 'none';
-        hintEl.textContent = privacyOn ? t('settings.privacyMode.locked') : '';
+      const lockedText = t('settings.privacyMode.locked');
+      for (const hintEl of container.querySelectorAll('.privacy-lock-hint')) {
+        const show = privacyOn && lockedCards.has(hintEl.closest('.card'));
+        hintEl.style.display = show ? 'block' : 'none';
+        hintEl.textContent = show ? lockedText : '';
       }
     }
 
@@ -622,12 +627,12 @@ updatePrivacyModeStatus();
             <button class="btn btn-sm browser-ext-install" data-browser="${escapeHtml(b.id)}" style="flex-shrink:0;" disabled>${escapeHtml(t('settings.browserExtension.installBtn'))}</button>
           </div>`;
         }).join('');
-        body.innerHTML = `
-          <div style="padding:12px; margin-bottom:10px; background:var(--panel-bg-alt, rgba(128,128,128,0.08)); border:1px solid var(--border, rgba(128,128,128,0.2)); border-radius:8px;">
-            <div class="toggle-label" style="margin-bottom:6px;">Privacy disclosure before installation</div>
-            <div class="toggle-desc">Soterios records no analytics, product telemetry, tracking identifiers, passwords, or browsing history. HIBP and signed-feed updates are selected by default in the extension, but no external request occurs until you confirm its first-run choices. Google Safe Browsing stays off until you add your own key. Continuous access to sites is optional; on-demand protection remains available.</div>
-            <label style="display:flex; align-items:flex-start; gap:8px; margin-top:10px; font-size:0.85rem;"><input type="checkbox" id="browserExtDisclosureConfirm" style="margin-top:3px;"> <span>I understand that online protection services are separate from telemetry and will be controlled in the extension.</span></label>
-          </div>
+body.innerHTML = `
+          <details class="browser-ext-disclosure">
+            <summary><span class="toggle-label">${escapeHtml(t('settings.browserExtension.disclosureTitle'))}</span><span class="browser-ext-disclosure-chevron" aria-hidden="true">▸</span></summary>
+            <div class="toggle-desc">${escapeHtml(t('settings.browserExtension.disclosureText'))}</div>
+            <label style="display:flex; align-items:flex-start; gap:8px; margin-top:10px; font-size:0.85rem;"><input type="checkbox" id="browserExtDisclosureConfirm" style="margin-top:3px;"> <span>${escapeHtml(t('settings.browserExtension.disclosureConfirm'))}</span></label>
+          </details>
           <div class="toggle-desc" style="margin-bottom:8px;">Bundled extension: ${escapeHtml(state.bundledVersion || 'unavailable')} &nbsp;·&nbsp; Installed: ${escapeHtml(state.installedVersion || 'not staged')} &nbsp;·&nbsp; Native binary: ${state.nativeHostBinaryPresent ? 'present' : 'not staged'} &nbsp;·&nbsp; Desktop bridge: ${state.bridge?.connected ? 'host connected' : state.bridge?.listening ? 'ready' : 'unavailable'}</div>
           ${rows}
           <div id="browserExtSteps" style="display:none; margin-top:12px; padding:12px; background:var(--panel-bg-alt, rgba(128,128,128,0.08)); border-radius:6px;">

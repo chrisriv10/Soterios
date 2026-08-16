@@ -1645,6 +1645,16 @@ body {
 .toggle-row:last-child { border-bottom: none; }
 .toggle-label { font-weight: 500; }
 .toggle-desc { font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; }
+.browser-ext-disclosure { margin-bottom: 10px; border: 1px solid var(--glass-border); border-radius: 8px; background: var(--panel-bg-alt, rgba(128,128,128,0.08)); }
+.browser-ext-disclosure > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; cursor: pointer; list-style: none; user-select: none; }
+.browser-ext-disclosure > summary::-webkit-details-marker { display: none; }
+.browser-ext-disclosure > summary:hover { background: var(--glass-bg, rgba(255,255,255,0.04)); }
+.browser-ext-disclosure[open] > summary { border-bottom: 1px solid var(--glass-border); }
+.browser-ext-disclosure-chevron { color: var(--text-muted); font-size: 0.7rem; transition: transform 0.15s ease; }
+.browser-ext-disclosure[open] .browser-ext-disclosure-chevron { transform: rotate(90deg); }
+.browser-ext-disclosure > .toggle-desc, .browser-ext-disclosure > label { padding: 0 12px 12px; }
+.browser-ext-disclosure > label { margin-top: 0; }
+[dir="rtl"] .browser-ext-disclosure[open] .browser-ext-disclosure-chevron { transform: rotate(-90deg); }
 .q-tabs .q-tab { border-color: var(--glass-border); background: var(--glass-bg, rgba(255,255,255,0.04)); color: inherit; }
 .q-tabs .q-tab-active { background: var(--accent-primary, #00c88c); border-color: var(--accent-primary, #00c88c); color: #fff; }
 .q-select {
@@ -2852,7 +2862,7 @@ body {
 }
 
 .maintenance-state,
-.risk-pill {
+.tag-pill {
   display: inline-flex;
   align-items: center;
   width: fit-content;
@@ -2866,22 +2876,22 @@ body {
 .maintenance-state.running,
 .maintenance-state.warning,
 .maintenance-state.failed,
-.risk-medium,
-.risk-high {
+.tag-medium,
+.tag-high {
   color: var(--warn);
   background: var(--warn-glow);
 }
 
 .maintenance-state.completed,
 .maintenance-state.success,
-.risk-none,
-.risk-low {
+.tag-none,
+.tag-low {
   color: var(--ok);
   background: var(--ok-glow);
 }
 
 .maintenance-state.canceled,
-.risk-critical {
+.tag-critical {
   color: var(--danger);
   background: var(--danger-glow);
 }
