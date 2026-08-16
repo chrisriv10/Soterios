@@ -1,0 +1,26 @@
+[package]
+name = "soterios-process-inspector"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Local-only Windows process collector for Soterios"
+
+[dependencies]
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+windows = { version = "0.57", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_ProcessStatus",
+  "Win32_System_SystemInformation",
+  "Win32_System_Threading",
+] }
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+opt-level = 3
+panic = "abort"
+strip = "symbols"

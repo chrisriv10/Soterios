@@ -2,64 +2,48 @@
 
 ## Process Inspector
 
-The **Processes** page lists running processes with risk scoring and resource usage.
+The Process Inspector is local-only and has two persistent views over one shared data model.
 
-### Sorting and filters
+- **Simple** groups application instances and explains resource use and security findings in plain language.
+- **Technical** shows a virtualized process tree with stable selection, sorting, filtering, lineage, identity, owner, integrity, architecture, protection level, CPU user/kernel time, memory, I/O, handles, threads, priority, affinity, and efficiency status when Windows makes those facts available.
 
-- Default sort: **risk score** (highest first), then **CPU + memory** within the same risk level.
-- Filter by risk level or search by process name, path, or PID.
-- Auto-refreshes every 3 seconds.
+The bundled Rust/MSVC helper uses documented Windows APIs and communicates with the main process over bounded, versioned stdin/stdout frames. It is an ordinary child process, not a service or driver. If it is missing or fails integrity verification, Soterios enters a clearly labeled compatibility mode and displays unavailable counters as **N/A**, never as zero.
 
-### Risk signals
+### Live data and privacy
 
-The risk engine flags processes that show suspicious patterns:
+- The default refresh interval is one second. A full snapshot is followed by process deltas, preserving selection, expansion, filters, and scroll position.
+- Process identity is `{ PID, creation time }`, preventing actions from targeting a different process after PID reuse.
+- Performance history remains in RAM for at most 15 minutes. Exited history ages out with the same limit.
+- Soterios does not persist process events or upload process data.
+- A trace is written only after an explicit Save action. Encrypted traces use AES-256-GCM with an Argon2id-derived passphrase key. Portable JSON exports default to strict redaction.
+- The diagnostic exporter contains versions, capabilities, sanitized errors, and collector timing only. It excludes process names, paths, command lines, users, and connections.
 
-- Running from `%AppData%`, `%Temp%`, or other user-writable paths
-- Double file extensions (e.g., `document.pdf.exe`)
-- Names mimicking system processes
-- Encoded PowerShell command lines
-- Known LOLBins (mshta, regsvr32, certutil, bitsadmin, etc.)
-- Executables on UNC or non-system drives
+### Assessments
 
-### Ending a process
+Results use **No concerns detected**, **Unverified**, **Review recommended**, and **High concern**. “No concerns detected” is not a safety guarantee. Each result includes a score, confidence, evidence, rule version, and evaluation time.
 
-Select a process and click **Kill Process**. Soterios blocks termination of protected system processes (System, csrss.exe, lsass.exe, and others).
+Rules cover unusual locations, system-process masquerading, suspicious parent/child chains, encoded PowerShell and LOLBin arguments, invalid signatures, and reputation evidence. A trusted hash or publisher can reduce low-confidence static findings, but it cannot suppress critical identity, invalid-signature, lineage, or active-behavior evidence.
+
+### Actions
+
+Soterios re-reads the target creation time immediately before every action. Protected processes and Soterios itself are denied. Technical actions carry impact-specific confirmation.
+
+Available actions include terminate, restart, suspend, resume, priority, affinity, efficiency mode, and user-mode dumps. Availability depends on the Windows version, target protection level, and access rights. Run Task accepts a structured executable and argument array and never invokes a command shell.
+
+### Optional reputation
+
+Online reputation is off by default and runs only when the user clicks **Check hash reputation**. It sends only the executable SHA-256 to the VirusTotal file-report endpoint. Files, paths, commands, usernames, addresses, and system details are never sent. The user supplies the API key, which is protected with Electron/Windows secure storage. Results are cached locally for seven days. Privacy Mode disables the feature completely.
+
+### Capability boundaries
+
+The current driverless release exposes module and thread enumeration and handle counts. Named-handle search, Windows Wait Chain Traversal, and ETW deep-inspection capture remain capability-gated and are reported as unavailable; Soterios never fabricates partial results. No quarantine, kill-tree, permanent network blocking, kernel driver, or automatic containment is included.
+
+See [Process Inspector protocol](../PROCESS_INSPECTOR_PROTOCOL.md) and [security and privacy model](../PROCESS_INSPECTOR_SECURITY.md).
 
 ---
 
 ## Network Monitor
 
-The **Network Monitor** page shows active TCP connections and interface statistics.
+The Network Monitor shows active TCP connections and interface statistics, including local/remote endpoints, owning process when resolvable, reverse DNS, service names, and evidence-based classification. Basic scoring requires no API key. Optional geolocation and the Network Perimeter Map are controlled in Settings.
 
-### Connection details
-
-Each connection can display:
-
-- Local and remote addresses and ports
-- Associated process name
-- Reverse DNS hostname (when resolvable)
-- Service name for well-known ports
-- Risk classification: **Safe**, **Unknown**, or **Malicious**
-
-Classification uses private IP detection, blocklist membership, and port/hostname heuristics. No API keys are required for basic scoring.
-
-### Interface statistics
-
-Per-network-interface receive/transmit rates and totals (via system information APIs).
-
-### Optional features
-
-Enable in **Settings**:
-
-- **Geo Lookup** — Adds geolocation context to connections (requires network).
-- **Network Perimeter Map** — Visual heat map of connection destinations.
-
-### Firewall page
-
-The **Firewall** page complements network monitoring with:
-
-- Windows Firewall profile status (Domain, Private, Public)
-- Rule summaries
-- Management of Soterios-created rules (prefixed `Soterios - `)
-
-Auto-refreshes every 3 seconds when the page is open.
+The Firewall page shows Windows Firewall profiles and manages only rules created by Soterios with the `Soterios - ` prefix.
