@@ -51,7 +51,7 @@ module.exports = {
     const report = {
       title: friendlyTitle,
       generatedAt: generatedAt.toISOString(),
-      app: { name: 'Soterios', version: args.version || '1.2.1' },
+      app: { name: 'Soterios', version: args.version || '1.3.0' },
       overview: overviewResult.data,
       system: systemResult.data,
       recentScans: scanReports,

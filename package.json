@@ -1,7 +1,7 @@
 {
   "name": "soterios",
   "productName": "Soterios",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "A local-first desktop suite for system maintenance, monitoring, and basic security checks.",
   "main": "src/main/main.js",
   "author": "Soterios",
@@ -87,12 +87,17 @@
       {
         "from": "browser-extension/dist/chromium",
         "to": "browser-extension",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "build/native",
         "to": "native",
-        "filter": ["soterios-process-inspector.exe", "checksums.json"]
+        "filter": [
+          "soterios-process-inspector.exe",
+          "checksums.json"
+        ]
       }
     ],
     "win": {
@@ -107,7 +112,9 @@
       "icon": "assets/icon.ico",
       "artifactName": "${productName}-Setup-${version}.${ext}",
       "signAndEditExecutable": true,
-    "signExts": [".exe"],
+      "signExts": [
+        ".exe"
+      ],
       "requestedExecutionLevel": "requireAdministrator",
       "signtoolOptions": {
         "publisherName": "Chris Rivera"

@@ -334,7 +334,7 @@ window.Pages.settings = {
         <div class="card">
           <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.about'))}</div>
           <div style="font-size:0.9rem; line-height:1.8;">
-            <div><strong>Soterios</strong> v${escapeHtml(appInfo.version || '1.2.1')}</div>
+            <div><strong>Soterios</strong> v${escapeHtml(appInfo.version || '1.3.0')}</div>
             <div style="color:var(--text-muted); margin-top:8px;">${escapeHtml(t('settings.aboutDesc'))}</div>
             <div style="margin-top:12px; font-size:0.8rem;">
               <div>${escapeHtml(t('settings.clamavPath'))}</div>

@@ -31,7 +31,7 @@ Download the latest Windows release:
 
 | Platform | Installer | Notes |
 |----------|-----------|-------|
-| **Windows** | `Soterios-Setup-1.2.1.exe` | NSIS installer · requires admin for system-level checks |
+| **Windows** | `Soterios-Setup-1.3.0.exe` | NSIS installer · requires admin for system-level checks |
 
 ---
 
