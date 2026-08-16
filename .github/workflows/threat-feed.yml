@@ -31,7 +31,7 @@ jobs:
         run: |
           test -n "$URLHAUS_AUTH_KEY"
           curl --fail --silent --show-error --retry 3 "https://hole.cert.pl/domains/v2/domains.txt" -o certpl-domains.txt
-          curl --fail --silent --show-error --retry 3 -H "Auth-Key: ${URLHAUS_AUTH_KEY}" "https://urlhaus-api.abuse.ch/v2/urls/recent/" -o urlhaus.json
+          curl --fail --silent --show-error --retry 3 -H "Auth-Key: ${URLHAUS_AUTH_KEY}" "https://urlhaus-api.abuse.ch/v1/urls/recent/" -o urlhaus.json
       - name: Normalize, shard, hash, and sign
         env:
           THREAT_FEED_PRIVATE_KEY: ${{ secrets.THREAT_FEED_PRIVATE_KEY }}
