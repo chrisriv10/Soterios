@@ -3564,6 +3564,52 @@ body.setup-mode .app-shell { display: block; }
   font-weight: 600;
 }
 
+.setup-lang-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.setup-lang-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--bg-surface);
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text-primary);
+  text-align: left;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.setup-lang-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-primary-glow);
+}
+
+.setup-lang-flag {
+  width: 32px;
+  height: 24px;
+  border-radius: 4px;
+  object-fit: cover;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  flex-shrink: 0;
+}
+
+.setup-lang-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[dir="rtl"] .setup-lang-card { text-align: right; }
+
 .setup-status {
   margin-top: 12px;
   font-size: 0.85rem;

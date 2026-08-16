@@ -94,6 +94,7 @@ function createHarness() {
 
   const themeCalls = [];
   const settingsCalls = [];
+  const localeCalls = [];
   const ApiStub = {
     getSettings: async () => ({ features: {}, ui: { theme: 'dark' } }),
     applyTheme: (name) => themeCalls.push(name),
@@ -105,7 +106,11 @@ function createHarness() {
     window: {
       Pages: {},
       api: { invoke: apiInvoke },
-      I18n: { t: (key) => key },
+      I18n: {
+        t: (key) => key,
+        setLocale: async (code) => localeCalls.push(code),
+        locale: 'en'
+      },
       AppRouter: { navigate: (page) => navCalls.push(page) },
       AppState: {},
       localStorage: { getItem: () => null, setItem: () => {} }
@@ -131,6 +136,21 @@ function createHarness() {
     assert.ok(fn, `no change listener registered for #${id}`);
     return fn({ target: el, currentTarget: el });
   }
+  const STEPS = ['welcome', 'language', 'theme', 'notifications', 'privacy', 'extension', 'scan'];
+  function activeStep() {
+    for (const step of STEPS) {
+      const el = registry.get('setupStep-' + step);
+      if (el && el.style.display === 'block') return step;
+    }
+    return null;
+  }
+  async function goToStep(step) {
+    for (let i = 0; i < 10; i++) {
+      if (activeStep() === step) return;
+      await click('setupNext');
+    }
+    throw new Error(`could not reach step ${step}, active=${activeStep()}`);
+  }
 
   return {
     sandbox,
@@ -140,10 +160,13 @@ function createHarness() {
     invokeCalls,
     settingsCalls,
     themeCalls,
+    localeCalls,
     navCalls,
     responses,
     click,
     change,
+    activeStep,
+    goToStep,
     flush: () => new Promise((resolve) => setImmediate(resolve)),
     page: sandbox.window.Pages.setup
   };
@@ -159,12 +182,12 @@ describe('first-run setup wizard source', () => {
     assert.match(setupSource, /destroy\(\)/);
   });
 
-  it('defines all six wizard steps in order', () => {
-    assert.match(setupSource, /'welcome', 'theme', 'notifications', 'privacy', 'extension', 'scan'/);
+  it('defines all seven wizard steps in order', () => {
+    assert.match(setupSource, /'welcome', 'language', 'theme', 'notifications', 'privacy', 'extension', 'scan'/);
   });
 
   it('shows the logo, welcome heading and subtitle on the first step', () => {
-    const welcomeStep = setupSource.slice(setupSource.indexOf("setupStep-welcome"), setupSource.indexOf("setupStep-theme"));
+    const welcomeStep = setupSource.slice(setupSource.indexOf("setupStep-welcome"), setupSource.indexOf("setupStep-language"));
     assert.match(welcomeStep, /setup-logo/);
     assert.match(welcomeStep, /\.\.\/\.\.\/\.\.\/assets\/icon\.png/);
     assert.match(welcomeStep, /setup\.title/);
@@ -205,13 +228,27 @@ describe('first-run setup wizard source', () => {
     assert.match(setupSource, /browserExtension:install/);
     assert.match(setupSource, /browserExtension:openPage/);
     assert.match(setupSource, /scan:quick/);
+    assert.match(setupSource, /i18n:listLocales/);
+    assert.match(setupSource, /window\.I18n\.setLocale/);
+    assert.match(setupSource, /ui: \{ language: code \}/);
+    assert.match(setupSource, /assets\/flags\//);
+  });
+
+  it('labels the language step through i18n keys', () => {
+    const languageStep = setupSource.slice(setupSource.indexOf("setupStep-language"), setupSource.indexOf("setupStep-theme"));
+    assert.match(languageStep, /setup\.languageTitle/);
+    assert.match(languageStep, /setup\.languageDesc/);
+    assert.match(languageStep, /setupLangGrid/);
+    assert.match(setupSource, /setup-lang-card/);
+    assert.match(styles, /\.setup-lang-grid/);
+    assert.match(styles, /\.setup-lang-flag/);
   });
 
   it('labels all wizard chrome through i18n keys', () => {
-    for (const key of ['setup.title', 'setup.subtitle', 'setup.skip', 'setup.skipSetup', 'setup.back', 'setup.next', 'setup.finish']) {
+    for (const key of ['setup.title', 'setup.subtitle', 'setup.skip', 'setup.skipSetup', 'setup.back', 'setup.next', 'setup.finish', 'setup.languageTitle', 'setup.languageDesc']) {
       assert.ok(setupSource.includes("'" + key + "'"), `wizard must reference the ${key} i18n key`);
     }
-    for (const id of ['setupSkip', 'setupSkipSetup', 'setupBack', 'setupNext', 'setupStep-welcome', 'setupStep-theme', 'setupStep-notifications', 'setupStep-privacy', 'setupStep-extension', 'setupStep-scan']) {
+    for (const id of ['setupSkip', 'setupSkipSetup', 'setupBack', 'setupNext', 'setupStep-welcome', 'setupStep-language', 'setupStep-theme', 'setupStep-notifications', 'setupStep-privacy', 'setupStep-extension', 'setupStep-scan']) {
       assert.ok(setupSource.includes('"' + id + '"'), `wizard must define #${id}`);
     }
   });
@@ -286,17 +323,49 @@ describe('first-run setup wizard behavior', () => {
   it('finishes the wizard from the last step', async () => {
     const h = createHarness();
     await h.page.render(h.container);
-    for (let i = 0; i < 5; i++) await h.click('setupNext');
+    await h.goToStep('scan');
     assert.equal(h.registry.get('setupNext').textContent, 'setup.finish');
     await h.click('setupNext');
     assert.ok(h.invokeCalls.some((c) => c[0] === 'db:setSetting' && c[1] === 'app.setupComplete' && c[2] === true));
     assert.deepEqual(h.navCalls, ['dashboard']);
   });
 
+  it('lists languages with flag images on the language step', async () => {
+    const h = createHarness();
+    h.responses['i18n:listLocales'] = [
+      { code: 'fr', label: 'Français' },
+      { code: 'de', label: 'Deutsch' }
+    ];
+    await h.page.render(h.container);
+    await h.goToStep('language');
+    const gridHtml = h.registry.get('setupLangGrid')._html;
+    assert.ok(gridHtml.includes('../../../assets/flags/fr.png'), 'fr card must reference its flag image');
+    assert.ok(gridHtml.includes('../../../assets/flags/de.png'), 'de card must reference its flag image');
+    assert.ok(gridHtml.includes('Français'));
+    assert.ok(gridHtml.includes('Deutsch'));
+    assert.ok(h.registry.get('setupLangBtn-fr'), 'fr card must be registered');
+  });
+
+  it('applies, persists, and re-renders the wizard on the chosen language', async () => {
+    const h = createHarness();
+    h.responses['i18n:listLocales'] = [
+      { code: 'fr', label: 'Français' },
+      { code: 'de', label: 'Deutsch' }
+    ];
+    await h.page.render(h.container);
+    await h.goToStep('language');
+    await h.click('setupLangBtn-fr');
+    await h.flush();
+    assert.deepEqual(h.localeCalls, ['fr']);
+    assert.ok(h.settingsCalls.some((p) => p.ui && p.ui.language === 'fr'));
+    assert.equal(h.activeStep(), 'language', 'wizard must stay on the language step after re-render');
+    assert.deepEqual(h.navCalls, [], 'changing language must not leave the wizard');
+  });
+
   it('applies and persists the theme from the theme step', async () => {
     const h = createHarness();
     await h.page.render(h.container);
-    await h.click('setupNext');
+    await h.goToStep('theme');
     await h.click('setupThemeCard-ocean');
     assert.deepEqual(h.themeCalls, ['ocean']);
     assert.equal(h.registry.get('setupThemeCard-ocean')._attrs['aria-pressed'], 'true');
@@ -307,8 +376,7 @@ describe('first-run setup wizard behavior', () => {
   it('disables scan notifications when notifications are turned off', async () => {
     const h = createHarness();
     await h.page.render(h.container);
-    await h.click('setupNext');
-    await h.click('setupNext');
+    await h.goToStep('notifications');
     h.registry.get('setupNotificationsToggle').checked = false;
     await h.change('setupNotificationsToggle');
     assert.ok(h.settingsCalls.some((p) => p.features && p.features.notificationsEnabled === false));
@@ -318,8 +386,7 @@ describe('first-run setup wizard behavior', () => {
   it('enables notifications without touching scan notifications', async () => {
     const h = createHarness();
     await h.page.render(h.container);
-    await h.click('setupNext');
-    await h.click('setupNext');
+    await h.goToStep('notifications');
     h.registry.get('setupNotificationsToggle').checked = true;
     await h.change('setupNotificationsToggle');
     assert.ok(h.settingsCalls.some((p) => p.features && p.features.notificationsEnabled === true));
@@ -334,9 +401,7 @@ describe('first-run setup wizard behavior', () => {
     };
     h.responses['db:getSetting'] = (key) => (String(key).startsWith('feature.') ? true : {});
     await h.page.render(h.container);
-    await h.click('setupNext');
-    await h.click('setupNext');
-    await h.click('setupNext');
+    await h.goToStep('privacy');
     h.registry.get('setupPrivacyToggle').checked = true;
     await h.change('setupPrivacyToggle');
     const snapshotCall = h.invokeCalls.find((c) => c[0] === 'db:setSetting' && c[1] === 'privacy.snapshot');
@@ -357,10 +422,7 @@ describe('first-run setup wizard behavior', () => {
       ]
     };
     await h.page.render(h.container);
-    await h.click('setupNext');
-    await h.click('setupNext');
-    await h.click('setupNext');
-    await h.click('setupNext');
+    await h.goToStep('extension');
     const installBtn = h.registry.get('setupExtBtn-chrome');
     assert.ok(installBtn, 'install button must exist for the detected browser');
     h.responses['browserExtension:install'] = { ok: true };
@@ -372,7 +434,7 @@ describe('first-run setup wizard behavior', () => {
     const h = createHarness();
     h.responses['scan:quick'] = {};
     await h.page.render(h.container);
-    for (let i = 0; i < 5; i++) await h.click('setupNext');
+    await h.goToStep('scan');
     await h.click('setupScanRun');
     assert.ok(h.invokeCalls.some((c) => c[0] === 'scan:quick'));
     assert.ok(h.invokeCalls.some((c) => c[0] === 'db:setSetting' && c[1] === 'app.setupComplete' && c[2] === true));
@@ -382,7 +444,7 @@ describe('first-run setup wizard behavior', () => {
   it('defers the first scan without completing it', async () => {
     const h = createHarness();
     await h.page.render(h.container);
-    for (let i = 0; i < 5; i++) await h.click('setupNext');
+    await h.goToStep('scan');
     await h.click('setupScanLater');
     await h.flush();
     assert.ok(!h.invokeCalls.some((c) => c[0] === 'scan:quick'));

@@ -7,7 +7,7 @@ window.Pages = window.Pages || {};
     sunset: '#f97316', violet: '#8b5cf6', crimson: '#dc2626', terminal: '#16a34a',
     midnight: '#38bdf8', bumblebee: '#facc15', monochrome: '#e5e5e5', rose: '#f472b6', aurora: '#60a5fa'
   };
-  const STEPS = ['welcome', 'theme', 'notifications', 'privacy', 'extension', 'scan'];
+  const STEPS = ['welcome', 'language', 'theme', 'notifications', 'privacy', 'extension', 'scan'];
 
   function escapeHtml(value) {
     return String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -55,6 +55,12 @@ window.Pages = window.Pages || {};
             <h1 class="setup-title">${escapeHtml(t('setup.title'))}</h1>
             <p class="setup-subtitle">${escapeHtml(t('setup.subtitle'))}</p>
             <button type="button" class="btn btn-primary setup-skip-setup" id="setupSkipSetup">${escapeHtml(t('setup.skipSetup'))}</button>
+          </section>
+
+          <section class="setup-step" id="setupStep-language">
+            <h2 class="setup-step-title">${escapeHtml(t('setup.languageTitle'))}</h2>
+            <p class="setup-step-desc">${escapeHtml(t('setup.languageDesc'))}</p>
+            <div class="setup-lang-grid" id="setupLangGrid"></div>
           </section>
 
           <section class="setup-step" id="setupStep-theme">
@@ -112,6 +118,7 @@ window.Pages = window.Pages || {};
       this._bindThemeCards(container);
       this._bindStepContent(container);
       this._goTo(0);
+      this._loadLanguageGrid(container, t);
       this._loadExtensionBody(container, t);
 
       try {
@@ -246,7 +253,7 @@ window.Pages = window.Pages || {};
     },
 
     async _applyCurrentStep() {
-      if (this._stepIndex === 1) {
+      if (this._stepIndex === 2) {
         await Api.updateSettings({ ui: { theme: this._theme } });
       }
     },
@@ -267,6 +274,42 @@ window.Pages = window.Pages || {};
       if (next) next.textContent = index === STEPS.length - 1 ? t('setup.finish') : t('setup.next');
       const skip = this._container.querySelector('#setupSkip');
       if (skip) skip.textContent = index === 0 ? t('setup.skipSetup') : t('setup.skip');
+    },
+
+    async _loadLanguageGrid(container, t) {
+      const grid = container.querySelector('#setupLangGrid');
+      if (!grid) return;
+      let locales = null;
+      try {
+        locales = await window.api.invoke('i18n:listLocales');
+      } catch (_) {}
+      if (!Array.isArray(locales) || locales.length === 0) {
+        locales = [{ code: 'en', label: 'English' }];
+      }
+      grid.innerHTML = locales.map((l) => `
+        <button type="button" class="setup-lang-card" id="setupLangBtn-${escapeHtml(l.code)}" data-lang="${escapeHtml(l.code)}">
+          <img class="setup-lang-flag" src="../../../assets/flags/${escapeHtml(l.code)}.png" alt="" loading="lazy" />
+          <span class="setup-lang-name">${escapeHtml(l.label)}</span>
+        </button>`).join('');
+      for (const l of locales) {
+        const btn = grid.querySelector('#setupLangBtn-' + l.code);
+        if (!btn) continue;
+        btn.addEventListener('click', async () => {
+          await this._applyLanguage(l.code, container, t);
+        });
+      }
+    },
+
+    async _applyLanguage(code, container, t) {
+      const keep = this._stepIndex;
+      try {
+        if (window.I18n) await window.I18n.setLocale(code);
+        await Api.updateSettings({ ui: { language: code } });
+      } catch (_) {}
+      if (container === this._container && !this._finishing) {
+        await this.render(container);
+        this._goTo(keep);
+      }
     },
 
     async _loadExtensionBody(container, t) {
