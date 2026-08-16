@@ -1,9 +1,0 @@
-{
-  "name": "com.soterios.credential_safety",
-  "description": "Soterios Credential Safety Native Messaging Host",
-  "path": "C:\\Users\\chris\\Desktop\\Soterios\\browser-extension\\src\\native-host.bat",
-  "type": "stdio",
-  "allowed_origins": [
-    "chrome-extension://__REPLACE_WITH_EXTENSION_ID__/"
-  ]
-}

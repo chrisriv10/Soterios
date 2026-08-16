@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Soterios content harness</title><style>body{font:16px system-ui;margin:40px}#login-form{display:grid;grid-template-columns:1fr;gap:12px;width:320px;padding:20px;border:2px solid #456;border-radius:12px}input{min-height:38px}button{min-height:38px}</style></head>
+<body>
+  <h1>Credential form harness</h1>
+  <form id="login-form" action="/session"><label for="static-password">Password</label><input id="static-password" type="password"><button type="submit">Sign in</button></form>
+  <div id="open-shadow-host"></div>
+  <button id="add-dynamic" type="button">Add dynamic password field</button>
+  <script>
+    window.__mockCalls = [];
+    const dangerMode = new URL(location.href).searchParams.get('danger') === '1';
+    document.documentElement.dataset.mockCalls = '';
+    window.chrome = {
+      runtime: {
+        id: 'test-extension',
+        sendMessage: async (message) => {
+          window.__mockCalls.push({ type: message.type });
+          document.documentElement.dataset.mockCalls = window.__mockCalls.map((entry) => entry.type).join(',');
+          const payloads = {
+            GET_CONTENT_STATE: { enabled: true, paused: false, bypassed: false, onboardingConfirmed: true },
+            CHECK_SITE: dangerMode
+              ? { verdict: { verdict: 'danger', source: 'feed', reasons: ['SIGNED_FEED_PHISHING'] }, paused: false }
+              : { verdict: { verdict: 'clear', source: 'combined', reasons: [] }, paused: false },
+            CHECK_FORM_DESTINATION: { reasons: [] },
+            CHECK_PASSWORD: { strength: { label: 'Strong' }, hibp: { found: false, count: 0 }, serviceState: 'ready' },
+            CHECK_REUSE: { reused: false, domains: [] },
+            CONTINUE_ONCE: { domain: '127.0.0.1' }
+          };
+          return { protocol: 2, requestId: message.requestId, ok: true, payload: payloads[message.type] || {} };
+        },
+        onMessage: { addListener: () => {} }
+      }
+    };
+    const shadow = document.querySelector('#open-shadow-host').attachShadow({ mode: 'open' });
+    shadow.innerHTML = '<label>Shadow password <input id="shadow-password" type="password"></label>';
+    document.querySelector('#add-dynamic').addEventListener('click', () => {
+      const input = document.createElement('input'); input.type = 'password'; input.id = 'dynamic-password'; input.setAttribute('aria-label', 'Dynamic password'); document.body.appendChild(input);
+    });
+  </script>
+  <script src="/browser-extension/dist/chromium/content.js"></script>
+</body>
+</html>

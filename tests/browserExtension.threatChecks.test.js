@@ -1,230 +1,34 @@
-const { test } = require('node:test');
+'use strict';
+const { test, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
-const {
-  HIBP_API,
-  sha1Hex,
-  runHibpCheck,
-  runThreatChecks,
-  runSafeBrowsingCheck,
-  urlHashPrefix
-} = require('../browser-extension/src/threatChecks.js');
+const { generateKeyPairSync, sign } = require('crypto');
+const { checkHibpPassword, sha1Hex } = require('../browser-extension/dist/test/credential.js');
+const { inspectUrl, inspectCredentialDestination } = require('../browser-extension/dist/test/heuristics.js');
+const { migrateSettings, providerEnabled } = require('../browser-extension/dist/test/settings.js');
+const { pruneHistory } = require('../browser-extension/dist/test/history.js');
+const { verifyFeedManifest, threatToken, domainThreatTokens } = require('../browser-extension/dist/test/feed.js');
 
-function mockFetch(text, status = 200) {
-  return async () => ({ ok: status >= 200 && status < 300, status, text: async () => text });
-}
+beforeEach(() => {});
 
-function jsonFetch(data, status = 200) {
-  return async () => ({ ok: status >= 200 && status < 300, status, json: async () => data });
-}
-
-function countingFetch(inner) {
-  const calls = [];
-  const wrapped = async (url) => {
-    calls.push(url);
-    return inner(url);
-  };
-  wrapped.calls = calls;
-  return wrapped;
-}
-
-function baseConfig(overrides) {
-  return Object.assign({
-    privacyMode: false,
-    hibpEnabled: true,
-    safeBrowsingEnabled: true,
-    safeBrowsingApiKey: 'test-key'
-  }, overrides || {});
-}
-
-test('privacy mode on blocks the HIBP check without calling the API', async () => {
-  const fetchFn = countingFetch(mockFetch(''));
-  const checks = await runThreatChecks({
-    password: 'hunter2',
-    config: baseConfig({ privacyMode: true }),
-    fetchFn
-  });
-  assert.strictEqual(checks.hibp.error, 'Disabled by Privacy Mode');
-  assert.strictEqual(fetchFn.calls.length, 0);
+test('HIBP makes exactly one padded request and discards count-zero padding rows', async () => {
+  const hash = await sha1Hex('completed password'); const suffix = hash.slice(5); const calls = [];
+  const result = await checkHibpPassword('completed password', undefined, async (url, init) => { calls.push({ url, init }); return { ok: true, status: 200, text: async () => `${suffix}:0\n${'A'.repeat(35)}:0` }; });
+  assert.equal(calls.length, 1); assert.equal(calls[0].init.headers['Add-Padding'], 'true'); assert.equal(result.found, false); assert.equal(result.count, 0);
 });
+test('HIBP reports exact prevalence from a validated response line', async () => { const hash = await sha1Hex('match me'); const suffix = hash.slice(5); const result = await checkHibpPassword('match me', undefined, async () => ({ ok: true, status: 200, text: async () => `${suffix}:41\nINVALID:999` })); assert.deepEqual(result, { found: true, count: 41 }); });
 
-test('privacy mode on blocks the Safe Browsing check without calling the API', async () => {
-  const fetchFn = countingFetch(mockFetch(''));
-  const checks = await runThreatChecks({
-    password: 'hunter2',
-    url: 'https://example.com/login',
-    config: baseConfig({ privacyMode: true }),
-    fetchFn
-  });
-  assert.strictEqual(checks.safeBrowsing.status, 'disabled');
-  assert.strictEqual(checks.safeBrowsing.reason, 'Privacy Mode');
-  assert.strictEqual(fetchFn.calls.length, 0);
-});
+test('conservative URL heuristics produce advisories with exact reason codes', () => { assert.deepEqual(inspectUrl('http://127.0.0.1/login').map((item) => item.code), ['IP_LITERAL_HOST', 'INSECURE_CREDENTIAL_PATH']); assert.ok(inspectUrl('https://paypal.example.net/signin').some((item) => item.code === 'BRAND_IMPERSONATION')); assert.ok(inspectUrl('https://trusted.example@evil.example/login').some((item) => item.code === 'DECEPTIVE_USERINFO')); assert.equal(inspectCredentialDestination('https://example.com/login', 'https://collector.test/submit')[0].code, 'CROSS_SITE_CREDENTIAL_FORM'); });
 
-test('privacy mode off preserves current HIBP behavior', async () => {
-  const hash = await sha1Hex('test123');
-  const suffix = hash.slice(5);
-  const fetchFn = countingFetch(mockFetch(`${suffix}:42`));
-  const checks = await runThreatChecks({
-    password: 'test123',
-    config: baseConfig(),
-    fetchFn
-  });
-  assert.strictEqual(checks.hibp.pwned, true);
-  assert.strictEqual(checks.hibp.count, 42);
-  assert.ok(fetchFn.calls[0].startsWith(HIBP_API));
-});
+test('migration suspends all online requests until the new disclosure is confirmed', () => { const migration = migrateSettings({ privacyMode: false, reuseMap: { old: true }, safeBrowsingApiKey: 'local-key' }, { theme: 'aurora', safeBrowsingApiKey: 'sync-key' }); assert.equal(migration.settings.onboarding.confirmedAt, null); assert.equal(migration.settings.onlineServices.hibp, true); assert.equal(providerEnabled(migration.settings, 'hibp'), false); assert.equal(migration.settings.onboarding.reuseResetNoticePending, true); assert.equal(migration.display.theme, 'aurora'); assert.equal(migration.googleKey, 'local-key'); assert.ok(migration.deleteLocalKeys.includes('reuseMap')); assert.ok(migration.deleteSyncKeys.includes('safeBrowsingApiKey')); });
 
-test('hibpEnabled off disables HIBP only, keeping other checks unchanged', async () => {
-  const fetchFn = countingFetch(mockFetch(''));
-  const checks = await runThreatChecks({
-    password: 'test123',
-    url: 'https://example.com',
-    config: baseConfig({ hibpEnabled: false, safeBrowsingApiKey: undefined }),
-    fetchFn
-  });
-  assert.strictEqual(checks.hibp.error, 'HIBP checks disabled');
-  assert.strictEqual(checks.safeBrowsing.status, 'not_configured');
-  assert.strictEqual(fetchFn.calls.length, 0);
-});
+test('30-day findings retention removes old records and caps local history', () => { const now = Date.parse('2026-08-15T00:00:00Z'); const fresh = { id: '1', timestamp: '2026-08-14T00:00:00Z', category: 'phishing', severity: 'danger', domain: 'example.com', reasonCodes: ['X'], resolution: 'open' }; const old = { ...fresh, id: '2', timestamp: '2026-06-01T00:00:00Z' }; assert.deepEqual(pruneHistory([old, fresh], now).map((event) => event.id), ['1']); });
 
-test('runHibpCheck returns pwned when suffix matches', async () => {
-  const hash = await sha1Hex('pwnedpass');
-  const suffix = hash.slice(5);
-  const result = await runHibpCheck({ password: 'pwnedpass', fetchFn: mockFetch(`${suffix}:7`) });
-  assert.strictEqual(result.pwned, true);
-  assert.strictEqual(result.count, 7);
-});
-
-test('runHibpCheck returns safe when suffix is absent', async () => {
-  const result = await runHibpCheck({ password: 'freshpass', fetchFn: mockFetch('AAAAAAAA:1\nBBBBBBBB:2') });
-  assert.strictEqual(result.pwned, false);
-  assert.strictEqual(result.count, 0);
-});
-
-test('runHibpCheck returns an error result on API failure', async () => {
-  const result = await runHibpCheck({ password: 'test123', fetchFn: async () => { throw new Error('network down'); } });
-  assert.strictEqual(result.error, 'network down');
-});
-
-test('runSafeBrowsingCheck returns safe when no hash matches', async () => {
-  const now = Date.now();
-  const result = await runSafeBrowsingCheck({
-    url: 'https://example.com/login',
-    apiKey: 'test-key',
-    fetchFn: jsonFetch({ hashes: [] }),
-    now
-  });
-  assert.strictEqual(result.status, 'safe');
-  assert.strictEqual(result.expiresAt, now + 30 * 60 * 1000);
-});
-
-test('runSafeBrowsingCheck returns unsafe on matching full hash', async () => {
-  const now = Date.now();
-  const { fullB64 } = await urlHashPrefix('https://evil.example.com/payload?x=1');
-  const result = await runSafeBrowsingCheck({
-    url: 'https://evil.example.com/payload?x=1',
-    apiKey: 'test-key',
-    fetchFn: jsonFetch({
-      hashes: [{
-        fullHash: fullB64,
-        hashList: 'social-engineering',
-        expireTime: new Date(now + 10 * 60 * 1000).toISOString(),
-        cacheDuration: '60s'
-      }]
-    }),
-    now
-  });
-  assert.strictEqual(result.status, 'unsafe');
-  assert.strictEqual(result.threatType, 'social-engineering');
-  assert.ok(result.expiresAt > now + 9 * 60 * 1000 && result.expiresAt <= now + 10 * 60 * 1000 + 1000);
-});
-
-test('runSafeBrowsingCheck caps verdict freshness at 30 minutes', async () => {
-  const now = Date.now();
-  const { fullB64 } = await urlHashPrefix('https://fresh.example.com');
-  const result = await runSafeBrowsingCheck({
-    url: 'https://fresh.example.com',
-    apiKey: 'test-key',
-    fetchFn: jsonFetch({
-      hashes: [{ fullHash: fullB64, hashList: 'malware', expireTime: new Date(now + 60 * 60 * 1000).toISOString() }]
-    }),
-    now
-  });
-  assert.strictEqual(result.status, 'unsafe');
-  assert.ok(Math.abs(result.expiresAt - (now + 30 * 60 * 1000)) <= 1000);
-});
-
-test('runSafeBrowsingCheck returns unknown on stale threat data', async () => {
-  const now = Date.now();
-  const { fullB64 } = await urlHashPrefix('https://stale.example.com');
-  const result = await runSafeBrowsingCheck({
-    url: 'https://stale.example.com',
-    apiKey: 'test-key',
-    fetchFn: jsonFetch({
-      hashes: [{ fullHash: fullB64, hashList: 'malware', expireTime: new Date(now - 60 * 1000).toISOString() }]
-    }),
-    now
-  });
-  assert.strictEqual(result.status, 'unknown');
-  assert.strictEqual(result.reason, 'stale threat data');
-});
-
-test('runSafeBrowsingCheck returns unknown on HTTP error', async () => {
-  const result = await runSafeBrowsingCheck({
-    url: 'https://example.com',
-    apiKey: 'test-key',
-    fetchFn: jsonFetch({}, 500),
-    now: Date.now()
-  });
-  assert.strictEqual(result.status, 'unknown');
-  assert.strictEqual(result.reason, 'HTTP 500');
-});
-
-test('runSafeBrowsingCheck returns unknown when rate limited', async () => {
-  const result = await runSafeBrowsingCheck({
-    url: 'https://example.com',
-    apiKey: 'test-key',
-    fetchFn: jsonFetch({}, 429),
-    now: Date.now()
-  });
-  assert.strictEqual(result.status, 'unknown');
-  assert.strictEqual(result.reason, 'rate limited');
-});
-
-test('runSafeBrowsingCheck returns unknown on network failure', async () => {
-  const result = await runSafeBrowsingCheck({
-    url: 'https://example.com',
-    apiKey: 'test-key',
-    fetchFn: async () => { throw new Error('offline'); },
-    now: Date.now()
-  });
-  assert.strictEqual(result.status, 'unknown');
-  assert.strictEqual(result.reason, 'offline');
-});
-
-test('runSafeBrowsingCheck aborts and returns unknown on timeout', async () => {
-  const result = await runSafeBrowsingCheck({
-    url: 'https://example.com',
-    apiKey: 'test-key',
-    timeoutMs: 50,
-    now: Date.now(),
-    fetchFn: (url, init) => new Promise((resolve, reject) => {
-      init.signal.addEventListener('abort', () => {
-        const err = new Error('This operation was aborted');
-        err.name = 'AbortError';
-        reject(err);
-      });
-    })
-  });
-  assert.strictEqual(result.status, 'unknown');
-  assert.strictEqual(result.reason, 'timeout');
-});
-
-test('runSafeBrowsingCheck returns not_configured without an API key', async () => {
-  const result = await runSafeBrowsingCheck({
-    url: 'https://example.com',
-    fetchFn: async () => { throw new Error('should not be called'); },
-    now: Date.now()
-  });
-  assert.strictEqual(result.status, 'not_configured');
+test('feed manifests require a valid Ed25519 signature and reject unsigned data', async () => { const { privateKey, publicKey } = generateKeyPairSync('ed25519'); const manifest = { schema: 1, version: 7, generatedAt: '2026-08-15T00:00:00.000Z', expiresAt: '2026-08-16T00:00:00.000Z', shards: [{ id: 'ab', file: 'ab.json', sha256: 'a'.repeat(64), count: 1 }] }; const payload = Buffer.from(JSON.stringify({ schema: manifest.schema, version: manifest.version, generatedAt: manifest.generatedAt, expiresAt: manifest.expiresAt, shards: manifest.shards })); manifest.signature = sign(null, payload, privateKey).toString('base64'); const spki = publicKey.export({ type: 'spki', format: 'der' }).toString('base64'); assert.equal(await verifyFeedManifest(manifest, spki), true); assert.equal(await verifyFeedManifest({ ...manifest, signature: undefined }, spki), false); });
+test('feed tokens are 128-bit hashes of canonical URLs', async () => { const a = await threatToken('https://example.com/login?secret=1#x'); const b = await threatToken('https://example.com/login?other=2'); assert.match(a, /^[0-9a-f]{32}$/); assert.equal(a, b); });
+test('domain feed tokens match an exact listed domain and its subdomains without matching the parent', async () => {
+  const listed = await domainThreatTokens('https://login.example.com/');
+  const child = await domainThreatTokens('https://deep.login.example.com/path');
+  const parent = await domainThreatTokens('https://example.com/');
+  assert.ok(child.includes(listed[0]));
+  assert.ok(!parent.includes(listed[0]));
 });

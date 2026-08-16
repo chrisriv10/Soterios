@@ -1,0 +1,6 @@
+{
+  "urls": [
+    { "url": "https://malware.example.invalid/payload.exe?source=test", "url_status": "online" },
+    { "url": "https://inactive.example.invalid/old.exe", "url_status": "offline" }
+  ]
+}

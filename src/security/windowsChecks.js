@@ -177,6 +177,7 @@ async function getSignatureInfo(filePath) {
   }
   const escaped = filePath.replace(/'/g, "''");
   const result = await runJsonPowerShell(`
+    Import-Module (Join-Path $PSHOME 'Modules\\Microsoft.PowerShell.Security\\Microsoft.PowerShell.Security.psd1') -Force -ErrorAction SilentlyContinue
     $sig = Get-AuthenticodeSignature -LiteralPath '${escaped}' -ErrorAction SilentlyContinue
     [PSCustomObject]@{
       status = if ($sig) { [string]$sig.Status } else { 'Unknown' }

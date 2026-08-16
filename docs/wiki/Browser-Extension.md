@@ -1,51 +1,71 @@
 # Browser Extension
 
-The Soterios browser extension adds credential safety to Chrome/Edge: breach checks on password entry, local reuse detection, and optional malicious-site warnings.
+Soterios 2.0 is a standalone-capable credential and phishing protection extension for Chrome, Edge, and Brave on Windows. The desktop app is optional. The extension contains no analytics, product telemetry, tracking identifiers, advertising code, cloud account, vault, or autofill system.
 
-## Install and set up
+## Build and install
 
-1. Load the unpacked extension from `browser-extension/` via `chrome://extensions` (Developer mode → Load unpacked).
-2. Open the extension options page and paste a Google Safe Browsing API key (optional — only needed for malicious-site warnings).
-3. Install the [desktop app](Installation.md) to receive breach alerts through native messaging.
+Requirements for contributors are Node.js and npm. End users do not need Node.js: the Windows native host is built as a standalone executable.
 
-## Privacy Mode
+```powershell
+npm run extension:build
+npm run extension:validate
+npm run extension:package
+npm run native-host:build
+npm run extension:install
+```
 
-Privacy Mode is a single switch that disables every call to a third-party service, including Have I Been Pwned and Google Safe Browsing. Password and reuse checks stay fully local:
+The install command atomically stages the validated extension at `%LOCALAPPDATA%\Soterios\browser-extension`, registers the native host, and opens the supported browser's extensions page. Enable Developer mode, choose **Load unpacked**, and select that fixed folder. After an update, use the extension card's **Reload** button.
 
-- The HIBP check uses k-anonymity: only the first 5 characters of the password's SHA-1 hash leave the device.
-- Reuse detection hashes each password locally (SHA-256) and stores only the hash plus hostname in `chrome.storage.local`.
-- With Privacy Mode on, password fields show a neutral "Checks disabled" indicator instead of calling any remote API.
+Generated deliverables are:
 
-## Malicious-site warnings (Safe Browsing)
+- `browser-extension/dist/chromium` — load-unpacked directory included in the Electron installer.
+- `dist/extension/soterios-extension-2.0.0.zip` and its SHA-256 file — deterministic archive.
+- `build/native-host/SoteriosNativeHost.exe` — Node Single Executable Application included in the unpacked Electron payload so release signing covers it.
 
-When Safe Browsing is enabled with an API key, the extension checks top-frame navigations against Google Safe Browsing v5 (No-Storage Real-Time Mode, `hashes:search`):
+## First-run privacy boundary
 
-- Only a 4-byte SHA-256 hash prefix of the canonicalized URL leaves the device (k-anonymity — never the full URL).
-- Matching full hashes are compared locally; only Google-listed sites trigger a warning.
-- Verdicts are cached per origin until the earlier of the server `expireTime` or 30 minutes; stale data is never used to warn.
-- API failures, timeouts (5 s), and rate limits (HTTP 429) produce no warning — the verdict is "unknown", never "safe" from absence of data.
-- Warnings are non-blocking, dismissible banners with Google's required attribution ("Advisory provided by Google" linked to https://safebrowsing.google.com/).
+HIBP Pwned Passwords and signed Soterios feed updates are selected by default, but the service worker makes no external request until the user clicks **Confirm choices**. Closing onboarding keeps online protection suspended. Google Safe Browsing is off until the user supplies a key.
 
-### Getting an API key
+The global **Online protection services** switch is a hard network gate. Provider switches cancel in-flight requests and remove their optional provider permission where Chromium's permission model allows it. If continuous all-site access also covers that origin, the service-worker gate still guarantees that a disabled provider is never called.
 
-1. Create a Google Cloud project and enable the Safe Browsing API.
-2. Create an API key restricted to the Safe Browsing API.
-3. Paste it into the Safe Browsing section of the extension options.
+Continuous HTTP/HTTPS access is optional. Without it, **Protect this page** uses temporary `activeTab` access. `storage.sync` contains only display preferences. Consent, provider settings, secrets, pause rules, and history metadata use trusted-context `storage.local`; one-time bypasses use `storage.session`; signed feed shards use IndexedDB.
 
-Note: Google Safe Browsing is for non-commercial use only. The extension respects the 30-minute freshness requirement and shows the protection notice in options before enabling.
+## Protection behavior
 
-### Canonicalization note
+- Password breach checks run once after a completed password field loses focus or after an explicit popup action. They use HIBP k-anonymity with `Add-Padding: true`, bounded timeouts, strict response parsing, and zero-count padding removal.
+- Strength analysis and the cryptographic password/passphrase generator run locally.
+- Reuse detection uses a per-install HMAC inside the service worker and compares registrable domains. Plaintext passwords, SHA-1 values, HIBP prefixes, and unkeyed password hashes are never persisted or logged.
+- Signed high-confidence feed matches show an interaction-blocking warning with **Go back** and a short-lived, tab-scoped **Continue once** choice.
+- Local URL and credential-form heuristics show non-blocking advisories with exact reason codes. Heuristics never trigger the blocking surface.
+- Only actual findings are retained for 30 days. Incognito findings and reuse data are not retained. Activity can be exported as JSON or deleted in one click.
 
-URLs are canonicalized before hashing (lowercase host, default ports removed, dot segments resolved, fragment stripped) using the WHATWG URL standard. This is an approximation of Google's canonicalization rules; a non-Google-form URL may occasionally miss a match (a false negative), never a false positive.
+The page component lives in an isolated Shadow DOM overlay. It does not modify the host page's parent layout. It observes dynamically added password fields, open shadow roots, frames covered by the granted permission, resizing, scrolling, and SPA navigation, and it tears down cleanly when reinjected.
 
-## Desktop alerting
+## Threat-feed publishing
 
-Breach and reuse findings are forwarded to the Soterios desktop app via native messaging, which shows the alert in the dashboard. Threat notifications for malicious sites use the `soterios://threat-detected` deep link.
+`.github/workflows/threat-feed.yml` runs every six hours. It reads active, analyst-reviewed domains from the public CERT Polska Dangerous Websites Warning List and active URLhaus entries, canonicalizes them, publishes category-tagged 128-bit SHA-256 tokens in checksummed shards, signs the manifest with Ed25519, and deploys to GitHub Pages. Domain indicators apply to the listed domain and its subdomains, never its parent. The extension downloads changed shards on the schedule—not in response to site visits.
 
-## Files
+The signing private key is held outside the repository at `%LOCALAPPDATA%\Soterios\signing\threat-feed-ed25519.pem` on the provisioning workstation. Add its PEM contents to the repository's `THREAT_FEED_PRIVATE_KEY` Actions secret. The corresponding public key is pinned in `browser-extension/src/feed-public-key.json`. Also configure `URLHAUS_AUTH_KEY`; CERT Polska requires no key. Do not replace the public key without coordinating a signed feed-key rotation release.
 
-- `src/content.js` — password field detection, breach/reuse badges, threat banner, navigation monitoring
-- `src/background.js` — service worker, HIBP checks, Safe Browsing client calls, per-origin verdict cache, native messaging
-- `src/threatChecks.js` — shared check modules (HIBP, Safe Browsing v5), also used by tests
-- `src/options.js` / `options.html` — settings UI
-- `src/native-host.js` — native messaging host bridge
+If signature validation, schema limits, freshness checks, checksum validation, or rollback protection fails, the last valid feed is retained and the UI reports degraded/unknown protection; it does not claim a clean verdict.
+
+## Native protocol
+
+The native host manifest uses the exact unpacked extension origin and points directly to `SoteriosNativeHost.exe`. Chrome's four-byte little-endian framing is bounded to 64 KiB. `NativeEnvelopeV2` requires protocol version 2, a correlation ID, a known message type, and a schema-validated payload.
+
+The host launches Soterios without sensitive command-line arguments, waits with bounded backoff for a per-user named pipe, and forwards only category, severity, registrable domain, and optional prevalence count. Legacy `CREDENTIAL_LEAK` and `THREAT_DETECTED` names are translated for one release only; any legacy message containing a plaintext password is rejected.
+
+## Tests and release gates
+
+`npm test` builds the extension before running the existing suite. Extension coverage includes migrations and pre-consent gating, permissions and CSP, HIBP padding, HMAC reuse, URL canonicalization, heuristics, feed signatures and rollback primitives, retention, native framing, plaintext rejection, the standalone executable, and artifact validation.
+
+Before packaging, run:
+
+```powershell
+npm run extension:build
+npm run extension:validate
+npm run native-host:build
+npm test
+```
+
+Publishing to Chrome Web Store or other stores is intentionally outside the 2.0 release scope.

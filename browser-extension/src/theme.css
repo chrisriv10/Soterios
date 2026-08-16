@@ -258,3 +258,25 @@
   --accent-danger-glow: rgba(251, 113, 133, 0.2);
   --accent-primary-contrast: #0b1220;
 }
+
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] {
+    --bg-base: #f5f7fb;
+    --bg-surface: rgba(255, 255, 255, 0.97);
+    --bg-surface-hover: #eef2f7;
+    --glass-border: rgba(15, 23, 42, 0.14);
+    --body-gradient: var(--bg-base);
+    --text-main: #0f172a;
+    --text-muted: #526276;
+    --accent-primary: #1d4ed8;
+    --accent-primary-dark: #1e40af;
+    --accent-primary-glow: rgba(29, 78, 216, 0.16);
+    --accent-success: #15803d;
+    --accent-success-glow: rgba(21, 128, 61, 0.15);
+    --accent-warning: #b45309;
+    --accent-warning-glow: rgba(180, 83, 9, 0.15);
+    --accent-danger: #b91c1c;
+    --accent-danger-glow: rgba(185, 28, 28, 0.15);
+    --accent-primary-contrast: #fff;
+  }
+}

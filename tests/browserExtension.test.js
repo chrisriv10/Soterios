@@ -1,225 +1,80 @@
 'use strict';
-
-const { describe, it, mock } = require('node:test');
+const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const path = require('path');
+const { normalizeEnvelope, encodeFrame, createFrameDecoder, MAX_FRAME_BYTES, getPipeName } = require('../src/native-host/protocol');
+const installer = require('../src/extension/installer');
+const { spawnSync } = require('child_process');
 
-describe('Browser Extension Integration', () => {
-  describe('credential-leak:notify IPC handler', () => {
-    it('should reject missing password', async () => {
-      const mockDb = {
-        addAlert: () => {}
-      };
-      const mockEventBus = {
-        emit: () => {}
-      };
+const dist = path.join(__dirname, '..', 'browser-extension', 'dist', 'chromium');
 
-      // Simulate the IPC handler logic
-      const handleCredentialLeak = async (payload) => {
-        if (!payload?.password) return { ok: false, error: 'Missing password' };
-        const crypto = require('crypto');
-        const sha = crypto.createHash('sha1').update(payload.password).digest('hex').toUpperCase();
-        const alert = {
-          level: 'danger',
-          source: 'Browser Extension',
-          title: 'Credential Leak Detected',
-          message: `Password found in ${payload.count} breach${payload.count > 1 ? 'es' : ''} via browser extension`,
-          detail: `SHA-1 prefix: ${sha.slice(0, 5)}... | Breaches: ${payload.count}`,
-          timestamp: new Date().toISOString(),
-          metadata: { source: 'browser-extension', hashPrefix: sha.slice(0, 5), count: payload.count }
-        };
-        mockDb.addAlert(alert);
-        if (mockEventBus) mockEventBus.emit('alert:new', alert);
-        return { ok: true };
-      };
-
-      const result = await handleCredentialLeak({});
-      assert.equal(result.ok, false);
-      assert.equal(result.error, 'Missing password');
-    });
-
-    it('should create alert with valid payload', async () => {
-      const mockDb = {
-        addAlert: (alert) => {
-          assert.equal(alert.level, 'danger');
-          assert.equal(alert.source, 'Browser Extension');
-          assert.equal(alert.title, 'Credential Leak Detected');
-          assert.match(alert.message, /Password found in 3 breaches/);
-          assert.match(alert.detail, /SHA-1 prefix:/);
-          assert.equal(alert.metadata.source, 'browser-extension');
-          assert.equal(alert.metadata.count, 3);
-        }
-      };
-      const mockEventBus = {
-        emit: (event, alert) => {
-          assert.equal(event, 'alert:new');
-          assert.equal(alert.level, 'danger');
-        }
-      };
-
-      const handleCredentialLeak = async (payload) => {
-        if (!payload?.password) return { ok: false, error: 'Missing password' };
-        const crypto = require('crypto');
-        const sha = crypto.createHash('sha1').update(payload.password).digest('hex').toUpperCase();
-        const alert = {
-          level: 'danger',
-          source: 'Browser Extension',
-          title: 'Credential Leak Detected',
-          message: `Password found in ${payload.count} breach${payload.count > 1 ? 'es' : ''} via browser extension`,
-          detail: `SHA-1 prefix: ${sha.slice(0, 5)}... | Breaches: ${payload.count}`,
-          timestamp: new Date().toISOString(),
-          metadata: { source: 'browser-extension', hashPrefix: sha.slice(0, 5), count: payload.count }
-        };
-        mockDb.addAlert(alert);
-        if (mockEventBus) mockEventBus.emit('alert:new', alert);
-        return { ok: true };
-      };
-
-      const result = await handleCredentialLeak({ password: 'test123', count: 3 });
-      assert.equal(result.ok, true);
-    });
+describe('Soterios extension 2.0 public and privacy contracts', () => {
+  it('ships a least-privilege generated MV3 manifest', () => {
+    const manifest = JSON.parse(fs.readFileSync(path.join(dist, 'manifest.json'), 'utf8'));
+    assert.equal(manifest.manifest_version, 3);
+    assert.equal(manifest.version, '2.0.0');
+    assert.deepEqual(manifest.permissions, ['storage', 'alarms', 'activeTab', 'scripting']);
+    assert.deepEqual(manifest.optional_permissions, ['nativeMessaging']);
+    assert.equal(manifest.content_scripts, undefined);
+    assert.equal(manifest.web_accessible_resources, undefined);
+    assert.match(manifest.content_security_policy.extension_pages, /script-src 'self'/);
+    assert.ok(manifest.optional_host_permissions.includes('http://*/*'));
+    assert.ok(manifest.optional_host_permissions.includes('https://api.pwnedpasswords.com/*'));
   });
 
-  describe('browserExtension:installNativeHost IPC handler', () => {
-    it('should reject non-Windows platforms', async () => {
-      const originalPlatform = process.platform;
-      Object.defineProperty(process, 'platform', { value: 'darwin' });
-
-      const handleInstall = async () => {
-        if (process.platform !== 'win32') {
-          return { ok: false, error: 'Native host install only supported on Windows' };
-        }
-        return { ok: true };
-      };
-
-      const result = await handleInstall();
-      assert.equal(result.ok, false);
-      assert.equal(result.error, 'Native host install only supported on Windows');
-
-      Object.defineProperty(process, 'platform', { value: originalPlatform });
-    });
-
-    it('should download files if not present', async () => {
-      const fs = require('fs');
-      const path = require('path');
-
-      const handleInstall = async () => {
-        if (process.platform !== 'win32') {
-          return { ok: false, error: 'Native host install only supported on Windows' };
-        }
-        // Simulate checking for files
-        const extDir = path.join(process.env.LOCALAPPDATA || '', 'Soterios', 'browser-extension');
-        const manifestPath = path.join(extDir, 'native-host-manifest.json');
-        const batPath = path.join(extDir, 'src', 'native-host.bat');
-        const jsPath = path.join(extDir, 'src', 'native-host.js');
-
-        if (!fs.existsSync(manifestPath) || !fs.existsSync(batPath) || !fs.existsSync(jsPath)) {
-          return { ok: false, error: 'Files would be downloaded from GitHub' };
-        }
-        return { ok: true, extDir };
-      };
-
-      const result = await handleInstall();
-      // Files may or may not exist depending on whether extension was enabled
-      assert.ok(result.ok === true || (result.ok === false && result.error.includes('downloaded')));
-    });
-
-    it('should handle GitHub download failure gracefully', async () => {
-      const handleInstall = async (downloadSuccess) => {
-        if (process.platform !== 'win32') {
-          return { ok: false, error: 'Native host install only supported on Windows' };
-        }
-        if (!downloadSuccess) {
-          return { ok: false, error: 'Failed to download extension files: network error' };
-        }
-        return { ok: true };
-      };
-
-      const result = await handleInstall(false);
-      assert.equal(result.ok, false);
-      assert.match(result.error, /Failed to download/);
-    });
+  it('contains every generated UI/runtime entry and no telemetry SDK reference', () => {
+    for (const file of ['background.js', 'content.js', 'popup.js', 'options.js', 'onboarding.js', 'activity.js', 'popup.html', 'options.html', 'onboarding.html', 'activity.html']) assert.ok(fs.existsSync(path.join(dist, file)), file);
+    const scripts = fs.readdirSync(dist).filter((name) => name.endsWith('.js')).map((name) => fs.readFileSync(path.join(dist, name), 'utf8')).join('\n');
+    assert.doesNotMatch(scripts, /google-analytics|mixpanel|segment\.com|amplitude|posthog|sentry\.io/i);
+    assert.doesNotMatch(scripts, /credential-leak:notify/);
   });
 
-  describe('background.js onInstalled behavior', () => {
-    it('should only set externalLookupsEnabled on install', async () => {
-      let storageSet = false;
-      let storageGet = { externalLookupsEnabled: undefined };
+  it('validates the staged extension before desktop installation', () => {
+    const manifest = installer.validateExtensionDirectory(dist);
+    assert.equal(manifest.version, '2.0.0');
+    assert.match(installer.predictExtensionId(installer.getNativeHostDir()), /^[a-p]{32}$/);
+  });
+});
 
-      const mockChrome = {
-        runtime: {
-          onInstalled: {
-            addListener: (callback) => {
-              callback({ reason: 'install' });
-            }
-          }
-        },
-        storage: {
-          sync: {
-            get: (key) => {
-              return Promise.resolve(storageGet);
-            },
-            set: (data) => {
-              storageSet = true;
-              storageGet = data;
-              return Promise.resolve();
-            }
-          }
-        }
-      };
+describe('NativeEnvelopeV2 framing and validation', () => {
+  it('accepts a minimal finding and strips undeclared fields', () => {
+    const result = normalizeEnvelope({ protocol: 2, requestId: 'request_12345678', type: 'REPORT_FINDING', payload: { category: 'phishing', severity: 'danger', domain: 'example.com', fullUrl: 'https://example.com/secret', password: 'never' } });
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.envelope.payload, { category: 'phishing', severity: 'danger', domain: 'example.com' });
+  });
 
-      // Simulate the fixed background.js logic
-      const onInstalled = async (details) => {
-        if (details.reason === 'install') {
-          const { externalLookupsEnabled } = await mockChrome.storage.sync.get('externalLookupsEnabled');
-          if (externalLookupsEnabled === undefined) {
-            await mockChrome.storage.sync.set({ externalLookupsEnabled: true });
-          }
-        }
-      };
+  it('explicitly rejects plaintext credential compatibility messages', () => {
+    const result = normalizeEnvelope({ type: 'CREDENTIAL_LEAK', password: 'plaintext', domain: 'example.com', count: 2 });
+    assert.deepEqual(result, { ok: false, error: 'PLAINTEXT_CREDENTIAL_REJECTED' });
+  });
 
-      await onInstalled({ reason: 'install' });
-      assert.equal(storageSet, true);
-      assert.equal(storageGet.externalLookupsEnabled, true);
-    });
+  it('supports old non-plaintext message names for one release', () => {
+    const result = normalizeEnvelope({ type: 'THREAT_DETECTED', domain: 'bad.example', threatType: 'malware' });
+    assert.equal(result.ok, true); assert.equal(result.legacy, true); assert.equal(result.envelope.payload.category, 'malware');
+  });
 
-    it('should not override existing false value on update', async () => {
-      let storageSet = false;
-      let storageGet = { externalLookupsEnabled: false };
+  it('decodes fragmented correlated frames and rejects oversize output', () => {
+    const values = []; const errors = []; const frame = encodeFrame({ protocol: 2, requestId: 'request_12345678', type: 'PING', payload: {} });
+    const decode = createFrameDecoder((value) => values.push(value), (error) => errors.push(error)); decode(frame.subarray(0, 3)); decode(frame.subarray(3));
+    assert.equal(values.length, 1); assert.equal(errors.length, 0); assert.throws(() => encodeFrame({ value: 'x'.repeat(MAX_FRAME_BYTES) }));
+  });
 
-      const mockChrome = {
-        runtime: {
-          onInstalled: {
-            addListener: (callback) => {
-              callback({ reason: 'update' });
-            }
-          }
-        },
-        storage: {
-          sync: {
-            get: (key) => {
-              return Promise.resolve(storageGet);
-            },
-            set: (data) => {
-              storageSet = true;
-              storageGet = data;
-              return Promise.resolve();
-            }
-          }
-        }
-      };
+  it('uses a stable per-user pipe name without sensitive data', () => {
+    const a = getPipeName({ LOCALAPPDATA: 'C:\\Users\\A\\AppData\\Local' }, 'Alice'); const b = getPipeName({ LOCALAPPDATA: 'C:\\Users\\A\\AppData\\Local' }, 'Alice');
+    assert.equal(a, b); assert.match(a, /^\\\\\.\\pipe\\soterios-browser-v2-[0-9a-f]{20}$/); assert.doesNotMatch(a, /alice/i);
+  });
 
-      const onInstalled = async (details) => {
-        if (details.reason === 'install') {
-          const { externalLookupsEnabled } = await mockChrome.storage.sync.get('externalLookupsEnabled');
-          if (externalLookupsEnabled === undefined) {
-            await mockChrome.storage.sync.set({ externalLookupsEnabled: true });
-          }
-        }
-      };
-
-      await onInstalled({ reason: 'update' });
-      assert.equal(storageSet, false);
-      assert.equal(storageGet.externalLookupsEnabled, false);
-    });
+  it('runs as a standalone executable and reports desktop state with a correlated response', { skip: process.platform !== 'win32' }, () => {
+    const executable = path.join(__dirname, '..', 'build', 'native-host', 'SoteriosNativeHost.exe');
+    assert.ok(fs.existsSync(executable), 'run npm run native-host:build first');
+    const request = { protocol: 2, requestId: 'request_standalone_123', type: 'PING', payload: {} };
+    const result = spawnSync(executable, [], { input: encodeFrame(request), timeout: 15_000, windowsHide: true });
+    assert.equal(result.error, undefined);
+    assert.ok(result.stdout.length >= 4);
+    const length = result.stdout.readUInt32LE(0); const response = JSON.parse(result.stdout.subarray(4, 4 + length).toString('utf8'));
+    assert.equal(response.requestId, request.requestId);
+    assert.equal(response.ok, false);
+    assert.equal(response.error.code, 'DESKTOP_NOT_RUNNING');
   });
 });
