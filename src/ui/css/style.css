@@ -3521,7 +3521,18 @@ body.setup-mode .app-shell { display: block; }
   transform: scale(1.2);
 }
 
-.setup-step { display: none; }
+.setup-step {
+  display: block;
+  opacity: 0;
+  transform: translateX(20px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  pointer-events: none;
+}
+.setup-step.active {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
 
 .setup-logo {
   display: flex;
