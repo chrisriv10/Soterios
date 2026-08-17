@@ -143,7 +143,7 @@ function createHarness() {
   function activeStep() {
     for (const step of STEPS) {
       const el = registry.get('setupStep-' + step);
-      if (el && el.style.display === 'block') return step;
+      if (el && el.classList && el.classList.contains('active')) return step;
     }
     return null;
   }

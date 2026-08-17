@@ -39,11 +39,6 @@ a{color:var(--accent-primary)}
   transform: translateY(12px);
   animation: onboardingFadeIn 0.4s ease forwards;
 }
-.onboarding .confirm-bar.onboarding-step {
-  opacity: 0;
-  transform: translateY(12px);
-  animation: onboardingFadeIn 0.4s ease forwards;
-}
 @keyframes onboardingFadeIn {
   to { opacity: 1; transform: translateY(0); }
 }

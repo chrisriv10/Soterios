@@ -267,7 +267,17 @@ window.Pages = window.Pages || {};
       if (!this._container) return;
       for (let i = 0; i < STEPS.length; i++) {
         const section = this._container.querySelector('#setupStep-' + STEPS[i]);
-        if (section) section.classList.toggle('active', i === index);
+        if (section) {
+          const isActive = i === index;
+          section.classList.toggle('active', isActive);
+          try {
+            if (isActive) {
+              section.removeAttribute?.('inert');
+            } else {
+              section.setAttribute?.('inert', '');
+            }
+          } catch (_) {}
+        }
         const dot = this._container.querySelector('#setupDot-' + i);
         if (dot) dot.classList.toggle('active', i === index);
       }
