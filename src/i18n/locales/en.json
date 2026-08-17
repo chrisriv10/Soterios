@@ -1681,5 +1681,6 @@
   "settings.performanceMode.apply": "Apply",
   "settings.performanceMode.unknown": "A custom or third-party power plan is currently active.",
   "settings.performanceMode.error": "Couldn't switch power plans: {error}",
-  "settings.performanceMode.loadError": "Couldn't read the current power plan. This feature requires Windows."
+  "settings.performanceMode.loadError": "Couldn't read the current power plan. This feature requires Windows.",
+  "loading.loadingConnections": "Loading connections..."
 }
