@@ -414,6 +414,57 @@ window.Pages.reports = {
     }
   },
 
+  formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  },
+
+  formatResultDetail(r, t) {
+    const summary = r.summary || {};
+    const scriptId = r.scriptId;
+    let detail = '';
+
+    if (scriptId === 'clear-temp-files') {
+      const parts = [];
+      if (summary.reclaimedBytes) parts.push(`${t('reports.reclaimed', { size: this.formatBytes(summary.reclaimedBytes) })}`);
+      if (summary.deletedCount) parts.push(`${summary.deletedCount} ${t('reports.files')}`);
+      if (summary.skippedCount) parts.push(`${summary.skippedCount} ${t('reports.skipped')}`);
+      if (summary.candidateCount) parts.push(`${summary.candidateCount} ${t('reports.candidates')}`);
+      detail = parts.join(', ');
+    } else if (scriptId === 'browser-cache-report') {
+      const parts = [];
+      if (summary.totalBytes) parts.push(`${t('reports.reclaimed', { size: this.formatBytes(summary.totalBytes) })}`);
+      if (summary.browserCount) parts.push(`${summary.browserCount} ${t('reports.browsers')}`);
+      detail = parts.join(', ');
+    } else if (scriptId === 'disk-space-report') {
+      const parts = [];
+      if (summary.volumeCount) parts.push(`${summary.volumeCount} ${t('reports.volumes')}`);
+      if (summary.warningCount) parts.push(`${summary.warningCount} ${t('reports.warnings')}`);
+      detail = parts.join(', ');
+    } else if (scriptId === 'large-files-report') {
+      const parts = [];
+      if (summary.count) parts.push(`${summary.count} ${t('reports.files')}`);
+      if (summary.totalSizeBytes) parts.push(`${t('reports.totalSize', { size: this.formatBytes(summary.totalSizeBytes) })}`);
+      detail = parts.join(', ');
+    }
+
+    if (!detail) {
+      detail = r.ok ? t('common.ok') : (r.error || t('common.failed'));
+    }
+
+    if (r.skippedReason) {
+      detail += ` — ${t('reports.skippedReason', { reason: r.skippedReason })}`;
+    }
+    if (r.error) {
+      detail += ` — ${t('reports.error', { error: r.error })}`;
+    }
+
+    return `${t('reports.script.' + scriptId) || r.scriptId}: ${detail}`;
+  },
+
   async listMaintenanceHistory(container) {
     const el = container.querySelector('#maintenanceHistory');
     try {
@@ -427,12 +478,11 @@ window.Pages.reports = {
       const items = rows.map((row, index) => {
         const when = row.started_at || row.timestamp;
         const whenLabel = when ? new Date(when).toLocaleString() : t('common.unknown');
-        const mode = row.dry_run ? t('reports.dryRun') : t('reports.liveRun');
-        const detail = (row.results || []).map((r) => `${r.scriptId}: ${r.ok ? t('common.ok') : (r.error || t('common.failed'))}`).join('; ');
+        const detail = (row.results || []).map((r) => formatResultDetail(r, t)).join('; ');
         return `
           <div class="history-item">
             <div style="min-width:0;">
-              <div class="history-title">${escapeHtml(t('reports.maintenanceRun', { ok: row.ok_count || 0, total: row.total_count || 0, mode }))}</div>
+              <div class="history-title">${escapeHtml(t('reports.maintenanceRun', { ok: row.ok_count || 0, total: row.total_count || 0 }))}</div>
               <div class="history-meta">${escapeHtml(whenLabel)}${detail ? ` — ${escapeHtml(detail)}` : ''}</div>
             </div>
             <div style="display:flex; gap:8px; flex-shrink:0;">
@@ -479,26 +529,23 @@ window.Pages.reports = {
     const t = tFactory();
     const when = row.started_at || row.timestamp;
     const whenLabel = when ? new Date(when).toLocaleString() : t('common.unknown');
-    const mode = row.dry_run ? t('reports.dryRun') : t('reports.liveRun');
-    
+
     const resultsHtml = (row.results || []).map((r) => `
       <div class="log-row">
-        <span class="log-tag ${r.ok ? 'clean' : 'match'}">${escapeHtml(r.scriptId)}</span>
-        <span class="log-path">${escapeHtml(r.ok ? t('common.ok') : (r.error || t('common.failed')))}</span>
-      </div>
-    `).join('');
+        <span class="log-tag ${r.ok ? 'clean' : 'match'}">${escapeHtml(t('reports.script.' + r.scriptId) || r.scriptId)}</span>
+        <span class="log-path">${escapeHtml(this.formatResultDetail(r, t))}</span>
+      </div>`).join('');
 
     const html = `
       <div class="report-stats">
         <div class="stat-tile"><div class="stat-label">${escapeHtml(t('reports.maintenanceHistory'))}</div><div class="stat-value">${escapeHtml(whenLabel)}</div></div>
-        <div class="stat-tile"><div class="stat-label">${escapeHtml(t('reports.mode'))}</div><div class="stat-value">${escapeHtml(mode)}</div></div>
         <div class="stat-tile"><div class="stat-label">${escapeHtml(t('reports.completed'))}</div><div class="stat-value">${escapeHtml(row.ok_count || 0)}/${escapeHtml(row.total_count || 0)}</div></div>
       </div>
       <div class="report-section"><div class="panel-title">${escapeHtml(t('reports.results'))}</div>
         ${resultsHtml || `<div class="empty-state compact-empty">${escapeHtml(t('reports.noResults'))}</div>`}
       </div>
     `;
-    
+
     this.showViewer(container, `${t('reports.maintenanceHistory')} - ${whenLabel}`, html);
   }
 };
