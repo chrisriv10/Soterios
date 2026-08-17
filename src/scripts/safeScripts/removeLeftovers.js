@@ -4,6 +4,14 @@ const fs = require('fs');
 const path = require('path');
 const { isProtected } = require('./protectedPaths');
 
+/**
+ * Remove leftover directories after uninstallation.
+ *
+ * @param {Object} [args={}]
+ * @param {boolean} [args.dryRun] - When true, only log intended removals.
+ * @param {string[]} args.paths - Directory paths to remove.
+ * @returns {Promise<{dryRun: boolean, removedCount: number, skippedCount: number, removed: Array, skipped: Array, log: string[]}>} Removal summary.
+ */
 module.exports = async function removeLeftovers(args = {}) {
   const dryRun = args.dryRun !== false;
   const paths = Array.isArray(args.paths) ? args.paths : [];

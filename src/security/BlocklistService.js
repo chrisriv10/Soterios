@@ -9,7 +9,16 @@ const https = require('https');
 /** How often (ms) blocklists are refreshed from their upstream sources. */
 const BLOCKLIST_REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
+/**
+ * Manages IP blocklists with local caching and periodic refresh.
+ *
+ * Fetches public blocklists (Spamhaus) over HTTPS, caches the raw data
+ * in the database, and provides fast IP-lookup against the parsed ranges.
+ */
 class BlocklistService {
+  /**
+   * @param {import('../core/database')} db - Database instance used for cache storage.
+   */
   constructor(db) {
     this.db = db;
     this.blocklists = new Map();
@@ -39,6 +48,9 @@ class BlocklistService {
     this.loadFromCache();
   }
 
+  /**
+   * Load cached blocklist data from the database into memory.
+   */
   loadFromCache() {
     for (const source of this.sources) {
       try {
@@ -52,6 +64,13 @@ class BlocklistService {
     }
   }
 
+  /**
+   * Parse raw blocklist text and store the resulting ranges in memory.
+   *
+   * @param {string} source - Blocklist source identifier.
+   * @param {string} rawData - Raw text content of the blocklist.
+   * @param {number} [defaultVersion=4] - IP version to assume for entries without an explicit CIDR.
+   */
   parseAndStore(source, rawData, defaultVersion = 4) {
     const ranges = [];
     const lines = rawData.split('\n');
@@ -87,6 +106,12 @@ class BlocklistService {
     this.blocklists.set(source, ranges);
   }
 
+  /**
+   * Convert an IPv4 address string to a 32-bit unsigned integer.
+   *
+   * @param {string} ip - Dotted-quad IPv4 address.
+   * @returns {number|null} Unsigned 32-bit integer, or null on invalid input.
+   */
   static ipToInt(ip) {
     if (!ip || typeof ip !== 'string') return null;
     const parts = ip.split('.').map(Number);
@@ -94,6 +119,14 @@ class BlocklistService {
     return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
   }
 
+  /**
+   * Convert an IPv6 address string to a 16-byte buffer.
+   *
+   * Handles compressed notation, IPv4-mapped addresses, and embedded IPv4.
+   *
+   * @param {string} ip - IPv6 address string.
+   * @returns {Buffer|null} 16-byte buffer, or null on invalid input.
+   */
   static ipv6ToBytes(ip) {
     if (!ip || typeof ip !== 'string') return null;
 
@@ -149,6 +182,12 @@ class BlocklistService {
     return buf;
   }
 
+  /**
+   * Determine whether a 16-byte buffer is an IPv4-mapped IPv6 address.
+   *
+   * @param {Buffer} bytes - 16-byte IPv6 address buffer.
+   * @returns {boolean} True when the buffer represents an IPv4-mapped address.
+   */
   static isIPv4Mapped(bytes) {
     return bytes
       && bytes.length === 16
@@ -158,11 +197,25 @@ class BlocklistService {
       && bytes.readUInt16BE(8) === 0xffff;
   }
 
+  /**
+   * Extract the IPv4 address from an IPv4-mapped IPv6 buffer.
+   *
+   * @param {Buffer} bytes - 16-byte IPv4-mapped IPv6 buffer.
+   * @returns {string|null} Dotted-quad IPv4 string, or null if not mapped.
+   */
   static ipv4FromMappedBytes(bytes) {
     if (!BlocklistService.isIPv4Mapped(bytes)) return null;
     return [bytes[12], bytes[13], bytes[14], bytes[15]].join('.');
   }
 
+  /**
+   * Test whether a target IPv6 buffer falls within a CIDR network.
+   *
+   * @param {Buffer} targetBytes - 16-byte target IPv6 buffer.
+   * @param {Buffer} networkBytes - 16-byte network IPv6 buffer.
+   * @param {number} prefixLength - CIDR prefix length (0-128).
+   * @returns {boolean} True when the target is inside the network.
+   */
   static bytesMatchCidr(targetBytes, networkBytes, prefixLength) {
     for (let i = 0; i < 16; i++) {
       const bitOffset = i * 8;
@@ -174,6 +227,15 @@ class BlocklistService {
     return true;
   }
 
+  /**
+   * Fetch a single blocklist source over HTTPS.
+   *
+   * @param {Object} source - Blocklist source descriptor.
+   * @param {string} source.url - URL to fetch.
+   * @param {number} [source.version] - IP version hint for parsing.
+   * @returns {Promise<string>} Raw blocklist text.
+   * @throws {Error} On network error, timeout, or non-200 status.
+   */
   async fetchBlocklist(source) {
     const MAX_BLOCKLIST_BODY_BYTES = 10 * 1024 * 1024; // 10 MB
     return new Promise((resolve, reject) => {
@@ -203,6 +265,12 @@ class BlocklistService {
     });
   }
 
+  /**
+   * Refresh all configured blocklist sources from their upstream URLs.
+   *
+   * Each fetched source is cached in the database before parsing.
+   * Failures for individual sources are logged but do not abort the batch.
+   */
   async refreshAll() {
     for (const source of this.sources) {
       try {
@@ -215,6 +283,15 @@ class BlocklistService {
     }
   }
 
+  /**
+   * Check whether an IP address is listed in any loaded blocklist.
+   *
+   * Supports both IPv4 and IPv6. IPv4-mapped IPv6 addresses are resolved
+   * to their IPv4 counterpart before checking.
+   *
+   * @param {string} ip - IP address to test (optionally with CIDR suffix for IPv6).
+   * @returns {boolean} True when the IP is listed.
+   */
   isListed(ip) {
     if (!ip || typeof ip !== 'string') return false;
 
@@ -252,6 +329,11 @@ class BlocklistService {
     return false;
   }
 
+  /**
+   * Return blocklist statistics: source name → loaded range count.
+   *
+   * @returns {Object} Statistics mapping source names to range counts.
+   */
   getStats() {
     const stats = {};
     for (const [source, ranges] of this.blocklists) {

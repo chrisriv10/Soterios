@@ -201,11 +201,21 @@ class ClamAVEngineBase {
         return;
       }
 
+      /**
+       * Completes the update promise and clears the active process reference.
+       *
+       * @param {Object} result - Update result.
+       */
       const finish = (result) => {
         if (this.activeUpdateProcess === freshclam) this.activeUpdateProcess = null;
         resolve(result);
       };
 
+      /**
+       * Accumulates stdout/stderr data and forwards it to the progress callback.
+       *
+       * @param {Buffer} data - Chunk of output data.
+       */
       const handleData = (data) => {
         const chunk = data.toString();
         output += chunk;
@@ -326,11 +336,21 @@ class ClamAVEngineBase {
       let stderr = '';
       let lines = [];
 
+      /**
+       * Completes the scan promise and clears the active process reference.
+       *
+       * @param {Object} result - Scan result.
+       */
       const finish = (result) => {
         if (this.activeScanProcess === clam) this.activeScanProcess = null;
         resolve(result);
       };
 
+      /**
+       * Accumulates scan output and forwards progress to the callback.
+       *
+       * @param {Buffer} data - Chunk of output data.
+       */
       const handleOutput = (data) => {
         const chunk = data.toString();
         output += chunk;

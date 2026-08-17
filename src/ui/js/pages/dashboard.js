@@ -2,6 +2,13 @@ window.Pages = window.Pages || {};
 
 window.Pages['dashboard'] = {
   async render(container) {
+    /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
 
     // Warning title/detail translation map for security-overview tool
@@ -22,6 +29,12 @@ window.Pages['dashboard'] = {
       'Low disk space': { title: 'dashboard.warn.lowDisk.title', detail: 'dashboard.warn.lowDisk.detail' },
     };
 
+    /**
+     * Maps a raw warning title/detail into localized strings.
+     *
+     * @param {{title:string, detail?:string}} w - Warning object from the backend.
+     * @returns {{title:string, detail?:string}} Translated warning.
+     */
     function translateWarning(w) {
       const trans = warningTranslations[w.title];
       if (trans) return { ...w, title: t(trans.title), detail: t(trans.detail) };
@@ -222,6 +235,12 @@ window.Pages['dashboard'] = {
     let isRtpActive = true;
     let lastHealthResult = null;
 
+    /**
+     * Produces a human-readable health summary from a health score object.
+     *
+     * @param {{score:number, breakdown?:Record<string, {label:string, points:number, max:number, reason?:string}>}} health - Health assessment result.
+     * @returns {string} Localized summary string.
+     */
     function summarizeHealth(health) {
       const translatedBreakdown = translateHealthReason(health.breakdown || {});
       const entries = Object.values(translatedBreakdown);
@@ -231,6 +250,12 @@ window.Pages['dashboard'] = {
       return t('dashboard.healthWeakAreas', { count: weak.length });
     }
 
+    /**
+     * Translates health-check breakdown labels and reasons into the current locale.
+     *
+     * @param {Record<string, {label:string, points:number, max:number, reason?:string}>} breakdown - Raw health breakdown.
+     * @returns {Record<string, {label:string, points:number, max:number, reason?:string}>} Translated breakdown.
+     */
     function translateHealthReason(breakdown) {
       const translated = { ...breakdown };
       for (const [key, item] of Object.entries(translated)) {
@@ -319,6 +344,11 @@ window.Pages['dashboard'] = {
       return translated;
     }
 
+    /**
+     * Opens a full-screen modal with the health score breakdown.
+     *
+     * @param {{score:number, breakdown?:Record<string, {label:string, points:number, max:number, reason?:string}>}} health - Health assessment result.
+     */
     function showHealthDetailModal(health) {
       if (!health) return;
       const translatedBreakdown = translateHealthReason(health.breakdown || {});
@@ -349,16 +379,28 @@ window.Pages['dashboard'] = {
           </div>
         </div>`;
       document.body.appendChild(overlay);
+      /**
+       * Removes the health detail modal and cleans up event listeners.
+       */
       const close = () => {
         overlay.remove();
         document.removeEventListener('keydown', onKey);
       };
+      /**
+       * Closes the modal when the Escape key is pressed.
+       */
       const onKey = (e) => { if (e.key === 'Escape') close(); };
       overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
       overlay.querySelector('#closeHealthModal').addEventListener('click', close);
       document.addEventListener('keydown', onKey);
     }
 
+    /**
+     * Parses a SQLite timestamp string into a Date object.
+     *
+     * @param {string} value - Timestamp in "YYYY-MM-DD HH:MM:SS" or ISO format.
+     * @returns {Date} Parsed date, or Invalid Date if unparseable.
+     */
     function parseSqliteTimestamp(value) {
       if (!value) return new Date(NaN);
       if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) {
@@ -367,15 +409,24 @@ window.Pages['dashboard'] = {
       return new Date(value);
     }
 
+    /**
+     * Loads the latest scan report timestamp and updates the UI.
+     */
     async function loadLastScan() {
       const el = container.querySelector('#lastScanTime');
       if (!el) return;
       const latest = await window.api.invoke('scanReports:latest');
       el.textContent = latest
-        ? `${parseSqliteTimestamp(latest.timestamp).toLocaleString()} (${latest.status})`
-        : t('dashboard.lastScanNever');
+      ? `${parseSqliteTimestamp(latest.timestamp).toLocaleString()} (${latest.status})`
+      : t('dashboard.lastScanNever');
     }
 
+    /**
+     * Maps a raw warning title/detail into localized strings.
+     *
+     * @param {{title:string, detail?:string}} w - Warning object from the backend.
+     * @returns {{title:string, detail?:string}} Translated warning.
+     */
     function translateWarning(w) {
       const trans = warningTranslations[w.title];
       if (trans) {
@@ -388,6 +439,9 @@ window.Pages['dashboard'] = {
       return w;
     }
 
+    /**
+     * Fetches active and ignored warnings and renders them into the dashboard.
+     */
     async function loadWarnings() {
       const warningList = document.getElementById('warningList');
       const ignoredList = document.getElementById('ignoredWarningList');
@@ -453,6 +507,12 @@ window.Pages['dashboard'] = {
       }
     }
 
+    /**
+     * Normalizes an IPC error into a user-facing message string.
+     *
+     * @param {Error|string} err - Raw error from an IPC invocation.
+     * @returns {string} Localized or raw error message.
+     */
     function errorMessage(err) {
       try {
         if (!err) return '';
@@ -465,6 +525,11 @@ window.Pages['dashboard'] = {
       }
     }
 
+    /**
+     * Updates the real-time protection toggle button and internal state.
+     *
+     * @param {boolean} active - Whether RTP is currently enabled.
+     */
     function setRtpState(active) {
       isRtpActive = !!active;
       btnToggleRtp.textContent = isRtpActive ? t('dashboard.rtpDisable') : t('dashboard.rtpEnable');

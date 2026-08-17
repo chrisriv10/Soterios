@@ -1,6 +1,11 @@
 const si = require('systeminformation');
 const { isUserFacingVolume } = require('../../tools/healthScore');
 
+/**
+ * Collect disk usage information for user-facing volumes.
+ *
+ * @returns {Promise<{volumes: Array, lowSpaceWarnings: string[]}>} Volume usage summary.
+ */
 module.exports = async function diskSpaceReport() {
   const fsSize = await si.fsSize();
   const userFacingVolumes = fsSize.filter(isUserFacingVolume);

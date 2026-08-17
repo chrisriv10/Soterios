@@ -1,6 +1,14 @@
 window.Pages = window.Pages || {};
 window.Pages.passwords = {
   render(container) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     container.innerHTML = `
       <div class="page-header"><h1 class="page-title">${escapeHtml(t('passwords.title'))}</h1>
@@ -61,6 +69,14 @@ window.Pages.passwords = {
   },
 
   wirePasswordVisibilityToggles(container) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     container.querySelectorAll('.password-toggle-visibility').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -77,6 +93,14 @@ window.Pages.passwords = {
   },
 
   wireGenerator(container) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const slider = container.querySelector('#lengthSlider');
     const lengthLabel = container.querySelector('#lengthLabel');
@@ -111,6 +135,14 @@ window.Pages.passwords = {
   },
 
   wireChecker(container) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const input = container.querySelector('#checkInput');
     const out = container.querySelector('#checkStrength');
@@ -130,6 +162,14 @@ window.Pages.passwords = {
   },
 
   async wireLeakChecks(container) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const settings = await Api.getSettings();
     const externalLookups = settings.features.externalLookups;
@@ -172,7 +212,21 @@ window.Pages.passwords = {
   }
 };
 
+/**
+ * Renders a password-strength meter with color coding and issue list.
+ *
+ * @param {HTMLElement} el - Container element to render into.
+ * @param {{score:number, label:string, issues:string[]}} strength - Strength assessment.
+ * @param {boolean} showIssues - Whether to render the issues list.
+ */
 function renderStrengthMeter(el, strength, showIssues) {
+  /**
+   * Translates an i18n key into the current locale.
+   *
+   * @param {string} key - Translation key.
+   * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+   * @returns {string} Localized string.
+   */
   const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
   const color = strength.label === 'Very Strong' || strength.label === 'Strong' ? 'var(--ok)' : strength.label === 'Moderate' ? 'var(--warn)' : 'var(--danger)';
   

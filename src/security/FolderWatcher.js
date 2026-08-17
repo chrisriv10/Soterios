@@ -36,6 +36,11 @@ class FolderWatcher {
     this._scannedRecently = new Map();
   }
 
+  /**
+   * Default high-risk directories to watch for new or modified files.
+   *
+   * @returns {string[]} Directory paths to monitor.
+   */
   static defaultWatchDirs() {
     const home = os.homedir();
     const windir = process.env.WINDIR || 'C:\\Windows';

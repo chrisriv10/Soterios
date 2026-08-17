@@ -5,6 +5,12 @@ const os = require('os');
 const path = require('path');
 const { isProtected } = require('./protectedPaths');
 
+/**
+ * Normalize raw uninstall registry rows into a consistent app list.
+ *
+ * @param {Array|Object} parsed - Raw registry rows or a single row.
+ * @returns {Array<{name: string, version: string, publisher: string, installLocation: string, uninstallString: string, estimatedSizeMB: number|null, iconPath: string}>} Normalized app entries.
+ */
 function normalizeApps(parsed) {
   const rows = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : []);
   return rows
@@ -21,6 +27,12 @@ function normalizeApps(parsed) {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/**
+ * Split an app name into searchable tokens.
+ *
+ * @param {string} name - App display name.
+ * @returns {string[]} Lowercase tokens of length >= 3.
+ */
 function tokenizeAppName(name) {
   return String(name || '')
     .toLowerCase()
@@ -29,6 +41,13 @@ function tokenizeAppName(name) {
     .filter((token) => token.length >= 3);
 }
 
+/**
+ * Find leftover directories that likely belong to an uninstalled app.
+ *
+ * @param {string} appName - Display name of the uninstalled app.
+ * @param {string} [installLocation] - Known install directory, searched first.
+ * @returns {Array<{path: string, kind: 'directory'}>} Candidate leftover paths.
+ */
 function findLeftoverCandidates(appName, installLocation) {
   const tokens = tokenizeAppName(appName);
   if (!tokens.length) return [];
@@ -65,6 +84,12 @@ function findLeftoverCandidates(appName, installLocation) {
   return matches;
 }
 
+/**
+ * Find leftover registry keys that likely belong to an uninstalled app.
+ *
+ * @param {string} appName - Display name of the uninstalled app.
+ * @returns {Promise<Array<{path: string, kind: 'registry'}>>} Candidate leftover registry paths.
+ */
 async function findLeftoverRegistryCandidates(appName) {
   if (process.platform !== 'win32') return [];
   const tokens = tokenizeAppName(appName);

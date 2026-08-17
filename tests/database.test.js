@@ -20,6 +20,11 @@ describe('DatabaseService quarantine_path migration', () => {
     }
   });
 
+  /**
+   * Creates a temporary database path and registers it for cleanup.
+   *
+   * @returns {string} Temporary database file path.
+   */
   function tempDbPath() {
     const p = path.join(os.tmpdir(), `soterios-db-migrate-${Date.now()}-${Math.random().toString(16).slice(2)}.db`);
     tempDbs.push(p);
@@ -131,6 +136,11 @@ describe('DatabaseService maintenance_runs', () => {
     }
   });
 
+  /**
+   * Creates a temporary maintenance database path and registers it for cleanup.
+   *
+   * @returns {string} Temporary database file path.
+   */
   function tempDbPath() {
     const p = path.join(os.tmpdir(), `soterios-db-maint-${Date.now()}-${Math.random().toString(16).slice(2)}.db`);
     tempDbs.push(p);

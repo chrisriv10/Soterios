@@ -17,6 +17,11 @@ describe('DatabaseService network_stats', () => {
     }
   });
 
+  /**
+   * Creates a temporary database path and registers it for cleanup.
+   *
+   * @returns {string} Temporary database file path.
+   */
   function tempDb() {
     const p = path.join(os.tmpdir(), `soterios-netstats-${Date.now()}-${Math.random()}.db`);
     temps.push(p);

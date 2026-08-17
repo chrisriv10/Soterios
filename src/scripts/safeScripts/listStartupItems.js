@@ -3,10 +3,22 @@ const os = require('os');
 const path = require('path');
 const fs = require('fs');
 
+/**
+ * Runs a shell command and returns stdout, or null on error.
+ *
+ * @param {string} cmd - Command to execute.
+ * @returns {Promise<string|null>} Command stdout or null.
+ */
 function run(cmd) {
   return new Promise((resolve) => { exec(cmd, { timeout: 15000, maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => { if (err) resolve(null); else resolve(stdout); }); });
 }
 
+/**
+ * Extracts an executable path from a raw command string.
+ *
+ * @param {string} cmd - Raw command string.
+ * @returns {string|null} Executable path or null.
+ */
 function extractExe(cmd) {
   if (!cmd) return null;
   // Quoted path: "C:\path\to\exe.exe" args
@@ -21,6 +33,13 @@ function extractExe(cmd) {
   return f ? f[1] : null;
 }
 
+/**
+ * Parses `reg query` output into structured startup items.
+ *
+ * @param {string} out - Raw registry query output.
+ * @param {'HKCU'|'HKLM'} scope - Registry hive scope.
+ * @returns {{name: string, command: string, exePath: string|null, source: string, scope: string}[]} Parsed items.
+ */
 function parseRegOutput(out, scope) {
   const items = [];
   if (!out) return items;
@@ -35,6 +54,11 @@ function parseRegOutput(out, scope) {
   return items;
 }
 
+/**
+ * Enumerate startup items from platform-specific sources.
+ *
+ * @returns {Promise<{platform: string, itemCount: number, items: Array}>} Startup items.
+ */
 module.exports = async function listStartupItems() {
   const platform = os.platform();
   const items = [];

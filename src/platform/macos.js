@@ -2,6 +2,12 @@
 
 const base = require('./base');
 
+/**
+ * macOS platform provider.
+ *
+ * Currently only `startup` is marked as supported.
+ */
+
 module.exports = {
   ...base,
   id: 'darwin',

@@ -25,6 +25,12 @@ class EventBus {
    * @returns {() => void} Unsubscribe function.
    */
   once(eventName, handler) {
+    /**
+     * One-shot wrapper that unsubscribes itself after the first invocation.
+     *
+     * @param {*} payload - Event payload.
+     * @returns {*} Handler return value.
+     */
     const wrapper = (payload) => {
       this.off(eventName, wrapper);
       return handler(payload);

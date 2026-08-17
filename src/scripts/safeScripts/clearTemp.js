@@ -2,10 +2,25 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
+/**
+ * Safely stats a path, returning null on error.
+ *
+ * @param {string} p - Path to stat.
+ * @returns {fs.Stats|null} Stats object or null.
+ */
 function safeStat(p) {
   try { return fs.statSync(p); } catch (_) { return null; }
 }
 
+/**
+ * Clear temporary files older than a configurable age from the system temp directory.
+ *
+ * @param {Object} [args={}]
+ * @param {number} [args.maxAgeDays=7] - Files older than this are deleted.
+ * @param {boolean} [args.dryRun] - When true, only log intended deletions.
+ * @param {Function} [onProgress] - Progress callback `(payload)`.
+ * @returns {Promise<{dryRun: boolean, tempDir: string, maxAgeDays: number, deletedCount: number, skippedCount: number, freedBytes: number, freedMB: number, log: string[]}>} Clear summary.
+ */
 module.exports = async function clearTemp(args = {}, onProgress) {
   const maxAgeDays = args.maxAgeDays ?? 7;
   const dryRun = args.dryRun !== false;
@@ -19,6 +34,9 @@ module.exports = async function clearTemp(args = {}, onProgress) {
   // avoid flooding the IPC channel back to the parent process.
   let scannedCount = 0;
   const REPORT_EVERY = 25;
+  /**
+   * Emits a throttled progress update for the temp-file scan.
+   */
   function maybeReportProgress() {
     scannedCount++;
     if (onProgress && scannedCount % REPORT_EVERY === 0) {
@@ -26,6 +44,11 @@ module.exports = async function clearTemp(args = {}, onProgress) {
     }
   }
 
+  /**
+   * Processes a single path: deletes old files, recurses into directories.
+   *
+   * @param {string} p - Path to process.
+   */
   function processPath(p) {
     const stat = safeStat(p);
     if (!stat) return;

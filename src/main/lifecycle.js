@@ -229,7 +229,19 @@ function registerProgressListeners(services, db) {
   if (services._progressListenersRegistered) return;
   services._progressListenersRegistered = true;
 
+  /**
+   * Extracts the scan type from progress data.
+   *
+   * @param {{scanType?:string, report?:{scanType?:string}}|null} data - Progress payload.
+   * @returns {string|null} Scan type or null.
+   */
   const resolveScanType = (data) => data?.scanType || data?.report?.scanType || null;
+  /**
+   * Determines whether a scan type is a background/folder-watch scan.
+   *
+   * @param {string|null} scanType - Scan type string.
+   * @returns {boolean} True if the scan is a background scan.
+   */
   const isBackgroundScan = (scanType) => scanType === 'folderwatch';
   let announcedProgress = new Set();
 
@@ -395,6 +407,9 @@ async function start(db, eventBus, options = {}) {
   // Network stats timer control (for feature toggle)
   services.startNetworkStatsTimer = () => {
     if (services._networkStatsTimer) return { running: true };
+    /**
+     * Samples network stats and persists them to the database.
+     */
     const sampleNetworkStats = async () => {
       try {
         const stats = await services.networkMonitor.getStats();

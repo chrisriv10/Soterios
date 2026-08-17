@@ -9,6 +9,13 @@ const { NotFoundError } = require('../utils/errors');
 
 const PS_SCRIPTS_DIR = path.join(__dirname, 'scripts');
 
+/**
+ * Execute a PowerShell helper script from the security scripts directory.
+ *
+ * @param {string} scriptName - Script filename (e.g. `network-connections.ps1`).
+ * @returns {Promise<string>} stdout from the script.
+ * @throws {NotFoundError} When the script file does not exist.
+ */
 async function runPs1(scriptName) {
   const scriptPath = path.join(PS_SCRIPTS_DIR, scriptName);
   if (!fs.existsSync(scriptPath)) {

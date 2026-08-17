@@ -24,7 +24,13 @@ const { NetworkEnricher } = require('../security/NetworkEnricher');
 const { GeoLocationService } = require('../security/GeoLocationService');
 const toolRegistry = require('../core/toolRegistry');
 
+/**
+ * Registry that constructs and stores references to all security/main-process services.
+ */
 class ServiceRegistry {
+  /**
+   * Creates a new ServiceRegistry instance.
+   */
   constructor() {
     this._services = {};
   }
@@ -106,10 +112,21 @@ class ServiceRegistry {
     return this._services;
   }
 
+  /**
+   * Retrieves a single service by name.
+   *
+   * @param {string} name - Service name.
+   * @returns {*} Service instance or undefined.
+   */
   get(name) {
     return this._services[name];
   }
 
+  /**
+   * Returns all registered services.
+   *
+   * @returns {Object} Services map.
+   */
   getAll() {
     return this._services;
   }

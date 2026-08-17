@@ -4,35 +4,78 @@ const { describe, it, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const EmergencyLockdown = require('../src/security/EmergencyLockdown');
 
+/**
+ * Fake in-memory database used for EmergencyLockdown tests.
+ */
 class FakeDatabase {
+  /**
+   * Creates a FakeDatabase instance.
+   */
   constructor() {
     this.data = {};
   }
 
+  /**
+   * Retrieves a value by key.
+   *
+   * @param {string} key - Storage key.
+   * @returns {*} Stored value or undefined.
+   */
   get(key) {
     return this.data[key];
   }
 
+  /**
+   * Stores a value by key.
+   *
+   * @param {string} key - Storage key.
+   * @param {*} value - Value to store.
+   */
   set(key, value) {
     this.data[key] = value;
   }
 }
 
+/**
+ * Fake event bus used for EmergencyLockdown tests.
+ */
 class FakeEventBus {
+  /**
+   * Creates a FakeEventBus instance.
+   */
   constructor() {
     this.events = [];
   }
 
+  /**
+   * Records an emitted event.
+   *
+   * @param {string} event - Event name.
+   * @param {*} data - Event payload.
+   */
   emit(event, data) {
     this.events.push({ event, data });
   }
 }
 
+/**
+ * Fake notifier used for EmergencyLockdown tests.
+ */
 class FakeNotifier {
+  /**
+   * Creates a FakeNotifier instance.
+   */
   constructor() {
     this.notifications = [];
   }
 
+  /**
+   * Records a notification.
+   *
+   * @param {string} title - Notification title.
+   * @param {string} message - Notification message.
+   * @param {string} type - Notification type.
+   */
   notify(title, message, type) {
     this.notifications.push({ title, message, type });
   }

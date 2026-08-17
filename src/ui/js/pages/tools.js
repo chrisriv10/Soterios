@@ -308,6 +308,13 @@ async runScript(container, btn) {
 
   renderOutput(scriptId, result, when) {
     let html = `<div class="log-row" style="background:var(--panel-raised);"><span class="log-tag clean">${this.t('tools.done')}</span><span class="log-path">${this.t('tools.completedAt', { when: escapeHtml(when) })}</span></div>`;
+    /**
+     * Truncates a string to a maximum length, appending an ellipsis when trimmed.
+     *
+     * @param {string} s - String to truncate.
+     * @param {number} [n=80] - Maximum length.
+     * @returns {string} Truncated string.
+     */
     const truncate = (s, n = 80) => (typeof s === 'string' && s.length > n) ? s.slice(0, n - 1) + '…' : (s || '');
     if (scriptId === 'clear-temp-files') {
       html += `<div class="log-row"><span class="log-tag clean">${this.t('tools.cleared')}</span><span class="log-path">${result.deletedCount || 0} ${this.t('tools.files')} ${this.t('tools.comma')} ${result.freedMB || 0} MB ${this.t('tools.freed')} (${this.t('tools.olderThan')} ${result.maxAgeDays ?? '?'} ${this.t('tools.daysShort')})</span></div>`;
@@ -430,6 +437,10 @@ async runScript(container, btn) {
     const deleteBtn = output.querySelector('#deleteSelectedFilesBtn');
     if (!deleteBtn) return;
 
+    /**
+     * Updates the delete-selected button label and disabled state based on
+     * the number of checked large-file checkboxes.
+     */
     const updateButton = () => {
       const selected = output.querySelectorAll('.large-file-checkbox:checked');
       deleteBtn.textContent = `${this.t('tools.deleteSelected', { count: selected.length })}`;
@@ -467,6 +478,10 @@ async runScript(container, btn) {
     const deleteBtn = output.querySelector('#deleteDuplicatesBtn');
     if (!deleteBtn) return;
 
+    /**
+     * Updates the delete-selected button label and disabled state based on
+     * the number of checked duplicate checkboxes.
+     */
     const updateButton = () => {
       const selected = output.querySelectorAll('.duplicate-checkbox:checked');
       deleteBtn.textContent = `${this.t('tools.deleteSelected', { count: selected.length })}`;
@@ -503,6 +518,12 @@ async runScript(container, btn) {
     const clearAllBtn = output.querySelector('#clearAllCacheBtn');
     const singleBtns = output.querySelectorAll('.clear-single-cache-btn');
 
+    /**
+     * Clears browser cache for the specified browsers and refreshes the UI.
+     *
+     * @param {string[]} browsers - Browser names to clear.
+     * @param {HTMLButtonElement} triggerBtn - Button that triggered the action.
+     */
     const runClear = async (browsers, triggerBtn) => {
       const label = browsers.length === 1 ? browsers[0] : this.t('tools.allBrowsers');
       if (!window.confirm(`${this.t('tools.confirmClearCache', { label })}`)) return;
@@ -643,6 +664,9 @@ async runScript(container, btn) {
     const removeBtn = output.querySelector('#removeLeftoversBtn');
     if (!removeBtn) return;
 
+    /**
+     * Updates the remove-leftovers button label and disabled state.
+     */
     const updateRemoveButton = () => {
       const selected = output.querySelectorAll('.leftover-checkbox:checked');
       removeBtn.textContent = `${this.t('uninstaller.removeSelected')} (${selected.length})`;

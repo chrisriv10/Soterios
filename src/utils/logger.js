@@ -13,6 +13,11 @@ let minLevel = LEVELS.info;
 let filePath = null;
 let fsRef = null;
 
+/**
+ * Configures the global logger settings.
+ *
+ * @param {{level?: string, filePath?: string|null}} [options={}] - Logger options.
+ */
 function configure(options = {}) {
   if (options.level && LEVELS[options.level] != null) {
     minLevel = LEVELS[options.level];
@@ -32,10 +37,24 @@ function configure(options = {}) {
   }
 }
 
+/**
+ * Determines whether a message at the given level should be logged.
+ *
+ * @param {string} level - Log level.
+ * @returns {boolean} True if the level meets the current threshold.
+ */
 function shouldLog(level) {
   return (LEVELS[level] || 0) >= minLevel;
 }
 
+/**
+ * Formats a log line with timestamp, level, message, and optional metadata.
+ *
+ * @param {string} level - Log level.
+ * @param {string} message - Log message.
+ * @param {*} [meta] - Optional metadata.
+ * @returns {string} Formatted log line.
+ */
 function formatLine(level, message, meta) {
   const ts = new Date().toISOString();
   let metaStr = '';
@@ -65,6 +84,13 @@ function formatLine(level, message, meta) {
   return `[${ts}] ${level.toUpperCase()} ${message}${metaStr}`;
 }
 
+/**
+ * Writes a log entry to the console and optional file sink.
+ *
+ * @param {string} level - Log level.
+ * @param {string} message - Log message.
+ * @param {*} [meta] - Optional metadata.
+ */
 function write(level, message, meta) {
   if (!shouldLog(level)) return;
   const line = formatLine(level, message, meta);

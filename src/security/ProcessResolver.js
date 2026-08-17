@@ -4,6 +4,9 @@
  */
 
 class ProcessResolver {
+  /**
+   * @param {import('./ProcessInspector')} processInspector - Source of process enumeration.
+   */
   constructor(processInspector) {
     this.processInspector = processInspector;
     this.cache = new Map();

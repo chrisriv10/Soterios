@@ -13,6 +13,13 @@ const SKIP_DIRS = new Set([
   'System Volume Information'
 ]);
 
+/**
+ * Decide whether to skip a directory during duplicate-file scanning.
+ *
+ * @param {string} fullPath
+ * @param {string} name
+ * @returns {boolean}
+ */
 function shouldSkipDir(fullPath, name) {
   if (SKIP_DIRS.has(name)) return true;
   const lower = fullPath.toLowerCase();
@@ -22,6 +29,12 @@ function shouldSkipDir(fullPath, name) {
     || lower.includes('\\.git\\');
 }
 
+/**
+ * Normalize a list of file extensions into a Set of lowercase dotted values.
+ *
+ * @param {string|string[]} [exts]
+ * @returns {Set<string>|null}
+ */
 function normalizeExtensions(exts) {
   if (!exts) return null;
   const list = Array.isArray(exts)
@@ -34,6 +47,13 @@ function normalizeExtensions(exts) {
   }));
 }
 
+/**
+ * Compute a hex digest for a file.
+ *
+ * @param {string} filePath
+ * @param {'sha256'|'md5'} algorithm
+ * @returns {Promise<string>}
+ */
 function hashFile(filePath, algorithm) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash(algorithm);
@@ -70,6 +90,12 @@ async function findDuplicates(args = {}, onProgress) {
   const bySize = new Map();
   let scanned = 0;
 
+  /**
+   * Recursively walks a directory tree indexing files by size.
+   *
+   * @param {string} current - Current directory path.
+   * @param {number} depth - Current recursion depth.
+   */
   function walk(current, depth) {
     if (depth > maxDepth) return;
     let entries;

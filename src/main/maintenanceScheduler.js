@@ -30,6 +30,13 @@ const ALLOWED_SCRIPT_IDS = new Set([
 const MIN_INTERVAL_HOURS = 24;
 const MAX_INTERVAL_HOURS = 720;
 
+/**
+ * Builds the default arguments object for a maintenance script.
+ *
+ * @param {string} scriptId - Registered script identifier.
+ * @param {boolean} [dryRunCleanup] - Whether the maintenance run is a dry run.
+ * @returns {Object} Arguments to pass to the script.
+ */
 function scriptArgsFor(scriptId, dryRunCleanup) {
   if (scriptId === 'clear-temp-files') {
     return { dryRun: !!dryRunCleanup, maxAgeDays: 7 };
@@ -37,6 +44,15 @@ function scriptArgsFor(scriptId, dryRunCleanup) {
   return {};
 }
 
+/**
+ * Resolves the effective interval in hours from a maintenance config.
+ *
+ * For the `custom` preset the value is clamped to the allowed range.
+ * For named presets the interval is taken from the preset definition.
+ *
+ * @param {Object} config - Partial or full maintenance configuration.
+ * @returns {number} Interval in hours.
+ */
 function resolveIntervalHours(config) {
   const preset = config.schedulePreset || 'weekly';
   if (preset === 'custom') {
@@ -49,6 +65,13 @@ function resolveIntervalHours(config) {
   return presetDef.intervalHours || DEFAULT_MAINTENANCE.intervalHours;
 }
 
+/**
+ * Coordinates scheduled maintenance runs for the application.
+ *
+ * Reads and writes the maintenance schedule configuration, starts and
+ * stops the periodic check timer, and executes registered maintenance
+ * scripts when the configured interval has elapsed.
+ */
 class MaintenanceScheduler {
   /**
    * @param {object} options
@@ -70,6 +93,11 @@ class MaintenanceScheduler {
     this._startupTimer = null;
   }
 
+  /**
+   * Load the persisted maintenance configuration, merged with defaults.
+   *
+   * @returns {Object} Resolved maintenance configuration.
+   */
   loadConfig() {
     const stored = this.db.getSetting(this.settingKey, null);
     const merged = { ...DEFAULT_MAINTENANCE, ...(stored || {}) };
@@ -81,6 +109,16 @@ class MaintenanceScheduler {
     return merged;
   }
 
+  /**
+   * Persist a partial maintenance configuration.
+   *
+   * Merges the supplied patch with the current config, clamps the interval
+   * to allowed bounds, filters script IDs against the allow-list, and
+   * writes the result to the settings store.
+   *
+   * @param {Object} [partial] - Configuration fields to update.
+   * @returns {Object} The merged configuration after validation.
+   */
   saveConfig(partial) {
     const merged = { ...this.loadConfig(), ...(partial || {}) };
     merged.scriptIds = (merged.scriptIds || []).filter((id) => ALLOWED_SCRIPT_IDS.has(id));
@@ -98,6 +136,13 @@ class MaintenanceScheduler {
     return merged;
   }
 
+  /**
+   * Start the periodic maintenance check timer.
+   *
+   * The timer fires once per minute. A one-off startup check is also
+   * scheduled for ~20 seconds after app launch. Timers are unref'd so
+   * they do not keep the process alive on their own.
+   */
   start() {
     if (this._timer) return;
     this._timer = setInterval(() => {
@@ -118,6 +163,9 @@ class MaintenanceScheduler {
     if (typeof this._startupTimer.unref === 'function') this._startupTimer.unref();
   }
 
+  /**
+   * Stop the periodic maintenance check timer and cancel the startup check.
+   */
   stop() {
     if (this._timer) clearInterval(this._timer);
     if (this._startupTimer) clearTimeout(this._startupTimer);
@@ -125,12 +173,29 @@ class MaintenanceScheduler {
     this._startupTimer = null;
   }
 
+  /**
+   * Determine whether the scheduled run should be skipped because the user is active.
+   *
+   * Only applies to the `idle` schedule preset.
+   *
+   * @param {Object} config - Maintenance configuration.
+   * @returns {boolean} True when the run should be skipped.
+   */
   shouldSkipForIdle(config) {
     if (config.schedulePreset !== 'idle') return false;
     const idleSec = this.getIdleTimeSeconds();
     return idleSec < config.minIdleSeconds;
   }
 
+  /**
+   * Run maintenance now if the configured interval has elapsed.
+   *
+   * Returns early when maintenance is disabled, already running, the user
+   * is active (idle preset), or the interval has not yet elapsed since the
+   * last attempt.
+   *
+   * @returns {Promise<Object>} Result object describing whether the run was executed or skipped.
+   */
   async runIfDue() {
     if (this._running) return { ok: false, skipped: true, reason: 'already-running' };
     const config = this.loadConfig();
@@ -148,6 +213,17 @@ class MaintenanceScheduler {
     return this.runNow({ dryRunCleanup: true });
   }
 
+  /**
+   * Execute all configured maintenance scripts immediately.
+   *
+   * Each script is run through the tool registry. Results are persisted
+   * to the database and a desktop notification is sent when enabled.
+   *
+   * @param {Object} [options={}]
+   * @param {boolean} [options.dryRunCleanup=false] - Whether cleanup scripts should run in dry-run mode.
+   * @param {boolean} [options.manual=false] - Whether the run was triggered manually.
+   * @returns {Promise<Object>} Run summary including per-script results.
+   */
   async runNow(options = {}) {
     if (this._running) return { ok: false, skipped: true, reason: 'already-running' };
     const dryRunCleanup = options.dryRunCleanup !== false

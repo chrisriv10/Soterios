@@ -13,12 +13,28 @@ const PROTECTED_SYSTEM_NAMES = new Set([
 ]);
 const SYSTEM_DIR_PATTERNS = ['\\windows\\system32\\', '\\windows\\syswow64\\', '\\windows\\'];
 
+/**
+ * Check whether a process is masquerading as a system process.
+ *
+ * @param {string} name - Process name.
+ * @param {string} lowerPath - Lower-cased process path.
+ * @returns {boolean}
+ */
 function isMasquerading(name, lowerPath) {
   if (!PROTECTED_SYSTEM_NAMES.has(name)) return false;
   if (!lowerPath) return false; // can't confirm location either way -- don't guess
   return !SYSTEM_DIR_PATTERNS.some((p) => lowerPath.includes(p));
 }
 
+/**
+ * Build a list of risk signals for a process.
+ *
+ * @param {Object} proc
+ * @param {string} proc.name
+ * @param {string} [proc.path]
+ * @param {string} [proc.cmd]
+ * @returns {Array<{points:number, message:string}>}
+ */
 function processSignals(proc) {
   const signals = [];
   const lowerPath = String(proc.path || '').toLowerCase().replace(/\//g, '\\');
@@ -68,6 +84,13 @@ function processSignals(proc) {
   return signals;
 }
 
+/**
+ * Map a risk score to a human-readable recommendation.
+ *
+ * @param {Object} risk
+ * @param {number} risk.score
+ * @returns {string}
+ */
 function recommendationForRisk(risk) {
   if (risk.score >= 50) return 'Immediate termination recommended.';
   if (risk.score >= 35) return 'Review process path and command line arguments.';

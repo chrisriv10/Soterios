@@ -2,6 +2,13 @@ const fs = require('fs');
 const { makeRisk, recommendationForRisk } = require('../security/riskEngine');
 const { getRegistryRunItems, getStartupFolders, getScheduledTasks, getServices, getSignatureInfo, extractExecutablePath, suspiciousPathSignals, isExecutablePath } = require('../security/windowsChecks');
 
+/**
+ * Builds risk signals for a startup item based on path, command, and signature.
+ *
+ * @param {{path?:string, command?:string, source?:string}} item - Startup item descriptor.
+ * @param {{status:string, publisher?:string|null}} signature - Code-signing info.
+ * @returns {{points:number, message:string}[]} Risk signals.
+ */
 function buildSignals(item, signature) {
   const filePath = item.path || extractExecutablePath(item.command);
   const signals = suspiciousPathSignals(filePath);
@@ -19,6 +26,12 @@ function buildSignals(item, signature) {
   return signals.filter((s) => s.points > 0);
 }
 
+/**
+ * Enriches a startup item with signature, risk, and recommendation data.
+ *
+ * @param {{path?:string, command?:string, source?:string, location?:string}} item - Raw startup item.
+ * @returns {Promise<Object>} Enriched startup item.
+ */
 async function enrichStartupItem(item) {
   const filePath = item.path || extractExecutablePath(item.command);
   const signature = filePath ? await getSignatureInfo(filePath) : { status: 'Unknown', publisher: null };

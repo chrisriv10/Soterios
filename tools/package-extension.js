@@ -20,6 +20,12 @@ const excludePatterns = [
   'package-lock.json'
 ];
 
+/**
+ * Determines whether a file should be excluded from the extension package.
+ *
+ * @param {string} filePath - Absolute file path.
+ * @returns {boolean} True if the file should be excluded.
+ */
 function shouldExclude(filePath) {
   const relativePath = path.relative(extDir, filePath);
   
@@ -37,6 +43,13 @@ function shouldExclude(filePath) {
   return false;
 }
 
+/**
+ * Recursively adds a directory tree to an AdmZip archive.
+ *
+ * @param {AdmZip} zip - Target zip archive.
+ * @param {string} dirPath - Directory to add.
+ * @param {string} basePath - Base path for relative paths inside the zip.
+ */
 function addDirectoryToZip(zip, dirPath, basePath) {
   const items = fs.readdirSync(dirPath);
   
@@ -57,6 +70,9 @@ function addDirectoryToZip(zip, dirPath, basePath) {
   }
 }
 
+/**
+ * Creates the browser extension zip package.
+ */
 function main() {
   if (!fs.existsSync(extDir)) {
     console.error('browser-extension directory not found');

@@ -5,6 +5,12 @@
 // with a 'type' field ('progress' vs 'done') so progress updates sent
 // during a script's run are never mistaken for its final result.
 
+/**
+ * Child process runner for maintenance scripts.
+ *
+ * Forks a script by absolute path, passes JSON-decoded args, and relays
+ * progress/done messages back to the parent process via `process.send`.
+ */
 (async () => {
   try {
     const scriptPath = process.argv[2];
@@ -17,6 +23,11 @@
     // Passed as a second argument to every script. Scripts that don't
     // accept/call it (most of them -- only file-walk-based scripts report
     // progress) simply ignore the extra argument, which is safe in JS.
+    /**
+     * Sends a progress update to the parent process.
+     *
+     * @param {Object} payload - Progress payload.
+     */
     const onProgress = (payload) => {
       if (process && process.send) {
         try { process.send({ type: 'progress', payload }); } catch (e) { console.debug?.('childRunner progress send failed', { error: e?.message || String(e) }); }

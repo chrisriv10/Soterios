@@ -49,6 +49,12 @@ const COMMON_PASSWORDS = new Set([
 // Common leetspeak substitutions, used to catch "p@ssw0rd"-style variants of
 // dictionary words that a pure exact-match check would miss entirely.
 const LEET_MAP = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '@': 'a', '$': 's', '!': 'i' };
+/**
+ * Reverses common leetspeak substitutions in a password string.
+ *
+ * @param {string} password - Input password possibly containing leetspeak.
+ * @returns {string} De-leetified lowercase string.
+ */
 function deleetify(password) {
   return password
     .toLowerCase()
@@ -68,6 +74,12 @@ const KEYBOARD_ROWS = [
   'zxcvbnm,./',
   '1qaz2wsx3edc4rfv5tgb'
 ];
+/**
+ * Builds a set of adjacent-keyboard substrings from QWERTY rows.
+ *
+ * @param {number} [minLen=4] - Minimum sequence length.
+ * @returns {Set<string>} Set of keyboard walk substrings (forward and reverse).
+ */
 function buildKeyboardSequences(minLen = 4) {
   const seqs = new Set();
   for (const row of KEYBOARD_ROWS) {
@@ -80,6 +92,12 @@ function buildKeyboardSequences(minLen = 4) {
   return seqs;
 }
 const KEYBOARD_SEQUENCES = buildKeyboardSequences(4);
+/**
+ * Checks whether a password contains an adjacent-keyboard walk substring.
+ *
+ * @param {string} password - Password to test.
+ * @returns {boolean} True if a keyboard walk is detected.
+ */
 function hasKeyboardWalk(password) {
   const lower = password.toLowerCase();
   for (const seq of KEYBOARD_SEQUENCES) {
@@ -92,6 +110,13 @@ function hasKeyboardWalk(password) {
 // ascending or descending consecutive character codes, of any length and
 // starting anywhere -- so "6789", "jklm", "fedcba" are all caught, not just
 // the specific runs someone thought to hardcode.
+/**
+ * Detects ascending/descending sequential character runs in a password.
+ *
+ * @param {string} password - Password to test.
+ * @param {number} [minRun=4] - Minimum run length to flag.
+ * @returns {boolean} True if a sequential run is found.
+ */
 function hasSequentialRun(password, minRun = 4) {
   const s = password.toLowerCase();
   let asc = 1;
@@ -109,6 +134,13 @@ function hasSequentialRun(password, minRun = 4) {
 // ENTIRELY one repeated character ("aaaaaaaa"). This catches any repeated
 // run of 3+ within a longer password ("aaaa1234!") and any whole-password
 // repeated block ("abcabcabc", "12121212").
+/**
+ * Detects repeated character runs within a password.
+ *
+ * @param {string} password - Password to test.
+ * @param {number} [minRun=3] - Minimum repeated run length.
+ * @returns {boolean} True if a repeated run is found.
+ */
 function hasRepeatedRun(password, minRun = 3) {
   let run = 1;
   for (let i = 1; i < password.length; i++) {
@@ -117,6 +149,13 @@ function hasRepeatedRun(password, minRun = 3) {
   }
   return false;
 }
+
+/**
+ * Detects whether a password is a repeated block of a smaller substring.
+ *
+ * @param {string} password - Password to test.
+ * @returns {boolean} True if the password is a repeated pattern.
+ */
 function isRepeatedPattern(password) {
   const n = password.length;
   for (let size = 1; size <= Math.floor(n / 2); size++) {
@@ -129,6 +168,12 @@ function isRepeatedPattern(password) {
 // Years and common date shapes (mmddyyyy, ddmmyyyy) are frequently embedded
 // in passwords (birth years, graduation years) and are guessable even when
 // they satisfy a "must contain a digit" policy.
+/**
+ * Checks whether a password contains a year or date pattern.
+ *
+ * @param {string} password - Password to test.
+ * @returns {boolean} True if a date pattern is detected.
+ */
 function hasDatePattern(password) {
   return /\b(19\d{2}|20\d{2})\b/.test(password) || /\b\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}\b/.test(password);
 }
@@ -136,6 +181,12 @@ function hasDatePattern(password) {
 // Does the deleetified password contain a known common password/word as a
 // substantial substring? Catches "Password123!" and "p@ssw0rd2024", not
 // just an exact "password" match.
+/**
+ * Checks whether a deleetified password contains a common password substring.
+ *
+ * @param {string} password - Password to test.
+ * @returns {string|null} Matched common word, or null if none found.
+ */
 function containsCommonSubstring(password) {
   const deleeted = deleetify(password);
   for (const word of COMMON_PASSWORDS) {
@@ -145,8 +196,20 @@ function containsCommonSubstring(password) {
   return null;
 }
 
+/**
+ * Returns a cryptographically secure random integer in [0, maxExclusive).
+ *
+ * @param {number} maxExclusive - Upper bound (exclusive).
+ * @returns {number} Random integer.
+ */
 function secureRandomInt(maxExclusive) { return crypto.randomInt(0, maxExclusive); }
 
+/**
+ * Generates a random password with configurable character sets.
+ *
+ * @param {{length?:number, useLower?:boolean, useUpper?:boolean, useDigits?:boolean, useSymbols?:boolean, excludeAmbiguous?:boolean}} [opts={}] - Generation options.
+ * @returns {string} Generated password.
+ */
 function generatePassword({ length = 16, useLower = true, useUpper = true, useDigits = true, useSymbols = true, excludeAmbiguous = false } = {}) {
   let pool = '';
   if (useLower) pool += LOWER;
@@ -177,6 +240,12 @@ function generatePassword({ length = 16, useLower = true, useUpper = true, useDi
   return chars.join('');
 }
 
+/**
+ * Estimates the entropy bits of a password based on its character-set pool.
+ *
+ * @param {string} password - Password to evaluate.
+ * @returns {number} Estimated entropy bits.
+ */
 function estimateEntropyBits(password) {
   let poolSize = 0;
   if (/[a-z]/.test(password)) poolSize += 26;
@@ -192,6 +261,12 @@ function estimateEntropyBits(password) {
 // seconds figure) since precision here would be false precision -- the
 // real-world number depends entirely on the attacker's hash algorithm and
 // hardware, which this has no way to know.
+/**
+ * Maps a strength score to a qualitative crack-time estimate.
+ *
+ * @param {number} score - Strength score (0–100+).
+ * @returns {string} Qualitative crack-time label.
+ */
 function crackTimeEstimate(score) {
   if (score < 20) return 'Instantly';
   if (score < 40) return 'Minutes to hours';
@@ -200,6 +275,12 @@ function crackTimeEstimate(score) {
   return 'Centuries';
 }
 
+/**
+ * Evaluates password strength and returns a scored result with issues.
+ *
+ * @param {string} password - Password to evaluate.
+ * @returns {{score:number, label:string, entropyBits:number, issues:string[], crackTimeEstimate:string}} Strength assessment.
+ */
 function checkStrength(password) {
   if (!password) return { score: 0, label: 'Empty', entropyBits: 0, issues: ['No password provided'], crackTimeEstimate: 'Instantly' };
 

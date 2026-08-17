@@ -4,6 +4,13 @@ const { spawn } = require('child_process');
 const { getProvider } = require('../../platform');
 const { parseUninstallCommand, validateUninstallLaunch } = require('./uninstallLaunchUtils');
 
+/**
+ * Launch a program's uninstaller after validating the command.
+ *
+ * @param {Object} [args={}]
+ * @param {string} args.uninstallString - Uninstall command string from the registry.
+ * @returns {Promise<{ok: boolean, launched?: boolean, command?: string, error?: string}>} Launch result.
+ */
 module.exports = async function launchUninstaller(args = {}) {
   const platform = getProvider();
   if (!platform.supports('uninstaller')) {

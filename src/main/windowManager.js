@@ -21,7 +21,21 @@ let dbRef = null;
 let featureFlags = null;
 let currentUiTheme = 'dark';
 let startupLocale = 'en';
+/**
+ * Logs a message through the injected logger.
+ *
+ * @param {string} level - Log level.
+ * @param {string} message - Log message.
+ * @param {*} [meta] - Optional metadata.
+ */
 let logLine = (level, message, meta) => { const fn = logger[level] || logger.info; fn(message, meta || undefined); };
+/**
+ * Translates a key using the injected i18n function.
+ *
+ * @param {string} key - Translation key.
+ * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+ * @returns {string} Localized string.
+ */
 let t = (key, vars) => i18n.t(key, i18n.normalizeLocale(startupLocale), vars);
 
 let mainWindow = null;
@@ -338,6 +352,9 @@ function createWindow() {
  */
 function buildAppMenu(mainWindow) {
   const isMac = process.platform === 'darwin';
+  /**
+   * Shows the About dialog for the application.
+   */
   const aboutHandler = () => {
     dialog.showMessageBox(mainWindow, {
       type: 'info',

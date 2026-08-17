@@ -6,6 +6,13 @@ const { CANDIDATES } = require('./browserCacheReport');
 // -- Chromium-based browsers recreate their Cache folder on next launch, and
 // leaving the top-level folder in place avoids any issue if the browser
 // still holds a handle to it while running).
+/**
+ * Recursively deletes the contents of a directory without removing the directory itself.
+ *
+ * @param {string} dirPath - Directory to clear.
+ * @param {string[]} log - Accumulates human-readable skip messages.
+ * @returns {{freed:number, deleted:number, skipped:number}} Clear summary.
+ */
 function emptyDirContents(dirPath, log) {
   let freed = 0;
   let deleted = 0;
@@ -56,6 +63,13 @@ function emptyDirContents(dirPath, log) {
 // beyond what a "clear cache" action should touch.
 const FIREFOX_CACHE_FOLDER_NAMES = ['cache2', 'startupCache', 'shader-cache', 'OfflineCache'];
 
+/**
+ * Clears Firefox cache folders under the profiles root.
+ *
+ * @param {string} profilesRoot - Firefox Profiles directory path.
+ * @param {string[]} log - Accumulates human-readable skip messages.
+ * @returns {{freed:number, deleted:number, skipped:number}} Clear summary.
+ */
 function clearFirefoxCache(profilesRoot, log) {
   let freed = 0;
   let deleted = 0;
@@ -83,6 +97,13 @@ function clearFirefoxCache(profilesRoot, log) {
   return { freed, deleted, skipped };
 }
 
+/**
+ * Clear the disk cache for one or more supported browsers.
+ *
+ * @param {Object} [args={}]
+ * @param {string[]} [args.browsers] - Browser names to clear; defaults to all candidates.
+ * @returns {Promise<{totalMB: number, browsers: Array, log: string[]}>} Clear results.
+ */
 module.exports = async function clearBrowserCache(args = {}) {
   // An empty/omitted browsers list means "clear everything found" -- the
   // UI's "Clear All" action relies on this rather than needing to know the

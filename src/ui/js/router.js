@@ -1,8 +1,18 @@
+/**
+ * Simple single-page router for the renderer.
+ *
+ * Navigates between page modules registered on `window.Pages` by
+ * updating `#hash` and re-rendering the main content region.
+ */
 (async function () {
-  const mainContent = document.getElementById('mainContent');
   const navItems = document.querySelectorAll('.nav-item[data-page]');
   let currentPage = null;
 
+  /**
+   * Renders an "unknown page" placeholder in the main content area.
+   *
+   * @param {string} pageId - Requested page identifier.
+   */
   function showUnknownPage(pageId) {
     mainContent.replaceChildren();
     const el = document.createElement('div');
@@ -11,10 +21,21 @@
     mainContent.appendChild(el);
   }
 
+  /**
+   * Checks whether a page ID has a registered page module.
+   *
+   * @param {string} pageId - Page identifier.
+   * @returns {boolean} True if the page is known.
+   */
   function isKnownPage(pageId) {
     return !!(pageId && window.Pages && window.Pages[pageId]);
   }
 
+  /**
+   * Navigates to a page by ID, destroying the previous page if needed.
+   *
+   * @param {string} pageId - Page identifier.
+   */
   function navigate(pageId) {
     const pageModule = isKnownPage(pageId) ? window.Pages[pageId] : null;
     if (!pageModule) { showUnknownPage(pageId); return; }

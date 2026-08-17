@@ -8,6 +8,12 @@ const MAINTENANCE_SCRIPT_TRANSLATIONS = {
   'browser-cache-report': { name: 'tools.script.browserCacheReport.name', desc: 'tools.script.browserCacheReport.desc' }
 };
 
+/**
+ * Translates an update-status payload into a localized display string.
+ *
+ * @param {{messageKey?:string, message?:string, version?:string, progress?:{percent:number}}} status - Update status object.
+ * @returns {string} Localized status message.
+ */
 function translateUpdateStatus(status) {
   if (!status || !status.messageKey) return status.message || '';
   const vars = {};
@@ -20,6 +26,13 @@ function translateUpdateStatus(status) {
 window.Pages = window.Pages || {};
 window.Pages.settings = {
   async render(container) {
+    /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const settings = await Api.getSettings();
     const appInfo = await Api.getAppInfo();
@@ -325,6 +338,11 @@ window.Pages.settings = {
     const languageSelect = container.querySelector('#languageSelect');
     const languageWarning = container.querySelector('#languageWarning');
     const languageHint = container.querySelector('#languageHint');
+    /**
+     * Shows or hides the "translation in development" warning for a language.
+     *
+     * @param {string} [lang] - Language code; falls back to the select's current value.
+     */
     function updateLanguageWarning(lang) {
       const selectedLang = lang || languageSelect.value;
       if (selectedLang && selectedLang !== 'en') {
@@ -392,6 +410,14 @@ window.Pages.settings = {
       finally { setButtonLoading(btn, false); }
     });
 
+    /**
+     * Persists a single feature flag to the backend and updates UI state.
+     *
+     * @param {string} key - Feature flag key.
+     * @param {boolean} value - New feature flag value.
+     * @param {HTMLInputElement} input - Toggle input element.
+     * @param {HTMLElement} [statusEl] - Optional status element; defaults to #featureToggleStatus.
+     */
     async function saveFeature(key, value, input, statusEl) {
       if (!statusEl) statusEl = container.querySelector('#featureToggleStatus');
       statusEl.textContent = '';
@@ -535,6 +561,11 @@ window.Pages.settings = {
     const presetEl = container.querySelector('#maintenancePreset');
     const customIntervalWrap = container.querySelector('#maintenanceCustomIntervalWrap');
 
+    /**
+     * Shows or hides the custom-interval input based on the selected preset.
+     *
+     * @param {'custom'|string} preset - Selected maintenance preset.
+     */
     const syncPresetUi = (preset) => {
       customIntervalWrap.style.display = preset === 'custom' ? 'block' : 'none';
     };
@@ -610,6 +641,9 @@ window.Pages.settings = {
     const updateStatusEl = container.querySelector('#updateStatusText');
     const installUpdateBtn = container.querySelector('#installUpdateBtn');
 
+    /**
+     * Polls the updater status endpoint and refreshes the update UI.
+     */
     async function refreshUpdateStatus() {
       try {
         const status = await window.api.invoke('update:status');

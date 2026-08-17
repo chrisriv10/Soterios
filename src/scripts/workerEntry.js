@@ -2,6 +2,12 @@
 
 const { parentPort, workerData } = require('worker_threads');
 
+/**
+ * Worker thread entry point.
+ *
+ * Loads and executes a maintenance script, forwarding progress and
+ * completion messages back to the parent thread via `parentPort`.
+ */
 (async () => {
   try {
     const { scriptPath, args } = workerData || {};
@@ -9,6 +15,11 @@ const { parentPort, workerData } = require('worker_threads');
     const scriptFn = require(scriptPath);
     if (typeof scriptFn !== 'function') throw new Error('Script does not export a function');
 
+    /**
+     * Forwards a progress payload to the parent worker thread.
+     *
+     * @param {Object} payload - Progress payload.
+     */
     const onProgress = (payload) => {
       parentPort.postMessage({ type: 'progress', payload });
     };

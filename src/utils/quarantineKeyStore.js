@@ -34,10 +34,21 @@ class QuarantineKeyStore {
     this._key = this._loadOrCreateKey(storageDir);
   }
 
+  /**
+   * The 256-bit AES key used for quarantine operations.
+   *
+   * @type {Buffer}
+   */
   get key() {
     return this._key;
   }
 
+  /**
+   * Loads the persisted quarantine key or generates a new one.
+   *
+   * @param {string} storageDir - Directory for key storage.
+   * @returns {Buffer} Quarantine key.
+   */
   _loadOrCreateKey(storageDir) {
     try {
       if (fs.existsSync(this._keyPath)) {
@@ -62,6 +73,9 @@ class QuarantineKeyStore {
     return key;
   }
 
+  /**
+   * Restricts key file permissions to owner-only read/write.
+   */
   _restrictKeyFile() {
     try {
       fs.chmodSync(this._keyPath, 0o600);

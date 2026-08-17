@@ -2,6 +2,11 @@ const { describe, it, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { BlocklistService } = require('../src/security/BlocklistService');
 
+/**
+ * Creates a BlocklistService instance with a minimal mock dependency set.
+ *
+ * @returns {BlocklistService} Test service instance.
+ */
 function makeService() {
   return new BlocklistService({ getBlocklistCache: () => null });
 }

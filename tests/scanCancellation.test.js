@@ -6,6 +6,14 @@ const { EventEmitter } = require('events');
 const ScanEngine = require('../src/security/ScanEngine');
 const ClamAVEngine = require('../src/security/ClamAVEngine');
 
+/**
+ * Polls a condition until it returns true or a timeout expires.
+ *
+ * @param {() => boolean} condition - Condition to poll.
+ * @param {number} [timeoutMs=1000] - Maximum wait time in milliseconds.
+ * @returns {Promise<void>} Resolves when condition is true.
+ * @throws {Error} If the condition is not met within the timeout.
+ */
 async function waitFor(condition, timeoutMs = 1000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
@@ -15,17 +23,33 @@ async function waitFor(condition, timeoutMs = 1000) {
   throw new Error('Timed out waiting for condition');
 }
 
+/**
+ * Fake ClamAV engine used for scan cancellation tests.
+ */
 class FakeClamEngine extends ClamAVEngine {
+  /**
+   * Creates a FakeClamEngine instance.
+   */
   constructor() {
     super({});
     this.isReady = true;
     this.pendingResolve = null;
   }
 
+  /**
+   * Always reports a virus database is present.
+   *
+   * @returns {boolean} True.
+   */
   hasVirusDatabase() {
     return true;
   }
 
+  /**
+   * Returns a promise that resolves when the pending resolve is invoked.
+   *
+   * @returns {Promise<unknown>} Pending scan promise.
+   */
   async scanFile() {
     return new Promise((resolve) => {
       this.pendingResolve = resolve;

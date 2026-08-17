@@ -11,6 +11,9 @@ const { execSync } = require('child_process');
 const EXTENSION_ID = process.env.EXTENSION_ID;
 const IS_WIN = process.platform === 'win32';
 
+/**
+ * Installs the Soterios native messaging host manifest and launcher.
+ */
 function main() {
   // Validate extension ID
   if (!EXTENSION_ID || EXTENSION_ID === 'YOUR_EXTENSION_ID_HERE' || !/^[a-z]{32}$/.test(EXTENSION_ID)) {

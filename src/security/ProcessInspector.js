@@ -32,6 +32,12 @@ const PROTECTED_NAMES = new Set([
 
 const SYSTEM_DIR_MARKERS = ['\\windows\\system32\\', '\\windows\\syswow64\\'];
 
+/**
+ * Derive a human-readable recommendation from an array of suspicion reasons.
+ *
+ * @param {Array<string>} reasons
+ * @returns {string}
+ */
 function recommendationForReasons(reasons) {
   if (!reasons.length) return 'No action needed.';
   if (reasons.some((r) => /recycle bin/i.test(r))) {
@@ -43,6 +49,12 @@ function recommendationForReasons(reasons) {
   return 'Review the process location and confirm it is expected on this system.';
 }
 
+/**
+ * Check whether a path resolves into a Windows system directory.
+ *
+ * @param {string} [filePath]
+ * @returns {boolean}
+ */
 function isSystemDirectoryPath(filePath) {
   const lower = String(filePath || '').toLowerCase().replace(/\//g, '\\');
   return SYSTEM_DIR_MARKERS.some((marker) => lower.includes(marker));

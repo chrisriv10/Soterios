@@ -52,6 +52,11 @@ function collectFileMetadatas(paths) {
   const metadatas = [];
   const visited = new Set();
 
+  /**
+   * Recursively collects file metadata for a directory tree.
+   *
+   * @param {string} current - Current directory path.
+   */
   function walk(current) {
     if (visited.has(current)) return;
     visited.add(current);
@@ -140,10 +145,18 @@ class ScanEngine {
   // Compat getters: FolderWatcher and other callers historically read these
   // directly off the engine instance. Keep them working after the
   // userScan/folderWatchScan state split.
+  /**
+   * Whether a user-initiated scan is currently running.
+   * @returns {boolean}
+   */
   get isScanning() {
     return this.userScan.isScanning;
   }
 
+  /**
+   * Whether a folder-watch scan is currently running.
+   * @returns {boolean}
+   */
   get isFolderWatchScanning() {
     return this.folderWatchScan.isScanning;
   }
@@ -247,6 +260,13 @@ class ScanEngine {
     // percentage reported so far and clamps every emission to it.
     let maxEmittedPct = 0;
     let cumulativeFiles = 0;
+    /**
+     * Emits a scan progress event, clamping the percentage to never decrease.
+     *
+     * @param {number} pctCandidate - Candidate progress percentage.
+     * @param {string} message - Progress message.
+     * @param {Object} [extra] - Extra payload fields.
+     */
     const emitProgress = (pctCandidate, message, extra) => {
       const pct = Math.max(maxEmittedPct, clampProgress(pctCandidate));
       maxEmittedPct = pct;

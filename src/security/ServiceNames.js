@@ -39,6 +39,9 @@ const COMMON_PORTS = {
   27017: 'MongoDB'
 };
 
+/**
+ * Maps well-known TCP/UDP port numbers to human-readable service names.
+ */
 class ServiceNames {
   /**
    * Get service name for a port number

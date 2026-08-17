@@ -40,11 +40,28 @@ function setState(patch) {
 }
 setState._listeners = new Set();
 
+/**
+ * Subscribes to an auto-updater status event channel.
+ *
+ * @param {string} channel - Event channel name.
+ * @param {Function} handler - Event handler.
+ */
 function onStatus(channel, handler) {
   if (!autoUpdater) return;
   autoUpdater.on(channel, handler);
 }
 
+/**
+ * Initialize the Electron auto-updater integration.
+ *
+ * Wires `electron-updater` status events to the shared update state and
+ * optionally sends desktop notifications on state changes. Only operates
+ * in packaged builds; in development it returns an `unsupported` state.
+ *
+ * @param {Object} [options]
+ * @param {Function} [options.onNotify] - Optional notification callback `(title, body, level)`.
+ * @returns {Object} Current update state after initialization.
+ */
 function initAutoUpdater({ onNotify } = {}) {
   if (initialized) return state;
   if (!autoUpdater || !app.isPackaged) {
@@ -99,6 +116,14 @@ function initAutoUpdater({ onNotify } = {}) {
   return state;
 }
 
+/**
+ * Trigger an immediate update check.
+ *
+ * Only operates in packaged builds. Returns the current state, which will
+ * reflect any error encountered during the check.
+ *
+ * @returns {Promise<Object>} Current update state after the check attempt.
+ */
 async function checkForUpdates() {
   if (!autoUpdater || !app.isPackaged) {
     return { ...state, status: 'unsupported', message: 'Updates are available in packaged builds only.', messageKey: 'settings.updates.onlyPackaged' };

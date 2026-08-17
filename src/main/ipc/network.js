@@ -35,13 +35,17 @@ async function runPowerShellRaw(command) {
 }
 
   /**
-   * Measure bandwidth for a specific TCP connection.
+   * Measure per-connection bandwidth for an established IPv4 TCP connection.
+   *
+   * Uses Windows `SetPerTcpConnectionEStats` via PowerShell. Requires
+   * administrator privileges and an actively transferring connection.
+   *
    * @param {Object} params
    * @param {string} params.localAddress
    * @param {number} params.localPort
    * @param {string} params.remoteAddress
    * @param {number} params.remotePort
-   * @returns {Promise<Object>}
+   * @returns {Promise<{outboundKBps:number, inboundKBps:number}>}
    */
   async function measureConnectionBandwidth({ localAddress, localPort, remoteAddress, remotePort }) {
   if (!isValidIPv4(localAddress) || !isValidIPv4(remoteAddress)) {

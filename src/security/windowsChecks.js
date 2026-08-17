@@ -5,6 +5,20 @@ const path = require('path');
 
 const EXECUTABLE_EXTENSIONS = new Set(['.exe', '.dll', '.sys', '.scr', '.com', '.msi']);
 
+/**
+ * Windows security check utilities.
+ *
+ * Provides helpers for querying Defender, firewall, Windows Update, and
+ * other security-relevant state via PowerShell and the Windows registry.
+ */
+
+/**
+ * Execute a PowerShell script with a timeout.
+ *
+ * @param {string} script - PowerShell command to run.
+ * @param {number} [timeout=20000] - Timeout in milliseconds.
+ * @returns {Promise<{ok:boolean, stdout?:string, error?:string}>}
+ */
 function runPowerShell(script, timeout = 20000) {
   if (process.platform !== 'win32') {
     return Promise.resolve({ ok: false, error: 'Windows checks are only available on Windows.' });
@@ -20,6 +34,14 @@ function runPowerShell(script, timeout = 20000) {
   });
 }
 
+/**
+ * Execute a PowerShell script and parse JSON stdout.
+ *
+ * @param {string} script - PowerShell command to run.
+ * @param {*} [fallback=null] - Value returned when parsing fails or output is empty.
+ * @param {number} [timeout] - Optional timeout override in milliseconds.
+ * @returns {Promise<{ok:boolean, data?:*, error?:string}>}
+ */
 async function runJsonPowerShell(script, fallback = null, timeout) {
   const wrapped = `${script} | ConvertTo-Json -Depth 6`;
   const result = await runPowerShell(wrapped, timeout);
@@ -33,11 +55,25 @@ async function runJsonPowerShell(script, fallback = null, timeout) {
   }
 }
 
+/**
+ * Normalize a value to an array.
+ *
+ * @param {*} value - Input value.
+ * @returns {Array} Empty array for falsy input, otherwise an array wrapping non-array input.
+ */
 function asArray(value) {
   if (!value) return [];
   return Array.isArray(value) ? value : [value];
 }
 
+/**
+ * Query Windows Defender antivirus status using multiple strategies.
+ *
+ * Tries Get-MpComputerStatus, WMI SecurityCenter2, and registry reads
+ * in order of reliability.
+ *
+ * @returns {Promise<Object>} Defender status object.
+ */
 async function getDefenderStatus() {
   if (process.platform !== 'win32') return { available: false, error: 'Not Windows' };
 
@@ -108,6 +144,11 @@ async function getDefenderStatus() {
   return { available: false, error: 'All Defender query strategies failed' };
 }
 
+/**
+ * Get Windows Firewall profile statuses.
+ *
+ * @returns {Promise<Array<{name:string, enabled:boolean, defaultInboundAction:string, defaultOutboundAction:string}>>}
+ */
 async function getFirewallStatus() {
   const result = await runJsonPowerShell(
     'Get-NetFirewallProfile | Select-Object Name, Enabled, DefaultInboundAction, DefaultOutboundAction',
@@ -119,6 +160,13 @@ async function getFirewallStatus() {
   }));
 }
 
+/**
+ * Query pending Windows Update count and last update info.
+ *
+ * Uses WUA COM first, falls back to registry reads.
+ *
+ * @returns {Promise<{pendingCount:number|null, lastUpdateDate?:string, lastUpdateTitle?:string, error?:string}>}
+ */
 async function getUpdateStatus() {
   if (process.platform !== 'win32') return { pendingCount: null, error: 'Not Windows' };
 
@@ -171,6 +219,12 @@ async function getUpdateStatus() {
   return { pendingCount: null, error: 'All Windows Update query strategies failed' };
 }
 
+/**
+ * Get Authenticode signature info for a file.
+ *
+ * @param {string} filePath - Path to the executable.
+ * @returns {Promise<{status:string, publisher:string|null}>}
+ */
 async function getSignatureInfo(filePath) {
   if (!filePath || !fs.existsSync(filePath) || process.platform !== 'win32') {
     return { status: 'Unknown', publisher: null };
@@ -186,10 +240,22 @@ async function getSignatureInfo(filePath) {
   return result.data || { status: 'Unknown', publisher: null };
 }
 
+/**
+ * Check whether a file path has an executable extension.
+ *
+ * @param {string} filePath
+ * @returns {boolean}
+ */
 function isExecutablePath(filePath) {
   return EXECUTABLE_EXTENSIONS.has(path.extname(filePath || '').toLowerCase());
 }
 
+/**
+ * Score a file path for suspicious characteristics.
+ *
+ * @param {string} filePath
+ * @returns {Array<{points:number, message:string}>}
+ */
 function suspiciousPathSignals(filePath) {
   const signals = [];
   const normalized = String(filePath || '').toLowerCase().replace(/\//g, '\\');
@@ -217,6 +283,11 @@ function suspiciousPathSignals(filePath) {
   return signals;
 }
 
+/**
+ * Enumerate startup folder shortcuts.
+ *
+ * @returns {Promise<Array<{source:string, name:string, command:string, location:string, path:string}>>}
+ */
 async function getStartupFolders() {
   const folders = [
     path.join(os.homedir(), 'AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup'),
@@ -233,6 +304,11 @@ async function getStartupFolders() {
   return items;
 }
 
+/**
+ * Read Run/RunOnce registry values for current user and local machine.
+ *
+ * @returns {Promise<Array<{source:string, name:string, command:string, location:string, path:string|null}>>}
+ */
 async function getRegistryRunItems() {
   const result = await runJsonPowerShell(`
     $keys = @(
@@ -256,6 +332,11 @@ async function getRegistryRunItems() {
   return asArray(result.data);
 }
 
+/**
+ * Enumerate enabled scheduled tasks.
+ *
+ * @returns {Promise<Array<{source:string, name:string, command:string, location:string, path:string, state:string}>>}
+ */
 async function getScheduledTasks() {
   const result = await runJsonPowerShell(`
     Get-ScheduledTask |
@@ -272,6 +353,11 @@ async function getScheduledTasks() {
   return asArray(result.data);
 }
 
+/**
+ * Enumerate auto-start or running Windows services.
+ *
+ * @returns {Promise<Array<{source:string, name:string, serviceName:string, command:string, location:string, path:string|null, state:string}>>}
+ */
 async function getServices() {
   const result = await runJsonPowerShell(`
     Get-CimInstance Win32_Service |
@@ -285,6 +371,14 @@ async function getServices() {
   }));
 }
 
+/**
+ * Extract the executable path from a service command string.
+ *
+ * Handles quoted paths and unquoted paths with spaces.
+ *
+ * @param {string} command
+ * @returns {string|null}
+ */
 function extractExecutablePath(command) {
   if (!command) return null;
   const trimmed = String(command).trim();

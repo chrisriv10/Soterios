@@ -95,6 +95,9 @@ window.Pages['audit'] = {
     let ceilingPct = 4;
     let unsubscribeProgress = null;
 
+    /**
+     * Stops the indeterminate progress "creep" timer.
+     */
     const stopCreeping = () => {
       if (creepTimer) {
         clearInterval(creepTimer);
@@ -102,6 +105,10 @@ window.Pages['audit'] = {
       }
     };
 
+    /**
+     * Starts an indeterminate progress "creep" timer that advances the bar
+     * by 1% every 200ms until real progress arrives.
+     */
     const startCreeping = () => {
       stopCreeping();
       creepTimer = setInterval(() => {
@@ -112,6 +119,11 @@ window.Pages['audit'] = {
       }, 200);
     };
 
+    /**
+     * Shows or hides the indeterminate loading state.
+     *
+     * @param {boolean} active - Whether the loading state should be visible.
+     */
     const setLoadingState = (active) => {
       if (active) {
         startCreeping();
@@ -142,6 +154,15 @@ window.Pages['audit'] = {
         ceilingPct = nextMilestone >= total ? 100 : Math.max(currentPct + 1, Math.round((nextMilestone / total) * 100) - 3);
       }
     });
+    
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
 

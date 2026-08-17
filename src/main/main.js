@@ -71,6 +71,12 @@ app.on('second-instance', (_event, commandLine) => {
 });
 
 app.whenReady().then(async () => {
+  /**
+   * Electron app-ready bootstrap.
+   *
+   * Configures paths, logger, theme, database, services, windows,
+   * IPC handlers, tray, and background engines.
+   */
   if (process.platform === 'win32') {
     app.setAsDefaultProtocolClient('soterios');
   }
@@ -160,14 +166,27 @@ app.whenReady().then(async () => {
 });
 
 process.on('uncaughtException', (err) => {
+  /**
+   * Log uncaught exceptions through the lifecycle logger.
+   *
+   * @param {Error} err
+   */
   lifecycle.logLine('fatal', 'Uncaught exception', { message: err.message, stack: err.stack });
 });
 
 process.on('unhandledRejection', (err) => {
+  /**
+   * Log unhandled promise rejections through the lifecycle logger.
+   *
+   * @param {Error} err
+   */
   lifecycle.logLine('fatal', 'Unhandled rejection', { message: err && err.message ? err.message : String(err), stack: err && err.stack });
 });
 
 app.on('before-quit', () => {
+  /**
+   * Gracefully stop background services and close the database on quit.
+   */
   const lifecycleRefs = windowManager.lifecycleRefs;
   if (lifecycleRefs) {
     lifecycleRefs.maintenanceScheduler?.stop();

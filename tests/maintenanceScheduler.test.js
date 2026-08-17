@@ -4,6 +4,11 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const { MaintenanceScheduler, scriptArgsFor } = require('../src/main/maintenanceScheduler');
 
+/**
+ * Builds a lightweight fake database for MaintenanceScheduler tests.
+ *
+ * @returns {Object} Fake database with maintenance-related methods.
+ */
 function createDb() {
   const settings = new Map();
   const maintenanceRuns = [];

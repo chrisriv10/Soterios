@@ -7,6 +7,11 @@ let soteriosIcon = null;
 let passwordFields = new Map();
 let observer = null;
 
+/**
+ * Creates the Soterios password-check icon element.
+ *
+ * @returns {HTMLImageElement} Icon element.
+ */
 function createIcon() {
   const icon = document.createElement('img');
   icon.src = chrome.runtime.getURL('icons/icon16.png');
@@ -26,12 +31,23 @@ function createIcon() {
   return icon;
 }
 
+/**
+ * Positions the icon next to a password input element.
+ *
+ * @param {HTMLImageElement} icon - Icon to position.
+ * @param {HTMLInputElement} input - Target password input.
+ */
 function positionIcon(icon, input) {
   const rect = input.getBoundingClientRect();
   icon.style.top = `${rect.top + window.scrollY + (rect.height - 16) / 2}px`;
   icon.style.left = `${rect.right + window.scrollX - 20}px`;
 }
 
+/**
+ * Handles icon click by checking the password via the background script.
+ *
+ * @param {MouseEvent} e - Click event.
+ */
 async function onIconClick(e) {
   const input = e.target.dataset.forInput;
   const el = document.querySelector(`[data-soterios-id="${input}"]`);
@@ -48,6 +64,12 @@ async function onIconClick(e) {
   }
 }
 
+/**
+ * Shows a breach-result badge on a password field.
+ *
+ * @param {HTMLInputElement} input - Password input element.
+ * @param {{pwned: boolean, count: number}} result - Check result.
+ */
 function showResult(input, result) {
   removeResult(input);
 
@@ -75,11 +97,21 @@ function showResult(input, result) {
   setTimeout(() => removeResult(input), 5000);
 }
 
+/**
+ * Removes the breach-result badge from a password field.
+ *
+ * @param {HTMLInputElement} input - Password input element.
+ */
 function removeResult(input) {
   const badge = document.querySelector(`[data-soterios-badge="${input.dataset.soteriosId}"]`);
   if (badge) badge.remove();
 }
 
+/**
+ * Attaches the Soterios icon to a password input field.
+ *
+ * @param {HTMLInputElement} input - Password input element.
+ */
 function addIconToField(input) {
   if (input.dataset.soteriosId) return;
 
@@ -91,6 +123,9 @@ function addIconToField(input) {
   document.body.appendChild(icon);
   positionIcon(icon, input);
 
+  /**
+   * Repositions the icon next to its input (used for scroll/resize).
+   */
   const updatePos = () => positionIcon(icon, input);
   window.addEventListener('scroll', updatePos, true);
   window.addEventListener('resize', updatePos);
@@ -99,11 +134,26 @@ function addIconToField(input) {
   passwordFields.set(input, icon);
 }
 
+/**
+ * Repositions all attached icons (e.g. after scroll/resize).
+ */
+function updatePos() {
+  for (const [input, icon] of passwordFields) {
+    positionIcon(icon, input);
+  }
+}
+
+/**
+ * Scans the current document for unattached password fields.
+ */
 function scanForPasswordFields() {
   const inputs = document.querySelectorAll('input[type="password"]:not([data-soterios-id])');
   inputs.forEach(addIconToField);
 }
 
+/**
+ * Initializes the content script: scans for password fields and watches for DOM changes.
+ */
 function init() {
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init, { once: true });

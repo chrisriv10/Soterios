@@ -2,6 +2,13 @@ const fs = require('fs');
 const path = require('path');
 const { isProtected } = require('./protectedPaths');
 
+/**
+ * Delete an array of file paths, skipping protected and non-file entries.
+ *
+ * @param {Object} [args={}]
+ * @param {string[]} args.paths - File paths to delete.
+ * @returns {Promise<{deletedCount: number, skippedCount: number, freedBytes: number, log: string[]}>} Deletion summary.
+ */
 module.exports = async function deleteFiles(args = {}) {
   const paths = Array.isArray(args.paths) ? args.paths : [];
   let deletedCount = 0;

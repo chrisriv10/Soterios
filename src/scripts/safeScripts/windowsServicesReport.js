@@ -1,5 +1,11 @@
 const { execFile } = require('child_process');
 
+/**
+ * Executes a PowerShell command array and returns stdout.
+ *
+ * @param {string[]} args - PowerShell arguments (excluding `powershell.exe`).
+ * @returns {Promise<string>} Command stdout.
+ */
 function runPowerShell(args) {
   return new Promise((resolve, reject) => {
     execFile('powershell.exe', args, { windowsHide: true, timeout: 20000 }, (error, stdout, stderr) => {
@@ -9,6 +15,12 @@ function runPowerShell(args) {
   });
 }
 
+/**
+ * Evaluates a service executable path for suspicious characteristics.
+ *
+ * @param {string} pathName - Service executable path.
+ * @returns {{flagged: boolean, reason: string|null}} Risk assessment.
+ */
 function pathLooksRisky(pathName) {
   if (!pathName) return { flagged: false, reason: null };
   const lower = pathName.toLowerCase();
@@ -46,6 +58,11 @@ function pathLooksRisky(pathName) {
   return { flagged: false, reason: null };
 }
 
+/**
+ * Collect information about running Windows services.
+ *
+ * @returns {Promise<{services: Array}>} Service list.
+ */
 module.exports = async function windowsServicesReport() {
   if (process.platform !== 'win32') return { supported: false, message: 'Windows Services Report is only available on Windows.' };
   const script = ['Get-CimInstance Win32_Service', 'Where-Object { $_.StartMode -eq "Auto" }', 'Select-Object Name, DisplayName, State, StartName, PathName', 'ConvertTo-Json -Depth 3'].join(' | ');

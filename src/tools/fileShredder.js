@@ -1,4 +1,9 @@
-'use strict';
+/**
+ * Secure file shredder tool.
+ *
+ * Supports multiple overwrite methods (simple, DoD, Schneier, Gutmann)
+ * with dry-run support.
+ */
 
 const fs = require('fs');
 const fsp = require('fs').promises;
@@ -40,6 +45,13 @@ const METHODS = {
 
 const CHUNK = 1024 * 1024;
 
+/**
+ * Recursively collect file paths under a directory.
+ *
+ * @param {string} targetPath
+ * @param {string[]} [out=[]]
+ * @returns {string[]}
+ */
 function listFilesRecursive(targetPath, out = []) {
   const st = fs.statSync(targetPath);
   if (st.isFile()) {
@@ -53,6 +65,14 @@ function listFilesRecursive(targetPath, out = []) {
   return out;
 }
 
+/**
+ * Overwrite a file with the selected method and delete it.
+ *
+ * @param {string} filePath
+ * @param {string} methodId
+ * @param {Function} [onProgress]
+ * @returns {Promise<void>}
+ */
 async function overwriteFile(filePath, methodId, onProgress) {
   const method = METHODS[methodId] || METHODS.simple;
   const st = await fsp.stat(filePath);
@@ -85,6 +105,18 @@ async function overwriteFile(filePath, methodId, onProgress) {
   await fsp.unlink(filePath);
 }
 
+/**
+ * Shred a list of target files/folders.
+ *
+ * @param {Object} params
+ * @param {string[]} params.targets
+ * @param {string} [params.method='dod']
+ * @param {boolean} [params.recursive=true]
+ * @param {boolean} [params.dryRun=false]
+ * @param {boolean} [params.confirm=false]
+ * @param {Function} [params.onProgress]
+ * @returns {Promise<Object>}
+ */
 async function shredTargets({ targets, method = 'dod', recursive = true, dryRun = false, confirm = false, onProgress }) {
   if (!Array.isArray(targets) || !targets.length) {
     return { success: false, error: 'No targets provided.' };

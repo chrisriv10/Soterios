@@ -11,7 +11,20 @@ describe('SystemAudit', () => {
   let mockExecResults = [];
   let currentExecHandler;
 
+  /**
+   * Creates a mock child_process.exec function for SystemAudit tests.
+   *
+   * @returns {Function} Mock exec function.
+   */
   const makeMockExec = () => {
+    /**
+     * Mock exec implementation.
+     *
+     * @param {string} command - Command to run.
+     * @param {Object} [options] - Execution options.
+     * @param {Function} [callback] - Optional callback.
+     * @returns {Promise<{stdout: string, stderr: string}>} Mock result.
+     */
     const fn = (command, options, callback) => { };
     fn[util.promisify.custom] = async (command, options) => {
       return currentExecHandler(command, options);

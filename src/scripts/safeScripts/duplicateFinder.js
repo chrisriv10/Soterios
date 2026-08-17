@@ -27,6 +27,13 @@ const PROTECTED_PATHS = [
   process.env.WINDIR
 ];
 
+/**
+ * Checks whether a file path is inside a given root directory.
+ *
+ * @param {string} filePath - Path to test.
+ * @param {string} rootDir - Root directory.
+ * @returns {boolean} True if filePath is inside rootDir.
+ */
 function isPathInsideDir(filePath, rootDir) {
   if (!filePath || !rootDir) return false;
   const resolved = path.resolve(filePath);
@@ -36,6 +43,12 @@ function isPathInsideDir(filePath, rootDir) {
   return relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
 }
 
+/**
+ * Checks whether a path is safe to scan/delete (not under protected dirs).
+ *
+ * @param {string} filePath - Path to test.
+ * @returns {boolean} True if the path is safe.
+ */
 function isSafePath(filePath) {
   const normalized = path.resolve(filePath);
   
@@ -56,6 +69,12 @@ function isSafePath(filePath) {
   return false;
 }
 
+/**
+ * Computes the SHA-256 hash of a file's contents.
+ *
+ * @param {string} filePath - Path to the file.
+ * @returns {Promise<string>} Hex-encoded SHA-256 digest.
+ */
 function calculateHash(filePath) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('sha256');
@@ -67,6 +86,14 @@ function calculateHash(filePath) {
   });
 }
 
+/**
+ * Recursively scans a directory for files within safe roots.
+ *
+ * @param {string} dir - Directory to scan.
+ * @param {number} [maxDepth=3] - Maximum recursion depth.
+ * @param {number} [currentDepth=0] - Current recursion depth.
+ * @returns {Promise<Array<{path:string, size:number, modified:Date}>>} List of files.
+ */
 async function scanDirectory(dir, maxDepth = 3, currentDepth = 0) {
   const results = [];
   
@@ -116,6 +143,12 @@ async function scanDirectory(dir, maxDepth = 3, currentDepth = 0) {
   return results;
 }
 
+/**
+ * Finds duplicate files by scanning safe roots and comparing hashes.
+ *
+ * @param {string} [scanPath] - Optional single directory to scan.
+ * @returns {Promise<{totalFilesScanned:number, duplicateGroups:Array, totalDuplicates:number, totalWastedSpace:number}>} Duplicate report.
+ */
 async function findDuplicates(scanPath = null) {
   const scanDirs = scanPath ? [scanPath] : SAFE_ROOTS.filter(p => fs.existsSync(p));
   const allFiles = [];
@@ -199,6 +232,12 @@ async function findDuplicates(scanPath = null) {
   };
 }
 
+/**
+ * Deletes an array of file paths, skipping unsafe paths.
+ *
+ * @param {string[]} filePaths - Paths to delete.
+ * @returns {{deleted: string[], failed: Array<{path: string, error: string}>}} Deletion summary.
+ */
 function deleteFiles(filePaths) {
   const deleted = [];
   const failed = [];
@@ -220,6 +259,14 @@ function deleteFiles(filePaths) {
   return { deleted, failed };
 }
 
+/**
+ * Find duplicate files under a path or delete specified paths.
+ *
+ * @param {Object} [args={}]
+ * @param {string} [args.scanPath] - Directory to scan for duplicates.
+ * @param {string[]} [args.deletePaths] - Paths to delete directly.
+ * @returns {Promise<Object>} Duplicate groups or deletion summary.
+ */
 module.exports = async function duplicateFinder(args = {}) {
   const { scanPath, deletePaths } = args;
   

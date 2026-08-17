@@ -58,6 +58,9 @@ window.api.on('tray:summary', (summary) => {
   }
 });
 
+/**
+ * Loads the health summary from the main process and updates the tray UI.
+ */
 async function loadSummary() {
   try {
     const summary = await window.api.invoke('tray:getSummary');
@@ -103,6 +106,11 @@ async function loadSummary() {
   }
 }
 
+/**
+ * Draws a sparkline chart of network history on the tray canvas.
+ *
+ * @param {number[]} history - Array of historical network stat values.
+ */
 function drawSparkline(history) {
   const canvas = document.getElementById('sparkCanvas');
   if (!canvas) return;

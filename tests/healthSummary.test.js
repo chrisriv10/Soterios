@@ -4,42 +4,98 @@ const { describe, it, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { getTrayHealthSummary } = require('../src/main/healthSummary');
 
+/**
+ * Fake in-memory database used for getTrayHealthSummary tests.
+ */
 class FakeDatabase {
+  /**
+   * Creates a FakeDatabase instance.
+   */
   constructor() {
     this.data = {};
   }
 
+  /**
+   * Returns the latest scan report, if any.
+   *
+   * @returns {Object|null} Latest scan report.
+   */
   getLatestScanReport() {
     return this.data.latestScanReport || null;
   }
 
+  /**
+   * Reads a setting with an optional default.
+   *
+   * @param {string} key - Setting key.
+   * @param {*} [defaultValue] - Default value when key is missing.
+   * @returns {*} Setting value or default.
+   */
   getSetting(key, defaultValue) {
     return this.data.settings?.[key] ?? defaultValue;
   }
 
+  /**
+   * Stores the latest scan report.
+   *
+   * @param {Object} report - Scan report object.
+   */
   setLatestScanReport(report) {
     this.data.latestScanReport = report;
   }
 
+  /**
+   * Stores a setting value.
+   *
+   * @param {string} key - Setting key.
+   * @param {*} value - Setting value.
+   */
   setSetting(key, value) {
     if (!this.data.settings) this.data.settings = {};
     this.data.settings[key] = value;
   }
 
+  /**
+   * Returns network history entries.
+   *
+   * @param {number} _minutes - Ignored in fake.
+   * @returns {Array<Object>} Network history entries.
+   */
   getNetworkHistory(minutes) {
     return this.data.networkHistory || [];
   }
 
+  /**
+   * Stores network history entries.
+   *
+   * @param {Array<Object>} history - Network history entries.
+   */
   setNetworkHistory(history) {
     this.data.networkHistory = history;
   }
 }
 
+/**
+ * Fake tool registry used for getTrayHealthSummary tests.
+ */
 class FakeToolRegistry {
+  /**
+   * Creates a FakeToolRegistry instance.
+   *
+   * @param {*} result - Result to return from every run() call.
+   */
   constructor(result) {
     this.result = result;
   }
 
+  /**
+   * Returns the preset result for any tool invocation.
+   *
+   * @param {string} _tool - Tool name (unused).
+   * @param {Object} _params - Tool parameters (unused).
+   * @param {Object} _context - Execution context (unused).
+   * @returns {Promise<*>} Preset result.
+   */
   async run(tool, params, context) {
     return this.result;
   }

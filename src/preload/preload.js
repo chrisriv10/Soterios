@@ -1,5 +1,12 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+/**
+ * Renderer preload script.
+ *
+ * Exposes a restricted `window.api` surface for the renderer process.
+ * Only explicitly allowlisted IPC channels may be invoked or listened to.
+ */
+
 // Explicit allowlists so the renderer cannot invoke arbitrary main-process
 // handlers or register listeners on unapproved channels. Any channel not
 // listed here is rejected at the preload boundary.
@@ -110,6 +117,9 @@ contextBridge.exposeInMainWorld('api', {
     if (!ALLOWED_ON.has(channel)) {
       throw new Error(`IPC listener channel not allowed: ${channel}`);
     }
+    /**
+     * IPC event listener wrapper that strips the Electron event argument.
+     */
     const listener = (event, ...args) => callback(...args);
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
@@ -123,6 +133,9 @@ contextBridge.exposeInMainWorld('soterios', {
     run: (toolId, args) => ipcRenderer.invoke('tools:run', toolId, args),
     onProgress: (toolId, callback) => {
       const channel = `tools:progress:${toolId}`;
+      /**
+       * IPC progress listener that forwards payload to the callback.
+       */
       const listener = (event, payload) => callback(payload);
       ipcRenderer.on(channel, listener);
       return () => ipcRenderer.removeListener(channel, listener);

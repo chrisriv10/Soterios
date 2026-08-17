@@ -7,6 +7,9 @@ const MIN_USER_VOLUME_BYTES = 1024 ** 3;
  * Ignore tiny recovery/EFI/OEM partitions that are legitimately full but not
  * user-facing storage when scoring disk health. Also ignore read-only optical
  * drives (CD/DVD) which always report 100% usage.
+ *
+ * @param {Object} entry
+ * @returns {boolean}
  */
 function isUserFacingVolume(entry) {
   if (!entry || typeof entry.size !== 'number' || entry.size < MIN_USER_VOLUME_BYTES) {
@@ -28,6 +31,12 @@ function isUserFacingVolume(entry) {
   return mount.length > 0 && !mount.includes('\\?\\Volume{');
 }
 
+/**
+ * Find the worst disk usage among user-facing volumes.
+ *
+ * @param {Array} volumes
+ * @returns {{ worstUse: number, fullVolumes: string[], hasRelevant: boolean }}
+ */
 function worstUsageFromVolumes(volumes) {
   const relevant = (volumes || []).filter(isUserFacingVolume);
   if (!relevant.length) {
@@ -51,11 +60,13 @@ const LABELS = {
   firewall: 'Firewall'
 };
 
-// bands: array of [threshold, points] sorted ascending by threshold.
-// Returns the points for the first threshold the value falls under, or 0
-// if it exceeds every threshold. Used to turn a raw metric (percent used,
-// days elapsed, etc.) into a graduated score instead of a single pass/fail
-// cutoff.
+/**
+ * Convert a value to points using graduated bands.
+ *
+ * @param {number} value
+ * @param {Array<[number, number]>} bands - Sorted ascending [threshold, points] pairs.
+ * @returns {number}
+ */
 function bandedPoints(value, bands) {
   for (const [threshold, points] of bands) {
     if (value < threshold) return points;

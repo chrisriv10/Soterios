@@ -143,6 +143,12 @@ window.Pages.processes = {
       ? Math.min(100, Math.max(0, totalMemoryReading))
       : 0;
 
+    /**
+     * Maps a percentage to a severity color variable.
+     *
+     * @param {number} pct - Usage percentage (0–100).
+     * @returns {string} CSS color variable.
+     */
     const colorFor = (pct) => pct >= 80 ? 'var(--accent-danger)' : pct >= 50 ? 'var(--accent-warning)' : 'var(--accent-success)';
 
     cpuEl.textContent = this.t('processes.liveCpu', { cpu: totalCpu.toFixed(1) + '%' });

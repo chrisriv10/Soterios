@@ -7,6 +7,14 @@ window.Pages['network'] = {
   _geoCache: {},
 
   _classificationLabel(classification) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     switch (classification) {
       case 'SAFE': return t('network.flagSafe');
@@ -21,6 +29,14 @@ window.Pages['network'] = {
       clearInterval(this._refreshTimer);
       this._refreshTimer = null;
     }
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
 
     container.innerHTML = `
@@ -112,6 +128,14 @@ window.Pages['network'] = {
     }, this.REFRESH_INTERVAL_MS);
   },
   async load(container, isInitial) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const content = container.querySelector('#networkContent');
     if (!content) return;
@@ -144,10 +168,22 @@ window.Pages['network'] = {
         9: 'CLOSING', 10: 'LAST_ACK', 11: 'TIME_WAIT', 12: 'DELETE_TCB',
         100: 'BOUND'
       };
+      /**
+       * Resolves a connection's human-readable state from several possible fields.
+       *
+       * @param {{state?:number|string, State?:number|string, connectionState?:number|string, ConnectionState?:number|string, status?:number|string, Status?:number|string}} c - Connection record.
+       * @returns {string} Uppercase state string (e.g. "ESTABLISHED").
+       */
       const getState = (c) => {
         const raw = c.state ?? c.State ?? c.connectionState ?? c.ConnectionState ?? c.status ?? c.Status ?? '';
         return (STATE_CODE_MAP[raw] || raw).toString().toUpperCase() || 'UNKNOWN';
       };
+      /**
+       * Returns the first defined (non-null/undefined/empty) value from a list.
+       *
+       * @param {...*} vals - Values to test in order.
+       * @returns {*} First defined value, or empty string if none.
+       */
       const firstDefined = (...vals) => {
         for (const v of vals) {
           if (v !== undefined && v !== null && v !== '') return v;
@@ -155,6 +191,12 @@ window.Pages['network'] = {
         return '';
       };
 
+      /**
+       * Tests whether a connection record matches the current UI filters.
+       *
+       * @param {{processName?:string, remoteAddress?:string, remotePort?:string, localAddress?:string, localPort?:string, classification?:string, state?:number|string, [k:string]:any}} c - Connection record.
+       * @returns {boolean} True when the connection should be displayed.
+       */
       const matchesConnectionFilters = (c) => {
         const state = getState(c);
         const risk = c.classification || 'UNKNOWN';
@@ -201,6 +243,12 @@ window.Pages['network'] = {
       const stateTotal = stateEntries.reduce((sum, [, n]) => sum + n, 0);
       const fallbackPalette = ['var(--text-dim)', 'var(--accent-primary)', 'var(--warn)', 'var(--danger)', 'var(--ok)'];
       let paletteIdx = 0;
+      /**
+       * Returns a CSS color variable for a connection state label.
+       *
+       * @param {string} name - Uppercase state name (e.g. "ESTABLISHED").
+       * @returns {string} CSS color variable.
+       */
       const stateColorFor = (name) => {
         if (STATE_COLORS[name]) return STATE_COLORS[name];
         return fallbackPalette[paletteIdx++ % fallbackPalette.length];
@@ -609,6 +657,14 @@ window.Pages['network'] = {
   },
 
   applyConnectionFilter(container) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const content = container.querySelector('#networkContent');
     if (!content) return;
@@ -685,6 +741,12 @@ window.Pages['network'] = {
     ctx.lineTo(w - pad, h - pad);
     ctx.stroke();
 
+    /**
+     * Draws a line series on the canvas for a given traffic metric.
+     *
+     * @param {'rx'|'tx'} key - Series key to plot.
+     * @param {string} color - CSS color for the line.
+     */
     const plot = (key, color) => {
       ctx.strokeStyle = color;
       ctx.lineWidth = 2;

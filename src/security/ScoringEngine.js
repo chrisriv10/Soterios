@@ -12,6 +12,12 @@ const { ServiceNames } = require('./ServiceNames');
 // override a blocklist hit; malicious traffic on 443 is still MALICIOUS.
 const LIGHT_TOUCH_SAFE_PORTS = new Set([443, 80]);
 
+/**
+ * Classifies network connections as SAFE, UNKNOWN, or MALICIOUS.
+ *
+ * Combines blocklist status, IP privacy, port heuristics, and reverse-DNS
+ * hostname resolution into a single classification verdict.
+ */
 class ScoringEngine {
   /**
    * Classify a network connection

@@ -29,6 +29,11 @@ const RTL_LOCALES = new Set(['he', 'fa', 'ur', 'ar']);
 const catalogCache = new Map();
 let availableLocalesCache = null;
 
+/**
+ * Reads the locale JSON files from the locales directory.
+ *
+ * @returns {string[]} Available locale codes derived from filenames.
+ */
 function readLocaleFiles() {
   if (!fs.existsSync(LOCALES_DIR)) return [];
   return fs.readdirSync(LOCALES_DIR)
@@ -36,6 +41,14 @@ function readLocaleFiles() {
     .map((file) => file.slice(0, -5));
 }
 
+/**
+ * Returns the sorted list of locale codes available in the locales directory.
+ *
+ * The default locale `en` is always listed first. Remaining locales are
+ * sorted by their display label.
+ *
+ * @returns {string[]} Available locale codes.
+ */
 function listAvailableLocales() {
   if (!availableLocalesCache) {
     availableLocalesCache = readLocaleFiles().sort((a, b) => {
@@ -49,6 +62,11 @@ function listAvailableLocales() {
   return [...availableLocalesCache];
 }
 
+/**
+ * Returns the list of available locales with their display labels and RTL flags.
+ *
+ * @returns {Array<{code: string, label: string, rtl: boolean}>} Locale descriptors.
+ */
 function listLocales() {
   return listAvailableLocales().map((code) => ({
     code,
@@ -57,12 +75,34 @@ function listLocales() {
   }));
 }
 
+/**
+ * Determines whether a locale is right-to-left.
+ *
+ * Checks the normalized locale code and its base language subtag against
+ * the known RTL locale set.
+ *
+ * @param {string} locale - Locale code to test.
+ * @returns {boolean} True if the locale is RTL.
+ */
 function isRtlLocale(locale) {
   const normalized = normalizeLocale(locale);
   const base = normalized.split('-')[0];
   return RTL_LOCALES.has(normalized) || RTL_LOCALES.has(base);
 }
 
+/**
+ * Normalizes a locale code to one of the available catalog codes.
+ *
+ * Resolution order:
+ * 1. Exact match against available codes.
+ * 2. Case-insensitive match.
+ * 3. Language-prefix fallback (e.g. `pt` → `pt-BR`, `zh` → `zh-CN`).
+ * 4. Base-language match against available codes.
+ * 5. Falls back to the default locale (`en`) when no match is found.
+ *
+ * @param {string} locale - Raw locale code to normalize.
+ * @returns {string} Resolved available locale code.
+ */
 function normalizeLocale(locale) {
   const available = listAvailableLocales();
   const availableSet = new Set(available);
@@ -89,6 +129,16 @@ function normalizeLocale(locale) {
   return DEFAULT_LOCALE;
 }
 
+/**
+ * Loads a translation catalog for the given locale.
+ *
+ * Results are cached in memory. If the requested locale file cannot be
+ * read or parsed, the function falls back to the default locale catalog
+ * unless the default locale itself was requested.
+ *
+ * @param {string} locale - Locale code whose catalog should be loaded.
+ * @returns {Object} Translation key/value pairs for the locale.
+ */
 function loadCatalog(locale) {
   const normalized = normalizeLocale(locale);
   if (catalogCache.has(normalized)) return catalogCache.get(normalized);
@@ -106,6 +156,22 @@ function loadCatalog(locale) {
   return catalog;
 }
 
+/**
+ * Translates a localization key for the given locale.
+ *
+ * Lookup order:
+ * 1. Exact key in the requested locale catalog.
+ * 2. Fallback to the default locale catalog if the requested locale differs.
+ * 3. Returns the key itself when no translation is found.
+ *
+ * Interpolation: `{variable}` placeholders in the translation string are
+ * replaced with the corresponding values from `vars`.
+ *
+ * @param {string} key - Translation key to resolve.
+ * @param {string} [locale=DEFAULT_LOCALE] - Target locale code.
+ * @param {Object} [vars={}] - Interpolation variables.
+ * @returns {string} Translated string, or the key when missing.
+ */
 function t(key, locale = DEFAULT_LOCALE, vars = {}) {
   const normalized = normalizeLocale(locale);
   const catalog = loadCatalog(normalized);

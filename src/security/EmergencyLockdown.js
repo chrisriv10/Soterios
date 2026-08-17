@@ -13,6 +13,11 @@ const SAFE_INTERFACE_NAME = /^[^\s'"\\|&;<>]+$/;
  * Provides one-click network and service isolation for emergency situations
  */
 class EmergencyLockdown {
+  /**
+   * @param {import('../core/database')} db - Database instance.
+   * @param {import('../core/eventBus')} eventBus - Event bus for lockdown state changes.
+   * @param {(title: string, body: string, level?: string) => void} notify - Desktop notification callback.
+   */
   constructor(db, eventBus, notify) {
     this.db = db;
     this.eventBus = eventBus;

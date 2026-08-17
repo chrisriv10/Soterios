@@ -10,6 +10,13 @@ const electronBin = process.platform === 'win32'
   ? path.join(ROOT, 'node_modules', '.bin', 'electron.cmd')
   : path.join(ROOT, 'node_modules', '.bin', 'electron');
 
+/**
+ * Launches Electron to capture a single screenshot page.
+ *
+ * @param {string} name - Screenshot file stem.
+ * @param {string} page - App page route to capture.
+ * @param {string[]} [extraArgs=[]] - Additional Electron CLI args.
+ */
 function capturePage(name, page, extraArgs = []) {
   fs.mkdirSync(OUT, { recursive: true });
   const outPath = path.join(OUT, `${name}.png`);
@@ -39,6 +46,11 @@ function capturePage(name, page, extraArgs = []) {
   console.log(`Saved ${outPath}`);
 }
 
+/**
+ * Returns the screenshot fixture name for the uninstaller page on the current platform.
+ *
+ * @returns {string} Fixture name stem.
+ */
 function uninstallerFixtureName() {
   if (process.platform === 'darwin') return '03-uninstaller-unsupported';
   if (process.platform === 'win32') return '03-uninstaller-windows';

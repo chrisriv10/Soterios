@@ -15,6 +15,14 @@ window.Pages['firewall'] = {
       clearInterval(this._summaryTimer);
       this._summaryTimer = null;
     }
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     container.innerHTML = `
       <header class="page-header">
@@ -28,6 +36,14 @@ window.Pages['firewall'] = {
     this.load(container);
   },
   async load(container) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const content = container.querySelector('#firewallContent');
     try {
@@ -372,6 +388,9 @@ window.Pages['firewall'] = {
     const filterUnknown = container.querySelector('#filterUnknown');
     const filterMalicious = container.querySelector('#filterMalicious');
 
+    /**
+     * Re-renders the perimeter map and connections table from cached data.
+     */
     const reRenderFromCache = () => {
       this._renderPerimeter(container, this._lastConnections);
       this._renderConnectionsTable(container, this._lastConnections);
@@ -452,6 +471,14 @@ window.Pages['firewall'] = {
   },
 
   _matchesFilters(c, risk) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     if (!this._riskFilter[risk]) return false;
     if (this._directionFilter !== 'all') {
@@ -485,6 +512,14 @@ window.Pages['firewall'] = {
   },
 
   _renderPerimeter(container, connections) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const svg = container.querySelector('#perimeterSvg');
     const summary = container.querySelector('#perimeterSummary');
@@ -641,6 +676,14 @@ window.Pages['firewall'] = {
   },
 
   _createPerimeterNodeEl(item, cx, cy, entering, container, svg) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const color = this._riskColor(item.risk);
     const label = escapeHtml(this._field(item.c, 'processName') || this._field(item.c, 'remoteAddress', 'RemoteAddress') || t('common.unknown'));
@@ -670,6 +713,9 @@ window.Pages['firewall'] = {
     inner += `<circle class="perim-dot" cx="${item.x}" cy="${item.y}" r="6" fill="${color}" pointer-events="all"/>`;
     g.innerHTML = inner;
 
+    /**
+     * Selects a perimeter node and renders its detail panel.
+     */
     const handleNodeClick = () => {
       this._selectedKey = item.key;
       svg.querySelectorAll('.perim-node').forEach((n) => n.classList.remove('selected'));
@@ -748,6 +794,11 @@ window.Pages['firewall'] = {
     let lastFrameTime = 0;
     this._particleVisible = true;
 
+    /**
+     * Animation frame callback that advances perimeter particles.
+     *
+     * @param {number} t - High-resolution timestamp from requestAnimationFrame.
+     */
     const loop = (t) => {
       if (!document.body.contains(container)) {
         return;
@@ -778,6 +829,14 @@ window.Pages['firewall'] = {
   },
 
   _renderDetailPanel(container, item) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const panel = container.querySelector('#connectionDetailPanel');
     if (!panel) return;
@@ -863,6 +922,14 @@ window.Pages['firewall'] = {
   },
 
   _renderConnectionsTable(container, connections) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const tableEl = container.querySelector('#connTableContainer');
     const countEl = container.querySelector('#connTableCount');
@@ -922,6 +989,14 @@ window.Pages['firewall'] = {
   },
 
   async _blockConnection(container, c) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const remoteAddress = this._field(c, 'remoteAddress', 'RemoteAddress');
     const remotePort = this._field(c, 'remotePort', 'RemotePort');
@@ -942,6 +1017,14 @@ window.Pages['firewall'] = {
   },
 
   async _blockIp(container, ip) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     if (!window.confirm(t('firewall.confirmBlockIp', { ip }))) return;
     try {
@@ -966,6 +1049,14 @@ window.Pages['firewall'] = {
   },
 
   async _blockApp(container, pid, processName) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     try {
       const processes = await window.api.invoke('process:list');
@@ -982,6 +1073,14 @@ window.Pages['firewall'] = {
   },
 
   async _toggleTrust(container, ip, currentlyTrusted) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     try {
       this._trustedIps = currentlyTrusted
@@ -992,6 +1091,14 @@ window.Pages['firewall'] = {
   },
 
   async _measureBandwidth(container, btn, spec) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const target = container.querySelector('#detailBandwidthResult');
     const originalLabel = btn.textContent;
@@ -1012,6 +1119,14 @@ window.Pages['firewall'] = {
   },
 
   async _runWhois(container, ip) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const target = container.querySelector('#detailWhoisResult');
     if (target) target.textContent = t('firewall.whoisLookingUp');
@@ -1026,6 +1141,14 @@ window.Pages['firewall'] = {
   },
 
   async _showProcessDetails(container, pid) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const target = container.querySelector('#detailProcessResult');
     if (target) target.textContent = t('firewall.processLoading');
@@ -1100,6 +1223,10 @@ window.Pages['firewall'] = {
     const directionSelect = container.querySelector('#ruleDirectionFilter');
     if (!listEl) return;
 
+    /**
+     * Filters the cached rule list against the current search/action/direction
+     * criteria and re-renders the rule list.
+     */
     const applyFilters = () => {
       const q = (this._ruleQuery || '').trim().toLowerCase();
       const action = this._ruleActionFilter || 'all';
@@ -1141,6 +1268,14 @@ window.Pages['firewall'] = {
   },
 
   _renderRuleList(container, rules) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const listEl = container.querySelector('#ruleListContainer');
     if (!listEl) return;

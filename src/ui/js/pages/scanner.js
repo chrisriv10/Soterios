@@ -6,6 +6,14 @@ window.Pages['scanner'] = {
     this.cleanups = [];
   },
   render(container) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     container.innerHTML = `
       <div style="overflow-y: auto; max-height: calc(100vh - 80px); padding-right: 8px;">
@@ -121,6 +129,10 @@ window.Pages['scanner'] = {
     let alive = true;
     this.cleanups.push(() => { alive = false; });
 
+    /**
+     * Shows or hides the cancel and report buttons based on the current
+     * scan action and running state.
+     */
     function updateFooterButtons() {
       if (!cancelButton || !reportButton) return;
       const showCancel = activeAction === 'virus' && isScanRunning;
@@ -131,15 +143,29 @@ window.Pages['scanner'] = {
       reportButton.disabled = !showReports;
     }
 
+    /**
+     * Returns true while the scanner page container is still attached to
+     * the document and the page has not been destroyed.
+     */
     function hasView() {
       return alive && document.body.contains(container);
     }
 
+    /**
+     * Updates the scan progress bar width, clamped to 0–100.
+     *
+     * @param {number} pct - Completion percentage.
+     */
     function setProgress(pct) {
       if (!hasView() || !progressFill) return;
       progressFill.style.width = Math.min(100, Math.max(0, pct)) + '%';
     }
 
+    /**
+     * Toggles the scan-in-progress UI state.
+     *
+     * @param {boolean} active - Whether a scan is currently running.
+     */
     function setScanning(active) {
       if (!hasView()) return;
       isScanRunning = active;
@@ -166,6 +192,16 @@ window.Pages['scanner'] = {
       updateFooterButtons();
     }
 
+    /**
+     * Renders the final scan result state (success, failure, or cancel).
+     *
+     * @param {boolean} success - Whether the scan completed without error.
+     * @param {number} filesScanned - Total files processed.
+     * @param {number} threatsFound - Threats detected during the scan.
+     * @param {string} note - Additional status message or error detail.
+     * @param {boolean} canceled - Whether the user aborted the scan.
+     * @param {boolean} [historyEnabled=true] - Whether scan history is enabled.
+     */
     function setComplete(success, filesScanned, threatsFound, note, canceled, historyEnabled = true) {
       if (!hasView()) return;
       if (activeAction === 'virus') {
@@ -205,6 +241,10 @@ window.Pages['scanner'] = {
       updateFooterButtons();
     }
 
+    /**
+     * Polls the main process for the current scan/engine status and
+     * updates the UI accordingly.
+     */
     async function refreshStatus() {
       try {
         const status = await window.api.invoke('scan:status');
@@ -240,16 +280,31 @@ window.Pages['scanner'] = {
     // -- Scheduled Scans --
     let scheduleConfig = { enabled: false, scanType: 'quick', customPath: null, intervalHours: 24, lastRun: null };
 
+    /**
+     * Converts a numeric interval (hours) into a localized schedule label.
+     *
+     * @param {number} hours - Interval in hours.
+     * @returns {string} Localized label (e.g. "Every 24h").
+     */
     function scheduleIntervalLabel(hours) {
       const map = { 6: t('scanner.scheduleFreq6'), 12: t('scanner.scheduleFreq12'), 24: t('scanner.scheduleFreq24'), 72: t('scanner.scheduleFreq72'), 168: t('scanner.scheduleFreq168') };
       return map[hours] || t('scanner.scheduleFreqCustom', { hours });
     }
 
+    /**
+     * Formats a UTC timestamp for display in the schedule UI.
+     *
+     * @param {string|number|null} ts - ISO timestamp or epoch ms.
+     * @returns {string} Localized date/time string, or "never" if missing.
+     */
     function formatScheduleTimestamp(ts) {
       if (!ts) return t('common.never');
       try { return new Date(ts).toLocaleString(); } catch (_) { return t('common.never'); }
     }
 
+    /**
+     * Rebuilds the scheduled-scans section from the current config.
+     */
     function renderScheduleUI() {
       if (!hasView()) return;
       scheduleToggleBtn.textContent = scheduleConfig.enabled ? t('scanner.scheduleDisable') : t('scanner.scheduleEnable');
@@ -271,6 +326,9 @@ window.Pages['scanner'] = {
       }
     }
 
+    /**
+     * Fetches the persisted schedule config and re-renders the UI.
+     */
     async function loadSchedule() {
       try {
         const config = await window.api.invoke('schedule:get');
@@ -285,6 +343,9 @@ window.Pages['scanner'] = {
       }
     }
 
+    /**
+     * Persists the current schedule config to the main process.
+     */
     async function saveSchedule() {
       try {
         const saved = await window.api.invoke('schedule:set', scheduleConfig);
@@ -326,6 +387,11 @@ window.Pages['scanner'] = {
       saveSchedule();
     });
 
+    /**
+     * Displays an error state in the scan status card.
+     *
+     * @param {string} msg - Error message to show.
+     */
     function setError(msg) {
       if (!hasView()) return;
       if (scanCard) scanCard.style.display = 'block';
@@ -453,6 +519,13 @@ window.Pages['scanner'] = {
 
     reportButton.addEventListener('click', () => window.AppRouter.navigate('reports'));
 
+    /**
+     * Runs a scan runner, manages the scanning UI lifecycle, and
+     * reports the final result.
+     *
+     * @param {() => Promise<{success:boolean, filesScanned?:number, threatsFound?:number, note?:string, error?:string, canceled?:boolean}>} runner - Scan invocation.
+     * @param {() => void} [beforeStart] - Optional hook executed after the scan begins.
+     */
     async function startScan(runner, beforeStart) {
       if (isScanRunning) {
         setError(t('scanner.scanAlreadyRunning'));

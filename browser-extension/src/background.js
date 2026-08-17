@@ -1,3 +1,10 @@
+/**
+ * Browser extension background service worker.
+ *
+ * Handles extension install defaults and bridges password-leak checks
+ * between the content script and the Soterios native host.
+ */
+
 chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === 'install') {
     const { externalLookupsEnabled } = await chrome.storage.sync.get('externalLookupsEnabled');
@@ -18,6 +25,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 // Native messaging port for desktop app communication
 let nativePort = null;
 
+/**
+ * Establishes a native messaging connection to the Soterios desktop app.
+ */
 function connectNative() {
   try {
     nativePort = chrome.runtime.connectNative('com.soterios.credential_safety');
@@ -31,11 +41,22 @@ function connectNative() {
   }
 }
 
+/**
+ * Handles incoming native messages from the desktop app.
+ *
+ * @param {Object} msg - Message payload.
+ */
 function handleNativeMessage(msg) {
   console.log('[Soterios] Native message:', msg);
   // Handle responses from desktop app if needed
 }
 
+/**
+ * Checks a password against the HIBP Pwned Passwords API.
+ *
+ * @param {string} password - Password to check.
+ * @returns {Promise<{pwned: boolean, count: number}>} Breach check result.
+ */
 async function checkPassword(password) {
   const HIBP_API = 'https://api.pwnedpasswords.com/range/';
   const encoder = new TextEncoder();

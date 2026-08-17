@@ -35,6 +35,9 @@ function shannonEntropy(buffer) {
  * entropy, path, and extension heuristics.
  */
 class HeuristicEngine {
+  /**
+   * @param {import('../core/database')} [db] - Optional database for persisting results.
+   */
   constructor() {}
 
   /**

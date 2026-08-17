@@ -14,6 +14,14 @@ describe('Browser Extension Integration', () => {
       };
 
       // Simulate the IPC handler logic
+      /**
+       * Handles a credential-leak notification from the browser extension.
+       *
+       * @param {Object} payload - Incoming payload.
+       * @param {string} [payload.password] - Password to check.
+       * @param {number} [payload.count] - Number of breaches found.
+       * @returns {Promise<{ok: boolean, error?: string}>} Processing result.
+       */
       const handleCredentialLeak = async (payload) => {
         if (!payload?.password) return { ok: false, error: 'Missing password' };
         const crypto = require('crypto');
@@ -56,6 +64,14 @@ describe('Browser Extension Integration', () => {
         }
       };
 
+      /**
+       * Handles a credential-leak notification from the browser extension.
+       *
+       * @param {Object} payload - Incoming payload.
+       * @param {string} [payload.password] - Password to check.
+       * @param {number} [payload.count] - Number of breaches found.
+       * @returns {Promise<{ok: boolean, error?: string}>} Processing result.
+       */
       const handleCredentialLeak = async (payload) => {
         if (!payload?.password) return { ok: false, error: 'Missing password' };
         const crypto = require('crypto');
@@ -84,6 +100,11 @@ describe('Browser Extension Integration', () => {
       const originalPlatform = process.platform;
       Object.defineProperty(process, 'platform', { value: 'darwin' });
 
+      /**
+       * Simulated IPC handler for installing the native messaging host.
+       *
+       * @returns {Promise<{ok: boolean, error?: string}>} Installation result.
+       */
       const handleInstall = async () => {
         if (process.platform !== 'win32') {
           return { ok: false, error: 'Native host install only supported on Windows' };
@@ -102,6 +123,11 @@ describe('Browser Extension Integration', () => {
       const fs = require('fs');
       const path = require('path');
 
+      /**
+       * Simulated IPC handler for installing the native messaging host.
+       *
+       * @returns {Promise<{ok: boolean, error?: string}>} Installation result.
+       */
       const handleInstall = async () => {
         if (process.platform !== 'win32') {
           return { ok: false, error: 'Native host install only supported on Windows' };
@@ -150,6 +176,12 @@ describe('Browser Extension Integration', () => {
       };
 
       // Simulate the fixed background.js logic
+      /**
+       * Simulates the background.js onInstalled handler.
+       *
+       * @param {{reason: string}} details - Installation details.
+       * @returns {Promise<void>}
+       */
       const onInstalled = async (details) => {
         if (details.reason === 'install') {
           const { externalLookupsEnabled } = await mockChrome.storage.sync.get('externalLookupsEnabled');
@@ -190,6 +222,12 @@ describe('Browser Extension Integration', () => {
         }
       };
 
+      /**
+       * Simulates the background.js onInstalled handler.
+       *
+       * @param {{reason: string}} details - Installation details.
+       * @returns {Promise<void>}
+       */
       const onInstalled = async (details) => {
         if (details.reason === 'install') {
           const { externalLookupsEnabled } = await mockChrome.storage.sync.get('externalLookupsEnabled');

@@ -12,6 +12,9 @@ describe('windowsChecks', () => {
   let originalExecFile;
   let mockExecResults = [];
 
+  /**
+   * Clears the require cache and reloads the windowsChecks module.
+   */
   const reloadWindowsChecks = () => {
     delete require.cache[require.resolve('../src/security/windowsChecks')];
     windowsChecks = require('../src/security/windowsChecks');

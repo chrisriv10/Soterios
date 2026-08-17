@@ -246,6 +246,12 @@ class SystemAudit {
     const total = checks.length;
     let completed = 0;
 
+    /**
+     * Runs a single audit check and reports progress.
+     *
+     * @param {{label:string, run:Function}} check - Audit check descriptor.
+     * @returns {Promise<Array>} Check results.
+     */
     const runOne = async (check) => {
       onProgress?.({ type: 'start', label: check.label, completed, total });
       const result = await check.run();

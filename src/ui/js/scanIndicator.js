@@ -1,3 +1,9 @@
+/**
+ * Scan progress indicator behavior.
+ *
+ * Listens for `scan:progress` and `scan:complete` IPC events and
+ * updates the DOM indicator in the shell header.
+ */
 (function () {
   const el = document.getElementById('scanIndicator');
   const fill = document.getElementById('scanIndicatorFill');
@@ -7,30 +13,55 @@
   const label = el.querySelector('.scan-indicator-label');
   const dot = el.querySelector('.scan-indicator-dot');
 
+  /**
+   * Translates an i18n key into the current locale.
+   *
+   * @param {string} key - Translation key.
+   * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+   * @returns {string} Localized string.
+   */
   const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
 
   let doneTimer = null;
   let progressTimer = null;
   const PROGRESS_THROTTLE_MS = 500;
 
+  /**
+   * Shows the scan indicator element.
+   */
   function show() {
     el.style.display = 'block';
   }
 
+  /**
+   * Hides the scan indicator element.
+   */
   function hide() {
     el.style.display = 'none';
   }
 
+  /**
+   * Updates the scan progress bar and optional message.
+   *
+   * @param {number|null} percent - Completion percentage.
+   * @param {string} [message] - Optional status message.
+   */
   function setProgress(percent, message) {
     if (percent === null) return;
     const p = Math.max(0, Math.min(100, percent || 0));
     fill.style.width = p + '%';
     pct.textContent = p + '%';
-    if (message) msg.textContent = message;
-  }
+  if (message) msg.textContent = message;
+}
 
-  function markDone(status, threatsFound = 0) {
-    clearTimeout(doneTimer);
+/**
+ * Marks the scan as complete with a final status.
+ *
+ * @param {'canceled'|'failed'|'complete'} status - Final scan status.
+ * @param {number} [threatsFound=0] - Number of threats found.
+ */
+function markDone(status, threatsFound = 0) {
+  clearTimeout(doneTimer);
     clearTimeout(progressTimer);
     el.classList.add('scan-indicator--done');
     if (status === 'canceled') {

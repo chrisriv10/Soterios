@@ -154,6 +154,15 @@ const TOAST_THEMES = {
   },
 };
 
+/**
+ * Resolves a theme name to a canonical catalog key.
+ *
+ * Unknown names fall back to `dark`. Legacy aliases `black-red` and
+ * `black-green` are mapped to `crimson` and `terminal` respectively.
+ *
+ * @param {string} name - Raw theme name.
+ * @returns {string} Canonical theme key.
+ */
 function resolveThemeName(name) {
   const key = String(name || 'dark').toLowerCase();
   if (THEME_BACKGROUNDS[key]) return key;
@@ -162,6 +171,12 @@ function resolveThemeName(name) {
   return 'dark';
 }
 
+/**
+ * Returns the background color for a theme.
+ *
+ * @param {string} name - Raw theme name.
+ * @returns {string} Background color hex value.
+ */
 function themeBackground(name) {
   return THEME_BACKGROUNDS[resolveThemeName(name)] || THEME_BACKGROUNDS.dark;
 }

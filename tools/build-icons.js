@@ -1,6 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 
+/**
+ * Copy the app icon into the browser extension at multiple sizes.
+ *
+ * This is a simple copy operation; the browser handles scaling.
+ * For true resizing, an image-processing library would be required.
+ */
+
 const sizes = [16, 32, 48, 128];
 const sourcePath = path.join(__dirname, '../assets/icon.png');
 const iconsDir = path.join(__dirname, '../browser-extension/icons');

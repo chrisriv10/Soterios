@@ -12,6 +12,11 @@ let mockSpawn = null;
 let mockSpawnArgs = [];
 let mockSpawnCallbacks = {};
 
+/**
+ * Creates a mock child process for ClamAV engine tests.
+ *
+ * @returns {import('child_process').ChildProcess} Mock process instance.
+ */
 function createMockProcess() {
   const proc = new EventEmitter();
   proc.stdout = new EventEmitter();

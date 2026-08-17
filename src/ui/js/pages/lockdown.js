@@ -4,6 +4,14 @@ window.Pages = window.Pages || {};
 
 window.Pages['lockdown'] = {
   async render(container) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     
     container.innerHTML = `
@@ -223,6 +231,14 @@ window.Pages['lockdown'] = {
   },
 
   _renderAllowlist(allowlist) {
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     
     // Render interfaces
@@ -365,6 +381,15 @@ _showLockdownDetails(data) {
     const errorSection = document.getElementById('errorSection');
     const errorList = document.getElementById('errorList');
     
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
+    
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     
     lockdownDetails.style.display = 'block';
@@ -416,6 +441,12 @@ _showLockdownDetails(data) {
   }
 };
 
+/**
+ * Escapes a string for safe insertion into HTML.
+ *
+ * @param {string} text - Raw text.
+ * @returns {string} HTML-escaped string.
+ */
 function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;

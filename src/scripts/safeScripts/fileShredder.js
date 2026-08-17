@@ -26,6 +26,13 @@ const PROTECTED_PATHS = [
   path.join(process.env.USERPROFILE || '', 'AppData')
 ];
 
+/**
+ * Checks whether a file path is inside a given root directory.
+ *
+ * @param {string} filePath - Path to test.
+ * @param {string} rootDir - Root directory.
+ * @returns {boolean} True if filePath is inside rootDir.
+ */
 function isPathInsideDir(filePath, rootDir) {
   if (!filePath || !rootDir) return false;
   const resolved = path.resolve(filePath);
@@ -35,6 +42,12 @@ function isPathInsideDir(filePath, rootDir) {
   return relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
 }
 
+/**
+ * Checks whether a path is safe to shred (not under protected system dirs).
+ *
+ * @param {string} filePath - Path to test.
+ * @returns {boolean} True if the path is safe to shred.
+ */
 function isSafePath(filePath) {
   const normalized = path.resolve(filePath);
   
@@ -63,11 +76,24 @@ const NOFOLLOW_FLAGS = (fs.constants && fs.constants.O_NOFOLLOW && process.platf
   ? fs.constants.O_NOFOLLOW
   : 0;
 
+/**
+ * Opens a file with O_NOFOLLOW on POSIX to prevent symlink race conditions.
+ *
+ * @param {string} filePath - Path to open.
+ * @param {'r'|'r+'} mode - Open mode.
+ * @returns {number} File descriptor.
+ */
 function openNoFollow(filePath, mode) {
   const base = mode === 'r' ? fs.constants.O_RDONLY : (fs.constants.O_RDWR);
   return fs.openSync(filePath, base | NOFOLLOW_FLAGS);
 }
 
+/**
+ * Overwrites a file with a pattern ('zeros', 'ones', or 'random').
+ *
+ * @param {string} filePath - Path to the file.
+ * @param {'zeros'|'ones'|'random'} pattern - Overwrite pattern.
+ */
 function overwriteWithPattern(filePath, pattern) {
   const stats = fs.lstatSync(filePath);
   if (stats.isSymbolicLink()) {
@@ -104,6 +130,13 @@ function overwriteWithPattern(filePath, pattern) {
   }
 }
 
+/**
+ * Verifies that a file has been overwritten with the expected pattern.
+ *
+ * @param {string} filePath - Path to the file.
+ * @param {'zeros'|'ones'} expectedPattern - Pattern to verify.
+ * @returns {boolean} True if the file matches the pattern.
+ */
 function verifyOverwrite(filePath, expectedPattern) {
   const stats = fs.lstatSync(filePath);
   if (stats.isSymbolicLink()) {
@@ -143,6 +176,13 @@ function verifyOverwrite(filePath, expectedPattern) {
   return true;
 }
 
+/**
+ * Overwrites a file with random data and verifies the write by reading back.
+ *
+ * @param {string} filePath - Path to the file.
+ * @param {number} fileSize - Size of the file in bytes.
+ * @returns {boolean} True if random overwrite and verification succeeded.
+ */
 function generateAndVerifyRandom(filePath, fileSize) {
   const chunkSize = 64 * 1024;
   const lst = fs.lstatSync(filePath);
@@ -186,6 +226,13 @@ function generateAndVerifyRandom(filePath, fileSize) {
   }
 }
 
+/**
+ * Securely shreds a single file using the DoD 5220.22-M standard.
+ *
+ * @param {string} filePath - Path to the file.
+ * @param {number} [passes=3] - Number of overwrite passes.
+ * @returns {Promise<{success:boolean, originalPath?:string, sizeBytes?:number, passes?:number, error?:string}>} Shred result.
+ */
 async function shredFile(filePath, passes = 3) {
   if (!isSafePath(filePath)) {
     return { success: false, error: 'Path is not safe for shredding' };
@@ -258,14 +305,20 @@ async function shredFile(filePath, passes = 3) {
       passes: passes
     };
   } catch (err) {
-    return {
-      success: false,
-      error: err.message,
-      originalPath: filePath
-    };
-  }
+  return {
+    success: false,
+    error: err.message,
+    originalPath: filePath
+  };
 }
 
+/**
+ * Shreds multiple files and returns a summary.
+ *
+ * @param {string[]} filePaths - Files to shred.
+ * @param {number} [passes=3] - Overwrite passes.
+ * @returns {Promise<{total:number, successful:number, failed:number, results:Array, totalBytesShredded:number}>} Shred summary.
+ */
 async function shredFiles(filePaths, passes = 3) {
   const results = [];
   
@@ -286,6 +339,16 @@ async function shredFiles(filePaths, passes = 3) {
   };
 }
 
+/**
+ * Securely shred files by overwriting their contents before deletion.
+ *
+ * Uses a 3-pass overwrite pattern. Only accepts exactly 3 passes per call.
+ *
+ * @param {Object} [args={}]
+ * @param {string[]} args.filePaths - Files to shred.
+ * @param {number} [args.passes=3] - Overwrite passes (must be exactly 3).
+ * @returns {Promise<Object>} Shred summary.
+ */
 module.exports = async function fileShredder(args = {}) {
   const { filePaths, passes = 3 } = args;
   

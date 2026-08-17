@@ -2,6 +2,12 @@
 
 const base = require('./base');
 
+/**
+ * Linux platform provider.
+ *
+ * Currently only `startup` is marked as supported.
+ */
+
 module.exports = {
   ...base,
   id: 'linux',

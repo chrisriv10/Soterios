@@ -281,73 +281,10 @@ class DatabaseService {
     });
   }
 
-  getScanReports(limit = 25) {
-    return this.db.prepare('SELECT * FROM scan_reports ORDER BY timestamp DESC LIMIT ?').all(limit).map((row) => ({
-      ...row,
-      target_paths: JSON.parse(row.target_paths || '[]'),
-      details: JSON.parse(row.details || '{}')
-    }));
-  }
-
-  getLatestScanReport() {
-    const row = this.db.prepare('SELECT * FROM scan_reports ORDER BY timestamp DESC LIMIT 1').get();
-    if (!row) return null;
-    return {
-      ...row,
-      target_paths: JSON.parse(row.target_paths || '[]'),
-      details: JSON.parse(row.details || '{}')
-    };
-  }
-
-  getScanReport(id) {
-    const row = this.db.prepare('SELECT * FROM scan_reports WHERE id = ?').get(id);
-    if (!row) return null;
-    let target_paths = [];
-    let details = {};
-    try {
-      target_paths = JSON.parse(row.target_paths || '[]');
-    } catch (_) {
-      target_paths = [];
-    }
-    try {
-      details = JSON.parse(row.details || '{}');
-    } catch (_) {
-      details = {};
-    }
-    return {
-      ...row,
-      target_paths,
-      details
-    };
-  }
-
-  deleteScanReport(id) {
-    const row = this.db.prepare('SELECT * FROM scan_reports WHERE id = ?').get(id);
-    if (!row) return null;
-    this.db.prepare('DELETE FROM scan_reports WHERE id = ?').run(id);
-    return row;
-  }
-
   // --- Quarantine API ---
-  addQuarantineRecord(record) {
-    const stmt = this.db.prepare(`
-      INSERT INTO quarantine (original_path, quarantine_path, hash, engine, threat_name, reason) 
-      VALUES (@originalPath, @quarantinePath, @hash, @engine, @threatName, @reason)
-    `);
-    return stmt.run(record);
-  }
-
-  getQuarantineList() {
-    return this.db.prepare("SELECT * FROM quarantine WHERE status = 'quarantined' ORDER BY date_quarantined DESC").all();
-  }
-
-  updateQuarantineStatus(id, status) {
-    const stmt = this.db.prepare('UPDATE quarantine SET status = ? WHERE id = ?');
-    return stmt.run(status, id);
-  }
 
   /**
-   * Retrieve recent scan reports.
+   * Insert a quarantine record.
    * @param {number} [limit=25] - Maximum rows to return.
    * @returns {Array<Object>} Scan report rows with parsed JSON fields.
    */

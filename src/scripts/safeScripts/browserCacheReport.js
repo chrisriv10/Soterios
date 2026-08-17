@@ -2,8 +2,19 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+/**
+ * Computes the total size of a directory tree in bytes.
+ *
+ * @param {string} dirPath - Root directory path.
+ * @returns {number} Total size in bytes.
+ */
 function dirSize(dirPath) {
   let total = 0;
+  /**
+   * Recursively walks a directory and accumulates file sizes.
+   *
+   * @param {string} current - Current directory path.
+   */
   function walk(current) {
     let entries;
     try { entries = fs.readdirSync(current, { withFileTypes: true }); } catch (err) { return; }
@@ -23,6 +34,13 @@ const CANDIDATES = [
   { name: 'Firefox', path: path.join(os.homedir(), 'AppData/Local/Mozilla/Firefox/Profiles') }
 ];
 
+/**
+ * Estimate the on-disk size of each supported browser's cache directory.
+ *
+ * @param {Object} [args={}]
+ * @param {Function} [onProgress] - Progress callback `(payload)`.
+ * @returns {Promise<{totalMB: number, browsers: Array}>} Per-browser cache sizes.
+ */
 module.exports = async function browserCacheReport(args = {}, onProgress) {
   const total = CANDIDATES.length;
   const browsers = [];

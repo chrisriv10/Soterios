@@ -107,11 +107,22 @@ function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputation
   // -- Scheduled Scans --
   const SCHEDULE_SETTING_KEY = 'schedule.config';
 
+  /**
+   * Loads the persisted schedule config from settings.
+   *
+   * @returns {{enabled:boolean, scanType:string, intervalHours:number, customPath?:string, lastRun?:string}} Schedule config.
+   */
   function loadScheduleConfig() {
     const stored = db.getSetting(SCHEDULE_SETTING_KEY, null);
     return { ...DEFAULT_SCHEDULE, ...(stored || {}) };
   }
 
+  /**
+   * Merges and persists a partial schedule config.
+   *
+   * @param {{enabled?:boolean, scanType?:string, intervalHours?:number, customPath?:string, lastRun?:string}} partial - Config patch.
+   * @returns {{enabled:boolean, scanType:string, intervalHours:number, customPath?:string, lastRun?:string}} Merged config.
+   */
   function saveScheduleConfig(partial) {
     const merged = { ...loadScheduleConfig(), ...partial };
     db.setSetting(SCHEDULE_SETTING_KEY, merged);
@@ -139,6 +150,9 @@ function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputation
   // Runs in the main process, independent of any open renderer page, so the
   // schedule keeps working even if the user isn't looking at the Scanner tab.
   let scheduledScanRunning = false;
+  /**
+   * Runs a scheduled scan if the configured interval has elapsed.
+   */
   async function runScheduledScanIfDue() {
     if (scheduledScanRunning) return;
     const config = loadScheduleConfig();

@@ -1,5 +1,11 @@
 window.Pages = window.Pages || {};
 
+/**
+ * Parses a UTC timestamp string into a Date object.
+ *
+ * @param {string} value - Timestamp in "YYYY-MM-DD HH:MM:SS" or ISO format.
+ * @returns {Date} Parsed date, or Invalid Date if unparseable.
+ */
 function parseUtcTimestamp(value) {
   if (!value) return new Date(NaN);
   if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) {
@@ -8,6 +14,12 @@ function parseUtcTimestamp(value) {
   return new Date(value);
 }
 
+/**
+ * Converts a camelCase/snake_case key into a human-readable label.
+ *
+ * @param {string} key - Raw object key.
+ * @returns {string} Title-cased label.
+ */
 function humanizeKey(key) {
   return String(key)
     .replace(/_/g, ' ')
@@ -17,6 +29,12 @@ function humanizeKey(key) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/**
+ * Renders a primitive value (string, number, boolean) as HTML for report display.
+ *
+ * @param {*} value - Primitive value to render.
+ * @returns {string} HTML string.
+ */
 function formatSnapshotPrimitive(value) {
   if (value === null || value === undefined || value === '') return '<span class="page-subtitle">Not available</span>';
   if (typeof value === 'boolean') {
@@ -25,6 +43,12 @@ function formatSnapshotPrimitive(value) {
   return escapeHtml(String(value));
 }
 
+/**
+ * Recursively renders a snapshot value (primitive, array, or object) as HTML.
+ *
+ * @param {*} value - Snapshot value to render.
+ * @returns {string} HTML string.
+ */
 function renderSnapshotValue(value) {
   if (Array.isArray(value)) {
     if (!value.length) return '<span class="page-subtitle">None</span>';
@@ -39,6 +63,12 @@ function renderSnapshotValue(value) {
   return formatSnapshotPrimitive(value);
 }
 
+/**
+ * Renders a snapshot object as a two-column key/value HTML block.
+ *
+ * @param {Record<string, *>} obj - Snapshot object.
+ * @returns {string} HTML string.
+ */
 function renderSnapshotObject(obj) {
   const entries = Object.entries(obj || {});
   if (!entries.length) return '<span class="page-subtitle">No data.</span>';
@@ -51,6 +81,12 @@ function renderSnapshotObject(obj) {
   </div>`;
 }
 
+/**
+ * Renders a system-info snapshot as a grid of stat tiles.
+ *
+ * @param {Record<string, *>} system - System snapshot object.
+ * @returns {string} HTML string.
+ */
 function renderSystemSnapshot(system) {
   const entries = Object.entries(system || {});
   if (!entries.length) return '<div class="empty-state compact-empty">No system information recorded.</div>';
@@ -63,6 +99,11 @@ function renderSystemSnapshot(system) {
   </div>`;
 }
 
+/**
+ * Creates an i18n translation helper bound to the reports page.
+ *
+ * @returns {(key: string, vars?: Record<string, unknown>) => string} Translation function.
+ */
 function tFactory() {
   return (key, vars) => window.I18n?.t(key, vars) ?? key;
 }

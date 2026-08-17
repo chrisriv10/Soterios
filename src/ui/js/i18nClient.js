@@ -1,5 +1,12 @@
 'use strict';
 
+/**
+ * Renderer-side internationalization client.
+ *
+ * Loads translation catalogs, exposes `t()` for template substitution,
+ * and re-translates elements marked with `data-i18n` after locale changes.
+ */
+
 window.I18n = {
   locale: 'en',
   catalog: {},

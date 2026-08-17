@@ -11,10 +11,20 @@ const path = require('path');
 
 const DESKTOP_APP = process.env.SOTERIOS_APP_PATH || 'soterios://';
 
+/**
+ * Logs a timestamped message to stderr.
+ *
+ * @param {...*} args - Log arguments.
+ */
 function log(...args) {
   console.error('[Soterios Native Host]', new Date().toISOString(), ...args);
 }
 
+/**
+ * Sends a JSON message to the browser extension via stdout.
+ *
+ * @param {Object} msg - Message payload.
+ */
 function send(msg) {
   const json = JSON.stringify(msg);
   const len = Buffer.byteLength(json);
@@ -24,6 +34,9 @@ function send(msg) {
   process.stdout.write(buf);
 }
 
+/**
+ * Reads length-prefixed JSON messages from stdin.
+ */
 function readMessages() {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -56,6 +69,11 @@ let desktopProc = null;
 const pending = new Map();
 let msgId = 0;
 
+/**
+ * Launches the desktop Electron app if not already running.
+ *
+ * @returns {Promise<void>}
+ */
 function launchDesktopApp() {
   if (desktopProc) return Promise.resolve();
 
@@ -95,6 +113,11 @@ function launchDesktopApp() {
   });
 }
 
+/**
+ * Handles an incoming message from the browser extension.
+ *
+ * @param {Object} msg - Message payload.
+ */
 async function handleMessage(msg) {
   log('Received:', msg.type);
 

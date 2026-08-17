@@ -1,11 +1,24 @@
 const HIBP_API = 'https://api.pwnedpasswords.com/range/';
 
+/**
+ * Browser extension popup script.
+ *
+ * Provides password breach lookup UI and connection status for the
+ * Soterios desktop app.
+ */
+
 async function sha1(str) {
   const buf = new TextEncoder().encode(str);
   const hash = await crypto.subtle.digest('SHA-1', buf);
   return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
 }
 
+/**
+ * Checks a password against the HIBP Pwned Passwords API.
+ *
+ * @param {string} password - Password to check.
+ * @returns {Promise<number>} Number of times the password appears in breaches.
+ */
 async function checkPwned(password) {
   const hash = await sha1(password);
   const prefix = hash.slice(0, 5);
@@ -20,6 +33,11 @@ async function checkPwned(password) {
   return 0;
 }
 
+/**
+ * Renders the breach-check result in the popup UI.
+ *
+ * @param {number} count - Number of breaches found.
+ */
 function showResult(count) {
   const result = document.getElementById('result');
   if (count === 0) {
@@ -38,6 +56,9 @@ function showResult(count) {
   result.style.display = 'block';
 }
 
+/**
+ * Checks whether the Soterios desktop app is reachable.
+ */
 async function checkConnection() {
   try {
     const controller = new AbortController();

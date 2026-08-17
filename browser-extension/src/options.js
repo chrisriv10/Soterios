@@ -5,6 +5,12 @@ const DEFAULTS = {
   notifyDesktop: true
 };
 
+/**
+ * Browser extension options page.
+ *
+ * Loads and saves extension settings from `chrome.storage.sync`.
+ */
+
 function loadSettings() {
   chrome.storage.sync.get(DEFAULTS, settings => {
     Object.keys(DEFAULTS).forEach(key => {
@@ -14,6 +20,9 @@ function loadSettings() {
   });
 }
 
+/**
+ * Persists the current toggle settings to chrome.storage.sync.
+ */
 function saveSettings() {
   const settings = {};
   Object.keys(DEFAULTS).forEach(key => {
@@ -28,6 +37,9 @@ function saveSettings() {
   });
 }
 
+/**
+ * Wires toggle buttons to update settings on click/keyboard interaction.
+ */
 function setupToggles() {
   document.querySelectorAll('.toggle').forEach(btn => {
     btn.addEventListener('click', () => {

@@ -12,10 +12,23 @@ const TARGET_DIR = path.join(__dirname, '..', 'assets', 'clamav');
 const ZIP_PATH = path.join(__dirname, '..', 'assets', 'clamav.zip');
 const DOWNLOAD_TIMEOUT_MS = 120000;
 
+/**
+ * Download and install the Windows ClamAV binaries.
+ *
+ * Verifies the archive checksum, extracts into `assets/clamav`,
+ * and backs up any previous installation.
+ */
+
 function removePath(targetPath) {
   fs.rmSync(targetPath, { recursive: true, force: true });
 }
 
+/**
+ * Computes the SHA-256 hash of a file.
+ *
+ * @param {string} filePath - Path to the file.
+ * @returns {Promise<string>} Hex-encoded SHA-256 digest.
+ */
 function sha256File(filePath) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('sha256');
@@ -26,6 +39,11 @@ function sha256File(filePath) {
   });
 }
 
+/**
+ * Flattens a nested extracted directory by moving files up one level.
+ *
+ * @param {string} rootDir - Root directory to flatten.
+ */
 function flattenExtractedDir(rootDir) {
   const entries = fs.readdirSync(rootDir);
   for (const entry of entries) {
@@ -42,6 +60,12 @@ function flattenExtractedDir(rootDir) {
   }
 }
 
+/**
+ * Validates that all required ClamAV binaries exist in the install directory.
+ *
+ * @param {string} dir - Installation directory.
+ * @throws {Error} If a required binary is missing.
+ */
 function validateInstall(dir) {
   for (const binary of REQUIRED_BINARIES) {
     const binaryPath = path.join(dir, binary);
@@ -51,6 +75,12 @@ function validateInstall(dir) {
   }
 }
 
+/**
+ * Restores a backup directory if the target install was removed.
+ *
+ * @param {string} backupDir - Backup directory path.
+ * @param {boolean} backupCreated - Whether a backup was created.
+ */
 function restoreBackupIfNeeded(backupDir, backupCreated) {
   if (!backupCreated || !fs.existsSync(backupDir)) return;
   if (!fs.existsSync(TARGET_DIR)) {
@@ -60,6 +90,9 @@ function restoreBackupIfNeeded(backupDir, backupCreated) {
   removePath(backupDir);
 }
 
+/**
+ * Downloads, verifies, and installs the ClamAV binary distribution.
+ */
 async function downloadClamAV() {
   if (fs.existsSync(TARGET_DIR) && fs.existsSync(path.join(TARGET_DIR, 'clamscan.exe'))) {
     console.log('ClamAV already downloaded.');

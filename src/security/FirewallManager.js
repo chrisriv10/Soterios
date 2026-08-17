@@ -10,22 +10,36 @@ const { log, ACTIONS } = require('../core/auditLog');
 // stray click can never touch a built-in Windows rule.
 const APP_RULE_PREFIX = 'Soterios - ';
 
+/**
+ * Escape a value for safe embedding inside a single-quoted PowerShell string.
+ *
+ * @param {string|number|boolean} value
+ * @returns {string}
+ */
 function psEscape(value) {
   // Escape for embedding inside a single-quoted PowerShell string.
   return String(value).replace(/'/g, "''");
 }
 
+/**
+ * Validate an IP address string (IPv4 or IPv6).
+ *
+ * @param {string} ip
+ * @returns {boolean}
+ */
 function isValidIp(ip) {
   const v4 = /^(\d{1,3}\.){3}\d{1,3}$/;
   const v6 = /^[0-9a-fA-F:]+$/;
   return v4.test(ip) || (v6.test(ip) && ip.includes(':'));
 }
 
-// PowerShell/Windows errors are long, technical, and often include a stack
-// trace with line/column info that means nothing to an end user. This maps
-// the common cases to a short, actionable sentence and falls back to a
-// generic message for anything unrecognized (the raw error is still logged
-// to the console for debugging).
+/**
+ * Map raw PowerShell/Windows firewall errors to short, user-facing messages.
+ *
+ * @param {Error} e
+ * @param {string} fallback - Default message when the error is unrecognized.
+ * @returns {Error}
+ */
 function friendlyFirewallError(e, fallback) {
   const raw = (e && e.message) || String(e);
   logger.error('Firewall operation failed', { error: raw });

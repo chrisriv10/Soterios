@@ -1,6 +1,15 @@
 const si = require('systeminformation');
 
+/**
+ * Live system monitor tool.
+ *
+ * Returns CPU, memory, disk, and OS snapshot for the dashboard.
+ */
+
 module.exports = {
+  id: 'system-monitor', name: 'System Monitor',
+  description: 'Live CPU, memory, disk, and OS stats.',
+  category: 'System', icon: 'activity',
   id: 'system-monitor', name: 'System Monitor',
   description: 'Live CPU, memory, disk, and OS stats.',
   category: 'System', icon: 'activity',

@@ -1,16 +1,43 @@
 const si = require('systeminformation');
 const { getDefenderStatus, getFirewallStatus, getUpdateStatus } = require('../security/windowsChecks');
 
+/**
+ * Append an issue object to the issues array.
+ *
+ * @param {Array} issues
+ * @param {string} id
+ * @param {string} level
+ * @param {string} title
+ * @param {string} detail
+ * @param {number} points
+ * @param {string} actionPage
+ */
 function addIssue(issues, id, level, title, detail, points, actionPage) {
   issues.push({ id, level, title, detail, points, actionPage });
 }
 
+/**
+ * Convert a numeric health score into a display level.
+ *
+ * @param {number} score
+ * @returns {'ok'|'warn'|'danger'}
+ */
 function levelForScore(score) {
   if (score >= 80) return 'ok';
   if (score >= 60) return 'warn';
   return 'danger';
 }
 
+/**
+ * Build the security overview payload.
+ *
+ * Aggregates Defender, firewall, Windows Update, disk, CPU/memory, scan,
+ * and quarantine state into a scored overview.
+ *
+ * @param {Object} ctx
+ * @param {object} [ctx.db]
+ * @returns {Promise<Object>}
+ */
 async function buildSecurityOverview(ctx) {
   const ignored = ctx.db && typeof ctx.db.getIgnoredWarnings === 'function'
     ? ctx.db.getIgnoredWarnings().map((w) => w.id)

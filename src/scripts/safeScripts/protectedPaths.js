@@ -2,6 +2,11 @@
 
 const path = require('path');
 
+/**
+ * Builds the list of protected system root paths for the current platform.
+ *
+ * @returns {string[]} Lowercase root paths.
+ */
 function buildProtectedRoots() {
   if (process.platform === 'win32') {
     const windir = process.env.WINDIR || 'C:\\Windows';
@@ -30,6 +35,12 @@ const PROTECTED_PREFIXES = PROTECTED_ROOTS.map((root) => (
   process.platform === 'win32' ? `${root}\\` : `${root}/`
 ));
 
+/**
+ * Normalizes a path for protected-root comparison.
+ *
+ * @param {string} targetPath - Path to normalize.
+ * @returns {string} Normalized lowercase path.
+ */
 function normalizeProtectedPath(targetPath) {
   const resolved = path.resolve(targetPath);
   if (process.platform === 'win32') {
@@ -38,6 +49,12 @@ function normalizeProtectedPath(targetPath) {
   return path.normalize(resolved).toLowerCase();
 }
 
+/**
+ * Determines whether a path targets a protected system location.
+ *
+ * @param {string} targetPath - Path to test.
+ * @returns {boolean} True when the path is protected.
+ */
 function isProtected(targetPath) {
   if (!targetPath || typeof targetPath !== 'string') return true;
   const normalized = normalizeProtectedPath(targetPath);

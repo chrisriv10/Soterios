@@ -4,7 +4,15 @@ const { describe, it, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const FirewallManager = require('../src/security/FirewallManager');
 
+/**
+ * Fake firewall manager used for import/export validation tests.
+ */
 class FakeFirewallManager extends FirewallManager {
+  /**
+   * Creates a FakeFirewallManager instance.
+   *
+   * @param {Array<Object>} [existing=[]] - Pre-existing rules.
+   */
   constructor(existing = []) {
     super();
     this._existing = existing.map((r) => ({ ...r }));
@@ -12,10 +20,21 @@ class FakeFirewallManager extends FirewallManager {
     this.created = [];
   }
 
+  /**
+   * Lists current rules.
+   *
+   * @returns {Promise<Array<Object>>} Current rules.
+   */
   async listRules() {
     return this._existing.slice();
   }
 
+  /**
+   * Creates a new firewall rule.
+   *
+   * @param {Object} spec - Rule specification.
+   * @returns {Promise<{success: boolean, name: string}>} Creation result.
+   */
   async createRule(spec) {
     const name = spec.name.startsWith('Soterios - ') ? spec.name : `Soterios - ${spec.name}`;
     if (this._existing.some((r) => r.name === name)) {
@@ -38,12 +57,25 @@ class FakeFirewallManager extends FirewallManager {
     return { success: true, name };
   }
 
+  /**
+   * Deletes a firewall rule by name.
+   *
+   * @param {string} name - Rule name.
+   * @returns {Promise<{success: boolean}>} Deletion result.
+   */
   async deleteRule(name) {
     this.deleted.push(name);
     this._existing = this._existing.filter((r) => r.name !== name);
     return { success: true };
   }
 
+  /**
+   * Enables or disables a firewall rule.
+   *
+   * @param {string} _name - Rule name (unused in fake).
+   * @param {boolean} _enabled - Desired enabled state (unused in fake).
+   * @returns {Promise<{success: boolean}>} Update result.
+   */
   async setRuleEnabled() {
     return { success: true };
   }

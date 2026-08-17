@@ -4,12 +4,29 @@ const os = require('os');
 
 const SKIP_DIRS = new Set(['node_modules', '.git', 'AppData\\Local\\Packages']);
 
+/**
+ * Determines whether a directory should be skipped during a large-file scan.
+ *
+ * @param {string} fullPath - Full directory path.
+ * @param {string} name - Directory entry name.
+ * @returns {boolean} True if the directory should be skipped.
+ */
 function shouldSkip(fullPath, name) {
   if (SKIP_DIRS.has(name)) return true;
   const lower = fullPath.toLowerCase();
   return lower.includes('\\appdata\\local\\packages\\') || lower.includes('\\appdata\\local\\microsoft\\windowsapps\\');
 }
 
+/**
+ * Report large files under a directory tree.
+ *
+ * @param {Object} [args={}]
+ * @param {string} [args.path] - Root directory to scan.
+ * @param {number} [args.minSizeMB=100] - Minimum file size in MB.
+ * @param {number} [args.maxResults=40] - Maximum results to return.
+ * @param {Function} [onProgress] - Progress callback `(payload)`.
+ * @returns {Promise<{root: string, minSizeMB: number, count: number, files: Array}>} Large file report.
+ */
 module.exports = async function largeFilesReport(args = {}, onProgress) {
   const root = args.path || os.homedir();
   const minSizeMB = Number(args.minSizeMB || 100);
@@ -24,6 +41,12 @@ module.exports = async function largeFilesReport(args = {}, onProgress) {
   let scannedCount = 0;
   const REPORT_EVERY = 200;
 
+  /**
+   * Recursively walks a directory tree collecting large files.
+   *
+   * @param {string} current - Current directory path.
+   * @param {number} depth - Current recursion depth.
+   */
   function walk(current, depth) {
     if (depth > 8) return;
     let entries;

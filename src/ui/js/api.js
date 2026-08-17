@@ -1,3 +1,10 @@
+/**
+ * Renderer-process API surface.
+ *
+ * Wraps `window.api` / `window.soterios` IPC calls with higher-level
+ * helpers for theme, language, settings, tools, and shell actions.
+ */
+
 const Api = {
   applyTheme(themeName) {
     const theme = typeof themeName === 'string' && themeName ? themeName : 'dark';

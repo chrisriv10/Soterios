@@ -52,6 +52,9 @@ function initTrayDashboard({ app, mainWindow, getSummary }) {
   let tray = null;
   let trayWindow = null;
 
+  /**
+   * Brings the main application window to the front.
+   */
   const showMain = () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       if (mainWindow.isMinimized()) mainWindow.restore();
@@ -60,10 +63,16 @@ function initTrayDashboard({ app, mainWindow, getSummary }) {
     }
   };
 
+  /**
+   * Hides the tray popup window.
+   */
   const hideTrayWindow = () => {
     if (trayWindow && !trayWindow.isDestroyed()) trayWindow.hide();
   };
 
+  /**
+   * Refreshes the tray window content with the latest summary.
+   */
   const refreshTrayWindow = async () => {
     if (!trayWindow || trayWindow.isDestroyed() || !trayWindow.isVisible()) return;
     try {

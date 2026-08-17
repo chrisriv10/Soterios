@@ -10,7 +10,15 @@ const { ReverseDns } = require('./ReverseDns');
 const { ServiceNames } = require('./ServiceNames');
 const { ScoringEngine } = require('./ScoringEngine');
 
+/**
+ * Orchestrates network connection enrichment by combining process resolution,
+ * reverse DNS, service name lookup, blocklist checks, and scoring.
+ */
 class NetworkEnricher {
+  /**
+   * @param {import('./ProcessResolver')} processResolver - Resolves process names from PIDs.
+   * @param {import('./BlocklistService')} blocklistService - IP blocklist lookup service.
+   */
   constructor(processResolver, blocklistService) {
     this.processResolver = processResolver;
     this.blocklistService = blocklistService;
@@ -64,6 +72,13 @@ class NetworkEnricher {
     return enriched;
   }
 
+  /**
+   * Enrich a batch of network connections with metadata.
+   *
+   * @param {Array<Object>} connections - Raw network connection objects.
+   * @param {Function} [onProgress] - Optional progress callback `(completed, total)`.
+   * @returns {Promise<Array<Object>>} Enriched connection objects.
+   */
   async enrich(connections, onProgress) {
     if (!Array.isArray(connections)) {
       return [];

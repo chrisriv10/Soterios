@@ -17,6 +17,11 @@ const { loadPlugins } = require('../../src/core/pluginLoader');
 const toolRegistry = require('../../src/core/toolRegistry');
 const updater = require('../../src/main/updater');
 
+/**
+ * Runs a callback with a temporary database service and cleans up afterward.
+ *
+ * @param {(db: DatabaseService) => Promise<void>} fn - Async callback receiving the database.
+ */
 async function withTempDb(fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'soterios-smoke-'));
   const dbPath = path.join(dir, 'soterios.db');
@@ -29,6 +34,9 @@ async function withTempDb(fn) {
   }
 }
 
+/**
+ * Integration smoke check for MaintenanceScheduler.runNow().
+ */
 async function testMaintenanceRunScript() {
   await withTempDb(async (db) => {
     loadPlugins();
@@ -43,6 +51,9 @@ async function testMaintenanceRunScript() {
   console.log('PASS maintenance run-script integration');
 }
 
+/**
+ * Integration smoke check for getTrayHealthSummary().
+ */
 async function testTrayHealthSummary() {
   await withTempDb(async (db) => {
     const summary = await getTrayHealthSummary(db, toolRegistry);
@@ -53,6 +64,9 @@ async function testTrayHealthSummary() {
   console.log('PASS tray health summary');
 }
 
+/**
+ * Integration smoke check for updater.checkForUpdates() in dev builds.
+ */
 async function testUpdaterDevBuild() {
   const status = await updater.checkForUpdates();
   assert.equal(status.status, 'unsupported');
@@ -60,6 +74,9 @@ async function testUpdaterDevBuild() {
   console.log('PASS updater unsupported in dev build');
 }
 
+/**
+ * Runs all integration smoke checks.
+ */
 async function main() {
   await testMaintenanceRunScript();
   await testTrayHealthSummary();

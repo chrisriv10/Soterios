@@ -1,6 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 
+/**
+ * Validate the browser extension native host manifest.
+ *
+ * Ensures `allowed_origins` is populated with real extension IDs
+ * and that the referenced host script exists on disk.
+ */
+
 function validateNativeHostManifest() {
   const manifestPath = path.join(__dirname, '..', 'browser-extension', 'native-host-manifest.json');
   if (!fs.existsSync(manifestPath)) {

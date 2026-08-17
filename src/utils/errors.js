@@ -20,6 +20,11 @@ class AppError extends Error {
     Error.captureStackTrace(this, this.constructor);
   }
 
+  /**
+   * Serialize the error to a plain object.
+   *
+   * @returns {Object} Plain-object representation suitable for logging or IPC.
+   */
   toJSON() {
     return {
       name: this.name,
@@ -30,6 +35,11 @@ class AppError extends Error {
   }
 }
 
+/**
+ * Error raised when a requested resource cannot be found.
+ *
+ * Carries the code `not_found`.
+ */
 class NotFoundError extends AppError {
   /**
    * @param {string} [message]
@@ -40,6 +50,11 @@ class NotFoundError extends AppError {
   }
 }
 
+/**
+ * Error raised when an operation is denied by permissions or access control.
+ *
+ * Carries the code `permission_denied`.
+ */
 class PermissionError extends AppError {
   /**
    * @param {string} [message]
@@ -50,6 +65,11 @@ class PermissionError extends AppError {
   }
 }
 
+/**
+ * Error raised when an operation exceeds its time limit.
+ *
+ * Carries the code `timeout`.
+ */
 class TimeoutError extends AppError {
   /**
    * @param {string} [message]
@@ -60,6 +80,11 @@ class TimeoutError extends AppError {
   }
 }
 
+/**
+ * Error raised when input fails validation.
+ *
+ * Carries the code `invalid_input`.
+ */
 class InvalidInputError extends AppError {
   /**
    * @param {string} [message]

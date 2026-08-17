@@ -8,7 +8,15 @@ const dns = require('dns').promises;
 
 const LOOKUP_TIMEOUT_MS = 2000;
 
+/**
+ * Simple reverse DNS lookup with in-memory caching.
+ *
+ * Uses Node.js built-in `dns` module. No external dependencies or API keys.
+ */
 class ReverseDns {
+  /**
+   * @param {import('../core/database')} [db] - Optional database for cache persistence.
+   */
   constructor() {
     this.cache = new Map();
     this.cacheTtl = 5 * 60 * 1000; // 5 minutes

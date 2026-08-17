@@ -4,6 +4,12 @@ const { execFile } = require('child_process');
 const { getProvider } = require('../../platform');
 const { normalizeApps, findLeftoverCandidates, findLeftoverRegistryCandidates } = require('./uninstallUtils');
 
+/**
+ * Executes a PowerShell script and returns stdout.
+ *
+ * @param {string} script - PowerShell script content.
+ * @returns {Promise<string>} Script stdout.
+ */
 function runPowerShell(script) {
   return new Promise((resolve, reject) => {
     execFile(
@@ -21,6 +27,13 @@ function runPowerShell(script) {
   });
 }
 
+/**
+ * Collect installed application information and optional leftover scan.
+ *
+ * @param {Object} [args={}]
+ * @param {string} [args.scanLeftoversFor] - App name to scan leftovers for.
+ * @returns {Promise<{supported: boolean, appCount: number, apps: Array, leftovers: Array, scannedApp: string|null}>} Uninstaller report.
+ */
 module.exports = async function uninstallerReport(args = {}) {
   const platform = getProvider();
   if (!platform.supports('uninstaller')) {

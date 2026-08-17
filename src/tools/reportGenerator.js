@@ -2,6 +2,12 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+/**
+ * Resolve the reports directory, creating it if missing.
+ *
+ * @param {Object} [ctx]
+ * @returns {string}
+ */
 function reportsDir(ctx) {
   const base = path.join(os.homedir(), '.soterios');
   const dir = path.join(base, 'reports');
@@ -9,10 +15,22 @@ function reportsDir(ctx) {
   return dir;
 }
 
+/**
+ * HTML-escape a string for safe insertion into report markup.
+ *
+ * @param {string|number|boolean} v
+ * @returns {string}
+ */
 function esc(v) {
   return String(v ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 }
 
+/**
+ * Render a security overview report to a standalone HTML string.
+ *
+ * @param {Object} report
+ * @returns {string}
+ */
 function renderHtml(report) {
   const issues = report.overview.issues || [];
   return `<!doctype html>

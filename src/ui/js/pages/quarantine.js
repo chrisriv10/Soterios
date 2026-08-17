@@ -1,3 +1,9 @@
+/**
+ * Displays a native confirm dialog with an i18n-aware message.
+ *
+ * @param {string} message - Message key or literal text.
+ * @returns {boolean} True when the user confirms.
+ */
 function confirmAction(message) {
   return window.confirm(message);
 }
@@ -5,6 +11,21 @@ function confirmAction(message) {
 window.Pages = window.Pages || {};
 window.Pages['quarantine'] = {
   async render(container) {
+    /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+        /**
+     * Translates an i18n key into the current locale.
+     *
+     * @param {string} key - Translation key.
+     * @param {Record<string, unknown>} [vars] - Optional interpolation variables.
+     * @returns {string} Localized string.
+     */
+
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     container.innerHTML = `
       <header class="page-header">

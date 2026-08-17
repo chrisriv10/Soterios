@@ -1,5 +1,11 @@
 'use strict';
 
+/**
+ * Base platform provider for unsupported platforms.
+ *
+ * All feature checks return `false` and an "unsupported" message.
+ */
+
 module.exports = {
   id: 'base',
   label: 'Unknown',

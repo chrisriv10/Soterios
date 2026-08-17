@@ -19,6 +19,12 @@ const WIKI_REPO_DIR = path.join(__dirname, '..', '.wiki');
 // Configuration: set this to your wiki repository URL if not already cloned
 const WIKI_REPO_URL = 'https://github.com/chrisriv10/Soterios.wiki.git';
 
+/**
+ * Converts Markdown links from `.md` extension to no-extension format.
+ *
+ * @param {string} content - Markdown content.
+ * @returns {string} Content with converted links.
+ */
 function convertMarkdownLinks(content) {
   // Convert ](Something.md) to ](Something)
   // This regex matches markdown links with .md extension
@@ -28,6 +34,9 @@ function convertMarkdownLinks(content) {
   });
 }
 
+/**
+ * Ensures the wiki repository is cloned locally.
+ */
 function ensureWikiRepo() {
   if (!fs.existsSync(WIKI_REPO_DIR)) {
     console.log('Cloning wiki repository...');
@@ -40,6 +49,9 @@ function ensureWikiRepo() {
   }
 }
 
+/**
+ * Syncs local wiki markdown files to the cloned wiki repository.
+ */
 function syncWiki() {
   console.log('Syncing wiki files...');
 
