@@ -262,7 +262,10 @@ class MaintenanceScheduler {
       const okCount = results.filter((result) => result.ok).length;
       const reclaimedBytes = results.reduce((sum, result) => sum + Number(result.summary?.reclaimedBytes || 0), 0);
       const summary = `Maintenance completed (${okCount}/${results.length} tasks OK).`;
-      this.db.addMaintenanceRun({ startedAt, results, dryRunCleanup: !Object.values(config.policies).includes('auto-clean') });
+      const dryRun = options.dryRunCleanup !== undefined
+        ? options.dryRunCleanup
+        : !Object.values(config.policies).includes('auto-clean');
+      this.db.addMaintenanceRun({ startedAt, results, dryRunCleanup: dryRun });
       this.db.addAlert(okCount === results.length ? 'info' : 'warning', `[Maintenance] ${summary}`);
       const lastResult = { startedAt, okCount, totalCount: results.length, reclaimedBytes, results };
       if (okCount > 0) this.saveConfig({ lastRun: startedAt, lastResult });
