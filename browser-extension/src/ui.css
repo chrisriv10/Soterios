@@ -32,3 +32,18 @@ a{color:var(--accent-primary)}
 .settings-nav{scrollbar-width:thin;scrollbar-color:var(--text-muted) transparent}
 .settings-nav::-webkit-scrollbar{height:5px}.settings-nav::-webkit-scrollbar-track{background:transparent}.settings-nav::-webkit-scrollbar-thumb{background:var(--text-muted);border-radius:9px}
 @media(max-width:380px){.popup{width:100%;min-width:0}.appbar>.subtle{display:none}.brand{min-width:0}.brand>span:last-child{white-space:nowrap}}
+
+/* Onboarding entrance animations */
+.onboarding .onboarding-step {
+  opacity: 0;
+  transform: translateY(12px);
+  animation: onboardingFadeIn 0.4s ease forwards;
+}
+.onboarding .confirm-bar.onboarding-step {
+  opacity: 0;
+  transform: translateY(12px);
+  animation: onboardingFadeIn 0.4s ease forwards;
+}
+@keyframes onboardingFadeIn {
+  to { opacity: 1; transform: translateY(0); }
+}

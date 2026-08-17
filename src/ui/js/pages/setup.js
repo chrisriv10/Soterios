@@ -267,7 +267,7 @@ window.Pages = window.Pages || {};
       if (!this._container) return;
       for (let i = 0; i < STEPS.length; i++) {
         const section = this._container.querySelector('#setupStep-' + STEPS[i]);
-        if (section) section.style.display = i === index ? 'block' : 'none';
+        if (section) section.classList.toggle('active', i === index);
         const dot = this._container.querySelector('#setupDot-' + i);
         if (dot) dot.classList.toggle('active', i === index);
       }
