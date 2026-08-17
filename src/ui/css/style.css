@@ -1,6 +1,7 @@
 :root {
   --bg-base: #0B0E14;
-  --bg-surface: rgba(22, 27, 34, 0.6);
+  --bg-panel: #0B0E14;
+  --bg-surface: rgba(22, 27, 34, 0.9);
   --bg-surface-hover: rgba(33, 40, 48, 0.8);
   --glass-border: rgba(255, 255, 255, 0.05);
   --body-gradient: var(--bg-base);
@@ -31,6 +32,7 @@
 
 :root[data-theme="light"] {
   --bg-base: #f5f7fb;
+  --bg-panel: #f5f7fb;
   --bg-surface: rgba(255, 255, 255, 0.95);
   --bg-surface-hover: rgba(241, 245, 249, 0.98);
   --glass-border: rgba(15, 23, 42, 0.1);
@@ -50,7 +52,8 @@
 
 :root[data-theme="sunset"] {
   --bg-base: #1c1214;
-  --bg-surface: rgba(46, 24, 27, 0.82);
+  --bg-panel: #1c1214;
+  --bg-surface: rgba(46, 24, 27, 0.9);
   --bg-surface-hover: rgba(69, 35, 39, 0.94);
   --glass-border: rgba(251, 191, 36, 0.16);
   --body-gradient: var(--bg-base);
@@ -69,7 +72,8 @@
 
 :root[data-theme="violet"] {
   --bg-base: #140f1f;
-  --bg-surface: rgba(35, 24, 54, 0.82);
+  --bg-panel: #140f1f;
+  --bg-surface: rgba(35, 24, 54, 0.9);
   --bg-surface-hover: rgba(55, 37, 84, 0.94);
   --glass-border: rgba(192, 132, 252, 0.18);
   --body-gradient: var(--bg-base);
@@ -88,6 +92,7 @@
 
 :root[data-theme="crimson"], :root[data-theme="black-red"] {
   --bg-base: #020202;
+  --bg-panel: #020202;
   --bg-surface: rgba(12, 4, 5, 0.96);
   --bg-surface-hover: rgba(24, 8, 10, 0.98);
   --glass-border: rgba(220, 38, 38, 0.22);
@@ -107,6 +112,7 @@
 
 :root[data-theme="terminal"], :root[data-theme="black-green"] {
   --bg-base: #010201;
+  --bg-panel: #010201;
   --bg-surface: rgba(5, 12, 7, 0.97);
   --bg-surface-hover: rgba(8, 18, 10, 0.99);
   --glass-border: rgba(0, 255, 170, 0.18);
@@ -126,7 +132,8 @@
 
 :root[data-theme="ocean"] {
   --bg-base: #07131f;
-  --bg-surface: rgba(8, 23, 39, 0.78);
+  --bg-panel: #07131f;
+  --bg-surface: rgba(8, 23, 39, 0.9);
   --bg-surface-hover: rgba(15, 35, 56, 0.92);
   --glass-border: rgba(125, 211, 252, 0.16);
   --body-gradient: var(--bg-base);
@@ -145,7 +152,8 @@
 
 :root[data-theme="emerald"] {
   --bg-base: #0a1f17;
-  --bg-surface: rgba(12, 48, 36, 0.85);
+  --bg-panel: #0a1f17;
+  --bg-surface: rgba(12, 48, 36, 0.9);
   --bg-surface-hover: rgba(18, 70, 52, 0.95);
   --glass-border: rgba(134, 239, 172, 0.28);
   --body-gradient: var(--bg-base);
@@ -164,7 +172,8 @@
 
 :root[data-theme="midnight"] {
   --bg-base: #0a0e1a;
-  --bg-surface: rgba(14, 22, 42, 0.88);
+  --bg-panel: #0a0e1a;
+  --bg-surface: rgba(14, 22, 42, 0.9);
   --bg-surface-hover: rgba(22, 34, 62, 0.95);
   --glass-border: rgba(96, 165, 250, 0.18);
   --body-gradient: var(--bg-base);
@@ -183,6 +192,7 @@
 
 :root[data-theme="bumblebee"] {
   --bg-base: #0c0b08;
+  --bg-panel: #0c0b08;
   --bg-surface: rgba(22, 18, 6, 0.92);
   --bg-surface-hover: rgba(36, 30, 10, 0.96);
   --glass-border: rgba(250, 204, 21, 0.22);
@@ -202,6 +212,7 @@
 
 :root[data-theme="monochrome"] {
   --bg-base: #0a0a0a;
+  --bg-panel: #0a0a0a;
   --bg-surface: rgba(23, 23, 23, 0.94);
   --bg-surface-hover: rgba(38, 38, 38, 0.98);
   --glass-border: rgba(255, 255, 255, 0.1);
@@ -222,7 +233,8 @@
 
 :root[data-theme="rose"] {
   --bg-base: #1a1216;
-  --bg-surface: rgba(45, 28, 38, 0.88);
+  --bg-panel: #1a1216;
+  --bg-surface: rgba(45, 28, 38, 0.9);
   --bg-surface-hover: rgba(62, 40, 52, 0.94);
   --glass-border: rgba(244, 114, 182, 0.18);
   --body-gradient: var(--bg-base);
@@ -241,7 +253,8 @@
 
 :root[data-theme="aurora"] {
   --bg-base: #0b1220;
-  --bg-surface: rgba(20, 30, 50, 0.75);
+  --bg-panel: #0b1220;
+  --bg-surface: rgba(20, 30, 50, 0.85);
   --bg-surface-hover: rgba(30, 45, 75, 0.88);
   --glass-border: rgba(125, 211, 252, 0.18);
   --body-gradient: var(--bg-base);
@@ -1114,7 +1127,12 @@ body {
   border-radius: 12px;
 }
 
-.pi-list-panel { min-width: 0; }
+.pi-list-panel {
+  min-width: 0;
+  /* The technical header has several fixed columns. Keep its grid inside
+     the list pane when the details pane is open instead of painting over it. */
+  overflow: hidden;
+}
 .pi-column-header,
 .pi-row {
   display: grid;
@@ -1123,8 +1141,10 @@ body {
 }
 
 .pi-column-header {
+  min-width: 0;
   min-height: 36px;
   padding: 0 11px;
+  overflow: hidden;
   color: var(--text-muted);
   background: var(--bg-panel);
   border-bottom: 1px solid var(--glass-border);
@@ -1230,6 +1250,8 @@ body {
 .pi-risk.high-concern { color: var(--danger); background: var(--danger-glow); }
 
 .pi-details {
+  position: relative;
+  z-index: 2;
   width: min(410px, 38vw);
   min-width: 340px;
   height: 576px;
@@ -1464,6 +1486,57 @@ body {
 .status-info .value {
   font-size: 1.5rem;
   font-weight: 600;
+}
+
+.device-cleanup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.device-cleanup-header .status-icon {
+  flex-shrink: 0;
+}
+.device-cleanup-header .status-info {
+  flex: 1;
+  min-width: 0;
+}
+.device-cleanup-summary {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.device-cleanup-breakdown {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--glass-border);
+}
+.device-cleanup-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+}
+.device-cleanup-item .label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.device-cleanup-item .freed {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+.device-cleanup-item .count {
+  font-size: 0.65rem;
+  color: var(--text-muted);
 }
 
 /* Buttons */
