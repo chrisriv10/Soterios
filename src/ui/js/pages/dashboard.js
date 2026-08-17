@@ -347,8 +347,11 @@ window.Pages['dashboard'] = {
             <button class="btn btn-sm" id="btnRefreshWarnings">${escapeHtml(t('dashboard.refreshWarnings'))}</button>
           </div>
           <div id="warningList" class="history-list" style="margin-top:12px;"><div class="empty-state">${escapeHtml(t('common.loading'))}</div></div>
-          <div class="panel-title" style="margin-top:16px;">${escapeHtml(t('dashboard.ignoredWarnings'))}</div>
-          <div id="ignoredWarningList" class="history-list" style="max-height:300px; overflow-y:auto;"><div class="empty-state">${escapeHtml(t('common.loading'))}</div></div>
+          <div class="flex-between">
+            <div class="panel-title" style="margin-top:16px;">${escapeHtml(t('dashboard.ignoredWarnings'))}</div>
+            <button class="btn btn-sm btn-ghost" id="ignoredWarningsToggle" aria-expanded="false" aria-controls="ignoredWarningList">${escapeHtml(t('dashboard.ignoredWarningsExpand'))}</button>
+          </div>
+          <div id="ignoredWarningList" class="history-list" style="max-height:300px; overflow-y:auto;" hidden><div class="empty-state">${escapeHtml(t('common.loading'))}</div></div>
         </div>
       </div>
     `;
@@ -804,6 +807,20 @@ async function loadWarnings() {
         btnRefreshWarnings.textContent = originalLabel;
       }
     });
+    const btnIgnoredWarningsToggle = container.querySelector('#ignoredWarningsToggle');
+    const ignoredWarningList = container.querySelector('#ignoredWarningList');
+    if (btnIgnoredWarningsToggle && ignoredWarningList) {
+      btnIgnoredWarningsToggle.addEventListener('click', () => {
+        const expanded = btnIgnoredWarningsToggle.getAttribute('aria-expanded') === 'true';
+        btnIgnoredWarningsToggle.setAttribute('aria-expanded', String(!expanded));
+        btnIgnoredWarningsToggle.textContent = expanded ? t('dashboard.ignoredWarningsExpand') : t('dashboard.ignoredWarningsCollapse');
+        if (expanded) {
+          ignoredWarningList.hidden = true;
+        } else {
+          ignoredWarningList.hidden = false;
+        }
+      });
+    }
     const btnRefreshDashboard = container.querySelector('#btnRefreshDashboard');
     if (btnRefreshDashboard) {
       btnRefreshDashboard.addEventListener('click', async () => {

@@ -1681,5 +1681,7 @@
   "settings.performanceMode.apply": "Zastosuj",
   "settings.performanceMode.unknown": "Obecnie aktywny jest niestandardowy lub zewnętrzny plan zasilania.",
   "settings.performanceMode.error": "Nie można przełączyć planu zasilania: {error}",
-  "settings.performanceMode.loadError": "Nie można odczytać bieżącego planu zasilania. Ta funkcja wymaga systemu Windows."
+  "settings.performanceMode.loadError": "Nie można odczytać bieżącego planu zasilania. Ta funkcja wymaga systemu Windows.",
+  "dashboard.ignoredWarningsExpand": "Pokaż zignorowane ostrzeżenia",
+  "dashboard.ignoredWarningsCollapse": "Ukryj zignorowane ostrzeżenia"
 }

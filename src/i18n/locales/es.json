@@ -1681,5 +1681,7 @@
   "settings.performanceMode.apply": "Aplicar",
   "settings.performanceMode.unknown": "Actualmente hay activo un plan de energía personalizado o de terceros.",
   "settings.performanceMode.error": "No se pudo cambiar el plan de energía: {error}",
-  "settings.performanceMode.loadError": "No se pudo leer el plan de energía actual. Esta función requiere Windows."
+  "settings.performanceMode.loadError": "No se pudo leer el plan de energía actual. Esta función requiere Windows.",
+  "dashboard.ignoredWarningsExpand": "Mostrar advertencias ignoradas",
+  "dashboard.ignoredWarningsCollapse": "Ocultar advertencias ignoradas"
 }

@@ -1681,5 +1681,7 @@
   "settings.performanceMode.apply": "適用",
   "settings.performanceMode.unknown": "カスタムまたはサードパーティ製の電源プランが現在アクティブです。",
   "settings.performanceMode.error": "電源プランを切り替えられませんでした: {error}",
-  "settings.performanceMode.loadError": "現在の電源プランを読み取れませんでした。この機能には Windows が必要です。"
+  "settings.performanceMode.loadError": "現在の電源プランを読み取れませんでした。この機能には Windows が必要です。",
+  "dashboard.ignoredWarningsExpand": "無視した警告を表示",
+  "dashboard.ignoredWarningsCollapse": "無視した警告を非表示"
 }

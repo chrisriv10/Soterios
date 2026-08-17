@@ -1681,5 +1681,7 @@
   "settings.performanceMode.apply": "Appliquer",
   "settings.performanceMode.unknown": "Un plan d'alimentation personnalisé ou tiers est actuellement actif.",
   "settings.performanceMode.error": "Impossible de changer le plan d'alimentation : {error}",
-  "settings.performanceMode.loadError": "Impossible de lire le plan d'alimentation actuel. Cette fonctionnalité nécessite Windows."
+  "settings.performanceMode.loadError": "Impossible de lire le plan d'alimentation actuel. Cette fonctionnalité nécessite Windows.",
+  "dashboard.ignoredWarningsExpand": "Afficher les avertissements ignorés",
+  "dashboard.ignoredWarningsCollapse": "Masquer les avertissements ignorés"
 }

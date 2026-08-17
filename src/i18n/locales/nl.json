@@ -1681,5 +1681,7 @@
   "settings.performanceMode.apply": "Toepassen",
   "settings.performanceMode.unknown": "Er is momenteel een aangepast of derdepartij-energieplan actief.",
   "settings.performanceMode.error": "Kon energiestatus niet wisselen: {error}",
-  "settings.performanceMode.loadError": "Huidig energieplan kon niet worden gelezen. Deze functie vereist Windows."
+  "settings.performanceMode.loadError": "Huidig energieplan kon niet worden gelezen. Deze functie vereist Windows.",
+  "dashboard.ignoredWarningsExpand": "Genegeerde waarschuwingen tonen",
+  "dashboard.ignoredWarningsCollapse": "Genegeerde waarschuwingen verbergen"
 }

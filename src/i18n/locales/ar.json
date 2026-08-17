@@ -1681,5 +1681,7 @@
   "settings.performanceMode.apply": "تطبيق",
   "settings.performanceMode.unknown": "خطة طاقة مخصصة أو تابعة لجهة خارجية نشطة حالياً.",
   "settings.performanceMode.error": "تعذر تبديل خطة الطاقة: {error}",
-  "settings.performanceMode.loadError": "تعذر قراءة خطة الطاقة الحالية. تتطلب هذه الميزة نظام Windows."
+  "settings.performanceMode.loadError": "تعذر قراءة خطة الطاقة الحالية. تتطلب هذه الميزة نظام Windows.",
+  "dashboard.ignoredWarningsExpand": "إظهار التحذيرات المتجاهلة",
+  "dashboard.ignoredWarningsCollapse": "إخفاء التحذيرات المتجاهلة"
 }

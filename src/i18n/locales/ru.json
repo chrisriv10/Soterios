@@ -1681,5 +1681,7 @@
   "settings.performanceMode.apply": "Применить",
   "settings.performanceMode.unknown": "В данный момент активна пользовательская или сторонняя схема питания.",
   "settings.performanceMode.error": "Не удалось переключить схему питания: {error}",
-  "settings.performanceMode.loadError": "Не удалось прочитать текущую схему питания. Эта функция требует Windows."
+  "settings.performanceMode.loadError": "Не удалось прочитать текущую схему питания. Эта функция требует Windows.",
+  "dashboard.ignoredWarningsExpand": "Показать проигнорированные предупреждения",
+  "dashboard.ignoredWarningsCollapse": "Скрыть проигнорированные предупреждения"
 }

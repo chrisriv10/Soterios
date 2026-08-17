@@ -1681,5 +1681,7 @@
   "settings.performanceMode.apply": "적용",
   "settings.performanceMode.unknown": "사용자 지정 또는 서드파티 전원 계획이 현재 활성화되어 있습니다.",
   "settings.performanceMode.error": "전원 계획을 전환할 수 없습니다: {error}",
-  "settings.performanceMode.loadError": "현재 전원 계획을 읽을 수 없습니다. 이 기능은 Windows가 필요합니다."
+  "settings.performanceMode.loadError": "현재 전원 계획을 읽을 수 없습니다. 이 기능은 Windows가 필요합니다.",
+  "dashboard.ignoredWarningsExpand": "무시된 경고 표시",
+  "dashboard.ignoredWarningsCollapse": "무시된 경고 숨기기"
 }

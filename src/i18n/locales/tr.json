@@ -1681,5 +1681,7 @@
   "settings.performanceMode.apply": "Uygula",
   "settings.performanceMode.unknown": "Şu anda özel veya üçüncü taraf bir güç planı etkin.",
   "settings.performanceMode.error": "Güç planı değiştirilemedi: {error}",
-  "settings.performanceMode.loadError": "Mevcut güç planı okunamadı. Bu özellik Windows gerektirir."
+  "settings.performanceMode.loadError": "Mevcut güç planı okunamadı. Bu özellik Windows gerektirir.",
+  "dashboard.ignoredWarningsExpand": "Görmezden gelinen uyarıları göster",
+  "dashboard.ignoredWarningsCollapse": "Görmezden gelinen uyarıları gizle"
 }

@@ -1681,5 +1681,7 @@
   "settings.performanceMode.apply": "应用",
   "settings.performanceMode.unknown": "当前处于活动状态的是自定义或第三方电源计划。",
   "settings.performanceMode.error": "无法切换电源计划: {error}",
-  "settings.performanceMode.loadError": "无法读取当前电源计划。此功能需要 Windows。"
+  "settings.performanceMode.loadError": "无法读取当前电源计划。此功能需要 Windows。",
+  "dashboard.ignoredWarningsExpand": "显示已忽略的警告",
+  "dashboard.ignoredWarningsCollapse": "隐藏已忽略的警告"
 }

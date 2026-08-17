@@ -1681,5 +1681,7 @@
   "settings.performanceMode.apply": "Applica",
   "settings.performanceMode.unknown": "È attivo un piano di alimentazione personalizzato o di terze parti.",
   "settings.performanceMode.error": "Impossibile cambiare il piano di alimentazione: {error}",
-  "settings.performanceMode.loadError": "Impossibile leggere il piano di alimentazione corrente. Questa funzione richiede Windows."
+  "settings.performanceMode.loadError": "Impossibile leggere il piano di alimentazione corrente. Questa funzione richiede Windows.",
+  "dashboard.ignoredWarningsExpand": "Mostra avvisi ignorati",
+  "dashboard.ignoredWarningsCollapse": "Nascondi avvisi ignorati"
 }

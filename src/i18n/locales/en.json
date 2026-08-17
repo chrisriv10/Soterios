@@ -1682,5 +1682,7 @@
   "settings.performanceMode.unknown": "A custom or third-party power plan is currently active.",
   "settings.performanceMode.error": "Couldn't switch power plans: {error}",
   "settings.performanceMode.loadError": "Couldn't read the current power plan. This feature requires Windows.",
-  "loading.loadingConnections": "Loading connections..."
+  "loading.loadingConnections": "Loading connections...",
+  "dashboard.ignoredWarningsExpand": "Show ignored warnings",
+  "dashboard.ignoredWarningsCollapse": "Hide ignored warnings"
 }

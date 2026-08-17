@@ -1681,5 +1681,7 @@
   "settings.performanceMode.apply": "Aplicar",
   "settings.performanceMode.unknown": "Um plano de energia personalizado ou de terceiros está ativo no momento.",
   "settings.performanceMode.error": "Não foi possível alternar o plano de energia: {error}",
-  "settings.performanceMode.loadError": "Não foi possível ler o plano de energia atual. Este recurso requer Windows."
+  "settings.performanceMode.loadError": "Não foi possível ler o plano de energia atual. Este recurso requer Windows.",
+  "dashboard.ignoredWarningsExpand": "Mostrar avisos ignorados",
+  "dashboard.ignoredWarningsCollapse": "Ocultar avisos ignorados"
 }

@@ -1681,5 +1681,7 @@
   "settings.performanceMode.apply": "Anwenden",
   "settings.performanceMode.unknown": "Ein benutzerdefinierter oder Drittanbieter-Energiesparplan ist derzeit aktiv.",
   "settings.performanceMode.error": "Energiesparplan konnte nicht gewechselt werden: {error}",
-  "settings.performanceMode.loadError": "Aktueller Energiesparplan konnte nicht geladen werden. Diese Funktion erfordert Windows."
+  "settings.performanceMode.loadError": "Aktueller Energiesparplan konnte nicht geladen werden. Diese Funktion erfordert Windows.",
+  "dashboard.ignoredWarningsExpand": "Ignorierte Warnungen anzeigen",
+  "dashboard.ignoredWarningsCollapse": "Ignorierte Warnungen ausblenden"
 }

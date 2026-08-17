@@ -1681,5 +1681,7 @@
   "settings.performanceMode.apply": "लागू करें",
   "settings.performanceMode.unknown": "वर्तमान में एक कस्टम या थर्ड-पार्टी पावर प्लान सक्रिय है।",
   "settings.performanceMode.error": "पावर प्लान स्विच नहीं कर सके: {error}",
-  "settings.performanceMode.loadError": "वर्तमान पावर प्लान पढ़ नहीं सके। इस सुविधा के लिए Windows आवश्यक है।"
+  "settings.performanceMode.loadError": "वर्तमान पावर प्लान पढ़ नहीं सके। इस सुविधा के लिए Windows आवश्यक है।",
+  "dashboard.ignoredWarningsExpand": "अनदेखी चेतावनियाँ दिखाएँ",
+  "dashboard.ignoredWarningsCollapse": "अनदेखी चेतावनियाँ छिपाएँ"
 }
