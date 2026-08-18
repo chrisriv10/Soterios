@@ -1697,5 +1697,12 @@
   "reports.script.clear-temp-files": "临时文件",
   "reports.script.browser-cache-report": "浏览器缓存",
   "reports.script.disk-space-report": "磁盘空间",
-  "reports.script.large-files-report": "大文件"
+  "reports.script.large-files-report": "大文件",
+  "firewall.selectAll": "全选",
+  "firewall.selectedCount": "已选择 {count} 项",
+  "firewall.deleteSelected": "删除所选",
+  "firewall.confirmDeleteRules": "删除选中的 {count} 条规则？",
+  "firewall.bulkDeletePartial": "已删除 {deleted} 条规则，{failed} 条无法删除。",
+  "firewall.bulkTogglePartial": "已更新 {updated} 条规则，{failed} 条无法更新。",
+  "firewall.clearSelection": "清除"
 }

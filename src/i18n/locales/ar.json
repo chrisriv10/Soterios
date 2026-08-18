@@ -1697,5 +1697,12 @@
   "reports.script.clear-temp-files": "ملفات مؤقتة",
   "reports.script.browser-cache-report": "ذاكرة متصفح",
   "reports.script.disk-space-report": "مساحة القرص",
-  "reports.script.large-files-report": "ملفات كبيرة"
+  "reports.script.large-files-report": "ملفات كبيرة",
+  "firewall.selectAll": "تحديد الكل",
+  "firewall.selectedCount": "تم تحديد {count}",
+  "firewall.deleteSelected": "حذف المحدد",
+  "firewall.confirmDeleteRules": "حذف {count} قاعدة محددة؟",
+  "firewall.bulkDeletePartial": "تم حذف {deleted} قاعدة. تعذر حذف {failed}.",
+  "firewall.bulkTogglePartial": "تم تحديث {updated} قاعدة. تعذر تحديث {failed}.",
+  "firewall.clearSelection": "مسح"
 }

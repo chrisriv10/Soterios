@@ -1697,5 +1697,12 @@
   "reports.script.clear-temp-files": "Pliki tymczasowe",
   "reports.script.browser-cache-report": "Pamięć podręczna przeglądarki",
   "reports.script.disk-space-report": "Miejsce na dysku",
-  "reports.script.large-files-report": "Duże pliki"
+  "reports.script.large-files-report": "Duże pliki",
+  "firewall.selectAll": "Zaznacz wszystko",
+  "firewall.selectedCount": "Wybrano: {count}",
+  "firewall.deleteSelected": "Usuń zaznaczone",
+  "firewall.confirmDeleteRules": "Usunąć {count} zaznaczonych reguł?",
+  "firewall.bulkDeletePartial": "Usunięto {deleted} reguł(y). {failed} nie można usunąć.",
+  "firewall.bulkTogglePartial": "Zaktualizowano {updated} reguł(y). {failed} nie można zaktualizować.",
+  "firewall.clearSelection": "Wyczyść"
 }

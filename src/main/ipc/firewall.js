@@ -39,8 +39,16 @@ function register(mainWindow, { db, firewallManager }) {
     return firewallManager.deleteRule(name);
   });
 
+  ipcMain.handle('firewall:deleteRules', async (_event, names) => {
+    return firewallManager.deleteRules(names);
+  });
+
   ipcMain.handle('firewall:setRuleEnabled', async (_event, { name, enabled }) => {
     return firewallManager.setRuleEnabled(name, enabled);
+  });
+
+  ipcMain.handle('firewall:setRulesEnabled', async (_event, { names, enabled }) => {
+    return firewallManager.setRulesEnabled(names, enabled);
   });
 
   ipcMain.handle('firewall:setProfileEnabled', async (_event, { profile, enabled }) => {

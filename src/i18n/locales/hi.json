@@ -1697,5 +1697,12 @@
   "reports.script.clear-temp-files": "अस्थायी फ़ाइलें",
   "reports.script.browser-cache-report": "ब्राउज़र कैश",
   "reports.script.disk-space-report": "डिस्क स्थान",
-  "reports.script.large-files-report": "बड़ी फ़ाइलें"
+  "reports.script.large-files-report": "बड़ी फ़ाइलें",
+  "firewall.selectAll": "सभी चुनें",
+  "firewall.selectedCount": "{count} चुने गए",
+  "firewall.deleteSelected": "चयनित हटाएँ",
+  "firewall.confirmDeleteRules": "{count} चयनित नियम हटाएँ?",
+  "firewall.bulkDeletePartial": "{deleted} नियम हटाए गए। {failed} हटाए नहीं जा सके।",
+  "firewall.bulkTogglePartial": "{updated} नियम अपडेट किए गए। {failed} अपडेट नहीं किए जा सके।",
+  "firewall.clearSelection": "साफ़ करें"
 }

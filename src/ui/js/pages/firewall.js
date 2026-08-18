@@ -5,6 +5,7 @@ window.Pages['firewall'] = {
   _ruleQuery: '',
   _ruleActionFilter: 'all',
   _ruleDirectionFilter: 'all',
+  _selectedRules: new Set(),
 
   t(key, vars) {
     return window.I18n?.t(key, vars) ?? key;
@@ -64,6 +65,7 @@ window.Pages['firewall'] = {
 
       if (showPerimeterMap) await this._initPerimeter(container);
       await this._initRuleList(container);
+      this._wireRuleBulkBar(container, t);
       this._wireImportExport(container);
 
       content.addEventListener('click', (e) => {
@@ -246,6 +248,17 @@ window.Pages['firewall'] = {
             <input type="text" id="ruleSearchInput" placeholder="${escapeHtml(t('firewall.ruleSearchPlaceholder'))}"
               value="${escapeHtml(this._ruleQuery || '')}"
               style="min-width:240px; padding:8px 12px; border-radius:8px; border:1px solid var(--glass-border); background:var(--bg-surface); color:var(--text-main);" />
+          </div>
+        </div>
+        <div id="ruleBulkBar" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:10px 12px; margin-bottom:10px; background:var(--bg-surface-hover); border-radius:8px;">
+          <label style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:var(--text-dim); cursor:pointer;">
+            <input type="checkbox" id="ruleSelectAll" /> <span>${escapeHtml(t('firewall.selectAll'))}</span>
+          </label>
+          <span id="ruleSelectedCount" style="font-size:0.8rem; color:var(--text-muted);"></span>
+          <div style="display:flex; gap:8px; margin-left:auto; flex-wrap:wrap;">
+            <button class="btn btn-sm" id="ruleBulkToggle" type="button" disabled>${escapeHtml(t('firewall.ruleDisable'))}</button>
+            <button class="btn btn-sm" style="color:var(--accent-danger);" id="ruleBulkDelete" type="button" disabled>${escapeHtml(t('firewall.deleteSelected'))}</button>
+            <button class="btn btn-sm btn-ghost" id="ruleBulkClear" type="button" disabled>${escapeHtml(t('firewall.clearSelection'))}</button>
           </div>
         </div>
         <div id="ruleListContainer" style="max-height:380px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;">
@@ -1285,6 +1298,96 @@ window.Pages['firewall'] = {
     }
   },
 
+  _wireRuleBulkBar(container, t) {
+    const selectAll = container.querySelector('#ruleSelectAll');
+    const bulkToggle = container.querySelector('#ruleBulkToggle');
+    const bulkDelete = container.querySelector('#ruleBulkDelete');
+    const bulkClear = container.querySelector('#ruleBulkClear');
+
+    if (selectAll) {
+      selectAll.addEventListener('change', () => {
+        const managed = (this._ruleCache || []).filter((r) => r.managedByApp);
+        if (selectAll.checked) managed.forEach((r) => this._selectedRules.add(r.name));
+        else this._selectedRules.clear();
+        this._updateRuleSelectionUi(container, t);
+      });
+    }
+
+    if (bulkToggle) {
+      bulkToggle.addEventListener('click', async () => {
+        const names = [...this._selectedRules];
+        if (!names.length) return;
+        const allEnabled = names.every((n) => {
+          const rule = (this._ruleCache || []).find((r) => r.name === n);
+          return rule ? rule.enabled : false;
+        });
+        try {
+          const res = await window.api.invoke('firewall:setRulesEnabled', { names, enabled: !allEnabled });
+          this._selectedRules.clear();
+          await this._initRuleList(container);
+          this._refreshSummary(container);
+          if (res && res.failed && res.failed.length) {
+            alert(t('firewall.bulkTogglePartial', { updated: res.updated ? res.updated.length : 0, failed: res.failed.length }));
+          }
+        } catch (e) { alert(this._friendlyError(e, t('firewall.failedToggleRule'))); }
+      });
+    }
+
+    if (bulkDelete) {
+      bulkDelete.addEventListener('click', async () => {
+        const names = [...this._selectedRules];
+        if (!names.length) return;
+        if (!window.confirm(t('firewall.confirmDeleteRules', { count: names.length }))) return;
+        try {
+          const res = await window.api.invoke('firewall:deleteRules', names);
+          this._selectedRules.clear();
+          await this._initRuleList(container);
+          this._refreshSummary(container);
+          if (res && res.failed && res.failed.length) {
+            alert(t('firewall.bulkDeletePartial', { deleted: res.deleted ? res.deleted.length : 0, failed: res.failed.length }));
+          }
+        } catch (e) { alert(this._friendlyError(e, t('firewall.failedDeleteRule'))); }
+      });
+    }
+
+    if (bulkClear) {
+      bulkClear.addEventListener('click', () => {
+        this._selectedRules.clear();
+        this._updateRuleSelectionUi(container, t);
+      });
+    }
+  },
+
+  _updateRuleSelectionUi(container, t) {
+    const selectAll = container.querySelector('#ruleSelectAll');
+    const countEl = container.querySelector('#ruleSelectedCount');
+    const bulkToggle = container.querySelector('#ruleBulkToggle');
+    const bulkDelete = container.querySelector('#ruleBulkDelete');
+    const bulkClear = container.querySelector('#ruleBulkClear');
+    const count = this._selectedRules.size;
+    if (countEl) countEl.textContent = count ? t('firewall.selectedCount', { count }) : '';
+    const managedVisible = (this._ruleCache || []).filter((r) => r.managedByApp);
+    const visibleSelected = managedVisible.filter((r) => this._selectedRules.has(r.name)).length;
+    if (selectAll) {
+      selectAll.checked = managedVisible.length > 0 && visibleSelected === managedVisible.length;
+      selectAll.indeterminate = visibleSelected > 0 && visibleSelected < managedVisible.length;
+    }
+    if (bulkToggle) {
+      bulkToggle.disabled = count === 0;
+      if (count) {
+        const allEnabled = [...this._selectedRules].every((n) => {
+          const rule = (this._ruleCache || []).find((r) => r.name === n);
+          return rule ? rule.enabled : false;
+        });
+        bulkToggle.textContent = allEnabled ? t('firewall.ruleDisable') : t('firewall.ruleEnable');
+      } else {
+        bulkToggle.textContent = t('firewall.ruleDisable');
+      }
+    }
+    if (bulkDelete) bulkDelete.disabled = count === 0;
+    if (bulkClear) bulkClear.disabled = count === 0;
+  },
+
   async _initRuleList(container) {
     const listEl = container.querySelector('#ruleListContainer');
     const searchInput = container.querySelector('#ruleSearchInput');
@@ -1307,6 +1410,10 @@ window.Pages['firewall'] = {
 
     try {
       this._ruleCache = (await window.api.invoke('firewall:listRules')) || [];
+      const known = new Set(this._ruleCache.map((r) => r.name));
+      for (const name of [...this._selectedRules]) {
+        if (!known.has(name)) this._selectedRules.delete(name);
+      }
       applyFilters();
     } catch (e) {
       listEl.innerHTML = `<div class="empty-state">Error loading rules: ${escapeHtml(this._friendlyError(e, 'Unable to load rules.'))}</div>`;
@@ -1344,6 +1451,7 @@ window.Pages['firewall'] = {
       const actionColor = r.action === 'Allow' ? 'var(--ok)' : 'var(--danger)';
       const dirLabel = r.direction === 'Inbound' ? 'IN' : 'OUT';
       return `<div class="log-row" style="display:flex; align-items:center; gap:10px; content-visibility:auto; contain-intrinsic-size: 0 30px; ${r.enabled ? '' : 'opacity:0.5;'}">
+        ${r.managedByApp ? `<input type="checkbox" data-rule-select="${escapeHtml(r.name)}" ${this._selectedRules.has(r.name) ? 'checked' : ''} style="flex-shrink:0;" />` : ''}
         <span class="log-tag" style="background:${actionColor}22; color:${actionColor};">${escapeHtml(r.action || '')}</span>
         <span class="log-tag info">${dirLabel}</span>
         <span class="log-path" style="flex:1;">${escapeHtml(r.name || '')}${r.program ? ` — ${escapeHtml(r.program)}` : ''}${r.remoteAddress ? ` — ${escapeHtml(r.remoteAddress)}` : ''}</span>
@@ -1353,6 +1461,16 @@ window.Pages['firewall'] = {
         ` : ''}
       </div>`;
     }).join('');
+
+    listEl.querySelectorAll('[data-rule-select]').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        const name = cb.getAttribute('data-rule-select');
+        if (cb.checked) this._selectedRules.add(name);
+        else this._selectedRules.delete(name);
+        this._updateRuleSelectionUi(container, t);
+      });
+    });
+    this._updateRuleSelectionUi(container, t);
 
     listEl.querySelectorAll('[data-rule-toggle]').forEach((btn) => {
       btn.addEventListener('click', async () => {
@@ -1394,5 +1512,6 @@ window.Pages['firewall'] = {
     this._perimeterConnToGroup = new Map();
     this._selectedKey = null;
     this._lastConnections = [];
+    this._selectedRules = new Set();
   }
 };

@@ -1697,5 +1697,12 @@
   "reports.script.clear-temp-files": "Tijdelijke bestanden",
   "reports.script.browser-cache-report": "Browser-cache",
   "reports.script.disk-space-report": "Schijfruimte",
-  "reports.script.large-files-report": "Grote bestanden"
+  "reports.script.large-files-report": "Grote bestanden",
+  "firewall.selectAll": "Alles selecteren",
+  "firewall.selectedCount": "{count} geselecteerd",
+  "firewall.deleteSelected": "Geselecteerde verwijderen",
+  "firewall.confirmDeleteRules": "{count} geselecteerde regels verwijderen?",
+  "firewall.bulkDeletePartial": "{deleted} regel(s) verwijderd. {failed} konden niet worden verwijderd.",
+  "firewall.bulkTogglePartial": "{updated} regel(s) bijgewerkt. {failed} konden niet worden bijgewerkt.",
+  "firewall.clearSelection": "Wissen"
 }

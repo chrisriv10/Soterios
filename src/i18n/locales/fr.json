@@ -1697,5 +1697,12 @@
   "reports.script.clear-temp-files": "Fichiers temporaires",
   "reports.script.browser-cache-report": "Cache navigateur",
   "reports.script.disk-space-report": "Espace disque",
-  "reports.script.large-files-report": "Gros fichiers"
+  "reports.script.large-files-report": "Gros fichiers",
+  "firewall.selectAll": "Tout sélectionner",
+  "firewall.selectedCount": "{count} sélectionné(s)",
+  "firewall.deleteSelected": "Supprimer la sélection",
+  "firewall.confirmDeleteRules": "Supprimer {count} règle(s) sélectionnée(s) ?",
+  "firewall.bulkDeletePartial": "{deleted} règle(s) supprimée(s). {failed} n'ont pas pu être supprimées.",
+  "firewall.bulkTogglePartial": "{updated} règle(s) mise(s) à jour. {failed} n'ont pas pu être mises à jour.",
+  "firewall.clearSelection": "Effacer"
 }

@@ -223,6 +223,52 @@ class FirewallManager {
     return { success: true };
   }
 
+  // Batch variants for the multi-select bulk bar. Each name goes through the
+  // same per-rule guards and friendly error mapping; failures are collected
+  // per rule so one bad entry never aborts the rest (same pattern as
+  // enableAllProfiles / importRules).
+  async deleteRules(names) {
+    const list = Array.isArray(names) ? names : [];
+    if (!Array.isArray(names)) {
+      throw new Error('Expected an array of rule names.');
+    }
+    if (list.length > 500) {
+      throw new Error('Too many rules in one batch (limit 500).');
+    }
+    const deleted = [];
+    const failed = [];
+    for (const name of list) {
+      try {
+        await this.deleteRule(name);
+        deleted.push(name);
+      } catch (e) {
+        failed.push({ name, error: e.message || String(e) });
+      }
+    }
+    return { success: failed.length === 0, deleted, failed };
+  }
+
+  async setRulesEnabled(names, enabled) {
+    const list = Array.isArray(names) ? names : [];
+    if (!Array.isArray(names)) {
+      throw new Error('Expected an array of rule names.');
+    }
+    if (list.length > 500) {
+      throw new Error('Too many rules in one batch (limit 500).');
+    }
+    const updated = [];
+    const failed = [];
+    for (const name of list) {
+      try {
+        await this.setRuleEnabled(name, enabled);
+        updated.push(name);
+      } catch (e) {
+        failed.push({ name, error: e.message || String(e) });
+      }
+    }
+    return { success: failed.length === 0, updated, failed };
+  }
+
   // Turns Windows Firewall on/off for a given profile (Domain/Private/Public).
   // The IPC layer already validates `profile` against the same whitelist
   // before this is ever called, but we check again here since this class

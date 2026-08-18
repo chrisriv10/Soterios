@@ -1697,5 +1697,12 @@
   "reports.script.clear-temp-files": "임시 파일",
   "reports.script.browser-cache-report": "브라우저 캐시",
   "reports.script.disk-space-report": "디스크 공간",
-  "reports.script.large-files-report": "대용량 파일"
+  "reports.script.large-files-report": "대용량 파일",
+  "firewall.selectAll": "모두 선택",
+  "firewall.selectedCount": "{count}개 선택됨",
+  "firewall.deleteSelected": "선택 항목 삭제",
+  "firewall.confirmDeleteRules": "선택한 {count}개 규칙을 삭제할까요?",
+  "firewall.bulkDeletePartial": "{deleted}개 삭제됨. {failed}개는 삭제할 수 없습니다.",
+  "firewall.bulkTogglePartial": "{updated}개 업데이트됨. {failed}개는 업데이트할 수 없습니다.",
+  "firewall.clearSelection": "지우기"
 }

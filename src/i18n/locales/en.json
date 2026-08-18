@@ -1710,5 +1710,12 @@
   "reports.script.clear-temp-files": "Temp Files",
   "reports.script.browser-cache-report": "Browser Cache",
   "reports.script.disk-space-report": "Disk Space",
-  "reports.script.large-files-report": "Large Files"
+  "reports.script.large-files-report": "Large Files",
+  "firewall.selectAll": "Select all",
+  "firewall.selectedCount": "{count} selected",
+  "firewall.deleteSelected": "Delete selected",
+  "firewall.confirmDeleteRules": "Delete {count} selected rules?",
+  "firewall.bulkDeletePartial": "Deleted {deleted} rule(s). {failed} could not be deleted.",
+  "firewall.bulkTogglePartial": "Updated {updated} rule(s). {failed} could not be updated.",
+  "firewall.clearSelection": "Clear"
 }

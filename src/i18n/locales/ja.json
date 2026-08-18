@@ -1697,5 +1697,12 @@
   "reports.script.clear-temp-files": "一時ファイル",
   "reports.script.browser-cache-report": "ブラウザキャッシュ",
   "reports.script.disk-space-report": "ディスク容量",
-  "reports.script.large-files-report": "大容量ファイル"
+  "reports.script.large-files-report": "大容量ファイル",
+  "firewall.selectAll": "すべて選択",
+  "firewall.selectedCount": "{count}件選択中",
+  "firewall.deleteSelected": "選択項目を削除",
+  "firewall.confirmDeleteRules": "選択した{count}件のルールを削除しますか？",
+  "firewall.bulkDeletePartial": "{deleted}件を削除しました。{failed}件は削除できませんでした。",
+  "firewall.bulkTogglePartial": "{updated}件を更新しました。{failed}件は更新できませんでした。",
+  "firewall.clearSelection": "クリア"
 }

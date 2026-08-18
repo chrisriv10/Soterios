@@ -1697,5 +1697,12 @@
   "reports.script.clear-temp-files": "Временные файлы",
   "reports.script.browser-cache-report": "Кэш браузера",
   "reports.script.disk-space-report": "Место на диске",
-  "reports.script.large-files-report": "Крупные файлы"
+  "reports.script.large-files-report": "Крупные файлы",
+  "firewall.selectAll": "Выбрать все",
+  "firewall.selectedCount": "Выбрано: {count}",
+  "firewall.deleteSelected": "Удалить выбранные",
+  "firewall.confirmDeleteRules": "Удалить {count} выбранных правил?",
+  "firewall.bulkDeletePartial": "Удалено правил: {deleted}. Не удалось удалить: {failed}.",
+  "firewall.bulkTogglePartial": "Обновлено правил: {updated}. Не удалось обновить: {failed}.",
+  "firewall.clearSelection": "Очистить"
 }

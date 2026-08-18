@@ -1697,5 +1697,12 @@
   "reports.script.clear-temp-files": "Geçici Dosyalar",
   "reports.script.browser-cache-report": "Tarayıcı Önbelleği",
   "reports.script.disk-space-report": "Disk Alanı",
-  "reports.script.large-files-report": "Büyük Dosyalar"
+  "reports.script.large-files-report": "Büyük Dosyalar",
+  "firewall.selectAll": "Tümünü seç",
+  "firewall.selectedCount": "{count} seçildi",
+  "firewall.deleteSelected": "Seçilenleri sil",
+  "firewall.confirmDeleteRules": "{count} seçili kural silinsin mi?",
+  "firewall.bulkDeletePartial": "{deleted} kural silindi. {failed} silinemedi.",
+  "firewall.bulkTogglePartial": "{updated} kural güncellendi. {failed} güncellenemedi.",
+  "firewall.clearSelection": "Temizle"
 }

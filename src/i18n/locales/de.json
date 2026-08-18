@@ -1697,5 +1697,12 @@
   "reports.script.clear-temp-files": "Temporäre Dateien",
   "reports.script.browser-cache-report": "Browser-Cache",
   "reports.script.disk-space-report": "Festplattenplatz",
-  "reports.script.large-files-report": "Große Dateien"
+  "reports.script.large-files-report": "Große Dateien",
+  "firewall.selectAll": "Alle auswählen",
+  "firewall.selectedCount": "{count} ausgewählt",
+  "firewall.deleteSelected": "Ausgewählte löschen",
+  "firewall.confirmDeleteRules": "{count} ausgewählte Regeln löschen?",
+  "firewall.bulkDeletePartial": "{deleted} Regel(n) gelöscht. {failed} konnten nicht gelöscht werden.",
+  "firewall.bulkTogglePartial": "{updated} Regel(n) aktualisiert. {failed} konnten nicht aktualisiert werden.",
+  "firewall.clearSelection": "Leeren"
 }
