@@ -18,7 +18,7 @@ const ACTION_LABELS = {
   'password-generator': 'Password generator',
   'duplicate-file-finder': 'Duplicate file finder',
   'startup-persistence-scan': 'Startup persistence scan',
-  'generate-security-report': 'Security report',
+  'generate-security-report': 'System report',
 };
 
 // Actions that can take a long time. They return a "started" result right away

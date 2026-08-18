@@ -46,18 +46,16 @@ window.Pages = window.Pages || {};
 
       container.innerHTML = `
         <div class="setup-wizard">
-          <button type="button" class="btn btn-ghost setup-skip" id="setupSkip">${escapeHtml(t('setup.skip'))}</button>
+          <button type="button" class="btn btn-ghost setup-skip" id="setupSkip">${escapeHtml(t('setup.skipSetup'))}</button>
 
           <div class="setup-dots" aria-hidden="true">${dots}</div>
 
           <section class="setup-step" id="setupStep-welcome">
             <div class="setup-logo">
-              <img src="../../../assets/brand-logo.png" alt="" aria-hidden="true" />
-              <img class="setup-wordmark" src="../../../assets/brand-wordmark.png" alt="Soterios" />
+              <img class="setup-logo-image" src="../../../assets/soteriosLogo.png" alt="Soterios" />
             </div>
             <h1 class="setup-title">${escapeHtml(t('setup.title'))}</h1>
-            <p class="setup-subtitle">${escapeHtml(t('setup.subtitle'))}</p>
-            <button type="button" class="btn btn-primary setup-skip-setup" id="setupSkipSetup">${escapeHtml(t('setup.skipSetup'))}</button>
+            <p class="setup-subtitle">${escapeHtml(String(t('setup.subtitle')).split(/(?<=[.!?。！？])\s+/u)[0])}</p>
           </section>
 
           <section class="setup-step" id="setupStep-language">
@@ -163,7 +161,6 @@ window.Pages = window.Pages || {};
       const back = container.querySelector('#setupBack');
       const next = container.querySelector('#setupNext');
       const skip = container.querySelector('#setupSkip');
-      const skipSetup = container.querySelector('#setupSkipSetup');
 
       back.addEventListener('click', () => {
         if (this._stepIndex > 0) this._goTo(this._stepIndex - 1);
@@ -177,7 +174,6 @@ window.Pages = window.Pages || {};
         this._goTo(this._stepIndex + 1);
       });
       skip.addEventListener('click', () => { this._finish(); });
-      if (skipSetup) skipSetup.addEventListener('click', () => { this._finish(); });
 
       const notificationsToggle = container.querySelector('#setupNotificationsToggle');
       if (notificationsToggle) {
@@ -286,7 +282,7 @@ window.Pages = window.Pages || {};
       const next = this._container.querySelector('#setupNext');
       if (next) next.textContent = index === STEPS.length - 1 ? t('setup.finish') : t('setup.next');
       const skip = this._container.querySelector('#setupSkip');
-      if (skip) skip.textContent = index === 0 ? t('setup.skipSetup') : t('setup.skip');
+      if (skip) skip.textContent = t('setup.skipSetup');
     },
 
     async _loadLanguageGrid(container, t) {
@@ -363,7 +359,7 @@ window.Pages = window.Pages || {};
         const first = detected[0];
         const openBtn = document.createElement('button');
         openBtn.type = 'button';
-        openBtn.className = 'btn btn-sm';
+        openBtn.className = 'btn btn-sm setup-extension-open';
         openBtn.textContent = t('settings.browserExtension.openPage');
         openBtn.addEventListener('click', async () => {
           try { await window.api.invoke('browserExtension:openPage', first.id); } catch (_) {}

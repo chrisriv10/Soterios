@@ -192,11 +192,10 @@ describe('first-run setup wizard source', () => {
   it('shows the logo, welcome heading and subtitle on the first step', () => {
     const welcomeStep = setupSource.slice(setupSource.indexOf("setupStep-welcome"), setupSource.indexOf("setupStep-language"));
     assert.match(welcomeStep, /setup-logo/);
-    assert.match(welcomeStep, /\.\.\/\.\.\/\.\.\/assets\/brand-logo\.png/);
-    assert.match(welcomeStep, /\.\.\/\.\.\/\.\.\/assets\/brand-wordmark\.png/);
+    assert.match(welcomeStep, /\.\.\/\.\.\/\.\.\/assets\/soteriosLogo\.png/);
     assert.match(welcomeStep, /setup\.title/);
     assert.match(welcomeStep, /setup\.subtitle/);
-    assert.match(welcomeStep, /setup\.skipSetup/);
+    assert.doesNotMatch(welcomeStep, /setupSkipSetup/);
   });
 
   it('hides the sidebar only while the wizard is rendered', () => {
@@ -249,17 +248,17 @@ describe('first-run setup wizard source', () => {
   });
 
   it('labels all wizard chrome through i18n keys', () => {
-    for (const key of ['setup.title', 'setup.subtitle', 'setup.skip', 'setup.skipSetup', 'setup.back', 'setup.next', 'setup.finish', 'setup.languageTitle', 'setup.languageDesc']) {
+    for (const key of ['setup.title', 'setup.subtitle', 'setup.skipSetup', 'setup.back', 'setup.next', 'setup.finish', 'setup.languageTitle', 'setup.languageDesc']) {
       assert.ok(setupSource.includes("'" + key + "'"), `wizard must reference the ${key} i18n key`);
     }
-    for (const id of ['setupSkip', 'setupSkipSetup', 'setupBack', 'setupNext', 'setupStep-welcome', 'setupStep-language', 'setupStep-theme', 'setupStep-notifications', 'setupStep-privacy', 'setupStep-extension', 'setupStep-scan']) {
+    for (const id of ['setupSkip', 'setupBack', 'setupNext', 'setupStep-welcome', 'setupStep-language', 'setupStep-theme', 'setupStep-notifications', 'setupStep-privacy', 'setupStep-extension', 'setupStep-scan']) {
       assert.ok(setupSource.includes('"' + id + '"'), `wizard must define #${id}`);
     }
   });
 
   it('keeps the skip button reachable from every step and shows Skip setup on step one', () => {
     assert.match(setupSource, /setupSkip/);
-    assert.match(setupSource, /skip\.textContent = index === 0 \? t\('setup\.skipSetup'\) : t\('setup\.skip'\)/);
+    assert.match(setupSource, /skip\.textContent = t\('setup\.skipSetup'\)/);
   });
 
   it('gates first-run routing in router.js only when no explicit hash is present', () => {
@@ -293,8 +292,7 @@ describe('first-run setup wizard source', () => {
     assert.match(styles, /\.setup-wizard\s*\{[\s\S]*?background:\s*var\(--bg-surface\);/);
     assert.match(styles, /\.setup-wizard\s*\{[\s\S]*?border:\s*1px solid var\(--glass-border\);/);
     assert.match(styles, /\.setup-step\.active\s*\{[\s\S]*?width:\s*min\(100%,\s*820px\);/);
-    assert.match(styles, /\.setup-logo img\s*\{[\s\S]*?height:\s*148px;/);
-    assert.match(styles, /\.setup-logo \.setup-wordmark\s*\{[\s\S]*?height:\s*88px;/);
+    assert.match(styles, /\.setup-logo-image\s*\{[\s\S]*?width:\s*min\(100%,\s*500px\);/);
     assert.match(styles, /\.setup-actions\s*\{[\s\S]*?width:\s*min\(100%,\s*820px\);[\s\S]*?border-top:\s*1px solid var\(--glass-border\);/);
     assert.match(styles, /@media\s*\(max-width:\s*720px\)/);
     assert.match(styles, /@media\s*\(max-width:\s*480px\)/);
@@ -317,7 +315,7 @@ describe('first-run setup wizard behavior', () => {
   it('lets the user skip setup from the welcome step', async () => {
     const h = createHarness();
     await h.page.render(h.container);
-    await h.click('setupSkipSetup');
+    await h.click('setupSkip');
     await h.flush();
     assert.ok(h.invokeCalls.some((c) => c[0] === 'db:setSetting' && c[1] === 'app.setupComplete' && c[2] === true));
     assert.deepEqual(h.navCalls, ['dashboard']);
@@ -470,7 +468,7 @@ describe('first-run setup wizard behavior', () => {
   it('does not complete the wizard twice when buttons race', async () => {
     const h = createHarness();
     await h.page.render(h.container);
-    await Promise.all([h.click('setupSkipSetup'), h.click('setupSkipSetup')]);
+    await Promise.all([h.click('setupSkip'), h.click('setupSkip')]);
     const setCalls = h.invokeCalls.filter((c) => c[0] === 'db:setSetting' && c[1] === 'app.setupComplete');
     assert.ok(setCalls.length >= 1);
     assert.ok(setCalls.length <= 2, 'repeated clicks must not spam setup completion');

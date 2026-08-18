@@ -93,6 +93,9 @@ window.Pages.reports = {
           </div>
           <div id="reportHistory" class="history-list"><div class="empty-state">${escapeHtml(t('reports.loadingSavedReports'))}</div></div>
 
+          <div class="panel-title" style="margin-top:18px;">${escapeHtml(t('reports.maintenanceStatus'))}</div>
+          <div class="card" id="maintenanceStatus" style="padding:14px;"><div class="empty-state">${escapeHtml(t('reports.loadingMaintenance'))}</div></div>
+
           <div class="panel-title" style="margin-top:18px;">${escapeHtml(t('reports.maintenanceHistory'))}</div>
           <div id="maintenanceHistory" class="history-list"><div class="empty-state">${escapeHtml(t('reports.loadingMaintenance'))}</div></div>
         </section>
@@ -121,6 +124,7 @@ window.Pages.reports = {
     container.querySelector('#exportReportCsv').addEventListener('click', () => this.exportCurrentReport(container, 'csv'));
     this.listScanReports(container);
     this.listReports(container);
+    this.renderMaintenanceStatus(container);
     this.listMaintenanceHistory(container);
   },
 
@@ -547,5 +551,94 @@ window.Pages.reports = {
     `;
 
     this.showViewer(container, `${t('reports.maintenanceHistory')} - ${whenLabel}`, html);
+  },
+
+  async renderMaintenanceStatus(container) {
+    const el = container.querySelector('#maintenanceStatus');
+    const t = tFactory();
+    try {
+      const response = await window.api.invoke('maintenance:get').catch(() => null);
+      const config = response?.data || null;
+      if (!config) {
+        el.innerHTML = `<div class="empty-state">${escapeHtml(t('reports.noMaintenance'))}</div>`;
+        return;
+      }
+      const enabled = !!config.enabled;
+      const preset = config.schedulePreset || 'weekly';
+      const presetKey = `reports.schedule${preset.charAt(0).toUpperCase()}${preset.slice(1)}`;
+      const scheduleLabel = t(presetKey);
+      const scheduleValue = preset === 'custom'
+        ? `${scheduleLabel} (${config.intervalHours} h)`
+        : scheduleLabel;
+      const autoClean = Object.values(config.policies || {}).filter((mode) => mode === 'auto-clean').length;
+      const total = (config.scriptIds || []).length;
+      const scriptsValue = autoClean > 0
+        ? t('reports.scriptCountAutoClean', { count: total, auto: autoClean })
+        : t('reports.scriptCount', { count: total });
+      const nextRun = config.nextEligibleRun
+        ? new Date(config.nextEligibleRun).toLocaleString()
+        : t('reports.notRunYet');
+      const lastResult = config.lastResult;
+      const lastRunValue = lastResult && lastResult.startedAt
+        ? `${new Date(lastResult.startedAt).toLocaleString()} — ${lastResult.okCount}/${lastResult.totalCount} ${t('reports.completed')}`
+        : t('reports.notRunYet');
+
+      el.innerHTML = `
+        <div class="report-stats" style="grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px;">
+          <div class="stat-tile" style="padding:10px 12px;">
+            <div class="stat-label">${escapeHtml(t('reports.statusLabel'))}</div>
+            <div class="stat-value" style="font-size:0.95rem; padding-top:6px;"><span class="log-tag ${enabled ? 'clean' : 'warn'}">${escapeHtml(enabled ? t('reports.scheduleEnabled') : t('reports.scheduleDisabled'))}</span></div>
+          </div>
+          <div class="stat-tile" style="padding:10px 12px;">
+            <div class="stat-label">${escapeHtml(t('reports.scheduleLabel'))}</div>
+            <div class="stat-value small" style="padding-top:6px;">${escapeHtml(scheduleValue)}</div>
+          </div>
+          <div class="stat-tile" style="padding:10px 12px;">
+            <div class="stat-label">${escapeHtml(t('reports.scriptsLabel'))}</div>
+            <div class="stat-value small" style="padding-top:6px;">${escapeHtml(scriptsValue)}</div>
+          </div>
+          <div class="stat-tile" style="padding:10px 12px;">
+            <div class="stat-label">${escapeHtml(t('reports.nextRunLabel'))}</div>
+            <div class="stat-value small" style="padding-top:6px;">${escapeHtml(nextRun)}</div>
+          </div>
+        </div>
+        <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; margin:12px 2px 0;">
+          <span class="page-subtitle" style="flex-shrink:0;">${escapeHtml(t('reports.lastRunLabel'))}</span>
+          <span style="text-align:right; font-size:0.85rem; line-height:1.35; color:var(--text-muted);">${escapeHtml(lastRunValue)}</span>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:12px;">
+          <button class="btn btn-primary btn-sm" id="runMaintenanceNow">${escapeHtml(t('reports.runNow'))}</button>
+          <button class="btn btn-sm" id="configureMaintenance">${escapeHtml(t('reports.configureSchedule'))}</button>
+        </div>`;
+
+      container.querySelector('#runMaintenanceNow').addEventListener('click', () => this.runMaintenanceNow(container));
+      container.querySelector('#configureMaintenance').addEventListener('click', () => {
+        if (window.AppRouter && typeof window.AppRouter.navigate === 'function') {
+          window.AppRouter.navigate('tools');
+        }
+      });
+    } catch (err) {
+      el.innerHTML = `<div class="empty-state">${escapeHtml(t('reports.errorPrefix', { error: err.message }))}</div>`;
+    }
+  },
+
+  async runMaintenanceNow(container) {
+    const t = tFactory();
+    const btn = container.querySelector('#runMaintenanceNow');
+    if (!btn) return;
+    setButtonLoading(btn, true, t('reports.running'));
+    try {
+      const response = await window.api.invoke('maintenance:runNow').catch(() => null);
+      if (!response?.ok) {
+        window.alert(t('reports.runFailed', { error: response?.error || t('common.unknown') }));
+        return;
+      }
+      this.renderMaintenanceStatus(container);
+      this.listMaintenanceHistory(container);
+    } catch (err) {
+      window.alert(t('reports.runFailed', { error: err.message }));
+    } finally {
+      setButtonLoading(btn, false);
+    }
   }
 };
