@@ -6,12 +6,12 @@ const CONTROL_PANEL_COMMANDS = new Map([
 ]);
 
 const POWERSHELL_CONTEXTS = new Map([
-  ['', ['-NoExit', '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass']],
-  ['execution-policy', ['-NoExit', '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', 'Get-ExecutionPolicy -List | Format-Table -AutoSize']],
-  ['network-protection', ['-NoExit', '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', 'Get-MpPreference | Select-Object EnableNetworkProtection | Format-List']],
-  ['lsa-protection', ['-NoExit', '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' | Select-Object RunAsPPL | Format-List"]],
-  ['password-policy', ['-NoExit', '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', 'net.exe accounts']],
-  ['guest-account', ['-NoExit', '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', "Get-LocalUser -Name 'Guest' | Format-List Name,Enabled,Description"]]
+  ['', ['-NoExit', '-NoLogo', '-NoProfile']],
+  ['execution-policy', ['-NoExit', '-NoLogo', '-NoProfile', '-Command', 'Get-ExecutionPolicy -List | Format-Table -AutoSize']],
+  ['network-protection', ['-NoExit', '-NoLogo', '-NoProfile', '-Command', 'Get-MpPreference | Select-Object EnableNetworkProtection | Format-List']],
+  ['lsa-protection', ['-NoExit', '-NoLogo', '-NoProfile', '-Command', "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' | Select-Object RunAsPPL | Format-List"]],
+  ['password-policy', ['-NoExit', '-NoLogo', '-NoProfile', '-Command', 'net.exe accounts']],
+  ['guest-account', ['-NoExit', '-NoLogo', '-NoProfile', '-Command', "Get-LocalUser -Name 'Guest' | Format-List Name,Enabled,Description"]]
 ]);
 
 const WINDOWS_UTILITIES = new Map([

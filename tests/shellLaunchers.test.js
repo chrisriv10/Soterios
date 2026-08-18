@@ -52,8 +52,8 @@ describe('shell launchers', () => {
     assert.ok(calls[0].args.includes('-NoExit'));
     assert.ok(calls[0].args.includes('-NoLogo'));
     assert.ok(calls[0].args.includes('-NoProfile'));
-    assert.ok(calls[0].args.includes('-ExecutionPolicy'));
-    assert.ok(calls[0].args.includes('Bypass'));
+    assert.ok(!calls[0].args.includes('-ExecutionPolicy'));
+    assert.ok(!calls[0].args.includes('Bypass'));
     assert.match(calls[0].args.join(' '), /Get-MpPreference/);
 
     assert.deepEqual(await openPowerShell(spawn, 'not-allowlisted'), {
