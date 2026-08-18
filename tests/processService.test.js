@@ -3,11 +3,13 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('events');
+const path = require('path');
 
 const {
   HISTORY_WINDOW_MS,
   ProcessService,
   processKeyString,
+  spawnDetachedVerified,
   validateProcessKey,
 } = require('../src/main/processService');
 
@@ -161,6 +163,203 @@ describe('ProcessService snapshots and deltas', () => {
     const service = new ProcessService({ collector: new FakeCollector([snapshot(new Date().toISOString(), [])]) });
     await assert.rejects(service.runTask('calc.exe'), /structured executable request/i);
     await assert.rejects(service.runTask({ executable: 'calc.exe' }), /absolute path/i);
+    await service.stop();
+  });
+});
+
+function fakeChild(emitSpawn = true) {
+  const child = new EventEmitter();
+  child.unrefCalled = false;
+  child.unref = () => {
+    child.unrefCalled = true;
+  };
+  if (emitSpawn) queueMicrotask(() => child.emit('spawn'));
+  return child;
+}
+
+function decodeEncodedPowerShell(args) {
+  const index = args.indexOf('-EncodedCommand');
+  return Buffer.from(args[index + 1], 'base64').toString('utf16le');
+}
+
+describe('spawnDetachedVerified', () => {
+  it('resolves only after the child emits spawn, then unrefs it', async () => {
+    const calls = [];
+    const spawnImpl = (file, args, options) => {
+      calls.push({ file, args, options });
+      return fakeChild();
+    };
+
+    const child = await spawnDetachedVerified('C:\\app.exe', ['--flag'], { cwd: 'C:\\' }, spawnImpl);
+
+    assert.equal(child.unrefCalled, true);
+    assert.equal(calls[0].file, 'C:\\app.exe');
+    assert.deepEqual(calls[0].args, ['--flag']);
+    assert.equal(calls[0].options.detached, true);
+    assert.equal(calls[0].options.stdio, 'ignore');
+    assert.equal(calls[0].options.shell, false);
+    assert.equal(calls[0].options.cwd, 'C:\\');
+  });
+
+  it('rejects when the child emits an error', async () => {
+    await assert.rejects(
+      spawnDetachedVerified('C:\\app.exe', [], {}, () => {
+        const child = fakeChild(false);
+        queueMicrotask(() => child.emit('error', Object.assign(new Error('launch denied'), { code: 'EPERM' })));
+        return child;
+      }),
+      (error) => error.code === 'EPERM',
+    );
+  });
+
+  it('rejects when spawn throws synchronously', async () => {
+    await assert.rejects(
+      spawnDetachedVerified('C:\\app.exe', [], {}, () => {
+        throw new Error('boom');
+      }),
+      /boom/,
+    );
+  });
+});
+
+describe('process affinity and priority actions', () => {
+  function makeService(execFileImpl) {
+    return new ProcessService({
+      collector: new FakeCollector([snapshot(new Date().toISOString(), [proc(401, 'start-401')])]),
+      execFileImpl,
+    });
+  }
+
+  it('rejects invalid affinity masks before invoking PowerShell', async () => {
+    const service = makeService(async () => {
+      throw new Error('must not be called');
+    });
+    for (const bad of [0, -1, 1.5, NaN, 'abc', '12x', '', '0', '18446744073709551616', null, undefined]) {
+      await assert.rejects(service._setAffinity(401, bad), /Invalid processor affinity mask/);
+    }
+    await service.stop();
+  });
+
+  it('interpolates only decimal digits into the affinity PowerShell script', async () => {
+    let script = '';
+    const service = makeService(async (_file, args) => {
+      script = decodeEncodedPowerShell(args);
+      return { stdout: '' };
+    });
+
+    await service._setAffinity(401, '9223372036854775808');
+
+    assert.match(script, /\$p = Get-Process -Id 401 -ErrorAction Stop/);
+    const maskRegion = script.match(/\[uint64\]([^\s;)]+)/)[1];
+    assert.equal(maskRegion, '9223372036854775808');
+    assert.match(maskRegion, /^\d+$/);
+    await service.stop();
+  });
+
+  it('returns the echoed mask or falls back to the requested one', async () => {
+    const echoed = makeService(async () => ({ stdout: '3' }));
+    assert.deepEqual(await echoed._setAffinity(401, 3), { success: true, effectiveAffinityMask: '3' });
+    await echoed.stop();
+
+    const fallback = makeService(async () => ({ stdout: '' }));
+    assert.deepEqual(await fallback._setAffinity(401, 3), { success: true, effectiveAffinityMask: '3' });
+    await fallback.stop();
+  });
+
+  it('validates priority against the allowlist and echoes the effective class', async () => {
+    const service = makeService(async (_file, args) => {
+      assert.match(decodeEncodedPowerShell(args), /\$p\.PriorityClass = 'High'/);
+      return { stdout: 'High' };
+    });
+    assert.deepEqual(await service._setPriority(401, 'High'), { success: true, effectivePriority: 'High' });
+    await assert.rejects(service._setPriority(401, 'max'), /Invalid priority class/);
+    await service.stop();
+
+    const fallback = makeService(async () => ({ stdout: '' }));
+    assert.deepEqual(await fallback._setPriority(401, 'Normal'), { success: true, effectivePriority: 'Normal' });
+    await fallback.stop();
+  });
+
+  it('dispatches setPriority with renderer-supplied options through performAction', async () => {
+    const service = new ProcessService({
+      collector: new FakeCollector([snapshot('2026-08-15T12:00:01.000Z', [proc(401, 'start-401')])]),
+      execFileImpl: async () => ({ stdout: 'High' }),
+    });
+
+    const result = await service.performAction({
+      processKey: { pid: 401, startedAt: 'start-401' },
+      action: 'setPriority',
+      options: { priority: 'High' },
+    });
+
+    assert.deepEqual(result, { success: true, effectivePriority: 'High' });
+    await service.stop();
+  });
+});
+
+describe('process restart relaunch', () => {
+  const startedAt = '2026-08-15T12:00:01.000Z';
+
+  function makeService({ targetPath, spawnImpl }) {
+    return new ProcessService({
+      collector: new FakeCollector([snapshot('2026-08-15T12:00:02.000Z', [proc(401, startedAt, { path: targetPath })])]),
+      execFileImpl: async () => ({ stdout: '' }),
+      spawnImpl,
+    });
+  }
+
+  it('terminates then relaunches the resolved executable in its own directory', async () => {
+    const calls = [];
+    const service = makeService({
+      targetPath: __filename,
+      spawnImpl: (file, args, options) => {
+        calls.push({ file, args, options });
+        return fakeChild();
+      },
+    });
+
+    const result = await service.performAction({ processKey: { pid: 401, startedAt }, action: 'restart' });
+
+    assert.deepEqual(result, { success: true });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].file, __filename);
+    assert.deepEqual(calls[0].args, []);
+    assert.equal(calls[0].options.cwd, path.dirname(__filename));
+    await service.stop();
+  });
+
+  it('surfaces a friendly error when Windows denies the relaunch', async () => {
+    const service = makeService({
+      targetPath: __filename,
+      spawnImpl: () => {
+        const child = fakeChild(false);
+        queueMicrotask(() => child.emit('error', Object.assign(new Error('spawn EPERM'), { code: 'EPERM' })));
+        return child;
+      },
+    });
+
+    const result = await service.performAction({ processKey: { pid: 401, startedAt }, action: 'restart' });
+
+    assert.equal(result.success, false);
+    assert.match(result.error, /denied relaunching this process/);
+    await service.stop();
+  });
+
+  it('refuses to restart when the executable path is unavailable', async () => {
+    const calls = [];
+    const service = makeService({
+      targetPath: 'C:\\missing\\fixture-401.exe',
+      spawnImpl: (file, args, options) => {
+        calls.push({ file, args, options });
+        return fakeChild();
+      },
+    });
+
+    const result = await service.performAction({ processKey: { pid: 401, startedAt }, action: 'restart' });
+
+    assert.equal(result.success, false);
+    assert.match(result.error, /Executable path is unavailable/);
+    assert.equal(calls.length, 0);
     await service.stop();
   });
 });

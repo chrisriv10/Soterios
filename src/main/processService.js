@@ -90,11 +90,11 @@ function powershellEncoded(script) {
   return Buffer.from(script, 'utf16le').toString('base64');
 }
 
-function spawnDetachedVerified(file, args, options = {}) {
+function spawnDetachedVerified(file, args, options = {}, spawnImpl = spawn) {
   return new Promise((resolve, reject) => {
     let child;
     try {
-      child = spawn(file, args, {
+      child = spawnImpl(file, args, {
         detached: true,
         stdio: 'ignore',
         shell: false,
@@ -137,6 +137,8 @@ class ProcessService extends EventEmitter {
     this._knownHashesByPath = new Map();
     this._signatureCache = new Map();
     this._detailsCollector = options.detailsCollector || new JavaScriptProcessCollector();
+    this._execFileAsync = options.execFileImpl || execFileAsync;
+    this._spawn = options.spawnImpl || spawn;
     this._auxMetricsEnabled = options.auxMetricsEnabled == null ? !options.collector : !!options.auxMetricsEnabled;
     this._auxMetrics = {
       sampledAt: 0,
@@ -662,7 +664,7 @@ class ProcessService extends EventEmitter {
 
   async _terminate(pid) {
     try {
-      await execFileAsync('taskkill.exe', ['/PID', String(pid), '/F'], { timeout: 10000, windowsHide: true });
+      await this._execFileAsync('taskkill.exe', ['/PID', String(pid), '/F'], { timeout: 10000, windowsHide: true });
       return { success: true };
     } catch (error) {
       throw new Error(String(error.stderr || error.message || 'Unable to end process.').trim());
@@ -672,7 +674,7 @@ class ProcessService extends EventEmitter {
   async _setPriority(pid, priority) {
     if (!PRIORITY_CLASSES.has(priority)) throw new Error('Invalid priority class.');
     const script = `$p = Get-Process -Id ${pid} -ErrorAction Stop; $p.PriorityClass = '${priority}'; [Console]::Write($p.PriorityClass)`;
-    const result = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', powershellEncoded(script)], {
+    const result = await this._execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', powershellEncoded(script)], {
       timeout: 10000,
       windowsHide: true,
     });
@@ -691,7 +693,7 @@ class ProcessService extends EventEmitter {
     if (mask <= 0n || mask > ((1n << 64n) - 1n)) throw new Error('Invalid processor affinity mask.');
     const decimalMask = mask.toString(10);
     const script = `$p = Get-Process -Id ${pid} -ErrorAction Stop; $p.ProcessorAffinity = [intptr]([uint64]${decimalMask}); [Console]::Write(([uint64]$p.ProcessorAffinity).ToString())`;
-    const result = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', powershellEncoded(script)], {
+    const result = await this._execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', powershellEncoded(script)], {
       timeout: 10000,
       windowsHide: true,
     });
@@ -728,7 +730,7 @@ class ProcessService extends EventEmitter {
         if (!current.path || !path.isAbsolute(current.path) || !fs.existsSync(current.path)) throw new Error('Executable path is unavailable; restart is not safe.');
         await this._terminate(current.pid);
         try {
-          await spawnDetachedVerified(current.path, [], { cwd: path.dirname(current.path) });
+          await spawnDetachedVerified(current.path, [], { cwd: path.dirname(current.path) }, this._spawn);
         } catch (error) {
           const code = error?.code;
           if (code === 'EPERM' || code === 'EACCES') {
@@ -869,5 +871,6 @@ module.exports = {
   PRIORITY_CLASSES,
   ProcessService,
   processKeyString,
+  spawnDetachedVerified,
   validateProcessKey,
 };
