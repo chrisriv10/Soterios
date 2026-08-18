@@ -102,23 +102,33 @@ describe('i18n - missing translation detection', () => {
     }
   });
 
-  it('should detect if any locale has significantly fewer keys than English', async () => {
+  it('should have identical translation key sets across all locales', async () => {
     const enCatalog = loadCatalog('en');
-    const enKeyCount = Object.keys(enCatalog).length;
+    const enKeys = Object.keys(enCatalog).sort();
     const locales = listAvailableLocales();
-    
+
     for (const locale of locales) {
       if (locale === 'en') continue;
-      
+
       const catalog = loadCatalog(locale);
-      const keyCount = Object.keys(catalog).length;
-      
-      // Allow for some variance (e.g., 10% difference), but flag major issues
-      const threshold = Math.floor(enKeyCount * 0.9);
-      assert.ok(
-        keyCount >= threshold,
-        `Locale "${locale}" has only ${keyCount} keys vs ${enKeyCount} in English (below ${threshold} threshold)`
+      const localeKeys = Object.keys(catalog).sort();
+
+      const missing = enKeys.filter((key) => !localeKeys.includes(key));
+      const extras = localeKeys.filter((key) => !enKeys.includes(key));
+
+      assert.equal(
+        localeKeys.length,
+        enKeys.length,
+        `Locale "${locale}" has ${localeKeys.length} keys vs ${enKeys.length} in English`
       );
+      assert.deepEqual(missing, [], `Locale "${locale}" is missing keys: ${missing.join(', ')}`);
+      assert.deepEqual(extras, [], `Locale "${locale}" has keys not present in English: ${extras.join(', ')}`);
+
+      for (const key of enKeys) {
+        const value = catalog[key];
+        assert.equal(typeof value, 'string', `Key "${key}" in locale "${locale}" is not a string`);
+        assert.ok(value.length > 0, `Key "${key}" in locale "${locale}" is empty`);
+      }
     }
   });
 
