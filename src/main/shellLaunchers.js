@@ -6,12 +6,12 @@ const CONTROL_PANEL_COMMANDS = new Map([
 ]);
 
 const POWERSHELL_CONTEXTS = new Map([
-  ['', ['-NoExit']],
-  ['execution-policy', ['-NoExit', '-Command', 'Get-ExecutionPolicy -List | Format-Table -AutoSize']],
-  ['network-protection', ['-NoExit', '-Command', 'Get-MpPreference | Select-Object EnableNetworkProtection | Format-List']],
-  ['lsa-protection', ['-NoExit', '-Command', "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' | Select-Object RunAsPPL | Format-List"]],
-  ['password-policy', ['-NoExit', '-Command', 'net.exe accounts']],
-  ['guest-account', ['-NoExit', '-Command', "Get-LocalUser -Name 'Guest' | Format-List Name,Enabled,Description"]]
+  ['', ['-NoExit', '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass']],
+  ['execution-policy', ['-NoExit', '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', 'Get-ExecutionPolicy -List | Format-Table -AutoSize']],
+  ['network-protection', ['-NoExit', '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', 'Get-MpPreference | Select-Object EnableNetworkProtection | Format-List']],
+  ['lsa-protection', ['-NoExit', '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' | Select-Object RunAsPPL | Format-List"]],
+  ['password-policy', ['-NoExit', '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', 'net.exe accounts']],
+  ['guest-account', ['-NoExit', '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', "Get-LocalUser -Name 'Guest' | Format-List Name,Enabled,Description"]]
 ]);
 
 const WINDOWS_UTILITIES = new Map([
@@ -72,7 +72,10 @@ function openPowerShell(spawnImpl, context) {
   const key = context == null ? '' : String(context);
   const args = POWERSHELL_CONTEXTS.get(key);
   if (!args) return Promise.resolve({ success: false, error: 'Unsupported PowerShell action.' });
-  return spawnDetached(spawnImpl, 'powershell.exe', args);
+  // Launch through the Windows `start` command so Electron reliably creates a
+  // visible, independent console window instead of leaving PowerShell behind
+  // the app window. All arguments still come from the fixed allowlist above.
+  return spawnDetached(spawnImpl, 'cmd.exe', ['/d', '/c', 'start', 'Soterios PowerShell', 'powershell.exe', ...args]);
 }
 
 function openControlPanel(spawnImpl, command) {

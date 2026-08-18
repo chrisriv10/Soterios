@@ -20,6 +20,7 @@ window.Pages.processes = {
   _rowHeight: 58,
   _iconCache: new Map(),
   _renderQueued: false,
+  _detailEditing: false,
 
   t(key, vars) { return window.I18n?.t(key, vars) ?? key; },
   esc(value) { return window.escapeHtml ? window.escapeHtml(String(value ?? '')) : String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]); },
@@ -193,7 +194,7 @@ window.Pages.processes = {
     this._renderStats();
     this._renderProviderNotice();
     this._scheduleRender(false);
-    if (this._selectedKey && this._processes.has(this._selectedKey)) this._renderDetails();
+    if (this._selectedKey && this._processes.has(this._selectedKey) && !this._detailEditing) this._renderDetails();
     if (this._selectedKey && !this._processes.has(this._selectedKey)) this._closeDetails();
   },
 
@@ -466,7 +467,19 @@ window.Pages.processes = {
     panel.querySelector('#piCloseDetails').addEventListener('click', () => this._closeDetails());
     panel.querySelectorAll('[data-detail-tab]').forEach((button) => button.addEventListener('click', () => { this._detailTab = button.dataset.detailTab; this._renderDetails(); }));
     panel.querySelectorAll('[data-detail-action]').forEach((button) => button.addEventListener('click', () => this._detailAction(button.dataset.detailAction, proc)));
-    panel.querySelector('#piPriority')?.addEventListener('change', (event) => this._runAction(this._selectedKey, 'setPriority', { priority: event.target.value }));
+    const priority = panel.querySelector('#piPriority');
+    if (priority) {
+      priority.addEventListener('focusin', () => { this._detailEditing = true; });
+      priority.addEventListener('focusout', () => setTimeout(() => { this._detailEditing = false; }, 250));
+      priority.addEventListener('change', async (event) => {
+        const value = event.target.value;
+        if (!value) return;
+        event.target.disabled = true;
+        await this._runAction(this._selectedKey, 'setPriority', { priority: value });
+        this._detailEditing = false;
+        if (this._selectedKey) await this._refreshSelectedDetails();
+      });
+    }
   },
 
   _detailContent(proc) {
@@ -479,6 +492,7 @@ window.Pages.processes = {
         ${this._detailPair(this.t('processes.fieldArchitecture'), proc.architecture)}${this._detailPair(this.t('processes.fieldIntegrity'), proc.integrityLevel)}
         ${this._detailPair(this.t('processes.fieldPriority'), proc.priority)}${this._detailPair(this.t('processes.fieldThreads'), proc.threads)}
         ${this._detailPair(this.t('processes.fieldHandles'), proc.handles)}${this._detailPair(this.t('processes.fieldEfficiency'), proc.efficiencyMode == null ? null : String(proc.efficiencyMode))}
+        ${this._detailPair('Processor affinity', proc.affinityMask)}
       </dl>`;
     }
     if (this._detailTab === 'performance') {
@@ -528,13 +542,58 @@ window.Pages.processes = {
     if (action === 'properties') return window.soterios.process.showProperties(proc.path).catch((error) => alert(error.message || String(error)));
     if (action === 'location') return proc.path ? window.soterios.shell.showItemInFolder(proc.path) : alert(this.t('processes.pathUnavailable'));
     if (action === 'search') return window.soterios.process.searchOnline(`${proc.name} ${proc.publisher || ''}`).catch((error) => alert(error.message || String(error)));
-    if (action === 'affinity') {
-      const value = window.prompt(this.t('processes.affinityPrompt'), proc.affinityMask == null ? '' : String(proc.affinityMask));
-      if (value == null) return;
-      return this._runAction(this._selectedKey, 'setAffinity', { affinityMask: Number(value) });
-    }
+    if (action === 'affinity') return this._showAffinityDialog(proc);
     if (action === 'efficiency') return this._runAction(this._selectedKey, 'setEfficiencyMode', { enabled: !proc.efficiencyMode });
     return this._runAction(this._selectedKey, action);
+  },
+
+  async _refreshSelectedDetails() {
+    const key = this._selectedKey;
+    const proc = key ? this._processes.get(key) : null;
+    if (!proc) return;
+    try {
+      this._selectedDetails = await window.soterios.process.getDetails(proc.key, ['security', 'network', 'timeline', 'modules', 'threads', 'handles', 'waitChain']);
+    } catch (error) {
+      this._selectedDetails = { process: proc, error: error.message || String(error) };
+    }
+    if (this._selectedKey === key) this._renderDetails();
+  },
+
+  async _showAffinityDialog(proc) {
+    const cpuCount = Math.max(1, Math.min(64, Number(navigator.hardwareConcurrency) || 1));
+    let currentMask = null;
+    try { if (proc.affinityMask != null) currentMask = BigInt(String(proc.affinityMask)); } catch (_) { currentMask = null; }
+    const dialog = document.createElement('div');
+    dialog.className = 'pi-modal-backdrop';
+    const options = Array.from({ length: cpuCount }, (_, index) => {
+      const checked = currentMask == null || (currentMask & (1n << BigInt(index))) !== 0n;
+      return `<label class="pi-affinity-option"><input type="checkbox" value="${index}"${checked ? ' checked' : ''}><span>CPU ${index}</span></label>`;
+    }).join('');
+    dialog.innerHTML = `<form class="pi-modal pi-affinity-modal" aria-labelledby="piAffinityTitle"><h2 id="piAffinityTitle">${this.esc(this.t('processes.setAffinity'))}</h2><p>Choose which logical CPUs Windows may use for <strong>${this.esc(proc.name)}</strong>. This can be changed again at any time.</p><div class="pi-affinity-actions"><button type="button" class="btn btn-xs" data-affinity-all>Select all</button><button type="button" class="btn btn-xs" data-affinity-none>Clear</button></div><div class="pi-affinity-grid">${options}</div><p class="pi-inline-error" data-affinity-error hidden></p><div class="pi-modal-actions"><button type="button" class="btn btn-sm" data-cancel>${this.esc(this.t('common.cancel'))}</button><button type="submit" class="btn btn-sm primary">${this.esc(this.t('common.confirm'))}</button></div></form>`;
+    document.body.appendChild(dialog);
+    const form = dialog.querySelector('form');
+    const boxes = () => [...dialog.querySelectorAll('.pi-affinity-option input')];
+    dialog.querySelector('[data-affinity-all]').addEventListener('click', () => boxes().forEach((box) => { box.checked = true; }));
+    dialog.querySelector('[data-affinity-none]').addEventListener('click', () => boxes().forEach((box) => { box.checked = false; }));
+    dialog.querySelector('[data-cancel]').addEventListener('click', () => dialog.remove());
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const selected = boxes().filter((box) => box.checked).map((box) => Number(box.value));
+      const error = dialog.querySelector('[data-affinity-error]');
+      if (!selected.length) { error.textContent = 'Select at least one CPU.'; error.hidden = false; return; }
+      let mask = 0n;
+      selected.forEach((index) => { mask |= 1n << BigInt(index); });
+      form.querySelectorAll('button, input').forEach((control) => { control.disabled = true; });
+      const result = await this._runAction(this._selectedKey, 'setAffinity', { affinityMask: mask.toString(10) });
+      if (result) {
+        proc.affinityMask = result.effectiveAffinityMask || mask.toString(10);
+        dialog.remove();
+        this._detailEditing = false;
+        await this._refreshSelectedDetails();
+      } else {
+        form.querySelectorAll('button, input').forEach((control) => { control.disabled = false; });
+      }
+    });
   },
 
   async _checkReputation(proc) {
@@ -585,8 +644,10 @@ window.Pages.processes = {
       if (!result?.success) throw new Error(result?.error || this.t('common.unknownError'));
       if (result.path) alert(this.t('processes.dumpSaved', { path: result.path }));
       if (action === 'terminate' || action === 'restart') this._closeDetails();
+      return result;
     } catch (error) {
       alert(this.t('processes.actionFailed', { error: error.message || String(error) }));
+      return null;
     }
   },
 

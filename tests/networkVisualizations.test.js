@@ -146,8 +146,59 @@ describe('adaptive geo activity model', () => {
     const mapStart = css.indexOf('.heatmap-map-skin::before');
     const mapEnd = css.indexOf('.heatmap-map-skin::after', mapStart);
     const mapRules = css.slice(mapStart, mapEnd);
-    assert.match(mapRules, /mask:\s*url\('\.\.\/img\/world-map\.svg'\) center \/ 100% 100% no-repeat/);
+    assert.match(mapRules, /mask:\s*url\('\.\.\/img\/world-map-equirect\.svg'\) center \/ 100% 100% no-repeat/);
     assert.doesNotMatch(mapRules, /contain/);
+    const map = fs.readFileSync(path.join(__dirname, '..', 'src', 'ui', 'img', 'world-map-equirect.svg'), 'utf8');
+    assert.match(map, /viewBox="0 0 360 180"/);
+    assert.match(map, /<g class="country /);
+  });
+
+  it('keeps the cluster drawer matched to the map height with an internal scroll area', () => {
+    const css = fs.readFileSync(path.join(__dirname, '..', 'src', 'ui', 'css', 'visualizations.css'), 'utf8');
+    const widgetStart = css.indexOf('.heatmap-widget {');
+    const widgetEnd = css.indexOf('.heatmap-viewport {', widgetStart);
+    const widgetRules = css.slice(widgetStart, widgetEnd);
+    assert.match(widgetRules, /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto/);
+    assert.match(widgetRules, /align-items:\s*stretch/);
+
+    const viewportStart = css.indexOf('.heatmap-viewport {');
+    const viewportEnd = css.indexOf('.heatmap-world {', viewportStart);
+    assert.match(css.slice(viewportStart, viewportEnd), /min-height:\s*0/);
+
+    const panelStart = css.indexOf('.heatmap-cluster-panel {');
+    const panelEnd = css.indexOf('.heatmap-cluster-panel[hidden]', panelStart);
+    const panelRules = css.slice(panelStart, panelEnd);
+    assert.match(panelRules, /min-height:\s*0/);
+    assert.match(panelRules, /height:\s*100%/);
+    assert.match(panelRules, /display:\s*flex/);
+    assert.doesNotMatch(panelRules, /max-height:\s*min\(620px/);
+
+    const bodyStart = css.indexOf('.heatmap-drawer-body {');
+    const bodyEnd = css.indexOf('.heatmap-kpis {', bodyStart);
+    const bodyRules = css.slice(bodyStart, bodyEnd);
+    assert.match(bodyRules, /flex:\s*1/);
+    assert.match(bodyRules, /min-height:\s*0/);
+    assert.match(bodyRules, /overflow-y:\s*auto/);
+    assert.doesNotMatch(bodyRules, /max-height:/);
+
+    const mobileStart = css.indexOf('@media (max-width: 900px)');
+    const mobileEnd = css.indexOf('@media (prefers-reduced-motion:', mobileStart);
+    const mobileRules = css.slice(mobileStart, mobileEnd);
+    assert.match(mobileRules, /grid-template-columns:\s*1fr/);
+    assert.match(mobileRules, /height:\s*min\(420px,\s*70vh\)/);
+  });
+
+  it('renders the home location as an interactive labeled control', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'ui', 'js', 'pages', 'network.js'), 'utf8');
+    assert.match(source, /id="heatmapHome" class="heatmap-home"/);
+    assert.match(source, /network\.heatmapHomeLabel/);
+    assert.match(source, /coords\.lat\.toFixed\(2\)/);
+  });
+
+  it('toggles paths on the heatmap widget that owns the clicked control', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'ui', 'js', 'pages', 'network.js'), 'utf8');
+    assert.match(source, /const widget = arcsToggle\.closest\('\.heatmap-widget'\) \|\| page\._heatmapWidgetEl/);
+    assert.match(source, /svg\.hidden = !page\._heatmapShowArcs/);
   });
 
   it('centers focus targets while clamping pan to the viewport', () => {

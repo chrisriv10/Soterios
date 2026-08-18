@@ -43,8 +43,17 @@ describe('shell launchers', () => {
     const spawn = successfulSpawner(calls);
 
     assert.deepEqual(await openPowerShell(spawn, 'network-protection'), { success: true });
-    assert.equal(calls[0].file, 'powershell.exe');
-    assert.equal(calls[0].args[0], '-NoExit');
+    assert.equal(calls[0].file, 'cmd.exe');
+    assert.equal(calls[0].args[0], '/d');
+    assert.equal(calls[0].args[1], '/c');
+    assert.equal(calls[0].args[2], 'start');
+    assert.equal(calls[0].args[3], 'Soterios PowerShell');
+    assert.equal(calls[0].args[4], 'powershell.exe');
+    assert.ok(calls[0].args.includes('-NoExit'));
+    assert.ok(calls[0].args.includes('-NoLogo'));
+    assert.ok(calls[0].args.includes('-NoProfile'));
+    assert.ok(calls[0].args.includes('-ExecutionPolicy'));
+    assert.ok(calls[0].args.includes('Bypass'));
     assert.match(calls[0].args.join(' '), /Get-MpPreference/);
 
     assert.deepEqual(await openPowerShell(spawn, 'not-allowlisted'), {

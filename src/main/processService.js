@@ -90,6 +90,29 @@ function powershellEncoded(script) {
   return Buffer.from(script, 'utf16le').toString('base64');
 }
 
+function spawnDetachedVerified(file, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    let child;
+    try {
+      child = spawn(file, args, {
+        detached: true,
+        stdio: 'ignore',
+        shell: false,
+        windowsHide: false,
+        ...options,
+      });
+    } catch (error) {
+      reject(error);
+      return;
+    }
+    child.once('error', reject);
+    child.once('spawn', () => {
+      child.unref();
+      resolve(child);
+    });
+  });
+}
+
 class ProcessService extends EventEmitter {
   constructor(options = {}) {
     super();
@@ -648,23 +671,31 @@ class ProcessService extends EventEmitter {
 
   async _setPriority(pid, priority) {
     if (!PRIORITY_CLASSES.has(priority)) throw new Error('Invalid priority class.');
-    const script = `$p = Get-Process -Id ${pid} -ErrorAction Stop; $p.PriorityClass = '${priority}'`;
-    await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', powershellEncoded(script)], {
+    const script = `$p = Get-Process -Id ${pid} -ErrorAction Stop; $p.PriorityClass = '${priority}'; [Console]::Write($p.PriorityClass)`;
+    const result = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', powershellEncoded(script)], {
       timeout: 10000,
       windowsHide: true,
     });
-    return { success: true };
+    return { success: true, effectivePriority: String(result.stdout || '').trim() || priority };
   }
 
   async _setAffinity(pid, affinityMask) {
-    const mask = Number(affinityMask);
-    if (!Number.isSafeInteger(mask) || mask <= 0) throw new Error('Invalid processor affinity mask.');
-    const script = `$p = Get-Process -Id ${pid} -ErrorAction Stop; $p.ProcessorAffinity = [intptr]${mask}`;
-    await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', powershellEncoded(script)], {
+    let mask;
+    try {
+      if (typeof affinityMask === 'string' && /^\d+$/.test(affinityMask)) mask = BigInt(affinityMask);
+      else if (Number.isSafeInteger(affinityMask)) mask = BigInt(affinityMask);
+      else throw new Error('Invalid processor affinity mask.');
+    } catch (_) {
+      throw new Error('Invalid processor affinity mask.');
+    }
+    if (mask <= 0n || mask > ((1n << 64n) - 1n)) throw new Error('Invalid processor affinity mask.');
+    const decimalMask = mask.toString(10);
+    const script = `$p = Get-Process -Id ${pid} -ErrorAction Stop; $p.ProcessorAffinity = [intptr]([uint64]${decimalMask}); [Console]::Write(([uint64]$p.ProcessorAffinity).ToString())`;
+    const result = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', powershellEncoded(script)], {
       timeout: 10000,
       windowsHide: true,
     });
-    return { success: true };
+    return { success: true, effectiveAffinityMask: String(result.stdout || '').trim() || decimalMask };
   }
 
   async _createDump(pid, requestedPath) {
@@ -696,8 +727,15 @@ class ProcessService extends EventEmitter {
       } else if (action === 'restart') {
         if (!current.path || !path.isAbsolute(current.path) || !fs.existsSync(current.path)) throw new Error('Executable path is unavailable; restart is not safe.');
         await this._terminate(current.pid);
-        const child = spawn(current.path, [], { detached: true, stdio: 'ignore', shell: false, windowsHide: false });
-        child.unref();
+        try {
+          await spawnDetachedVerified(current.path, [], { cwd: path.dirname(current.path) });
+        } catch (error) {
+          const code = error?.code;
+          if (code === 'EPERM' || code === 'EACCES') {
+            throw new Error('Windows denied relaunching this process (EPERM). It may require elevation, be a single-instance app, or be unsupported for restart.');
+          }
+          throw error;
+        }
         result = { success: true };
       } else if (action === 'setPriority') {
         result = await this._setPriority(current.pid, payload.options?.priority);

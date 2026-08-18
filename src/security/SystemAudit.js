@@ -241,13 +241,13 @@ class SystemAudit {
       out.push({ name: 'Cloud-delivered Protection', section: 'antivirus', status: 'info', message: 'Cloud-delivered protection status could not be determined.', detail: 'This setting may not be reported on this system.', actionUri: 'windowsdefender://threatsettings/' });
     }
     if (data.networkProtectionMode === 'block') {
-      out.push({ name: 'Network Protection', section: 'antivirus', status: 'pass', message: 'Network protection is on.', detail: 'Malicious connections and phishing sites are blocked.', recommendation: '', manageAction: 'open-powershell', manageContext: 'network-protection' });
+      out.push({ name: 'Network Protection', section: 'antivirus', status: 'pass', message: 'Network protection is on.', detail: 'Defender blocks malicious connections and phishing sites.', recommendation: '', manageAction: 'open-powershell', manageContext: 'network-protection' });
     } else if (data.networkProtectionMode === 'audit') {
-      out.push({ name: 'Network Protection', section: 'antivirus', status: 'info', message: 'Network protection is in audit mode.', detail: 'Malicious connections are logged but not blocked.', recommendation: 'Enable network protection block mode with PowerShell or Group Policy.', manageAction: 'open-powershell', manageContext: 'network-protection' });
+      out.push({ name: 'Network Protection', section: 'antivirus', status: 'info', message: 'Network protection is in audit mode.', detail: 'Audit mode: logs malicious connections without blocking.', recommendation: 'Enable network protection block mode with PowerShell or Group Policy.', manageAction: 'open-powershell', manageContext: 'network-protection' });
     } else if (data.networkProtectionMode === 'off') {
-      out.push({ name: 'Network Protection', section: 'antivirus', status: 'fail', message: 'Network protection is off!', detail: 'Malicious network connections are not blocked.', recommendation: 'Enable network protection block mode with PowerShell or Group Policy.', manageAction: 'open-powershell', manageContext: 'network-protection' });
+      out.push({ name: 'Network Protection', section: 'antivirus', status: 'fail', message: 'Defender Network Protection is off.', detail: 'Network Protection is disabled. Defender will not block malicious connections.', recommendation: 'Enable network protection block mode with PowerShell or Group Policy.', manageAction: 'open-powershell', manageContext: 'network-protection' });
     } else {
-      out.push({ name: 'Network Protection', section: 'antivirus', status: 'info', message: 'Network protection status could not be determined.', detail: 'Windows did not report a network protection state.', manageAction: 'open-powershell', manageContext: 'network-protection' });
+      out.push({ name: 'Network Protection', section: 'antivirus', status: 'info', message: 'Network protection status could not be determined.', detail: 'Network Protection status could not be determined.', manageAction: 'open-powershell', manageContext: 'network-protection' });
     }
     return out;
   }

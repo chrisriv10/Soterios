@@ -253,9 +253,10 @@ window.Pages['audit'] = {
   },
 
   loadingHtml() {
-    return `<div class="empty-state">${escapeHtml(this.t('audit.running'))}</div>
-      <div class="loading-progress" style="margin-top:8px;"><div class="loading-progress-bar"></div></div>
-      <div id="auditProgressLabel" class="page-subtitle" style="margin-top:6px; font-size:0.8rem; opacity:0.85;"></div>`;
+    return `<div class="analysis-loading">
+      <div class="analysis-loading-status"><span class="spinner"></span><span id="auditProgressLabel">${escapeHtml(this.t('audit.running'))}</span></div>
+      <div class="loading-progress"><div class="loading-progress-bar"></div></div>
+    </div>`;
   },
 
   render(container) {
@@ -627,7 +628,7 @@ content.innerHTML = self.loadingHtml();
   // splits any recommendation ending in a recognizable cmdlet into readable
   // prose plus its own copyable code block.
   renderRecommendation(rec) {
-    const match = String(rec).match(/^(.*?):\s*((?:Set|Get|Enable|Disable|Add|Remove|New|Start|Stop|Restart|Install|Uninstall)-[A-Za-z]+\b[\s\S]*)$/);
+    const match = String(rec).match(/^(.*?):\s*((?:(?:Set|Get|Enable|Disable|Add|Remove|New|Start|Stop|Restart|Install|Uninstall)-[A-Za-z]+|net(?:\.exe)?\s+accounts)\b[\s\S]*)$/i);
     if (!match) {
       return `<div style="font-size:0.85rem;"><strong>${escapeHtml(this.t('audit.recommendation', { rec }))}</strong></div>`;
     }

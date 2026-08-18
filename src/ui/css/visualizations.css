@@ -33,16 +33,45 @@
   stroke-dasharray: 5 5;
 }
 
+.perimeter-radar .perim-risk-outline {
+  fill: none;
+  pointer-events: none;
+  stroke-width: 2;
+  stroke-dasharray: 4 5;
+  opacity: .88;
+}
+
+.perimeter-radar .perim-risk-outline-safe { stroke: var(--ok); }
+.perimeter-radar .perim-risk-outline-unknown { stroke: var(--warn); }
+.perimeter-radar .perim-risk-outline-malicious {
+  stroke: var(--danger);
+  stroke-width: 1.5;
+  opacity: .3;
+}
+.perimeter-radar .perim-risk-outline-malicious.has-blocked {
+  stroke-width: 3;
+  opacity: .95;
+  filter: drop-shadow(0 0 4px var(--danger-glow));
+}
+
 .perimeter-radar .perim-ring-label {
+  pointer-events: none;
   font-size: 8px;
   font-weight: 700;
   letter-spacing: .08em;
   text-transform: uppercase;
 }
 
-.perimeter-radar .perim-ring-label-safe { fill: var(--ok); }
-.perimeter-radar .perim-ring-label-unknown { fill: var(--warn); }
-.perimeter-radar .perim-ring-label-malicious { fill: var(--danger); }
+.perimeter-radar .perim-ring-label rect {
+  fill: var(--bg-surface);
+  stroke: var(--glass-border);
+  stroke-width: 1;
+  opacity: .94;
+}
+.perimeter-radar .perim-ring-label text { paint-order: stroke; stroke: var(--bg-surface); stroke-width: 2px; }
+.perimeter-radar .perim-ring-label-safe text { fill: var(--ok); }
+.perimeter-radar .perim-ring-label-unknown text { fill: var(--warn); }
+.perimeter-radar .perim-ring-label-malicious text { fill: var(--danger); }
 
 .perimeter-radar .perim-hub > circle:first-child {
   fill: var(--accent-primary-glow);
@@ -52,7 +81,7 @@
 
 .perimeter-radar .perim-hub-core { fill: var(--bg-surface-hover); }
 .perimeter-radar .perim-hub text { fill: var(--text-main); font-size: 10px; font-weight: 700; }
-.perimeter-radar .perim-hub .perim-hub-count { fill: var(--text-dim); font-size: 7px; font-weight: 500; }
+.perimeter-radar .perim-hub .perim-hub-count { fill: var(--text-dim); font-size: 6.5px; font-weight: 500; }
 
 .perimeter-radar .perim-node {
   cursor: pointer;
@@ -94,6 +123,9 @@
   font-size: 8px;
   font-weight: 800;
   text-anchor: middle;
+  paint-order: stroke;
+  stroke: var(--bg-base);
+  stroke-width: 1.5px;
   pointer-events: none;
 }
 
@@ -218,6 +250,7 @@
 .heatmap-widget {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
   padding: 0;
   margin-bottom: 18px;
   overflow: hidden;
@@ -228,7 +261,9 @@
 .heatmap-viewport {
   position: relative;
   min-width: 0;
-  aspect-ratio: 950 / 620;
+  min-height: 0;
+  /* Plate Carrée maps span 360° x 180°; keep the artwork and markers in that 2:1 plane. */
+  aspect-ratio: 2 / 1;
   overflow: hidden;
   background:
     radial-gradient(circle at 50% 48%, color-mix(in srgb, var(--accent-primary) 12%, transparent), transparent 62%),
@@ -259,8 +294,8 @@
   inset: 0;
   background: color-mix(in srgb, var(--accent-primary) 52%, var(--text-dim));
   filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent-primary) 35%, transparent));
-  -webkit-mask: url('../img/world-map.svg') center / 100% 100% no-repeat;
-  mask: url('../img/world-map.svg') center / 100% 100% no-repeat;
+  -webkit-mask: url('../img/world-map-equirect.svg') center / 100% 100% no-repeat;
+  mask: url('../img/world-map-equirect.svg') center / 100% 100% no-repeat;
   opacity: .62;
 }
 
@@ -298,9 +333,9 @@
 
 .heatmap-arc {
   fill: none;
-  opacity: .28;
+  opacity: .72;
   vector-effect: non-scaling-stroke;
-  stroke-width: .5;
+  stroke-width: 1.15;
 }
 
 .heatmap-arc.heatmap-risk-safe { stroke: var(--ok); }
@@ -309,6 +344,10 @@
 .heatmap-pulse-dot.heatmap-risk-safe { fill: var(--ok); }
 .heatmap-pulse-dot.heatmap-risk-unknown { fill: var(--warn); }
 .heatmap-pulse-dot.heatmap-risk-malicious { fill: var(--danger); }
+.heatmap-pulse-dot { opacity: .95; filter: drop-shadow(0 0 2px currentColor); }
+
+.heatmap-paths-hidden .heatmap-arc,
+.heatmap-paths-hidden .heatmap-pulse-dot { display: none; }
 
 .heatmap-marker {
   position: absolute;
@@ -396,13 +435,18 @@
 .heatmap-home {
   position: absolute;
   z-index: 5;
-  width: 10px;
-  height: 10px;
+  width: 14px;
+  height: 14px;
+  aspect-ratio: 1;
+  padding: 0;
   border: 2px solid var(--bg-surface);
   border-radius: 50%;
   transform: translate(-50%, -50%);
   background: var(--accent-primary);
   box-shadow: 0 0 12px var(--accent-primary);
+  cursor: pointer;
+  appearance: none;
+  font: inherit;
 }
 
 .heatmap-home::after {
@@ -480,7 +524,10 @@
 
 .heatmap-cluster-panel {
   width: min(340px, 36vw);
-  max-height: min(620px, 70vh);
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   border-left: 1px solid var(--glass-border);
   background: var(--bg-surface);
@@ -504,8 +551,9 @@
 
 .heatmap-drawer-body {
   display: grid;
+  flex: 1;
   gap: 14px;
-  max-height: calc(min(620px, 70vh) - 55px);
+  min-height: 0;
   padding: 14px 16px;
   overflow-y: auto;
 }
@@ -554,7 +602,7 @@
 
 @media (max-width: 900px) {
   .heatmap-widget { grid-template-columns: 1fr; }
-  .heatmap-cluster-panel { width: auto; max-height: 420px; border-top: 1px solid var(--glass-border); border-left: 0; }
+  .heatmap-cluster-panel { width: auto; height: min(420px, 70vh); border-top: 1px solid var(--glass-border); border-left: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

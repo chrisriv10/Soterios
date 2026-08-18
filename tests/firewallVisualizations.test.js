@@ -94,6 +94,40 @@ describe('firewall perimeter activity model', () => {
     assert.ok(first.find((item) => item.risk === 'UNKNOWN').radius < first.find((item) => item.risk === 'MALICIOUS').radius);
   });
 
+  it('keeps dense endpoint layouts separated and inside the radar', () => {
+    const page = makePage();
+    const groups = page._aggregatePerimeterEndpoints(Array.from({ length: 42 }, (_, index) => connection({
+      remoteAddress: `198.51.100.${index + 1}`,
+      pid: index % 5,
+      processName: `process-${index % 5}.exe`,
+      classification: index % 11 === 0 ? 'MALICIOUS' : index % 4 === 0 ? 'UNKNOWN' : 'SAFE'
+    })), false);
+    const items = page._layoutPerimeterGroups(groups);
+    assert.equal(items.length, groups.length);
+    for (const item of items) {
+      assert.ok(item.x - item.nodeRadius >= 0);
+      assert.ok(item.x + item.nodeRadius <= 600);
+      assert.ok(item.y - item.nodeRadius >= 0);
+      assert.ok(item.y + item.nodeRadius <= 420);
+    }
+    for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        const distance = Math.hypot(items[i].x - items[j].x, items[i].y - items[j].y);
+        assert.ok(distance >= items[i].nodeRadius + items[j].nodeRadius + 3, `${items[i].key} overlaps ${items[j].key}`);
+      }
+    }
+  });
+
+  it('keeps single counts visible and emits layered risk boundaries', () => {
+    assert.match(firewallSource, /perim-node-count[^>]*>[\s\S]*\$\{item\.count\}/);
+    assert.match(firewallSource, /id="perimForegroundChrome"/);
+    assert.match(firewallSource, /perim-risk-outline-malicious/);
+    assert.match(firewallSource, /perim-hub-count[\s\S]*<tspan/);
+    const styles = fs.readFileSync(path.join(__dirname, '..', 'src', 'ui', 'css', 'visualizations.css'), 'utf8');
+    assert.match(styles, /\.perim-risk-outline\s*\{[\s\S]*?pointer-events:\s*none/);
+    assert.match(styles, /\.perim-risk-outline-malicious\.has-blocked/);
+  });
+
   it('tracks recent poll samples and resets continuous observation after a gap', () => {
     const page = makePage();
     const sample = connection();

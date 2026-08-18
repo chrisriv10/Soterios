@@ -23,7 +23,9 @@ window.Pages['firewall'] = {
         <p class="page-subtitle">${escapeHtml(t('firewall.subtitle'))}</p>
       </header>
       <div id="firewallContent">
-        <div class="empty-state"><span class="spinner"></span>&nbsp;${escapeHtml(t('firewall.loading'))}</div>
+        <div class="analysis-loading">
+          <div class="analysis-loading-status"><span class="spinner"></span><span>${escapeHtml(t('firewall.loading'))}</span></div>
+        </div>
       </div>
     `;
     this.load(container);
@@ -384,7 +386,8 @@ window.Pages['firewall'] = {
     for (const group of groups.values()) {
       group.direction = group.directions.size > 1 ? 'mixed' : [...group.directions][0] || 'outbound';
       group.blocked = group.risk === 'MALICIOUS';
-      group.nodeRadius = Math.min(13, 6 + Math.log2(group.count + 1) * 2.2);
+      const digitRadius = String(group.count).length * 3.8 + 2;
+      group.nodeRadius = Math.min(15, Math.max(9, 6 + Math.log2(group.count + 1) * 2.2, digitRadius));
       group.edgeWidth = Math.min(2.6, 0.8 + Math.log2(group.count + 1) * 0.45);
     }
     return [...groups.values()];
@@ -430,22 +433,77 @@ window.Pages['firewall'] = {
       UNKNOWN: { radii: [128, 145] },
       MALICIOUS: { radii: [174, 190] }
     };
-    return groups.map((group) => {
-      const processKey = `${group.pid || group.processName}`;
-      const processAngle = (this._stableHash(processKey) / 0x100000000) * Math.PI * 2 - Math.PI / 2;
-      const endpointJitter = ((this._stableHash(group.key) % 1001) / 1000 - 0.5) * 0.42;
-      const spec = ringSpec[group.risk] || ringSpec.UNKNOWN;
-      const band = this._stableHash(`${group.key}|band`) % spec.radii.length;
-      const radius = spec.radii[band];
-      const angle = processAngle + endpointJitter;
-      return {
-        ...group,
-        angle,
-        radius,
-        x: cx + Math.cos(angle) * radius,
-        y: cy + Math.sin(angle) * radius
-      };
+    const placed = [];
+    const sectorSpan = Math.PI * 0.9;
+    const slotCount = 25;
+    const ordered = [...(groups || [])].sort((a, b) => {
+      const pa = this._stableHash(`${a.pid || a.processName}|angle`);
+      const pb = this._stableHash(`${b.pid || b.processName}|angle`);
+      return pa - pb || String(a.key).localeCompare(String(b.key));
     });
+    for (const group of ordered) {
+      const processKey = `${group.pid || group.processName}`;
+      const processAngle = (this._stableHash(`${processKey}|angle`) / 0x100000000) * Math.PI * 2 - Math.PI / 2;
+      const spec = ringSpec[group.risk] || ringSpec.UNKNOWN;
+      const seed = this._stableHash(group.key);
+      const targetOffset = ((seed % 1001) / 1000 - 0.5) * sectorSpan;
+      const candidates = [];
+      for (let lane = 0; lane < spec.radii.length; lane++) {
+        for (let slot = 0; slot < slotCount; slot++) {
+          const slotOffset = ((slot / (slotCount - 1)) - 0.5) * sectorSpan;
+          const angle = processAngle + slotOffset + targetOffset * 0.22;
+          const radius = spec.radii[lane];
+          const x = cx + Math.cos(angle) * radius;
+          const y = cy + Math.sin(angle) * radius;
+          let overlap = 0;
+          for (const other of placed) {
+            const distance = Math.hypot(x - other.x, y - other.y);
+            const required = group.nodeRadius + other.nodeRadius + 4;
+            if (distance < required) overlap += required - distance;
+          }
+          candidates.push({ angle, radius, x, y, overlap, distanceFromTarget: Math.abs(slotOffset - targetOffset) });
+        }
+      }
+      candidates.sort((a, b) => a.overlap - b.overlap || a.distanceFromTarget - b.distanceFromTarget || a.radius - b.radius);
+      const chosen = candidates[0];
+      const item = { ...group, angle: chosen.angle, radius: chosen.radius, x: chosen.x, y: chosen.y };
+      placed.push(item);
+    }
+
+    // Repair the rare case where every deterministic slot is occupied. Keep
+    // each endpoint in its risk band while making the adjustment repeatable.
+    for (let pass = 0; pass < 8; pass++) {
+      let changed = false;
+      for (let i = 0; i < placed.length; i++) {
+        for (let j = i + 1; j < placed.length; j++) {
+          const a = placed[i], b = placed[j];
+          let dx = b.x - a.x, dy = b.y - a.y;
+          let distance = Math.hypot(dx, dy);
+          if (!distance) {
+            const angle = (this._stableHash(`${a.key}|${b.key}|repair`) / 0x100000000) * Math.PI * 2;
+            dx = Math.cos(angle); dy = Math.sin(angle); distance = 1;
+          }
+          const required = a.nodeRadius + b.nodeRadius + 4;
+          if (distance >= required) continue;
+          const push = (required - distance) / 2;
+          const ux = dx / distance, uy = dy / distance;
+          a.x -= ux * push; a.y -= uy * push;
+          b.x += ux * push; b.y += uy * push;
+          for (const item of [a, b]) {
+            const spec = ringSpec[item.risk] || ringSpec.UNKNOWN;
+            const radial = Math.hypot(item.x - cx, item.y - cy) || spec.radii[0];
+            const boundedRadius = Math.max(spec.radii[0], Math.min(spec.radii.at(-1), radial));
+            item.angle = Math.atan2(item.y - cy, item.x - cx);
+            item.radius = boundedRadius;
+            item.x = cx + Math.cos(item.angle) * boundedRadius;
+            item.y = cy + Math.sin(item.angle) * boundedRadius;
+          }
+          changed = true;
+        }
+      }
+      if (!changed) break;
+    }
+    return placed;
   },
 
   _orderPerimeterEndpoints(groups) {
@@ -705,28 +763,30 @@ window.Pages['firewall'] = {
     this._perimeterNodes = nodeMap;
 
     let chromeG = svg.querySelector('#perimStaticChrome');
+    let foregroundG = svg.querySelector('#perimForegroundChrome');
     let nodesG = svg.querySelector('#perimNodesLayer');
-    if (!chromeG || !nodesG) {
-      svg.innerHTML = '<g id="perimStaticChrome"></g><g id="perimNodesLayer"></g>';
+    if (!chromeG || !foregroundG || !nodesG) {
+      svg.innerHTML = '<g id="perimStaticChrome"></g><g id="perimNodesLayer"></g><g id="perimForegroundChrome"></g>';
       chromeG = svg.querySelector('#perimStaticChrome');
       nodesG = svg.querySelector('#perimNodesLayer');
+      foregroundG = svg.querySelector('#perimForegroundChrome');
       this._perimeterNodeEls = new Map();
     }
 
     const socketsShown = allItems.reduce((sum, item) => sum + item.count, 0);
+    const blockedCount = allItems.filter((item) => item.blocked).length;
+    const hubCount = String(t('firewall.perimeterHubCount', { endpoints: allItems.length, sockets: socketsShown }));
+    const hubLines = hubCount.split(/\s*[·•]\s*/);
+    const endpointLine = hubLines[0] || `${allItems.length}`;
+    const socketLine = hubLines[1] || `${socketsShown}`;
     const chromeHtml = `
       <circle class="perim-risk-band perim-risk-band-safe" cx="${cx}" cy="${cy}" r="114"/>
       <circle class="perim-risk-band perim-risk-band-unknown" cx="${cx}" cy="${cy}" r="149"/>
-      <circle class="perim-boundary-glow" cx="${cx}" cy="${cy}" r="${boundaryR}"/>
-      <circle class="perim-boundary" cx="${cx}" cy="${cy}" r="${boundaryR}"/>
-      <text class="perim-ring-label perim-ring-label-safe" x="${cx}" y="${cy - 116}" text-anchor="middle">${escapeHtml(t('firewall.perimeterBandSafe'))}</text>
-      <text class="perim-ring-label perim-ring-label-unknown" x="${cx}" y="${cy - 151}" text-anchor="middle">${escapeHtml(t('firewall.perimeterBandUnknown'))}</text>
-      <text class="perim-ring-label perim-ring-label-malicious" x="${cx}" y="${cy - 184}" text-anchor="middle">${escapeHtml(t('firewall.perimeterBandMalicious'))}</text>
       <g class="perim-hub">
         <circle cx="${cx}" cy="${cy}" r="34"/>
         <circle class="perim-hub-core" cx="${cx}" cy="${cy}" r="27"/>
-        <text x="${cx}" y="${cy - 3}" text-anchor="middle">${escapeHtml(t('firewall.thisPC'))}</text>
-        <text class="perim-hub-count" x="${cx}" y="${cy + 12}" text-anchor="middle">${escapeHtml(t('firewall.perimeterHubCount', { endpoints: allItems.length, sockets: socketsShown }))}</text>
+        <text x="${cx}" y="${cy - 6}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(t('firewall.thisPC'))}</text>
+        <text class="perim-hub-count" x="${cx}" y="${cy + 8}" text-anchor="middle" dominant-baseline="middle"><tspan x="${cx}" dy="0">${escapeHtml(endpointLine)}</tspan><tspan x="${cx}" dy="9">${escapeHtml(socketLine)}</tspan></text>
       </g>`;
     chromeG.innerHTML = chromeHtml;
 
@@ -758,12 +818,21 @@ window.Pages['firewall'] = {
       }
     }
 
+    foregroundG.innerHTML = `
+      <circle class="perim-boundary-glow" cx="${cx}" cy="${cy}" r="${boundaryR}"/>
+      <circle class="perim-boundary" cx="${cx}" cy="${cy}" r="${boundaryR}"/>
+      <circle class="perim-risk-outline perim-risk-outline-safe" cx="${cx}" cy="${cy}" r="114"/>
+      <circle class="perim-risk-outline perim-risk-outline-unknown" cx="${cx}" cy="${cy}" r="149"/>
+      <circle class="perim-risk-outline perim-risk-outline-malicious ${blockedCount ? 'has-blocked' : ''}" cx="${cx}" cy="${cy}" r="184"/>
+      <g class="perim-ring-label perim-ring-label-safe"><rect x="${cx - 52}" y="${cy - 127}" width="104" height="14" rx="7"/><text x="${cx}" y="${cy - 117}" text-anchor="middle" textLength="88" lengthAdjust="spacingAndGlyphs">${escapeHtml(t('firewall.perimeterBandSafe'))}</text></g>
+      <g class="perim-ring-label perim-ring-label-unknown"><rect x="${cx - 62}" y="${cy - 162}" width="124" height="14" rx="7"/><text x="${cx}" y="${cy - 152}" text-anchor="middle" textLength="108" lengthAdjust="spacingAndGlyphs">${escapeHtml(t('firewall.perimeterBandUnknown'))}</text></g>
+      <g class="perim-ring-label perim-ring-label-malicious"><rect x="${cx - 52}" y="${cy - 196}" width="104" height="14" rx="7"/><text x="${cx}" y="${cy - 186}" text-anchor="middle" textLength="88" lengthAdjust="spacingAndGlyphs">${escapeHtml(t('firewall.perimeterBandMalicious'))}</text></g>`;
+
     if (this._selectedKey && nodeMap.has(this._selectedKey)) {
       this._renderDetailPanel(container, nodeMap.get(this._selectedKey));
     }
 
     if (summary) {
-      const blockedCount = allItems.filter((i) => i.blocked).length;
       const unknownCount = allItems.filter((i) => i.risk === 'UNKNOWN').length;
       const totalConnections = connections.length;
       let countText = t('firewall.perimeterEndpointSummary', {
@@ -810,13 +879,14 @@ window.Pages['firewall'] = {
       <g class="perim-node-core">
         <circle class="perim-hit" r="${Math.max(13, item.nodeRadius + 5)}" cx="0" cy="0"/>
         <circle class="perim-dot" cx="0" cy="0" r="${item.nodeRadius}" fill="${color}"/>
-        <text class="perim-node-count" x="0" y="3">${item.count > 1 ? item.count : ''}</text>
+        <text class="perim-node-count" x="0" y="0" dominant-baseline="middle">${item.count}</text>
       </g>`;
 
     const handleNodeClick = () => {
       this._selectedKey = item.key;
       svg.querySelectorAll('.perim-node').forEach((n) => n.classList.remove('selected'));
       g.classList.add('selected');
+      if (g.parentNode) g.parentNode.appendChild(g);
       this._renderDetailPanel(container, this._perimeterNodes.get(item.key));
     };
     g.addEventListener('click', handleNodeClick);
@@ -871,7 +941,7 @@ window.Pages['firewall'] = {
     for (const particleEl of particleEls || []) {
       particleEl.setAttribute('fill', color);
     }
-    if (countEl) countEl.textContent = item.count > 1 ? item.count : '';
+    if (countEl) countEl.textContent = item.count;
 
     const titleEl = g.querySelector('title');
     const label = this.t('firewall.perimeterNodeAria', {
@@ -1509,7 +1579,7 @@ window.Pages['firewall'] = {
     this._perimeterNodes = new Map();
     this._perimeterNodeEls = new Map();
     this._perimeterActivity = new Map();
-    this._perimeterConnToGroup = new Map();
+this._perimeterConnToGroup = new Map();
     this._selectedKey = null;
     this._lastConnections = [];
     this._selectedRules = new Set();

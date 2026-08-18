@@ -3,7 +3,7 @@ window.Pages['network'] = {
   REFRESH_INTERVAL_MS: 3000,
   CHART_REFRESH_INTERVAL_MS: 30000,
   _connectionQuery: '',
-  _historyRangeHours: 24,
+  _historyRangeHours: 1,
   _historyCache: new Map(),
   _historyRequestToken: 0,
   _historyInspectIndex: null,
@@ -207,7 +207,7 @@ window.Pages['network'] = {
           <div class="heatmap-map-skin" aria-hidden="true"></div>
           <svg id="heatmapArcs" class="heatmap-arcs" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
           <div id="heatmapMarkers" class="heatmap-markers"></div>
-          <div id="heatmapHome" class="heatmap-home" aria-hidden="true"></div>
+          <button type="button" id="heatmapHome" class="heatmap-home" aria-label="${escapeHtml(t('network.heatmapHomeLabel'))}"></button>
           <div class="heatmap-pan-hint">${escapeHtml(t('network.heatmapPanHint'))}</div>
         </div>
         <div id="heatmapTooltip" class="heatmap-tooltip" role="tooltip"></div>
@@ -304,7 +304,9 @@ window.Pages['network'] = {
       marker.querySelector('.heatmap-marker-count').textContent = String(cluster.count);
       const label = marker.querySelector('.heatmap-marker-label');
       label.textContent = location;
-      label.hidden = !cluster.showLabel;
+      // Keep the map readable: location text is shown only for the selected
+      // cluster; the marker remains discoverable through its title/ARIA label.
+      label.hidden = !(cluster.showLabel && this._selectedClusterId === cluster.id);
       if (tierChanged) marker.classList.add('tier-changing');
     }
     for (const marker of existing.values()) {
@@ -324,6 +326,7 @@ window.Pages['network'] = {
     const signature = home ? `${home.lat}:${home.lon}|${clusters.map((cluster) => `${cluster.id}:${cluster.x.toFixed(2)}:${cluster.y.toFixed(2)}:${cluster.highestRisk}`).join('|')}` : '';
     homeEl.hidden = !home;
     svg.hidden = !home || !this._heatmapShowArcs;
+    widget.classList.toggle('heatmap-paths-hidden', !this._heatmapShowArcs || !home);
     toggle.disabled = !home;
     toggle.title = !home ? t('network.heatmapArcsUnavailable') : (this._heatmapShowArcs ? t('network.heatmapArcsOn') : t('network.heatmapArcsOff'));
     toggle.setAttribute('aria-pressed', this._heatmapShowArcs ? 'true' : 'false');
@@ -338,6 +341,7 @@ window.Pages['network'] = {
     homeEl.style.left = `${home.x}%`;
     homeEl.style.top = `${home.y}%`;
     homeEl.title = t('network.heatmapHomeLabel');
+    homeEl.dataset.location = [this._userLocation?.city, this._userLocation?.country].filter(Boolean).join(', ');
     if (signature === this._heatmapArcSignature) return;
     this._heatmapArcSignature = signature;
     const namespace = 'http://www.w3.org/2000/svg';
@@ -356,12 +360,15 @@ window.Pages['network'] = {
       path.setAttribute('class', `heatmap-arc ${riskClass}`);
       existing.delete(`path:${cluster.id}`);
       let dot = existing.get(`particle:${cluster.id}`);
-      if (!dot) { dot = document.createElementNS(namespace, 'ellipse'); svg.appendChild(dot); }
+      if (dot && dot.tagName.toLowerCase() !== 'circle') {
+        dot.remove();
+        dot = null;
+      }
+      if (!dot) { dot = document.createElementNS(namespace, 'circle'); svg.appendChild(dot); }
       dot.dataset.clusterId = cluster.id;
       dot.setAttribute('class', `heatmap-pulse-dot ${riskClass}`);
-      const dotRadius = cluster.highestRisk === 'MALICIOUS' ? 1.05 : 0.75;
-      dot.setAttribute('rx', String(dotRadius));
-      dot.setAttribute('ry', String(dotRadius * (950 / 620)));
+      const dotRadius = cluster.highestRisk === 'MALICIOUS' ? 1.15 : 0.9;
+      dot.setAttribute('r', String(dotRadius));
       dot.dataset.hx = String(home.x); dot.dataset.hy = String(home.y);
       dot.dataset.cx0 = String(midX); dot.dataset.cy0 = String(controlY);
       dot.dataset.tx = String(cluster.x); dot.dataset.ty = String(cluster.y);
@@ -371,7 +378,12 @@ window.Pages['network'] = {
       existing.delete(`particle:${cluster.id}`);
     }
     for (const node of existing.values()) node.remove();
-    this._startHeatmapPulses(widget);
+    if (this._heatmapShowArcs) {
+      this._startHeatmapPulses(widget);
+    } else if (this._heatmapPulseRaf) {
+      cancelAnimationFrame(this._heatmapPulseRaf);
+      this._heatmapPulseRaf = null;
+    }
   },
 
   _selectHeatmapCluster(clusterId) {
@@ -406,7 +418,7 @@ window.Pages['network'] = {
         <section><h4>${escapeHtml(t('network.heatmapTopServices'))}</h4><div class="heatmap-chip-list">${list(cluster.services, t('network.heatmapNone'))}</div></section>
         <section><h4>${escapeHtml(t('network.heatmapStatesPorts'))}</h4><div class="heatmap-chip-list">${list(cluster.states, t('network.heatmapNone'))}${list(cluster.ports, t('network.heatmapNone'))}</div></section>
         <section><h4>${escapeHtml(t('network.heatmapEndpoints'))}</h4><div class="heatmap-endpoints">${endpoints}</div></section>
-        <button type="button" id="heatmapFocusCluster" class="button secondary heatmap-focus">${escapeHtml(t('network.heatmapFocusCluster'))}</button>
+        <button type="button" id="heatmapFocusCluster" class="btn btn-primary heatmap-focus">${escapeHtml(t('network.heatmapFocusCluster'))}</button>
       </div>`;
     panel.hidden = false;
   },
@@ -511,12 +523,8 @@ async _renderAsync(container, t) {
         <p class="page-subtitle">${escapeHtml(t('network.subtitle'))}</p>
       </header>
       <div id="networkContent">
-        <div class="empty-state">
-          <span class="spinner"></span>&nbsp;${escapeHtml(t('network.loading'))}
-          <div style="margin-top: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
-            <img src="../../../assets/soteriosTextLogo.png" alt="Soterios" style="width: 120px; height: auto; filter: drop-shadow(0 0 16px var(--accent-primary));" />
-            <div class="loading-wordmark-message" id="networkLoadingMessage">${escapeHtml(t('loading.loadingConnections'))}</div>
-          </div>
+        <div class="analysis-loading">
+          <div class="analysis-loading-status"><span class="spinner"></span><span>${escapeHtml(t('network.loading'))}</span></div>
         </div>
       </div>
     `;
@@ -573,9 +581,13 @@ async _renderAsync(container, t) {
           return;
         }
         if (arcsToggle) {
-          window.Pages['network']._heatmapShowArcs = !window.Pages['network']._heatmapShowArcs;
+          const page = window.Pages['network'];
+          const widget = arcsToggle.closest('.heatmap-widget') || page._heatmapWidgetEl;
+          page._heatmapShowArcs = !page._heatmapShowArcs;
           const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
-          window.Pages['network']._diffHeatmapArcs(window.Pages['network']._heatmapWidgetEl, window.Pages['network']._heatmapClusters, t);
+          page._diffHeatmapArcs(widget, page._heatmapClusters, t);
+          const svg = widget?.querySelector('#heatmapArcs');
+          if (svg) svg.hidden = !page._heatmapShowArcs || !page._validHeatmapHome();
           return;
         }
         const focusCluster = e.target.closest('#heatmapFocusCluster');
@@ -596,7 +608,24 @@ async _renderAsync(container, t) {
           return;
         }
         const marker = e.target.closest('.heatmap-marker');
-        if (marker) {
+        const home = e.target.closest('#heatmapHome');
+        if (home) {
+          const page = window.Pages['network'];
+          const location = home.dataset.location || t('network.heatmapHomeLabel');
+          const coords = page._validHeatmapHome();
+          const tooltip = content.querySelector('#heatmapTooltip');
+          const viewport = content.querySelector('#heatmapViewport');
+          if (tooltip && viewport && coords) {
+            const vpRect = viewport.getBoundingClientRect();
+            const localX = e.clientX - vpRect.left;
+            const localY = e.clientY - vpRect.top;
+            tooltip.dataset.forIps = '';
+            tooltip.innerHTML = `<div style="font-weight:600; color:var(--text-main); margin-bottom:3px;">${escapeHtml(t('network.heatmapHomeLabel'))}</div><div style="color:var(--text-dim);">${escapeHtml(location)}</div><div style="color:var(--text-dim);">${coords.lat.toFixed(2)}°, ${coords.lon.toFixed(2)}°</div>`;
+            tooltip.style.display = 'block';
+            tooltip.style.left = `${Math.max(4, Math.min(vpRect.width - 190, localX + 14))}px`;
+            tooltip.style.top = `${Math.max(4, Math.min(vpRect.height - 70, localY + 14))}px`;
+          }
+        } else if (marker) {
           window.Pages['network']._selectHeatmapCluster(marker.dataset.clusterId);
         } else if (e.target.closest('.heatmap-infobox-close')) {
           window.Pages['network']._selectHeatmapCluster(null);
@@ -633,7 +662,7 @@ async _renderAsync(container, t) {
         if (e.button !== 0) return;
         const viewport = e.target.closest('#heatmapViewport');
         if (!viewport) return;
-        if (e.target.closest('.heatmap-marker') || e.target.closest('.heatmap-zoom-btn') || e.target.closest('#heatmapClusterPanel')) return;
+        if (e.target.closest('.heatmap-marker') || e.target.closest('#heatmapHome') || e.target.closest('.heatmap-zoom-btn') || e.target.closest('#heatmapClusterPanel')) return;
         const page = window.Pages['network'];
         page._heatmapDrag = {
           startX: e.clientX,
@@ -761,10 +790,15 @@ async _renderAsync(container, t) {
         const minimizeBtn = e.target.closest('.card-minimize-btn');
         if (minimizeBtn) {
           const cardId = minimizeBtn.dataset.cardId;
-          if (window.Pages['network']._minimized.has(cardId)) {
-            window.Pages['network']._minimized.delete(cardId);
-          } else {
-            window.Pages['network']._minimized.add(cardId);
+          const synced = ['bandwidth', 'connStates', 'secFlags'];
+          const ids = synced.includes(cardId) ? synced : [cardId];
+          const willMinimize = !window.Pages['network']._minimized.has(cardId);
+          for (const id of ids) {
+            if (willMinimize) {
+              window.Pages['network']._minimized.add(id);
+            } else {
+              window.Pages['network']._minimized.delete(id);
+            }
           }
           window.Pages['network'].load(container, false);
           return;
@@ -946,16 +980,18 @@ if (content) this.paintHistoryChart(content).catch(() => {});
         </div>`;
       }
 
-      html += '<div class="card" style="padding:14px 16px; margin-bottom:18px;">';
       const vpnMin = this._minimized.has('vpn');
+      html += `<div class="card" style="padding:${vpnMin ? '8px 16px' : '14px 16px'}; margin-bottom:18px;">`;
       html += `<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">`;
       html += `<div>
-        <h3 style="margin:0 0 2px; font-size:1rem; display:flex; align-items:center; gap:8px;">
+        <h3 style="margin:0; font-size:1rem; display:flex; align-items:center; gap:8px;">
           ${escapeHtml(t('network.vpnTitle'))}
           <button class="card-minimize-btn" data-card-id="vpn" title="${vpnMin ? 'Restore' : 'Minimize'}" style="background:none; border:none; cursor:pointer; color:var(--text-dim); font-size:1rem; padding:0 4px; line-height:1; transition:transform 0.2s;" aria-label="${vpnMin ? 'Restore' : 'Minimize'}">${vpnMin ? '&#9660;' : '&#9650;'}</button>
-        </h3>
-        <div class="page-subtitle" style="font-size:0.8rem;">${escapeHtml(t('network.vpnSubtitle'))}</div>
-      </div>`;
+        </h3>`;
+      if (!vpnMin) {
+        html += `<div class="page-subtitle" style="font-size:0.8rem;">${escapeHtml(t('network.vpnSubtitle'))}</div>`;
+      }
+      html += `</div>`;
       if (!vpnMin) {
         if (vpns.length === 0) {
         html += `<div style="font-size:0.8rem; color:var(--text-dim); flex:1 1 100%; display:flex; align-items:center; gap:8px;">
@@ -1989,7 +2025,7 @@ async renderAlertHits(content) {
     this._heatmapArcSignature = '';
     this._heatmapWidgetEl = null;
     this._historyRequestToken++;
-    this._historyRangeHours = 24;
+    this._historyRangeHours = 1;
     this._historyCache.clear();
     this._historyInspectIndex = null;
     this._alertsPanelEl = null;

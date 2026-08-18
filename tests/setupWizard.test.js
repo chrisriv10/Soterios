@@ -289,6 +289,15 @@ describe('first-run setup wizard source', () => {
     for (const selector of ['.setup-wizard', '.setup-dots', '.setup-logo', '.setup-theme-grid', '.setup-theme-card', '.setup-theme-card.active', '.setup-actions']) {
       assert.ok(styles.includes(selector), `style.css must define ${selector}`);
     }
+    assert.match(styles, /\.setup-wizard\s*\{[\s\S]*?display:\s*grid;/);
+    assert.match(styles, /\.setup-wizard\s*\{[\s\S]*?background:\s*var\(--bg-surface\);/);
+    assert.match(styles, /\.setup-wizard\s*\{[\s\S]*?border:\s*1px solid var\(--glass-border\);/);
+    assert.match(styles, /\.setup-step\.active\s*\{[\s\S]*?width:\s*min\(100%,\s*820px\);/);
+    assert.match(styles, /\.setup-logo img\s*\{[\s\S]*?height:\s*148px;/);
+    assert.match(styles, /\.setup-logo \.setup-wordmark\s*\{[\s\S]*?height:\s*88px;/);
+    assert.match(styles, /\.setup-actions\s*\{[\s\S]*?width:\s*min\(100%,\s*820px\);[\s\S]*?border-top:\s*1px solid var\(--glass-border\);/);
+    assert.match(styles, /@media\s*\(max-width:\s*720px\)/);
+    assert.match(styles, /@media\s*\(max-width:\s*480px\)/);
   });
 });
 
