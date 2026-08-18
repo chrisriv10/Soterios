@@ -205,12 +205,13 @@ function escToastHtml(v) {
   return String(v ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 }
 
-function toastHtml(title, body, level, themeName, iconOverride = null, openText = 'Open') {
+function toastHtml(title, body, level, themeName, iconOverride = null, openText = 'Open', action = null) {
   const theme = TOAST_THEMES[themeName] || TOAST_THEMES.dark;
   const accent = theme.accents[level] || theme.accents.info;
   const iconPaths = iconOverride || TOAST_ICONS[level] || TOAST_ICONS.info;
   const markDataUri = getToastMarkDataUri();
   const wordmarkDataUri = getToastWordmarkDataUri();
+  const hasAction = action === 'scanner' || action === 'tools';
   return `<!doctype html>
 <html><head><meta charset="utf-8"><style>
   html, body { margin:0; padding:0; background:transparent; overflow:hidden; user-select:none; }
@@ -226,7 +227,7 @@ function toastHtml(title, body, level, themeName, iconOverride = null, openText 
     box-shadow: 0 8px 28px rgba(0,0,0,0.45);
     font-family: 'Segoe UI', -apple-system, sans-serif;
     color: ${theme.textMain};
-    cursor: pointer;
+    ${hasAction ? 'cursor: pointer;' : ''}
     animation: toastIn 220ms ease-out;
     overflow: hidden;
   }
@@ -262,7 +263,7 @@ function toastHtml(title, body, level, themeName, iconOverride = null, openText 
       ${wordmarkDataUri ? `<img class="wordmark" src="${wordmarkDataUri}" alt="" />` : '<span class="wordmark-fallback">Soterios</span>'}
       <div class="spacer"></div>
       <div class="header-actions">
-        <div class="open-btn" id="openBtn">${escToastHtml(openText)}</div>
+        ${hasAction ? `<div class="open-btn" id="openBtn">${escToastHtml(openText)}</div>` : ''}
         <div class="close" id="closeBtn">&times;</div>
       </div>
     </div>
@@ -278,16 +279,18 @@ function toastHtml(title, body, level, themeName, iconOverride = null, openText 
   </div>
   <script>
     const toast = document.getElementById('toast');
+    const toastAction = ${JSON.stringify(hasAction ? action : null)};
     function dismiss() {
       toast.classList.add('closing');
       setTimeout(() => { window.close(); }, 200);
     }
     function openApp() {
-      window.location.href = 'soterios://navigate-scanner';
+      if (toastAction) window.location.href = 'soterios://navigate-' + toastAction;
       dismiss();
     }
     document.getElementById('closeBtn').addEventListener('click', (e) => { e.stopPropagation(); dismiss(); });
-    document.getElementById('openBtn').addEventListener('click', (e) => { e.stopPropagation(); openApp(); });
+    const openBtn = document.getElementById('openBtn');
+    if (openBtn) openBtn.addEventListener('click', (e) => { e.stopPropagation(); openApp(); });
     toast.addEventListener('click', () => {
       openApp();
     });
@@ -312,7 +315,7 @@ function repositionToasts() {
   }
 }
 
-function showNotification(title, body, level = 'info', iconOverride = null) {
+function showNotification(title, body, level = 'info', iconOverride = null, action = null) {
   if (dbRef && !featureFlags.getFlag(dbRef, 'notificationsEnabled', true)) return;
   try {
     const themeName = dbRef ? dbRef.getSetting('ui.theme', 'dark') : 'dark';
@@ -346,7 +349,7 @@ function showNotification(title, body, level = 'info', iconOverride = null) {
     const translatedBody = t(body);
     const translatedOpenText = t('toast.open');
     toastWindow.setAlwaysOnTop(true, 'screen-saver');
-    toastWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(toastHtml(translatedTitle, translatedBody, level, themeName, iconOverride, translatedOpenText)));
+    toastWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(toastHtml(translatedTitle, translatedBody, level, themeName, iconOverride, translatedOpenText, action)));
     toastWindow.once('ready-to-show', () => toastWindow.show());
     toastWindow.on('closed', () => {
       const idx = activeToasts.indexOf(toastWindow);
@@ -354,14 +357,13 @@ function showNotification(title, body, level = 'info', iconOverride = null) {
       repositionToasts();
     });
 
-    // Handle toast click to navigate to scanner
+    // Handle toast click to navigate to a page
     toastWindow.webContents.on('will-navigate', (event, url) => {
-      if (url === 'soterios://navigate-scanner') {
+      const match = url.match(/^soterios:\/\/navigate-([a-z0-9-]+)$/i);
+      if (match && mainWindow && !mainWindow.isDestroyed()) {
         event.preventDefault();
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.focus();
-          mainWindow.webContents.send('navigate-to-scanner');
-        }
+        mainWindow.focus();
+        mainWindow.webContents.send(`navigate-to-${match[1].toLowerCase()}`);
       }
     });
 
@@ -874,7 +876,7 @@ app.whenReady().then(async () => {
     getIdleTimeSeconds: () => {
       try { return powerMonitor.getSystemIdleTime(); } catch (_) { return 0; }
     },
-    notify: (title, body, level) => showNotification(t(title), t(body), level),
+    notify: (title, body, level) => showNotification(t(title), t(body), level, null, 'tools'),
     log: (level, message, meta) => logLine(level, message, meta)
   });
   maintenanceScheduler.start();
@@ -1007,9 +1009,9 @@ app.whenReady().then(async () => {
         const files = data.filesScanned || 0;
         // Use "Preparing scan" message for initial milestone when no files have been scanned yet
         if (files === 0 && data.message && data.message.includes('Preparing')) {
-          showNotification(t('toast.scanProgressTitle'), t('scan.preparing'), 'info');
+          showNotification(t('toast.scanProgressTitle'), t('scan.preparing'), 'info', null, 'scanner');
         } else {
-          showNotification(t('toast.scanProgressTitle'), t('scan.progress', { files, pct: data.pct }), 'info');
+          showNotification(t('toast.scanProgressTitle'), t('scan.progress', { files, pct: data.pct }), 'info', null, 'scanner');
         }
       }
     });
@@ -1056,7 +1058,7 @@ app.whenReady().then(async () => {
         }
       }
       const iconOverride = (data.threatsFound && data.threatsFound > 0) ? TOAST_ICONS.threat : null;
-      showNotification(label, body, level, iconOverride);
+      showNotification(label, body, level, iconOverride, 'scanner');
       // Auto-generate a scan report
       (async () => {
         try {

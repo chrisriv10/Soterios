@@ -87,10 +87,13 @@
   }
   navigate(initialPage);
 
-  // Listen for toast click to navigate to scanner
+  // Listen for toast click to navigate to a page
   if (window.api) {
     window.api.on('navigate-to-scanner', () => {
       navigate('scanner');
+    });
+    window.api.on('navigate-to-tools', () => {
+      navigate('tools');
     });
   }
 })();

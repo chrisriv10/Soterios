@@ -415,10 +415,10 @@ window.Pages.reports = {
   },
 
   formatBytes(bytes) {
-    if (bytes === 0) return '0 B';
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
     const k = 1024;
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    const i = Math.min(Math.max(Math.floor(Math.log(bytes) / Math.log(k)), 0), sizes.length - 1);
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   },
 
@@ -478,7 +478,7 @@ window.Pages.reports = {
       const items = rows.map((row, index) => {
         const when = row.started_at || row.timestamp;
         const whenLabel = when ? new Date(when).toLocaleString() : t('common.unknown');
-        const detail = (row.results || []).map((r) => formatResultDetail(r, t)).join('; ');
+        const detail = (row.results || []).map((r) => this.formatResultDetail(r, t)).join('; ');
         return `
           <div class="history-item">
             <div style="min-width:0;">
