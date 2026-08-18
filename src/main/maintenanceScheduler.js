@@ -31,6 +31,34 @@ const POLICY_MODES = new Set(['off', 'analyze', 'auto-clean']);
 const MIN_INTERVAL_HOURS = 24;
 const MAX_INTERVAL_HOURS = 720;
 
+const DEFAULT_SCRIPT_ARGS = {
+  'clear-temp-files': { minimumAgeDays: 7 },
+  'large-files-report': { thresholdMB: 100 },
+  'browser-cache-report': { browsers: [] }
+};
+
+function normalizeScriptArgs(value) {
+  const result = {};
+  for (const [scriptId, rawArgs] of Object.entries(value || {})) {
+    if (!ALLOWED_SCRIPT_IDS.has(scriptId)) continue;
+    if (!rawArgs || typeof rawArgs !== 'object' || Array.isArray(rawArgs)) continue;
+    const args = {};
+    if (rawArgs.minimumAgeDays !== undefined) {
+      const age = Math.floor(Number(rawArgs.minimumAgeDays));
+      if (Number.isFinite(age)) args.minimumAgeDays = Math.max(1, Math.min(365, age));
+    }
+    if (rawArgs.thresholdMB !== undefined) {
+      const mb = Math.floor(Number(rawArgs.thresholdMB));
+      if (Number.isFinite(mb)) args.thresholdMB = Math.max(1, Math.min(100000, mb));
+    }
+    if (Array.isArray(rawArgs.browsers)) {
+      args.browsers = rawArgs.browsers.map((value) => String(value).toLowerCase()).filter(Boolean);
+    }
+    if (Object.keys(args).length) result[scriptId] = args;
+  }
+  return result;
+}
+
 function normalizePolicies(value) {
   const result = {};
   for (const [scriptId, rawMode] of Object.entries(value || {})) {
@@ -110,6 +138,7 @@ class MaintenanceScheduler {
     if (!SCHEDULE_PRESETS[merged.schedulePreset]) merged.schedulePreset = DEFAULT_MAINTENANCE.schedulePreset;
     merged.intervalHours = resolveIntervalHours(merged);
     merged.minIdleSeconds = Math.max(60, Number(merged.minIdleSeconds) || DEFAULT_MAINTENANCE.minIdleSeconds);
+    merged.scriptArgs = { ...DEFAULT_SCRIPT_ARGS, ...normalizeScriptArgs(merged.scriptArgs) };
     const anchor = merged.lastAttempt || merged.lastRun;
     merged.nextEligibleRun = anchor
       ? new Date(new Date(anchor).getTime() + merged.intervalHours * 60 * 60 * 1000).toISOString()
@@ -138,6 +167,7 @@ class MaintenanceScheduler {
     }
     if (partial?.schedulePreset) merged.schedulePreset = SCHEDULE_PRESETS[partial.schedulePreset] ? partial.schedulePreset : merged.schedulePreset;
     merged.intervalHours = resolveIntervalHours(merged);
+    merged.scriptArgs = { ...DEFAULT_SCRIPT_ARGS, ...normalizeScriptArgs(merged.scriptArgs) };
     delete merged.nextEligibleRun;
     this.db.setSetting(this.settingKey, merged);
     return this.loadConfig();
@@ -232,6 +262,9 @@ class MaintenanceScheduler {
     if (argsOverride.minimumAgeDays && Number.isFinite(Number(argsOverride.minimumAgeDays))) {
       analysisArgs.minimumAgeDays = Math.max(1, Math.min(365, Math.floor(Number(argsOverride.minimumAgeDays))));
     }
+    if (scriptId === 'large-files-report' && argsOverride.thresholdMB && Number.isFinite(Number(argsOverride.thresholdMB))) {
+      analysisArgs.thresholdMB = Math.max(1, Math.min(100000, Math.floor(Number(argsOverride.thresholdMB))));
+    }
     const analysis = await this._executeScript(scriptId, analysisArgs, source);
     if (!analysis.ok || mode !== 'auto-clean') return { ...analysis, policy: mode, summary: summarizeResult(scriptId, analysis.data) };
     if (scriptId === 'clear-temp-files') {
@@ -269,7 +302,9 @@ class MaintenanceScheduler {
     try {
       for (const [scriptId, policyEntry] of Object.entries(effectivePolicies)) {
         const mode = typeof policyEntry === 'string' ? policyEntry : (policyEntry?.mode || 'off');
-        const argsOverride = policyEntry && typeof policyEntry === 'object' && policyEntry.args && typeof policyEntry.args === 'object' ? policyEntry.args : {};
+        const overrideArgs = policyEntry && typeof policyEntry === 'object' && policyEntry.args && typeof policyEntry.args === 'object' ? policyEntry.args : {};
+        const persistedArgs = options.manual ? {} : ((config.scriptArgs || {})[scriptId] || {});
+        const argsOverride = { ...persistedArgs, ...overrideArgs };
         if (this._cancelRequested) {
           results.push({ scriptId, policy: mode, ok: false, skipped: true, error: 'Canceled before start.' });
           continue;
@@ -330,7 +365,9 @@ module.exports = {
   SCHEDULE_PRESETS,
   MIN_INTERVAL_HOURS,
   MAX_INTERVAL_HOURS,
+  DEFAULT_SCRIPT_ARGS,
   scriptArgsFor,
   resolveIntervalHours,
-  normalizePolicies
+  normalizePolicies,
+  normalizeScriptArgs
 };

@@ -1734,5 +1734,10 @@
   "firewall.confirmDeleteRules": "{count} ausgewählte Regeln löschen?",
   "firewall.bulkDeletePartial": "{deleted} Regel(n) gelöscht. {failed} konnten nicht gelöscht werden.",
   "firewall.bulkTogglePartial": "{updated} Regel(n) aktualisiert. {failed} konnten nicht aktualisiert werden.",
-  "firewall.clearSelection": "Leeren"
+  "firewall.clearSelection": "Leeren",
+  "settings.tempAgeDays": "Mindestalter (Tage)",
+  "settings.largeFileThresholdMB": "Mindestgröße (MB)",
+  "settings.browserCacheBrowsers": "Zu bereinigende Browser",
+  "settings.browserCacheBrowsersHint": "Deaktiviert lassen, um den Cache in allen erkannten Browsern zu leeren.",
+  "settings.noBrowsersDetected": "Keine unterstützten Browser erkannt."
 }

@@ -52,6 +52,7 @@
     _notice: null,
     _maintenanceConfig: null,
     _maintenanceScripts: [],
+    _maintenanceBrowserOptions: [],
 
     e(value) {
       return String(value ?? '')
@@ -119,19 +120,22 @@
         Api.getActiveTools().catch(() => []),
         Api.getToolHistory(100).catch(() => []),
         (async () => {
-          const [cfgRes, scriptsRes] = await Promise.all([
+          const [cfgRes, scriptsRes, browsersRes] = await Promise.all([
             window.api.invoke('maintenance:get').catch(() => null),
-            window.api.invoke('maintenance:getScripts').catch(() => null)
+            window.api.invoke('maintenance:getScripts').catch(() => null),
+            window.api.invoke('maintenance:getBrowserOptions').catch(() => null)
           ]);
           return {
             config: cfgRes && cfgRes.ok ? cfgRes.data : null,
-            scripts: scriptsRes && scriptsRes.ok ? scriptsRes.data : []
+            scripts: scriptsRes && scriptsRes.ok ? scriptsRes.data : [],
+            browsers: browsersRes && browsersRes.ok ? browsersRes.data : []
           };
         })()
       ]);
       this._history = history;
       this._maintenanceConfig = maintenance.config;
       this._maintenanceScripts = maintenance.scripts || [];
+      this._maintenanceBrowserOptions = maintenance.browsers || [];
       for (const run of active) {
         this._runs[run.toolId] = run;
         this._progress[run.toolId] = run;
@@ -245,14 +249,16 @@
         const desc = trans ? this.t(trans[1], script.description) : script.description;
         const on = !!selectedPolicies[script.id] && selectedPolicies[script.id] !== 'off';
         const onValue = script.autoCleanAllowed ? 'auto-clean' : 'analyze';
+        const savedArgs = ((config && config.scriptArgs) || {})[script.id] || {};
         return `
-        <div style="display:grid; grid-template-columns:minmax(0,1fr) 150px; align-items:start; gap:12px; margin-bottom:10px;">
+        <div style="display:grid; grid-template-columns:minmax(0,1fr) 150px; align-items:start; gap:12px; margin-bottom:4px;">
           <span><strong>${this.e(name)}</strong><br /><span style="color:var(--text-muted);">${this.e(desc)}</span></span>
           <select class="maintenance-policy-select field-input" data-script-id="${this.e(script.id)}" aria-label="${this.e(name)} policy">
             <option value="off" ${on ? '' : 'selected'}>Off</option>
             <option value="${onValue}" ${on ? 'selected' : ''}>On</option>
           </select>
-        </div>`;
+        </div>
+        ${on ? this._maintenanceArgRow(script.id, savedArgs) : ''}`;
       }).join('') : `<span style="color:var(--text-muted);">${this.e(this.t('settings.maintenanceUnavailable', 'Maintenance scripts are unavailable.'))}</span>`;
       return `<section class="card scheduled-maintenance-section" style="margin-top:24px;" aria-labelledby="scheduledMaintenanceTitle">
         <div class="panel-title" style="margin-bottom:16px;" id="scheduledMaintenanceTitle">${this.e(this.t('settings.scheduledMaintenance', 'Scheduled Maintenance'))}</div>
@@ -306,6 +312,34 @@
         </div>
         <div id="maintenanceStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);">${statusText}</div>
       </section>`;
+    },
+
+    _maintenanceArgRow(scriptId, args) {
+      if (scriptId === 'clear-temp-files') {
+        return `<div class="script-arg-row" data-arg-script="clear-temp-files" style="display:grid; grid-template-columns:minmax(0,1fr) 150px; align-items:center; gap:12px; margin-bottom:10px; margin-left:24px;">
+          <label class="field-label" for="scriptArg-minimumAgeDays" style="margin:0;">${this.e(this.t('settings.tempAgeDays', 'Minimum age (days)'))}</label>
+          <input type="number" class="field-input" id="scriptArg-minimumAgeDays" min="1" max="365" value="${args.minimumAgeDays ?? 7}" />
+        </div>`;
+      }
+      if (scriptId === 'large-files-report') {
+        return `<div class="script-arg-row" data-arg-script="large-files-report" style="display:grid; grid-template-columns:minmax(0,1fr) 150px; align-items:center; gap:12px; margin-bottom:10px; margin-left:24px;">
+          <label class="field-label" for="scriptArg-thresholdMB" style="margin:0;">${this.e(this.t('settings.largeFileThresholdMB', 'Minimum size (MB)'))}</label>
+          <input type="number" class="field-input" id="scriptArg-thresholdMB" min="1" max="100000" value="${args.thresholdMB ?? 100}" />
+        </div>`;
+      }
+      if (scriptId === 'browser-cache-report') {
+        const options = this._maintenanceBrowserOptions || [];
+        const selected = (args.browsers || []).map((value) => String(value).toLowerCase());
+        const checks = options.length
+          ? options.map((browser) => `<label class="check-label" style="display:inline-flex; align-items:center; gap:6px; margin-right:12px;"><input type="checkbox" value="${this.e(browser.id)}" ${selected.includes(String(browser.id).toLowerCase()) ? 'checked' : ''} /> ${this.e(browser.name)}</label>`).join('')
+          : `<span style="color:var(--text-muted);">${this.e(this.t('settings.noBrowsersDetected', 'No supported browsers detected.'))}</span>`;
+        return `<div class="script-arg-row" data-arg-script="browser-cache-report" style="display:grid; grid-template-columns:minmax(0,1fr); gap:6px; margin-bottom:10px; margin-left:24px;">
+          <label class="field-label" style="margin:0;">${this.e(this.t('settings.browserCacheBrowsers', 'Browsers to clear'))}</label>
+          <div id="scriptArgBrowsers">${checks}</div>
+          <span style="color:var(--text-muted); font-size:0.8rem;">${this.e(this.t('settings.browserCacheBrowsersHint', 'Leave unchecked to clear cache in all detected browsers.'))}</span>
+        </div>`;
+      }
+      return '';
     },
 
     _renderHubCard(tool) {
@@ -537,7 +571,7 @@
     _renderVault(result) {
       const items = result.items || [];
       const staged = items.filter((item) => item.status === 'staged');
-      return `${this._summaryTiles([[this.t('tools.vault.availableToRestore', 'Available to restore'), staged.length], [this.t('tools.vault.stagedData', 'Staged data'), this.bytes(staged.reduce((sum, item) => sum + item.sizeBytes, 0))], [this.t('tools.vault.actuallyReclaimed', 'Actually reclaimed'), this.bytes(items.filter((item) => item.status === 'purged').reduce((sum, item) => sum + item.sizeBytes, 0))]])}<div class="maintenance-result-banner result-clean"><strong>${this.e(this.t('tools.vault.stagedNotDeleted', 'Staged files are never deleted'))}</strong><span>${this.e(this.t('tools.vault.stagedNotDeletedDesc', 'Staged files stay on disk until they expire or you purge them.'))}</span></div>${items.length ? `<div class="maintenance-table-wrap"><table class="maintenance-table"><thead><tr><th>${this.e(this.t('tools.vault.originalPath', 'Original path'))}</th><th>${this.e(this.t('tools.vault.operation', 'Operation'))}</th><th>${this.e(this.t('tools.vault.size', 'Size'))}</th><th>${this.e(this.t('tools.vault.expires', 'Expires'))}</th><th>${this.e(this.t('tools.vault.status', 'Status'))}</th><th></th></tr></thead><tbody>${items.map((item) => `<tr><td class="path-cell" title="${this.e(item.originalPath)}">${this.e(item.originalPath)}</td><td>${this.e(item.operation)}</td><td>${this.bytes(item.sizeBytes)}</td><td>${this.e(new Date(item.expiresAt).toLocaleString())}</td><td>${this.e(this.t(`tools.vault.status.${item.status}`, item.status))}</td><td class="button-cell">${item.status === 'staged' ? `<button class="btn btn-sm btn-primary" data-action="restore-vault" data-vault-id="${this.e(item.id)}">${this.e(this.t('tools.vault.restore', 'Restore'))}</button><button class="btn btn-sm btn-danger" data-action="purge-vault" data-vault-id="${this.e(item.id)}">${this.e(this.t('tools.vault.purgeNow', 'Purge Now'))}</button>` : ''}<button class="btn btn-sm btn-ghost" data-action="reveal" data-path="${this.e(item.originalPath)}">${this.e(this.t('tools.vault.originalLocation', 'Original location'))}</button></td></tr>`).join('')}</tbody></table></div>` : `<div class="maintenance-empty"><h3>${this.e(this.t('tools.vault.empty', 'The Safety Vault is empty'))}</h3><p>${this.e(this.t('tools.vault.emptyDesc', 'Files staged from Large Files, Duplicate Finder, and leftover cleanup will appear here.'))}</p></div>`}`;
+      return `${this._summaryTiles([[this.t('tools.vault.availableToRestore', 'Available to restore'), staged.length], [this.t('tools.vault.stagedData', 'Staged data'), this.bytes(staged.reduce((sum, item) => sum + item.sizeBytes, 0))], [this.t('tools.vault.actuallyReclaimed', 'Actually reclaimed'), this.bytes(items.filter((item) => item.status === 'purged').reduce((sum, item) => sum + item.sizeBytes, 0))]])}<div class="maintenance-result-banner result-clean"><strong>${this.e(this.t('tools.vault.stagedNotDeleted', 'Staged files are never deleted'))}</strong><span>${this.e(this.t('tools.vault.stagedNotDeletedDesc', 'Staged files stay on disk until they expire or you delete them.'))}</span></div>${items.length ? `<div class="maintenance-table-wrap"><table class="maintenance-table"><thead><tr><th>${this.e(this.t('tools.vault.originalPath', 'Original path'))}</th><th>${this.e(this.t('tools.vault.operation', 'Operation'))}</th><th>${this.e(this.t('tools.vault.size', 'Size'))}</th><th>${this.e(this.t('tools.vault.expires', 'Expires'))}</th><th>${this.e(this.t('tools.vault.status', 'Status'))}</th><th></th></tr></thead><tbody>${items.map((item) => `<tr><td class="path-cell" title="${this.e(item.originalPath)}">${this.e(item.originalPath)}</td><td>${this.e(item.operation)}</td><td>${this.bytes(item.sizeBytes)}</td><td>${this.e(new Date(item.expiresAt).toLocaleString())}</td><td>${this.e(this.t(`tools.vault.status.${item.status}`, item.status))}</td><td class="button-cell">${item.status === 'staged' ? `<button class="btn btn-sm btn-primary" data-action="restore-vault" data-vault-id="${this.e(item.id)}">${this.e(this.t('tools.vault.restore', 'Restore'))}</button><button class="btn btn-sm btn-danger" data-action="purge-vault" data-vault-id="${this.e(item.id)}">${this.e(this.t('tools.vault.purgeNow', 'Delete Now'))}</button>` : ''}<button class="btn btn-sm btn-ghost" data-action="reveal" data-path="${this.e(item.originalPath)}">${this.e(this.t('tools.vault.originalLocation', 'Original location'))}</button></td></tr>`).join('')}</tbody></table></div>` : `<div class="maintenance-empty"><h3>${this.e(this.t('tools.vault.empty', 'The Safety Vault is empty'))}</h3><p>${this.e(this.t('tools.vault.emptyDesc', 'Files staged from Large Files, Duplicate Finder, and leftover cleanup will appear here.'))}</p></div>`}`;
     },
 
     _renderPersistence(result) {
@@ -658,6 +692,11 @@
         if (wrap) wrap.style.display = target.value === 'custom' ? 'block' : 'none';
         return;
       }
+      if (target.classList.contains('maintenance-policy-select')) {
+        const row = this._container.querySelector(`.script-arg-row[data-arg-script="${target.dataset.scriptId}"]`);
+        if (row) row.style.display = target.value === 'off' ? 'none' : 'grid';
+        return;
+      }
       if (target.classList.contains('large-select')) { target.checked ? this._selectedLarge.add(target.dataset.path) : this._selectedLarge.delete(target.dataset.path); return; }
       if (target.classList.contains('temp-select')) { target.checked ? this._selectedTemp.add(target.dataset.path) : this._selectedTemp.delete(target.dataset.path); return; }
       if (target.classList.contains('duplicate-select')) { target.checked ? this._selectedDuplicates.add(target.dataset.path) : this._selectedDuplicates.delete(target.dataset.path); return; }
@@ -681,11 +720,21 @@
         const policies = Object.fromEntries(Array.from(container.querySelectorAll('.maintenance-policy-select'))
           .filter((el) => el.value !== 'off')
           .map((el) => [el.dataset.scriptId, el.value]));
+        const scriptArgs = {};
+        const ageInput = container.querySelector('#scriptArg-minimumAgeDays');
+        if (ageInput) scriptArgs['clear-temp-files'] = { minimumAgeDays: Number(ageInput.value) };
+        const sizeInput = container.querySelector('#scriptArg-thresholdMB');
+        if (sizeInput) scriptArgs['large-files-report'] = { thresholdMB: Number(sizeInput.value) };
+        const browserWrap = container.querySelector('#scriptArgBrowsers');
+        if (browserWrap) {
+          scriptArgs['browser-cache-report'] = { browsers: Array.from(browserWrap.querySelectorAll('input[type="checkbox"]:checked')).map((el) => el.value) };
+        }
         const response = await window.api.invoke('maintenance:set', {
           enabled: container.querySelector('#maintenanceEnabledToggle').checked,
           schedulePreset: container.querySelector('#maintenancePreset').value,
           intervalHours: Number(container.querySelector('#maintenanceInterval').value || 168),
           policies,
+          scriptArgs,
           notifyOnComplete: container.querySelector('#maintenanceNotifyToggle').checked
         });
         if (!response || !response.ok) throw new Error(response?.error || this.t('settings.saveMaintenanceError', 'Failed to save maintenance settings.'));
@@ -821,7 +870,7 @@
     async _stageVault(items, operation) {
       const response = await window.soterios.vault.stage(items, { operation });
       if (!response.ok) throw new Error(response.error);
-      this._setNotice(`${response.data.staged.length} item(s) staged for seven days. No space is reclaimed until they are purged.`, response.data.failed.length ? 'warning' : 'success');
+      this._setNotice(`${response.data.staged.length} item(s) staged for seven days. No space is reclaimed until they are deleted.`, response.data.failed.length ? 'warning' : 'success');
       return response.data;
     },
 
@@ -829,7 +878,7 @@
       const result = this._results['large-files-report'];
       const selectedPaths = [...this._container.querySelectorAll('.large-select:checked')].map((input) => input.dataset.path);
       if (!selectedPaths.length) throw new Error('Select at least one file.');
-      const ok = await this._confirm({ title: 'Stage selected large files?', message: 'The files will move to the Safety Vault for seven days. They will still use disk space until purged.', confirmLabel: 'Stage files' });
+      const ok = await this._confirm({ title: 'Stage selected large files?', message: 'The files will move to the Safety Vault for seven days. They will still use disk space until deleted.', confirmLabel: 'Stage files' });
       if (!ok) return;
       const items = selectedPaths.map((filePath) => result.files.find((file) => file.path === filePath)).filter(Boolean);
       await this._stageVault(items, 'Large Files cleanup');
@@ -946,11 +995,11 @@
     },
 
     async _purgeVault(id) {
-      const ok = await this._confirm({ title: 'Purge this Vault item now?', message: 'The staged copy will be permanently deleted and its space reclaimed. This cannot be undone.', confirmLabel: 'Purge permanently', danger: true });
+      const ok = await this._confirm({ title: 'Delete this Vault item now?', message: 'The staged copy will be permanently deleted and its space reclaimed. This cannot be undone.', confirmLabel: 'Delete permanently', danger: true });
       if (!ok) return;
       const response = await window.soterios.vault.purge(id);
       if (!response.ok) throw new Error(response.error);
-      this._setNotice(`Purged ${this.bytes(response.data.reclaimedBytes)}.`, 'success');
+      this._setNotice(`Deleted ${this.bytes(response.data.reclaimedBytes)}.`, 'success');
       await this._loadServiceState('maintenance-safety-vault'); this._renderView();
     },
 

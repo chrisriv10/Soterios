@@ -1734,5 +1734,10 @@
   "firewall.confirmDeleteRules": "Usunąć {count} zaznaczonych reguł?",
   "firewall.bulkDeletePartial": "Usunięto {deleted} reguł(y). {failed} nie można usunąć.",
   "firewall.bulkTogglePartial": "Zaktualizowano {updated} reguł(y). {failed} nie można zaktualizować.",
-  "firewall.clearSelection": "Wyczyść"
+  "firewall.clearSelection": "Wyczyść",
+  "settings.tempAgeDays": "Minimalny wiek (dni)",
+  "settings.largeFileThresholdMB": "Minimalny rozmiar (MB)",
+  "settings.browserCacheBrowsers": "Przeglądarki do wyczyszczenia",
+  "settings.browserCacheBrowsersHint": "Pozostaw niezaznaczone, aby wyczyścić pamięć podręczną we wszystkich wykrytych przeglądarkach.",
+  "settings.noBrowsersDetected": "Nie wykryto obsługiwanych przeglądarek."
 }

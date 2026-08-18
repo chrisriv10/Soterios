@@ -19,7 +19,7 @@ const updater = require('../updater');
 const { getTrayHealthSummary } = require('../healthSummary');
 const {
   MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS, ALLOWED_SCRIPT_IDS,
-  AUTO_CLEAN_SCRIPT_IDS, POLICY_MODES, SCHEDULE_PRESETS
+  AUTO_CLEAN_SCRIPT_IDS, POLICY_MODES, SCHEDULE_PRESETS, normalizeScriptArgs
 } = require('../maintenanceScheduler');
 const performanceModes = require('../performanceModes');
 const { loadRegistry } = require('../../scripts/scriptRunner');
@@ -206,6 +206,39 @@ function register(mainWindow, {
       if (!Object.keys(policies).length) return { ok: false, error: 'Select at least one maintenance policy.' };
       next.policies = policies;
       delete next.scriptIds;
+    }
+    if (Object.prototype.hasOwnProperty.call(next, 'scriptArgs')) {
+      if (!next.scriptArgs || typeof next.scriptArgs !== 'object' || Array.isArray(next.scriptArgs)) {
+        return { ok: false, error: 'scriptArgs must be an object.' };
+      }
+      const { browserIds } = require('../../scripts/safeScripts/browserCacheReport');
+      const knownBrowserIds = new Set(browserIds);
+      for (const [id, rawArgs] of Object.entries(next.scriptArgs)) {
+        if (!ALLOWED_SCRIPT_IDS.has(id)) continue;
+        if (!rawArgs || typeof rawArgs !== 'object' || Array.isArray(rawArgs)) continue;
+        if (rawArgs.minimumAgeDays !== undefined) {
+          const age = Math.floor(Number(rawArgs.minimumAgeDays));
+          if (!Number.isFinite(age) || age < 1 || age > 365) {
+            return { ok: false, error: 'minimumAgeDays must be between 1 and 365.' };
+          }
+        }
+        if (rawArgs.thresholdMB !== undefined) {
+          const mb = Math.floor(Number(rawArgs.thresholdMB));
+          if (!Number.isFinite(mb) || mb < 1 || mb > 100000) {
+            return { ok: false, error: 'thresholdMB must be between 1 and 100000.' };
+          }
+        }
+        if (rawArgs.browsers !== undefined) {
+          if (!Array.isArray(rawArgs.browsers)) {
+            return { ok: false, error: 'browsers must be an array.' };
+          }
+          const selected = rawArgs.browsers.map((value) => String(value).toLowerCase());
+          if (selected.some((value) => !knownBrowserIds.has(value))) {
+            return { ok: false, error: 'Unknown browser id in browsers.' };
+          }
+        }
+      }
+      next.scriptArgs = normalizeScriptArgs(next.scriptArgs);
     }
     return { ok: true, data: maintenanceScheduler.saveConfig(next) };
   });
