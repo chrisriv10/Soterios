@@ -223,6 +223,61 @@ function register(mainWindow, {
     return { ok: true, data: scripts };
   });
 
+  ipcMain.handle('maintenance:getBrowserOptions', async () => {
+    try {
+      const { listInstalledBrowsers } = require('../../scripts/safeScripts/browserCacheReport');
+      const browsers = await listInstalledBrowsers();
+      return { ok: true, data: browsers };
+    } catch (e) {
+      return { ok: false, error: e.message || String(e) };
+    }
+  });
+
+  ipcMain.handle('maintenance:runManual', async (_event, payload) => {
+    if (!maintenanceScheduler) return { ok: false, error: 'Maintenance scheduler unavailable.' };
+    const policies = payload?.policies;
+    if (!policies || typeof policies !== 'object' || Array.isArray(policies)) {
+      return { ok: false, error: 'policies must be an object.' };
+    }
+    const { browserIds } = require('../../scripts/safeScripts/browserCacheReport');
+    const knownBrowserIds = new Set(browserIds);
+    const entries = {};
+    for (const [id, entry] of Object.entries(policies)) {
+      if (!ALLOWED_SCRIPT_IDS.has(id)) continue;
+      const mode = entry && typeof entry === 'object' ? entry.mode : entry;
+      if (!POLICY_MODES.has(mode) || mode === 'off') continue;
+      const args = entry && typeof entry === 'object' && entry.args && typeof entry.args === 'object' ? entry.args : {};
+      if (id === 'clear-temp-files' && args.minimumAgeDays !== undefined) {
+        const age = Math.floor(Number(args.minimumAgeDays));
+        if (!Number.isFinite(age) || age < 1 || age > 365) {
+          return { ok: false, error: 'minimumAgeDays must be between 1 and 365.' };
+        }
+      }
+      if (id === 'browser-cache-report') {
+        if (!Array.isArray(args.browsers) || !args.browsers.length) {
+          return { ok: false, error: 'Select at least one browser to clear.' };
+        }
+        const selected = args.browsers.map((value) => String(value).toLowerCase());
+        if (selected.some((value) => !knownBrowserIds.has(value))) {
+          return { ok: false, error: 'Unknown browser id in browsers.' };
+        }
+      }
+      entries[id] = { mode, args };
+    }
+    if (!Object.keys(entries).length) return { ok: false, error: 'Select at least one cleanup policy.' };
+    const result = await maintenanceScheduler.runNow({ dryRunCleanup: false, manual: true, policyOverrides: entries });
+    if (result.skipped) {
+      return {
+        ok: false,
+        error: result.reason === 'already-running'
+          ? 'Maintenance is already running.'
+          : `Maintenance skipped: ${result.reason || 'unknown'}.`,
+        data: result,
+      };
+    }
+    return { ok: true, data: result };
+  });
+
   ipcMain.handle('maintenance:getHistory', () => ({ ok: true, data: db.getMaintenanceHistory(25) }));
 
   ipcMain.handle('maintenance:deleteRun', (_event, id) => {

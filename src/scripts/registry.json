@@ -1,7 +1,7 @@
 {
   "scripts": [
     {
-      "id": "clear-temp-files", "name": "Clear Temp Files", "description": "Analyze protected temp locations, preview removable items, and permanently clear an approved selection.",
+      "id": "clear-temp-files", "name": "Clear Temp Files", "description": "Find removable temporary files and clear them from protected temp locations.",
       "file": "safeScripts/clearTemp.js", "runner": "script", "category": "cleanup-storage", "impact": "medium", "icon": "trash-2",
       "inputs": ["minimumAgeDays", "mode", "selectedPaths"], "progress": true, "cancellation": true, "scheduling": ["analyze", "auto-clean"], "visible": true
     },
@@ -11,7 +11,7 @@
       "inputs": ["scanPath", "thresholdMB", "page", "pageSize"], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
     },
     {
-      "id": "browser-cache-report", "name": "Browser Cache", "description": "Measure cache-only data across installed browser profiles without touching history, cookies, passwords, or site storage.",
+      "id": "browser-cache-report", "name": "Browser Cache", "description": "Measure and clear cache-only data across installed browser profiles without touching history, cookies, passwords, or site storage.",
       "file": "safeScripts/browserCacheReport.js", "runner": "script", "category": "cleanup-storage", "impact": "medium", "icon": "globe-2",
       "inputs": ["mode", "browserIds"], "progress": true, "cancellation": true, "scheduling": ["analyze", "auto-clean"], "visible": true
     },

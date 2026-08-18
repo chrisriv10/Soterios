@@ -50,6 +50,8 @@
     _softwareSearch: '',
     _leftoverAppName: '',
     _notice: null,
+    _maintenanceConfig: null,
+    _maintenanceScripts: [],
 
     e(value) {
       return String(value ?? '')
@@ -113,11 +115,23 @@
       const response = await Api.listTools();
       this._registry = (response?.ok ? response.data : response) || [];
       this._registry = this._registry.filter((tool) => tool.visible !== false);
-      const [active, history] = await Promise.all([
+      const [active, history, maintenance] = await Promise.all([
         Api.getActiveTools().catch(() => []),
-        Api.getToolHistory(100).catch(() => [])
+        Api.getToolHistory(100).catch(() => []),
+        (async () => {
+          const [cfgRes, scriptsRes] = await Promise.all([
+            window.api.invoke('maintenance:get').catch(() => null),
+            window.api.invoke('maintenance:getScripts').catch(() => null)
+          ]);
+          return {
+            config: cfgRes && cfgRes.ok ? cfgRes.data : null,
+            scripts: scriptsRes && scriptsRes.ok ? scriptsRes.data : []
+          };
+        })()
       ]);
       this._history = history;
+      this._maintenanceConfig = maintenance.config;
+      this._maintenanceScripts = maintenance.scripts || [];
       for (const run of active) {
         this._runs[run.toolId] = run;
         this._progress[run.toolId] = run;
@@ -206,7 +220,92 @@
             </div>
           </section>`;
         }).join('')}
-      </div>`;
+      </div>
+      ${this._renderMaintenanceSection()}`;
+    },
+
+    _renderMaintenanceSection() {
+      const config = this._maintenanceConfig;
+      const scripts = this._maintenanceScripts;
+      const selectedPolicies = (config && config.policies) || {
+        'clear-temp-files': 'analyze',
+        'disk-space-report': 'analyze'
+      };
+      const preset = (config && config.schedulePreset) || 'weekly';
+      const intervalHours = (config && config.intervalHours) || 168;
+      let statusText = '';
+      if (config && config.lastRun) {
+        const next = config.nextEligibleRun ? ` · Next eligible ${new Date(config.nextEligibleRun).toLocaleString()}` : '';
+        const reclaimed = config.lastResult?.reclaimedBytes ? ` · Reclaimed ${(config.lastResult.reclaimedBytes / 1024 / 1024).toFixed(1)} MB` : '';
+        statusText = `${this.e(this.t('settings.lastRun', 'Last run', { when: new Date(config.lastRun).toLocaleString() }))}${next}${reclaimed}`;
+      }
+      const scriptRows = scripts.length ? scripts.map((script) => {
+        const trans = TOOL_I18N[script.id];
+        const name = trans ? this.t(trans[0], script.name) : script.name;
+        const desc = trans ? this.t(trans[1], script.description) : script.description;
+        const on = !!selectedPolicies[script.id] && selectedPolicies[script.id] !== 'off';
+        const onValue = script.autoCleanAllowed ? 'auto-clean' : 'analyze';
+        return `
+        <div style="display:grid; grid-template-columns:minmax(0,1fr) 150px; align-items:start; gap:12px; margin-bottom:10px;">
+          <span><strong>${this.e(name)}</strong><br /><span style="color:var(--text-muted);">${this.e(desc)}</span></span>
+          <select class="maintenance-policy-select field-input" data-script-id="${this.e(script.id)}" aria-label="${this.e(name)} policy">
+            <option value="off" ${on ? '' : 'selected'}>Off</option>
+            <option value="${onValue}" ${on ? 'selected' : ''}>On</option>
+          </select>
+        </div>`;
+      }).join('') : `<span style="color:var(--text-muted);">${this.e(this.t('settings.maintenanceUnavailable', 'Maintenance scripts are unavailable.'))}</span>`;
+      return `<section class="card scheduled-maintenance-section" style="margin-top:24px;" aria-labelledby="scheduledMaintenanceTitle">
+        <div class="panel-title" style="margin-bottom:16px;" id="scheduledMaintenanceTitle">${this.e(this.t('settings.scheduledMaintenance', 'Scheduled Maintenance'))}</div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">${this.e(this.t('settings.enableMaintenance.label', 'Enable scheduled maintenance'))}</div>
+            <div class="toggle-desc">${this.e(this.t('settings.enableMaintenance.desc', 'Run maintenance scripts automatically on a schedule.'))}</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="maintenanceEnabledToggle" ${config && config.enabled ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <label class="field-label">${this.e(this.t('settings.schedule', 'Schedule'))}</label>
+          <select id="maintenancePreset" class="field-input">
+            <option value="daily" ${preset === 'daily' ? 'selected' : ''}>${this.e(this.t('settings.daily', 'Daily'))}</option>
+            <option value="weekly" ${preset === 'weekly' ? 'selected' : ''}>${this.e(this.t('settings.weekly', 'Weekly'))}</option>
+            <option value="idle" ${preset === 'idle' ? 'selected' : ''}>${this.e(this.t('settings.idle', 'When idle'))}</option>
+            <option value="custom" ${preset === 'custom' ? 'selected' : ''}>${this.e(this.t('settings.custom', 'Custom'))}</option>
+          </select>
+        </div>
+        <div class="field" id="maintenanceCustomIntervalWrap" style="margin-top:12px; ${preset === 'custom' ? '' : 'display:none;'}">
+          <label class="field-label">${this.e(this.t('settings.intervalHours', 'Interval (hours)'))}</label>
+          <input type="number" id="maintenanceInterval" min="24" max="720" value="${intervalHours}" />
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <label class="field-label">${this.e(this.t('settings.scriptsToRun', 'Scripts to run'))}</label>
+          <div id="maintenanceScriptList" class="page-subtitle" style="font-size:0.85rem;">${scriptRows}</div>
+        </div>
+        <div class="toggle-row" style="margin-top:8px;">
+          <div>
+            <div class="toggle-label">${this.e(this.t('settings.notifyOnComplete.label', 'Notify on completion'))}</div>
+            <div class="toggle-desc">${this.e(this.t('settings.notifyOnComplete.desc', 'Show a notification when scheduled maintenance finishes.'))}</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="maintenanceNotifyToggle" ${!config || config.notifyOnComplete !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+        </div>
+        <div style="margin-top:12px;">
+          <button class="btn btn-primary" id="saveMaintenance" data-action="save-maintenance">${this.e(this.t('settings.saveMaintenance', 'Save Maintenance'))}</button>
+          <button class="btn btn-secondary" id="runMaintenanceNow" data-action="run-maintenance" style="margin-left:8px;">${this.e(this.t('settings.runNow', 'Run Now'))}</button>
+          <button class="btn btn-ghost" id="cancelMaintenance" data-action="cancel-maintenance" style="margin-left:8px; display:none;">${this.e(this.t('common.cancel', 'Cancel'))}</button>
+        </div>
+        <div id="maintenanceOutput" style="margin-top:12px; display:none;">
+          <div class="output-panel" style="height:300px; border-radius:8px;">
+            <div class="output-header">
+              <span>${this.e(this.t('tools.output', 'Output'))}</span>
+              <div style="display:flex; gap:8px;">
+                <button class="btn btn-sm btn-ghost" id="maximizeMaintenanceBtn" data-action="maximize-maintenance">${this.e(this.t('common.maximize', 'Maximize'))}</button>
+                <button class="btn btn-sm btn-ghost" id="clearMaintenanceBtn" data-action="clear-maintenance">${this.e(this.t('tools.clear', 'Clear'))}</button>
+              </div>
+            </div>
+            <div class="output-body" id="maintenanceOutputBody"></div>
+          </div>
+        </div>
+        <div id="maintenanceStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);">${statusText}</div>
+      </section>`;
     },
 
     _renderHubCard(tool) {
@@ -528,11 +627,37 @@
       if (action === 'purge-vault') { await this._purgeVault(target.dataset.vaultId); return; }
       if (action === 'approve-persistence') { await this._approvePersistence(target.dataset.scope); return; }
       if (action === 'open-utility') { await window.soterios.shell.openWindowsUtility(target.dataset.utility); return; }
+      if (action === 'save-maintenance') { await this._saveMaintenance(); return; }
+      if (action === 'run-maintenance') { await this._runMaintenanceNow(); return; }
+      if (action === 'cancel-maintenance') {
+        await window.api.invoke('maintenance:cancel');
+        const status = this._container.querySelector('#maintenanceStatus');
+        if (status) status.textContent = 'Canceling maintenance…';
+        return;
+      }
+      if (action === 'maximize-maintenance') {
+        const outputPanel = this._container.querySelector('#maintenanceOutput .output-panel');
+        const btn = this._container.querySelector('#maximizeMaintenanceBtn');
+        if (!outputPanel || !btn) return;
+        const isMaximized = outputPanel.classList.toggle('maximized');
+        btn.textContent = isMaximized ? this.t('common.minimize', 'Minimize') : this.t('common.maximize', 'Maximize');
+        return;
+      }
+      if (action === 'clear-maintenance') {
+        const outputBody = this._container.querySelector('#maintenanceOutputBody');
+        if (outputBody) outputBody.innerHTML = '<div class="empty-state">Cleared.</div>';
+        return;
+      }
     },
 
     _handleChange(target) {
       if (target.id === 'showMicrosoftTasks') { this._taskShowMicrosoft = target.checked; this._renderView(); return; }
       if (target.id === 'serviceRiskFilter') { this._serviceRiskFilter = target.value; this._renderView(); return; }
+      if (target.id === 'maintenancePreset') {
+        const wrap = this._container.querySelector('#maintenanceCustomIntervalWrap');
+        if (wrap) wrap.style.display = target.value === 'custom' ? 'block' : 'none';
+        return;
+      }
       if (target.classList.contains('large-select')) { target.checked ? this._selectedLarge.add(target.dataset.path) : this._selectedLarge.delete(target.dataset.path); return; }
       if (target.classList.contains('temp-select')) { target.checked ? this._selectedTemp.add(target.dataset.path) : this._selectedTemp.delete(target.dataset.path); return; }
       if (target.classList.contains('duplicate-select')) { target.checked ? this._selectedDuplicates.add(target.dataset.path) : this._selectedDuplicates.delete(target.dataset.path); return; }
@@ -545,6 +670,81 @@
         return;
       }
       if (target.classList.contains('leftover-select')) { target.checked ? this._selectedLeftovers.add(target.dataset.path) : this._selectedLeftovers.delete(target.dataset.path); }
+    },
+
+    async _saveMaintenance() {
+      const container = this._container;
+      const status = container.querySelector('#maintenanceStatus');
+      const btn = container.querySelector('#saveMaintenance');
+      setButtonLoading(btn, true, this.t('common.saving', 'Saving…'));
+      try {
+        const policies = Object.fromEntries(Array.from(container.querySelectorAll('.maintenance-policy-select'))
+          .filter((el) => el.value !== 'off')
+          .map((el) => [el.dataset.scriptId, el.value]));
+        const response = await window.api.invoke('maintenance:set', {
+          enabled: container.querySelector('#maintenanceEnabledToggle').checked,
+          schedulePreset: container.querySelector('#maintenancePreset').value,
+          intervalHours: Number(container.querySelector('#maintenanceInterval').value || 168),
+          policies,
+          notifyOnComplete: container.querySelector('#maintenanceNotifyToggle').checked
+        });
+        if (!response || !response.ok) throw new Error(response?.error || this.t('settings.saveMaintenanceError', 'Failed to save maintenance settings.'));
+        const saved = response.data;
+        this._maintenanceConfig = saved;
+        const presetLabel = {
+          daily: this.t('settings.daily', 'Daily'),
+          weekly: this.t('settings.weekly', 'Weekly'),
+          idle: this.t('settings.idle', 'When idle'),
+          custom: this.t('settings.customInterval', `${saved.intervalHours} hours`, { hours: saved.intervalHours })
+        }[saved.schedulePreset] || this.t('settings.customInterval', `${saved.intervalHours} hours`, { hours: saved.intervalHours });
+        status.textContent = saved.enabled
+          ? this.t('settings.maintenanceEnabled', `Scheduled maintenance enabled: ${presetLabel} (${Object.keys(saved.policies || {}).length} scripts)`, { preset: presetLabel, count: Object.keys(saved.policies || {}).length })
+          : this.t('settings.maintenanceDisabled', 'Scheduled maintenance disabled.');
+      } catch (err) {
+        status.textContent = err.message || String(err);
+      } finally {
+        setButtonLoading(btn, false);
+      }
+    },
+
+    async _runMaintenanceNow() {
+      const container = this._container;
+      const status = container.querySelector('#maintenanceStatus');
+      const btn = container.querySelector('#runMaintenanceNow');
+      const outputDiv = container.querySelector('#maintenanceOutput');
+      const outputBody = container.querySelector('#maintenanceOutputBody');
+      const cancelBtn = container.querySelector('#cancelMaintenance');
+      setButtonLoading(btn, true, this.t('common.running', 'Running…'));
+      cancelBtn.style.display = '';
+      outputDiv.style.display = 'block';
+      outputBody.innerHTML = '<div class="empty-state"><span class="spinner"></span>&nbsp;Running...</div>';
+      try {
+        const response = await window.api.invoke('maintenance:runNow');
+        if (!response || !response.ok) throw new Error(response?.error || this.t('settings.runFailed', 'Maintenance run failed.'));
+        const result = response.data;
+        if (result.skipped) {
+          const msg = this.t('settings.maintenanceSkipped', `Skipped: ${result.reason || 'unknown'}`, { reason: result.reason || 'unknown' });
+          status.textContent = msg;
+          outputBody.innerHTML = `<div class="log-row"><span class="log-tag warn">${this.e(this.t('common.info', 'Info'))}</span><span class="log-path">${this.e(msg)}</span></div>`;
+        } else {
+          const okCount = (result.results || []).filter((row) => row.ok).length;
+          const total = (result.results || []).length;
+          const completed = this.t('settings.maintenanceCompleted', `Completed: ${okCount}/${total}`, { ok: okCount, total });
+          status.textContent = completed;
+          let html = `<div class="log-row"><span class="log-tag clean">${this.e(this.t('tools.done', 'Done'))}</span><span class="log-path">${this.e(completed)}</span></div>`;
+          (result.results || []).forEach((r) => {
+            const summary = Object.entries(r.summary || {}).map(([key, value]) => `${key}: ${value}`).join(' · ');
+            html += `<div class="log-row"><span class="log-tag ${r.ok ? 'clean' : 'match'}">${this.e(r.scriptId)}</span><span class="log-path">${this.e(r.policy || 'analyze')} · ${r.ok ? this.t('common.ok', 'OK') : (r.error || this.t('common.failed', 'Failed'))}${summary ? ` · ${this.e(summary)}` : ''}</span></div>`;
+          });
+          outputBody.innerHTML = html;
+        }
+      } catch (err) {
+        status.textContent = err.message || String(err);
+        outputBody.innerHTML = `<div class="log-row"><span class="log-tag match">${this.e(this.t('common.error', 'Error'))}</span><span class="log-path">${this.e(err.message || String(err))}</span></div>`;
+      } finally {
+        setButtonLoading(btn, false);
+        cancelBtn.style.display = 'none';
+      }
     },
 
     async _runSelectedTool() {

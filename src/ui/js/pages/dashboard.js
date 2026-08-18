@@ -258,43 +258,25 @@ window.Pages['dashboard'] = {
             </div>
           </div>
 
-          <!-- Database Age -->
+<!-- Device Cleanup -->
           <div class="card">
             <div class="status-card">
-              <div class="status-icon warning">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
- stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-
-  <!-- bug body -->
-  <ellipse cx="10" cy="12" rx="4" ry="6"/>
-
-  <!-- bug head -->
-  <circle cx="10" cy="6" r="2"/>
-
-  <!-- antenna -->
-  <path d="M8.5 4.5 7 3"/>
-  <path d="M11.5 4.5 13 3"/>
-
-  <!-- bug legs -->
-  <path d="M6 10H3"/>
-  <path d="M6 13H2.5"/>
-  <path d="M6 16H3"/>
-  <path d="M14 10h2"/>
-  <path d="M14 13h2"/>
-  <path d="M14 16h2"/>
-
-  <!-- magnifying glass -->
-  <circle cx="16.5" cy="16.5" r="4"/>
-  <path d="m19.5 19.5 3 3"/>
-</svg>
+              <div class="status-icon info">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M9 2V1M15 2v1"/>
+    <path d="M10 12v8M14 12v8M10 16h4"/>
+  </svg>
               </div>
               <div class="status-info">
-                <h3>${escapeHtml(t('dashboard.dbDefinitions'))}</h3>
-                <div class="value" id="dbAge">${escapeHtml(t('dashboard.dbUpToDate'))}</div>
+                <h3>${escapeHtml(t('dashboard.deviceCleanup'))}</h3>
+                <div class="value" id="lastCleanup">${escapeHtml(t('common.loading'))}</div>
+                <div class="device-cleanup-summary" id="cleanupSummary"></div>
               </div>
             </div>
-            <div style="margin-top: 16px;">
-              <button class="btn" id="btnUpdateDb">${escapeHtml(t('dashboard.dbUpdate'))}</button>
+            <div style="margin-top: 16px; display: flex; gap: 12px; flex-wrap: wrap;">
+              <button class="btn btn-primary" id="btnRunCleanup">${escapeHtml(t('dashboard.runCleanup'))}</button>
+              <button class="btn" id="btnViewCleanupHistory">${escapeHtml(t('dashboard.viewHistory'))}</button>
             </div>
           </div>
 
@@ -347,11 +329,10 @@ window.Pages['dashboard'] = {
             <button class="btn btn-sm" id="btnRefreshWarnings">${escapeHtml(t('dashboard.refreshWarnings'))}</button>
           </div>
           <div id="warningList" class="history-list" style="margin-top:12px;"><div class="empty-state">${escapeHtml(t('common.loading'))}</div></div>
-          <div class="flex-between">
-            <div class="panel-title" style="margin-top:16px;">${escapeHtml(t('dashboard.ignoredWarnings'))}</div>
+          <div style="display:flex; justify-content:flex-end; margin-top:16px;">
             <button class="btn btn-sm btn-ghost" id="ignoredWarningsToggle" aria-expanded="false" aria-controls="ignoredWarningList">${escapeHtml(t('dashboard.ignoredWarningsExpand'))}</button>
           </div>
-          <div id="ignoredWarningList" class="history-list" style="max-height:300px; overflow-y:auto;" hidden><div class="empty-state">${escapeHtml(t('common.loading'))}</div></div>
+          <div id="ignoredWarningList" class="history-list" style="max-height:300px; overflow-y:auto;" hidden></div>
         </div>
       </div>
     `;
@@ -513,6 +494,14 @@ window.Pages['dashboard'] = {
       return new Date(value);
     }
 
+    function formatBytes(value) {
+      const bytes = Number(value) || 0;
+      if (bytes < 1024) return `${Math.round(bytes)} B`;
+      if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
+      if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+      return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+    }
+
     async function loadLastScan() {
       const el = container.querySelector('#lastScanTime');
       if (!el) return;
@@ -522,9 +511,84 @@ window.Pages['dashboard'] = {
         : t('dashboard.lastScanNever');
     }
 
+    async function loadCleanupHistory() {
+      const last = container.querySelector('#lastCleanup');
+      const summary = container.querySelector('#cleanupSummary');
+      if (!last || !summary) return;
+      try {
+        const response = await window.api.invoke('maintenance:get');
+        const config = response?.ok ? response.data : null;
+        const result = config?.lastResult;
+        if (!result?.startedAt) {
+          last.textContent = t('dashboard.noCleanupYet');
+          summary.textContent = '';
+          return;
+        }
+        last.textContent = t('dashboard.cleanupSummary', {
+          freed: formatBytes(Number(result.reclaimedBytes) || 0),
+          count: result.results?.reduce((n, item) => n + Number(item.summary?.deletedCount || 0), 0) || 0
+        });
+        summary.textContent = t('dashboard.lastCleanup', { time: new Date(result.startedAt).toLocaleString() });
+      } catch (_) {
+        last.textContent = t('common.notAvailable');
+      }
+    }
+
+function configControlsFor(item, browserOptions) {
+      if (item.id === 'clear-temp-files') {
+        return `<span class="cleanup-picker-config"><label class="cleanup-age-field">${escapeHtml(t('dashboard.cleanupMinAge'))} <span><input id="cleanupTempAge" type="number" min="1" max="365" value="7" aria-label="${escapeHtml(t('dashboard.cleanupMinAge'))}"> ${escapeHtml(t('dashboard.cleanupDays'))}</span></label></span>`;
+      }
+      if (item.id === 'browser-cache-report') {
+        const installed = (browserOptions || []).filter((browser) => browser.exists);
+        return `<span class="cleanup-picker-config"><span class="cleanup-browser-group"><span class="cleanup-browser-label">${escapeHtml(t('dashboard.cleanupBrowsers'))}</span>${installed.map((browser) => `<label><input type="checkbox" class="cleanup-browser-check" value="${escapeHtml(browser.id)}" checked> ${escapeHtml(browser.name)}</label>`).join('')}</span></span>`;
+      }
+      return '';
+    }
+
+    function showCleanupPicker(scripts, selected, browserOptions) {
+      return new Promise((resolve) => {
+        const dialog = document.createElement('div');
+        dialog.className = 'pi-modal-backdrop';
+        const options = scripts.map((item) => `<label class="cleanup-picker-option"><input type="checkbox" class="cleanup-tool-check" value="${escapeHtml(item.id)}" ${selected.includes(item.id) ? 'checked' : ''}><span><strong>${escapeHtml(item.name || item.id)}</strong><small>${escapeHtml(item.description || '')}</small>${configControlsFor(item, browserOptions)}</span></label>`).join('');
+        dialog.innerHTML = `<form class="pi-modal" aria-labelledby="cleanupPickerTitle"><h2 id="cleanupPickerTitle">${escapeHtml(t('dashboard.runCleanup'))}</h2><p>${escapeHtml(t('dashboard.cleanupPickerIntro'))}</p><div class="cleanup-picker-options">${options}</div><p class="cleanup-picker-error" hidden></p><div class="pi-modal-actions"><button type="button" class="btn btn-sm btn-ghost" data-open-maintenance>${escapeHtml(t('nav.tools'))}</button><span class="pi-modal-actions-spacer"></span><button type="button" class="btn btn-sm" data-cancel>${escapeHtml(t('common.cancel'))}</button><button type="submit" class="btn btn-sm primary">${escapeHtml(t('dashboard.runCleanup'))}</button></div></form>`;
+        document.body.appendChild(dialog);
+        const errorEl = dialog.querySelector('.cleanup-picker-error');
+        const showError = (message) => { errorEl.textContent = message; errorEl.hidden = false; };
+        const finish = (value) => { dialog.remove(); resolve(value); };
+        dialog.querySelector('[data-cancel]').addEventListener('click', () => finish(null));
+        dialog.querySelector('[data-open-maintenance]').addEventListener('click', () => {
+          finish(null);
+          if (window.AppRouter) window.AppRouter.navigate('tools');
+        });
+        dialog.addEventListener('click', (event) => { if (event.target === dialog) finish(null); });
+        dialog.querySelector('form').addEventListener('submit', (event) => {
+          event.preventDefault();
+          const selection = [];
+          for (const tool of scripts) {
+            const check = dialog.querySelector(`.cleanup-tool-check[value="${tool.id}"]`);
+            if (!check || !check.checked) continue;
+            const args = {};
+            if (tool.id === 'clear-temp-files') {
+              const age = parseInt(dialog.querySelector('#cleanupTempAge')?.value, 10);
+              if (!Number.isFinite(age) || age < 1 || age > 365) { showError(t('dashboard.cleanupAgeInvalid')); return; }
+              args.minimumAgeDays = age;
+            }
+            if (tool.id === 'browser-cache-report') {
+              const chosen = [...dialog.querySelectorAll('.cleanup-browser-check:checked')].map((input) => input.value);
+              if (!chosen.length) { showError(t('dashboard.cleanupSelectBrowser')); return; }
+              args.browsers = chosen;
+            }
+            selection.push({ id: tool.id, mode: 'auto-clean', args });
+          }
+          if (!selection.length) { showError(t('dashboard.cleanupSelectTool')); return; }
+          finish(selection);
+        });
+      });
+    }
+
 async function renderIgnoredList() {
       const ignoredList = document.getElementById('ignoredWarningList');
-      if (!ignoredList) return;
+      if (!ignoredList || ignoredList.hidden) return;
       const ignored = await window.api.invoke('warnings:listIgnored');
       // Also translate ignored warnings if they match our known warnings
       const translatedIgnored = ignored.map(w => {
@@ -619,6 +683,7 @@ async function loadWarnings() {
           try {
             await window.api.invoke('warnings:ignore', { id: btn.dataset.ignoreWarning, title: btn.dataset.title, detail: btn.dataset.detail });
             if (item) item.remove();
+            await renderIgnoredList();
             invalidateDashboardCache();
             await loadWarnings();
           } catch (err) {
@@ -626,8 +691,6 @@ async function loadWarnings() {
             alert(err.message || t('common.failed'));
           }
         }));
-
-        await renderIgnoredList();
       } catch (err) {
         if (warningList) warningList.innerHTML = `<div class="empty-state">${escapeHtml(t('common.error') + ': ' + err.message)}</div>`;
       }
@@ -739,7 +802,7 @@ async function loadWarnings() {
       window.api.invoke('splash:progress', { pct: 75, label: t('splash.checkingWarnings') });
     }
 
-    await loadDashboardData();
+    await Promise.all([loadDashboardData(), loadCleanupHistory()]);
 
     const btnManageFirewall = document.getElementById('btnManageFirewall');
     if (btnManageFirewall) {
@@ -810,7 +873,7 @@ async function loadWarnings() {
     const btnIgnoredWarningsToggle = container.querySelector('#ignoredWarningsToggle');
     const ignoredWarningList = container.querySelector('#ignoredWarningList');
     if (btnIgnoredWarningsToggle && ignoredWarningList) {
-      btnIgnoredWarningsToggle.addEventListener('click', () => {
+      btnIgnoredWarningsToggle.addEventListener('click', async () => {
         const expanded = btnIgnoredWarningsToggle.getAttribute('aria-expanded') === 'true';
         btnIgnoredWarningsToggle.setAttribute('aria-expanded', String(!expanded));
         btnIgnoredWarningsToggle.textContent = expanded ? t('dashboard.ignoredWarningsExpand') : t('dashboard.ignoredWarningsCollapse');
@@ -818,6 +881,8 @@ async function loadWarnings() {
           ignoredWarningList.hidden = true;
         } else {
           ignoredWarningList.hidden = false;
+          ignoredWarningList.innerHTML = `<div class="empty-state">${escapeHtml(t('common.loading'))}</div>`;
+          await renderIgnoredList();
         }
       });
     }
@@ -857,6 +922,48 @@ async function loadWarnings() {
     if (btnViewQuarantine) {
       btnViewQuarantine.addEventListener('click', () => {
         if (window.AppRouter) window.AppRouter.navigate('quarantine');
+      });
+    }
+    const btnRunCleanup = container.querySelector('#btnRunCleanup');
+    if (btnRunCleanup) {
+      btnRunCleanup.addEventListener('click', async () => {
+        btnRunCleanup.disabled = true;
+        const originalText = btnRunCleanup.textContent;
+        btnRunCleanup.textContent = t('common.loading');
+try {
+          const scriptsResponse = await window.api.invoke('maintenance:getScripts');
+          const configResponse = await window.api.invoke('maintenance:get');
+          const browsersResponse = await window.api.invoke('maintenance:getBrowserOptions');
+          const runnableIds = new Set(['clear-temp-files', 'browser-cache-report']);
+          const scripts = (scriptsResponse?.data || []).filter((item) => runnableIds.has(item.id));
+          const browserOptions = browsersResponse?.ok ? browsersResponse.data || [] : [];
+          const effectiveScripts = scripts.filter((item) => item.id !== 'browser-cache-report' || browserOptions.some((browser) => browser.exists));
+          if (!effectiveScripts.length) throw new Error(t('common.notAvailable'));
+          const configuredIds = configResponse?.data?.scriptIds || Object.keys(configResponse?.data?.policies || {});
+          const selection = await showCleanupPicker(effectiveScripts, configuredIds.filter((id) => runnableIds.has(id)), browserOptions);
+          if (!selection) return;
+          const res = await window.api.invoke('maintenance:runManual', {
+            policies: Object.fromEntries(selection.map((item) => [item.id, { mode: item.mode, args: item.args }]))
+          });
+          if (res?.ok) {
+            invalidateDashboardCache();
+            await loadCleanupHistory();
+            await loadDashboardData();
+          } else {
+            alert(res?.error || t('common.failed'));
+          }
+        } catch (e) {
+          alert(t('common.failed', { error: e }));
+        } finally {
+          btnRunCleanup.disabled = false;
+          btnRunCleanup.textContent = originalText;
+        }
+      });
+    }
+    const btnViewCleanupHistory = container.querySelector('#btnViewCleanupHistory');
+    if (btnViewCleanupHistory) {
+      btnViewCleanupHistory.addEventListener('click', () => {
+        if (window.AppRouter) window.AppRouter.navigate('reports');
       });
     }
 

@@ -1,13 +1,6 @@
 let savedTheme = 'dark';
 let unsubscribeUpdateStatus = null;
 
-const MAINTENANCE_SCRIPT_TRANSLATIONS = {
-  'clear-temp-files': { name: 'tools.script.clearTempFiles.name', desc: 'tools.script.clearTempFiles.desc' },
-  'disk-space-report': { name: 'tools.script.diskSpaceReport.name', desc: 'tools.script.diskSpaceReport.desc' },
-  'large-files-report': { name: 'tools.script.largeFilesReport.name', desc: 'tools.script.largeFilesReport.desc' },
-  'browser-cache-report': { name: 'tools.script.browserCacheReport.name', desc: 'tools.script.browserCacheReport.desc' }
-};
-
 function translateUpdateStatus(status) {
   if (!status || !status.messageKey) return status.message || '';
   const vars = {};
@@ -60,7 +53,7 @@ window.Pages.settings = {
     container.innerHTML = `
       <div class="page-header"><h1 class="page-title">${escapeHtml(t('nav.settings'))}</h1>
         <div class="page-subtitle">${escapeHtml(t('settings.pageSubtitle'))}</div></div>
-      <div class="dashboard-grid">
+      <div class="dashboard-grid settings-grid">
         <div class="card">
           <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.featureToggles'))}</div>
 
@@ -112,15 +105,6 @@ window.Pages.settings = {
             <label class="toggle"><input type="checkbox" id="scanHistoryToggle" ${settings.features.scanHistory ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
           <div class="privacy-lock-hint" style="display:none; margin-top:8px; font-size:0.8rem; color:var(--text-dim);"></div>
-        </div>
-
-        <div class="card">
-          <div class="panel-title" style="margin-bottom:4px;">${escapeHtml(t('settings.performanceMode.title'))}</div>
-          <div class="toggle-desc" style="margin-bottom:16px;">${escapeHtml(t('settings.performanceMode.desc'))}</div>
-          <div class="grid grid-3" id="performanceModeGrid">
-            <div class="toggle-desc">${escapeHtml(t('common.loading'))}</div>
-          </div>
-          <div id="performanceModeStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
         </div>
 
         <div class="card">
@@ -271,57 +255,6 @@ window.Pages.settings = {
             <label class="toggle"><input type="checkbox" id="launchAtStartupToggle" ${launchAtStartup ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
           <div id="startupStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
-        </div>
-
-        <div class="card">
-          <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.scheduledMaintenance'))}</div>
-          <div class="toggle-row">
-            <div>
-              <div class="toggle-label">${escapeHtml(t('settings.enableMaintenance.label'))}</div>
-              <div class="toggle-desc">${escapeHtml(t('settings.enableMaintenance.desc'))}</div>
-            </div>
-            <label class="toggle"><input type="checkbox" id="maintenanceEnabledToggle" /><span class="toggle-slider"></span></label>
-          </div>
-          <div class="field" style="margin-top:12px;">
-            <label class="field-label">${escapeHtml(t('settings.schedule'))}</label>
-            <select id="maintenancePreset" class="field-input">
-              <option value="daily">${escapeHtml(t('settings.daily'))}</option>
-              <option value="weekly">${escapeHtml(t('settings.weekly'))}</option>
-              <option value="idle">${escapeHtml(t('settings.idle'))}</option>
-              <option value="custom">${escapeHtml(t('settings.custom'))}</option>
-            </select>
-          </div>
-          <div class="field" id="maintenanceCustomIntervalWrap" style="margin-top:12px; display:none;">
-            <label class="field-label">${escapeHtml(t('settings.intervalHours'))}</label>
-            <input type="number" id="maintenanceInterval" min="24" max="720" value="168" />
-          </div>
-          <div class="field" style="margin-top:12px;">
-            <label class="field-label">${escapeHtml(t('settings.scriptsToRun'))}</label>
-            <div id="maintenanceScriptList" class="page-subtitle" style="font-size:0.85rem;">${escapeHtml(t('settings.loadingScripts'))}</div>
-          </div>
-          <div class="toggle-row" style="margin-top:8px;">
-            <div>
-              <div class="toggle-label">${escapeHtml(t('settings.notifyOnComplete.label'))}</div>
-              <div class="toggle-desc">${escapeHtml(t('settings.notifyOnComplete.desc'))}</div>
-            </div>
-            <label class="toggle"><input type="checkbox" id="maintenanceNotifyToggle" checked /><span class="toggle-slider"></span></label>
-          </div>
-          <button class="btn btn-primary" id="saveMaintenance" style="margin-top:12px;">${escapeHtml(t('settings.saveMaintenance'))}</button>
-          <button class="btn btn-secondary" id="runMaintenanceNow" style="margin-top:12px; margin-left:8px;">${escapeHtml(t('settings.runNow'))}</button>
-          <button class="btn btn-ghost" id="cancelMaintenance" style="margin-top:12px; margin-left:8px; display:none;">${escapeHtml(t('common.cancel'))}</button>
-          <div id="maintenanceOutput" style="margin-top:12px; display:none;">
-            <div class="output-panel" style="height:300px; border-radius:8px;">
-              <div class="output-header">
-                <span>${escapeHtml(t('tools.output'))}</span>
-                <div style="display:flex; gap:8px;">
-                  <button class="btn btn-sm btn-ghost" id="maximizeMaintenanceBtn">${escapeHtml(window.I18n?.t('common.maximize') ?? 'Maximize')}</button>
-                  <button class="btn btn-sm btn-ghost" id="clearMaintenanceBtn">${escapeHtml(t('tools.clear'))}</button>
-                </div>
-              </div>
-              <div class="output-body" id="maintenanceOutputBody"></div>
-            </div>
-          </div>
-          <div id="maintenanceStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
         </div>
 
         <div class="card">
@@ -512,53 +445,6 @@ window.Pages.settings = {
     container.querySelector('#externalLookupsToggle').addEventListener('change', (event) => saveFeature('externalLookups', event.target.checked, event.target));
     container.querySelector('#geoLookupToggle').addEventListener('change', (event) => saveFeature('geoLookup', event.target.checked, event.target));
     container.querySelector('#networkPerimeterMapToggle').addEventListener('change', (event) => saveFeature('networkPerimeterMap', event.target.checked, event.target));
-
-    const PERFORMANCE_MODE_ORDER = ['balanced', 'gaming', 'quiet'];
-
-    function performanceModeCardHtml(modeId, activeModeId, busy) {
-      const isActive = modeId === activeModeId;
-      const label = escapeHtml(t(`settings.performanceMode.${modeId}.name`));
-      const desc = escapeHtml(t(`settings.performanceMode.${modeId}.desc`));
-      const btnLabel = busy === modeId
-        ? escapeHtml(t('settings.performanceMode.applying'))
-        : (isActive ? escapeHtml(t('settings.performanceMode.active')) : escapeHtml(t('settings.performanceMode.apply')));
-      return `<div class="card" style="display:flex; flex-direction:column; gap:10px; ${isActive ? 'border-color:var(--accent-primary);' : ''}">
-        <div style="font-weight:600;">${label}</div>
-        <div class="toggle-desc" style="flex:1;">${desc}</div>
-        <button class="btn btn-sm ${isActive ? '' : 'btn-primary'}" data-performance-mode="${escapeHtml(modeId)}" ${isActive || busy ? 'disabled' : ''}>${btnLabel}</button>
-      </div>`;
-    }
-
-    async function renderPerformanceModes(container, busyModeId) {
-      const grid = container.querySelector('#performanceModeGrid');
-      const status = container.querySelector('#performanceModeStatus');
-      if (!grid) return;
-      try {
-        const result = await window.api.invoke('performance:getMode');
-        if (!result || !result.ok) throw new Error(result?.error || t('settings.performanceMode.loadError'));
-        grid.innerHTML = PERFORMANCE_MODE_ORDER.map((id) => performanceModeCardHtml(id, result.modeId, busyModeId)).join('');
-        if (status) status.textContent = result.modeId ? '' : t('settings.performanceMode.unknown');
-      } catch (err) {
-        grid.innerHTML = `<div class="toggle-desc">${escapeHtml(t('settings.performanceMode.loadError'))}</div>`;
-        if (status) status.textContent = err.message || '';
-      }
-    }
-
-    container.querySelector('#performanceModeGrid').addEventListener('click', async (e) => {
-      const btn = e.target.closest('[data-performance-mode]');
-      if (!btn) return;
-      const modeId = btn.getAttribute('data-performance-mode');
-      await renderPerformanceModes(container, modeId);
-      try {
-        const result = await window.api.invoke('performance:setMode', modeId);
-        if (!result || !result.ok) throw new Error(result?.error || '');
-        await renderPerformanceModes(container);
-      } catch (err) {
-        const status = container.querySelector('#performanceModeStatus');
-        if (status) status.textContent = t('settings.performanceMode.error', { error: err.message || '' });
-        await renderPerformanceModes(container);
-      }
-    });
 
     const privacyModeToggle = container.querySelector('#privacyModeToggle');
     const privacyModeStatus = container.querySelector('#privacyModeStatus');
@@ -772,7 +658,6 @@ body.innerHTML = `
       }
     }
     renderBrowserExtensionSection(container);
-    renderPerformanceModes(container);
     container.querySelector('#emergencyLockdownToggle').addEventListener('change', async (event) => {
       const checked = event.target.checked;
       event.target.disabled = true;
@@ -827,156 +712,6 @@ body.innerHTML = `
       } finally {
         input.disabled = false;
       }
-    });
-
-    let maintenanceConfig = null;
-    let maintenanceScripts = [];
-    try {
-      const [configResponse, scriptsResponse] = await Promise.all([
-        window.api.invoke('maintenance:get'),
-        window.api.invoke('maintenance:getScripts')
-      ]);
-      maintenanceConfig = configResponse && configResponse.ok ? configResponse.data : null;
-      maintenanceScripts = scriptsResponse && scriptsResponse.ok ? scriptsResponse.data : [];
-    } catch (_) {
-      maintenanceConfig = null;
-      maintenanceScripts = [];
-    }
-
-    const scriptListEl = container.querySelector('#maintenanceScriptList');
-    const selectedPolicies = (maintenanceConfig && maintenanceConfig.policies) || {
-      'clear-temp-files': 'analyze',
-      'disk-space-report': 'analyze'
-    };
-    if (maintenanceScripts.length) {
-      scriptListEl.innerHTML = maintenanceScripts.map((script) => {
-        const trans = MAINTENANCE_SCRIPT_TRANSLATIONS[script.id];
-        const name = trans ? t(trans.name, script.name) : script.name;
-        const desc = trans ? t(trans.desc, script.description) : script.description;
-        return `
-        <div style="display:grid; grid-template-columns:minmax(0,1fr) 150px; align-items:start; gap:12px; margin-bottom:10px;">
-          <span><strong>${escapeHtml(name)}</strong><br /><span style="color:var(--text-muted);">${escapeHtml(desc)}</span></span>
-          <select class="maintenance-policy-select field-input" data-script-id="${escapeHtml(script.id)}" aria-label="${escapeHtml(name)} policy">
-            <option value="off" ${!selectedPolicies[script.id] ? 'selected' : ''}>Off</option>
-            <option value="analyze" ${selectedPolicies[script.id] === 'analyze' ? 'selected' : ''}>Analyze only</option>
-            ${script.autoCleanAllowed ? `<option value="auto-clean" ${selectedPolicies[script.id] === 'auto-clean' ? 'selected' : ''}>Auto-clean (opt in)</option>` : ''}
-          </select>
-        </div>`;
-      }).join('');
-    } else {
-      scriptListEl.textContent = t('settings.maintenanceUnavailable');
-    }
-
-    const presetEl = container.querySelector('#maintenancePreset');
-    const customIntervalWrap = container.querySelector('#maintenanceCustomIntervalWrap');
-
-    const syncPresetUi = (preset) => {
-      customIntervalWrap.style.display = preset === 'custom' ? 'block' : 'none';
-    };
-
-    if (maintenanceConfig) {
-      container.querySelector('#maintenanceEnabledToggle').checked = !!maintenanceConfig.enabled;
-      presetEl.value = maintenanceConfig.schedulePreset || 'weekly';
-      container.querySelector('#maintenanceInterval').value = String(maintenanceConfig.intervalHours || 168);
-      container.querySelector('#maintenanceNotifyToggle').checked = maintenanceConfig.notifyOnComplete !== false;
-      syncPresetUi(presetEl.value);
-      if (maintenanceConfig.lastRun) {
-        const next = maintenanceConfig.nextEligibleRun ? ` · Next eligible ${new Date(maintenanceConfig.nextEligibleRun).toLocaleString()}` : '';
-        const reclaimed = maintenanceConfig.lastResult?.reclaimedBytes ? ` · Reclaimed ${(maintenanceConfig.lastResult.reclaimedBytes / 1024 / 1024).toFixed(1)} MB` : '';
-        container.querySelector('#maintenanceStatus').textContent = `${t('settings.lastRun', { when: new Date(maintenanceConfig.lastRun).toLocaleString() })}${next}${reclaimed}`;
-      }
-    } else {
-      syncPresetUi(presetEl.value);
-    }
-
-    presetEl.addEventListener('change', () => syncPresetUi(presetEl.value));
-
-    container.querySelector('#saveMaintenance').addEventListener('click', async () => {
-      const status = container.querySelector('#maintenanceStatus');
-      const btn = container.querySelector('#saveMaintenance');
-      setButtonLoading(btn, true, t('common.saving'));
-      try {
-        const policies = Object.fromEntries(Array.from(container.querySelectorAll('.maintenance-policy-select'))
-          .filter((el) => el.value !== 'off')
-          .map((el) => [el.dataset.scriptId, el.value]));
-        const response = await window.api.invoke('maintenance:set', {
-          enabled: container.querySelector('#maintenanceEnabledToggle').checked,
-          schedulePreset: presetEl.value,
-          intervalHours: Number(container.querySelector('#maintenanceInterval').value || 168),
-          policies,
-          notifyOnComplete: container.querySelector('#maintenanceNotifyToggle').checked
-        });
-        if (!response || !response.ok) throw new Error(response?.error || t('settings.saveMaintenanceError'));
-        const saved = response.data;
-        const presetLabel = {
-          daily: t('settings.daily'),
-          weekly: t('settings.weekly'),
-          idle: t('settings.idle'),
-          custom: t('settings.customInterval', { hours: saved.intervalHours })
-        }[saved.schedulePreset] || t('settings.customInterval', { hours: saved.intervalHours });
-        status.textContent = saved.enabled
-          ? t('settings.maintenanceEnabled', { preset: presetLabel, count: Object.keys(saved.policies || {}).length })
-          : t('settings.maintenanceDisabled');
-      } catch (err) {
-        status.textContent = err.message || String(err);
-      } finally {
-        setButtonLoading(btn, false);
-      }
-    });
-
-    container.querySelector('#runMaintenanceNow').addEventListener('click', async () => {
-      const status = container.querySelector('#maintenanceStatus');
-      const btn = container.querySelector('#runMaintenanceNow');
-      const outputDiv = container.querySelector('#maintenanceOutput');
-      const outputBody = container.querySelector('#maintenanceOutputBody');
-      const cancelBtn = container.querySelector('#cancelMaintenance');
-      setButtonLoading(btn, true, t('common.running'));
-      cancelBtn.style.display = '';
-      outputDiv.style.display = 'block';
-      outputBody.innerHTML = '<div class="empty-state"><span class="spinner"></span>&nbsp;Running...</div>';
-      try {
-        const response = await window.api.invoke('maintenance:runNow');
-        if (!response || !response.ok) throw new Error(response?.error || t('settings.runFailed'));
-        const result = response.data;
-        if (result.skipped) {
-          status.textContent = t('settings.maintenanceSkipped', { reason: result.reason || 'unknown' });
-          outputBody.innerHTML = `<div class="log-row"><span class="log-tag warn">${t('common.info')}</span><span class="log-path">${escapeHtml(t('settings.maintenanceSkipped', { reason: result.reason || 'unknown' }))}</span></div>`;
-        } else {
-          const okCount = (result.results || []).filter((row) => row.ok).length;
-          const total = (result.results || []).length;
-          status.textContent = t('settings.maintenanceCompleted', { ok: okCount, total });
-          
-          let html = `<div class="log-row"><span class="log-tag clean">${t('tools.done')}</span><span class="log-path">${t('settings.maintenanceCompleted', { ok: okCount, total })}</span></div>`;
-          (result.results || []).forEach((r) => {
-            const summary = Object.entries(r.summary || {}).map(([key, value]) => `${key}: ${value}`).join(' · ');
-            html += `<div class="log-row"><span class="log-tag ${r.ok ? 'clean' : 'match'}">${escapeHtml(r.scriptId)}</span><span class="log-path">${escapeHtml(r.policy || 'analyze')} · ${r.ok ? t('common.ok') : (r.error || t('common.failed'))}${summary ? ` · ${escapeHtml(summary)}` : ''}</span></div>`;
-          });
-          outputBody.innerHTML = html;
-        }
-      } catch (err) {
-        status.textContent = err.message || String(err);
-        outputBody.innerHTML = `<div class="log-row"><span class="log-tag match">${t('common.error')}</span><span class="log-path">${escapeHtml(err.message || String(err))}</span></div>`;
-      } finally {
-        setButtonLoading(btn, false);
-        cancelBtn.style.display = 'none';
-      }
-    });
-
-    container.querySelector('#cancelMaintenance').addEventListener('click', async () => {
-      await window.api.invoke('maintenance:cancel');
-      container.querySelector('#maintenanceStatus').textContent = 'Canceling maintenance…';
-    });
-
-    container.querySelector('#maximizeMaintenanceBtn').addEventListener('click', () => {
-      const outputPanel = container.querySelector('#maintenanceOutput .output-panel');
-      const btn = container.querySelector('#maximizeMaintenanceBtn');
-      const isMaximized = outputPanel.classList.toggle('maximized');
-      btn.textContent = isMaximized ? t('common.minimize') : t('common.maximize');
-    });
-
-    container.querySelector('#clearMaintenanceBtn').addEventListener('click', () => {
-      const outputBody = container.querySelector('#maintenanceOutputBody');
-      outputBody.innerHTML = '<div class="empty-state">Cleared.</div>';
     });
 
     const updateStatusEl = container.querySelector('#updateStatusText');

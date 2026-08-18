@@ -132,3 +132,15 @@ module.exports.CHROMIUM_CACHE_NAMES = CHROMIUM_CACHE_NAMES;
 module.exports.FIREFOX_CACHE_NAMES = FIREFOX_CACHE_NAMES;
 module.exports.discoverBrowserCaches = discoverBrowserCaches;
 module.exports.dirSize = dirSize;
+module.exports.browserIds = DEFINITIONS.map((definition) => definition.id);
+
+async function listInstalledBrowsers() {
+  const processSet = await runningProcesses();
+  return DEFINITIONS.map((definition) => ({
+    id: definition.id,
+    name: definition.name,
+    exists: profileRoots(definition).length > 0,
+    running: processSet.has(definition.process)
+  }));
+}
+module.exports.listInstalledBrowsers = listInstalledBrowsers;

@@ -199,21 +199,49 @@ class MaintenanceScheduler {
     return this.toolRegistry.run('run-script', { scriptId, scriptArgs }, { toolRegistry: this.toolRegistry, db: this.db, log: this.log });
   }
 
-  async _runPolicy(scriptId, mode, source, legacyLiveCleanup = false) {
+  _normalizeOverrides(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const result = {};
+    for (const [scriptId, entry] of Object.entries(value)) {
+      if (!ALLOWED_SCRIPT_IDS.has(scriptId)) continue;
+      const raw = entry && typeof entry === 'object' ? entry : { mode: entry };
+      let mode = POLICY_MODES.has(raw.mode) ? raw.mode : 'off';
+      if (mode === 'auto-clean' && !AUTO_CLEAN_SCRIPT_IDS.has(scriptId)) mode = 'analyze';
+      if (mode === 'off') continue;
+      const args = {};
+      if (raw.args && typeof raw.args === 'object') {
+        if (raw.args.minimumAgeDays !== undefined) {
+          const age = Math.floor(Number(raw.args.minimumAgeDays));
+          if (Number.isFinite(age)) args.minimumAgeDays = Math.max(1, Math.min(365, age));
+        }
+        if (Array.isArray(raw.args.browsers)) {
+          args.browsers = raw.args.browsers.map((value) => String(value).toLowerCase()).filter(Boolean);
+        }
+      }
+      result[scriptId] = { mode, args };
+    }
+    return Object.keys(result).length ? result : null;
+  }
+
+  async _runPolicy(scriptId, mode, source, legacyLiveCleanup = false, argsOverride = {}) {
     if (legacyLiveCleanup && scriptId === 'clear-temp-files' && mode === 'auto-clean') {
       const cleanup = await this._executeScript(scriptId, scriptArgsFor(scriptId, false), source);
       return { ...cleanup, policy: mode, summary: summarizeResult(scriptId, cleanup.data) };
     }
-    const analysis = await this._executeScript(scriptId, scriptArgsFor(scriptId, 'analyze'), source);
+    const analysisArgs = scriptArgsFor(scriptId, 'analyze');
+    if (argsOverride.minimumAgeDays && Number.isFinite(Number(argsOverride.minimumAgeDays))) {
+      analysisArgs.minimumAgeDays = Math.max(1, Math.min(365, Math.floor(Number(argsOverride.minimumAgeDays))));
+    }
+    const analysis = await this._executeScript(scriptId, analysisArgs, source);
     if (!analysis.ok || mode !== 'auto-clean') return { ...analysis, policy: mode, summary: summarizeResult(scriptId, analysis.data) };
     if (scriptId === 'clear-temp-files') {
       const candidates = analysis.data?.candidates || [];
       if (!candidates.length) return { ok: true, policy: mode, summary: summarizeResult(scriptId, analysis.data), skippedReason: 'nothing-eligible' };
-      const cleanup = await this._executeScript(scriptId, { mode: 'clean', minimumAgeDays: 7, selectedPaths: candidates }, source);
+      const cleanup = await this._executeScript(scriptId, { mode: 'clean', minimumAgeDays: analysisArgs.minimumAgeDays, selectedPaths: candidates }, source);
       return { ...cleanup, policy: mode, summary: summarizeResult(scriptId, cleanup.data), analysisSummary: summarizeResult(scriptId, analysis.data) };
     }
     if (scriptId === 'browser-cache-report') {
-      const cleanup = await this._executeScript('clear-browser-cache', { browsers: [] }, source);
+      const cleanup = await this._executeScript('clear-browser-cache', { browsers: Array.isArray(argsOverride.browsers) ? argsOverride.browsers : [] }, source);
       return {
         ...cleanup,
         policy: mode,
@@ -232,19 +260,22 @@ class MaintenanceScheduler {
     const busy = this._busyReason();
     if (busy) return { ok: false, skipped: true, reason: busy };
     const config = this.loadConfig();
+    const effectivePolicies = this._normalizeOverrides(options.policyOverrides) || config.policies;
     this._running = true;
     this._cancelRequested = false;
     const startedAt = new Date().toISOString();
     this.saveConfig({ lastAttempt: startedAt });
     const results = [];
     try {
-      for (const [scriptId, mode] of Object.entries(config.policies)) {
+      for (const [scriptId, policyEntry] of Object.entries(effectivePolicies)) {
+        const mode = typeof policyEntry === 'string' ? policyEntry : (policyEntry?.mode || 'off');
+        const argsOverride = policyEntry && typeof policyEntry === 'object' && policyEntry.args && typeof policyEntry.args === 'object' ? policyEntry.args : {};
         if (this._cancelRequested) {
           results.push({ scriptId, policy: mode, ok: false, skipped: true, error: 'Canceled before start.' });
           continue;
         }
         try {
-          const outcome = await this._runPolicy(scriptId, mode, options.manual ? 'manual-scheduled' : 'scheduled', !!config.legacyLiveCleanup);
+          const outcome = await this._runPolicy(scriptId, mode, options.manual ? 'manual-scheduled' : 'scheduled', !!config.legacyLiveCleanup && !options.policyOverrides, argsOverride);
           results.push({
             scriptId,
             policy: mode,
@@ -264,7 +295,7 @@ class MaintenanceScheduler {
       const summary = `Maintenance completed (${okCount}/${results.length} tasks OK).`;
       const dryRun = options.dryRunCleanup !== undefined
         ? options.dryRunCleanup
-        : !Object.values(config.policies).includes('auto-clean');
+        : !Object.values(effectivePolicies).map((entry) => typeof entry === 'string' ? entry : (entry?.mode || 'off')).includes('auto-clean');
       this.db.addMaintenanceRun({ startedAt, results, dryRunCleanup: dryRun });
       this.db.addAlert(okCount === results.length ? 'info' : 'warning', `[Maintenance] ${summary}`);
       const lastResult = { startedAt, okCount, totalCount: results.length, reclaimedBytes, results };
@@ -280,7 +311,7 @@ class MaintenanceScheduler {
         startedAt,
         results,
         reclaimedBytes,
-        policies: config.policies,
+        policies: effectivePolicies,
         schedulePreset: config.schedulePreset
       };
     } finally {
