@@ -258,13 +258,36 @@ window.Pages = window.Pages || {};
     },
 
     _goTo(index) {
-      this._stepIndex = index;
+      const direction = index > this._stepIndex ? 'forward' : 'back';
+      const root = document.documentElement;
+      if (root?.classList) {
+        root.classList.toggle('vt-forward', direction === 'forward');
+        root.classList.toggle('vt-back', direction === 'back');
+      }
+
+      const supportsVT = typeof document?.startViewTransition === 'function';
+
+      const doTransition = () => {
+        this._stepIndex = index;
+        this._updateStepVisibility();
+        this._updateDots();
+        this._updateButtons();
+      };
+
+      if (supportsVT) {
+        document.startViewTransition(doTransition);
+      } else {
+        doTransition();
+      }
+    },
+
+    _updateStepVisibility() {
       const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
       if (!this._container) return;
       for (let i = 0; i < STEPS.length; i++) {
         const section = this._container.querySelector('#setupStep-' + STEPS[i]);
         if (section) {
-          const isActive = i === index;
+          const isActive = i === this._stepIndex;
           section.classList.toggle('active', isActive);
           try {
             if (isActive) {
@@ -274,13 +297,24 @@ window.Pages = window.Pages || {};
             }
           } catch (_) {}
         }
-        const dot = this._container.querySelector('#setupDot-' + i);
-        if (dot) dot.classList.toggle('active', i === index);
       }
+    },
+
+    _updateDots() {
+      if (!this._container) return;
+      for (let i = 0; i < STEPS.length; i++) {
+        const dot = this._container.querySelector('#setupDot-' + i);
+        if (dot) dot.classList.toggle('active', i === this._stepIndex);
+      }
+    },
+
+    _updateButtons() {
+      const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+      if (!this._container) return;
       const back = this._container.querySelector('#setupBack');
-      if (back) back.disabled = index === 0;
+      if (back) back.disabled = this._stepIndex === 0;
       const next = this._container.querySelector('#setupNext');
-      if (next) next.textContent = index === STEPS.length - 1 ? t('setup.finish') : t('setup.next');
+      if (next) next.textContent = this._stepIndex === STEPS.length - 1 ? t('setup.finish') : t('setup.next');
       const skip = this._container.querySelector('#setupSkip');
       if (skip) skip.textContent = t('setup.skipSetup');
     },
