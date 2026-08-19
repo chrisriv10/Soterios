@@ -84,19 +84,19 @@ window.Pages.reports = {
 
       <div class="reports-layout">
         <section class="panel report-browser">
-          <div class="panel-title">${escapeHtml(t('reports.scanReports'))}</div>
+          <div class="panel-title report-section-toggle" data-collapse-target="scanReportHistory" role="button" tabindex="0" aria-expanded="true">${escapeHtml(t('reports.scanReports'))}</div>
           <div id="scanReportHistory" class="history-list"><div class="empty-state">${escapeHtml(t('reports.loadingScanReports'))}</div></div>
 
-          <div class="panel-title" style="margin-top:18px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
+          <div class="panel-title report-section-toggle" data-collapse-target="reportHistory" role="button" tabindex="0" aria-expanded="true" style="margin-top:18px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
             ${escapeHtml(t('reports.savedReports'))}
             <button class="btn btn-primary btn-sm" id="generateReport">${escapeHtml(t('reports.generateReport'))}</button>
           </div>
           <div id="reportHistory" class="history-list"><div class="empty-state">${escapeHtml(t('reports.loadingSavedReports'))}</div></div>
 
-          <div class="panel-title" style="margin-top:18px;">${escapeHtml(t('reports.maintenanceHistory'))}</div>
+          <div class="panel-title report-section-toggle" data-collapse-target="maintenanceHistory" role="button" tabindex="0" aria-expanded="true" style="margin-top:18px;">${escapeHtml(t('reports.maintenanceHistory'))}</div>
           <div id="maintenanceHistory" class="history-list"><div class="empty-state">${escapeHtml(t('reports.loadingMaintenance'))}</div></div>
 
-          <div class="panel-title" style="margin-top:18px;">${escapeHtml(t('reports.scheduledMaintenanceHistory'))}</div>
+          <div class="panel-title report-section-toggle" data-collapse-target="scheduledMaintenanceHistory" role="button" tabindex="0" aria-expanded="true" style="margin-top:18px;">${escapeHtml(t('reports.scheduledMaintenanceHistory'))}</div>
           <div id="scheduledMaintenanceHistory" class="history-list"><div class="empty-state">${escapeHtml(t('reports.loadingMaintenance'))}</div></div>
         </section>
 
@@ -122,6 +122,25 @@ window.Pages.reports = {
     container.querySelector('#closeReportViewer').addEventListener('click', () => this.clearViewer(container));
     container.querySelector('#exportReportPdf').addEventListener('click', () => this.exportCurrentReport(container, 'pdf'));
     container.querySelector('#exportReportCsv').addEventListener('click', () => this.exportCurrentReport(container, 'csv'));
+    container.querySelectorAll('.report-section-toggle').forEach((heading) => {
+      const toggle = () => {
+        const content = container.querySelector(`#${heading.dataset.collapseTarget}`);
+        if (!content) return;
+        const expanded = heading.getAttribute('aria-expanded') === 'true';
+        content.hidden = expanded;
+        heading.setAttribute('aria-expanded', String(!expanded));
+      };
+      heading.addEventListener('click', (event) => {
+        if (event.target.closest('button')) return;
+        toggle();
+      });
+      heading.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          toggle();
+        }
+      });
+    });
     this.listScanReports(container);
     this.listReports(container);
     this.listManualMaintenanceHistory(container);
@@ -440,7 +459,12 @@ window.Pages.reports = {
       detail = parts.join(', ');
     } else if (scriptId === 'browser-cache-report') {
       const parts = [];
-      if (summary.totalBytes !== undefined) parts.push(`${t('reports.reclaimed', { size: this.formatBytes(summary.totalBytes) })}`);
+      if (summary.reclaimedBytes !== undefined) {
+        parts.push(`${t('reports.reclaimed', { size: this.formatBytes(summary.reclaimedBytes) })}`);
+      } else if (summary.totalBytes !== undefined) {
+        // An analysis measures cache data; it does not delete anything.
+        parts.push(`${t('reports.totalSize', { size: this.formatBytes(summary.totalBytes) })}`);
+      }
       if (summary.browserCount !== undefined) parts.push(`${summary.browserCount} ${t('reports.browsers')}`);
       detail = parts.join(', ');
     } else if (scriptId === 'disk-space-report') {

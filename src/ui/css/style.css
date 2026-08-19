@@ -1727,6 +1727,19 @@ body {
   display: inline-block;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
+.report-section-toggle {
+  cursor: pointer;
+  user-select: none;
+}
+.report-section-toggle::after {
+  content: '▾';
+  display: inline-block;
+  margin-left: 10px;
+  transition: transform .2s ease;
+}
+.report-section-toggle[aria-expanded="false"]::after { transform: rotate(-90deg); }
+.report-section-toggle:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+.report-section-toggle + [hidden] { display: none !important; }
 .reports-layout { display: grid; grid-template-columns: minmax(320px, 0.9fr) minmax(420px, 1.1fr); gap: 18px; align-items: start; }
 .report-browser, .report-viewer { min-height: 520px; }
 .report-content { display: flex; flex-direction: column; gap: 16px; }

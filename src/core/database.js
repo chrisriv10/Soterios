@@ -445,6 +445,10 @@ class DatabaseService {
     return this.db.prepare('DELETE FROM tool_runs WHERE run_id = ?').run(runId);
   }
 
+  deleteToolHistory(toolId) {
+    return this.db.prepare('DELETE FROM tool_runs WHERE tool_id = ?').run(toolId);
+  }
+
   pruneMaintenanceRuns(keepCount = 100) {
     const count = this.db.prepare('SELECT COUNT(*) AS total FROM maintenance_runs').get().total;
     if (count <= keepCount) return { changes: 0 };

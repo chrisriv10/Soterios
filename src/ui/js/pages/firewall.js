@@ -824,9 +824,9 @@ window.Pages['firewall'] = {
       <circle class="perim-risk-outline perim-risk-outline-safe" cx="${cx}" cy="${cy}" r="114"/>
       <circle class="perim-risk-outline perim-risk-outline-unknown" cx="${cx}" cy="${cy}" r="149"/>
       <circle class="perim-risk-outline perim-risk-outline-malicious ${blockedCount ? 'has-blocked' : ''}" cx="${cx}" cy="${cy}" r="184"/>
-      <g class="perim-ring-label perim-ring-label-safe"><rect x="${cx - 52}" y="${cy - 127}" width="104" height="14" rx="7"/><text x="${cx}" y="${cy - 117}" text-anchor="middle" textLength="88" lengthAdjust="spacingAndGlyphs">${escapeHtml(t('firewall.perimeterBandSafe'))}</text></g>
-      <g class="perim-ring-label perim-ring-label-unknown"><rect x="${cx - 62}" y="${cy - 162}" width="124" height="14" rx="7"/><text x="${cx}" y="${cy - 152}" text-anchor="middle" textLength="108" lengthAdjust="spacingAndGlyphs">${escapeHtml(t('firewall.perimeterBandUnknown'))}</text></g>
-      <g class="perim-ring-label perim-ring-label-malicious"><rect x="${cx - 52}" y="${cy - 196}" width="104" height="14" rx="7"/><text x="${cx}" y="${cy - 186}" text-anchor="middle" textLength="88" lengthAdjust="spacingAndGlyphs">${escapeHtml(t('firewall.perimeterBandMalicious'))}</text></g>`;
+      <g class="perim-ring-label perim-ring-label-safe"><rect x="18" y="18" width="128" height="16" rx="8"/><text x="28" y="29" text-anchor="start">${escapeHtml(t('firewall.perimeterBandSafe'))}</text></g>
+      <g class="perim-ring-label perim-ring-label-unknown"><rect x="18" y="40" width="148" height="16" rx="8"/><text x="28" y="51" text-anchor="start">${escapeHtml(t('firewall.perimeterBandUnknown'))}</text></g>
+      <g class="perim-ring-label perim-ring-label-malicious"><rect x="18" y="62" width="148" height="16" rx="8"/><text x="28" y="73" text-anchor="start">${escapeHtml(t('firewall.perimeterBandMalicious'))}</text></g>`;
 
     if (this._selectedKey && nodeMap.has(this._selectedKey)) {
       this._renderDetailPanel(container, nodeMap.get(this._selectedKey));
