@@ -124,9 +124,21 @@ class DatabaseService {
         ok_count INTEGER DEFAULT 0,
         total_count INTEGER DEFAULT 0,
         dry_run INTEGER DEFAULT 0,
+        source TEXT DEFAULT 'scheduled',
         results_json TEXT
       )
     `);
+
+    // Migration: add source column to maintenance_runs if missing
+    try {
+      const maintenanceColumns = this.db.prepare("PRAGMA table_info(maintenance_runs)").all();
+      const hasSource = maintenanceColumns.some((col) => col.name === 'source');
+      if (!hasSource) {
+        this.db.exec("ALTER TABLE maintenance_runs ADD COLUMN source TEXT DEFAULT 'scheduled'");
+      }
+    } catch (e) {
+      console.error(e);
+    }
 
     // Unified history for interactive and scheduled maintenance tools.
     this.db.exec(`
@@ -371,17 +383,18 @@ class DatabaseService {
     return stmt.run(id);
   }
 
-  addMaintenanceRun({ startedAt, results, dryRunCleanup = false }) {
+  addMaintenanceRun({ startedAt, results, dryRunCleanup = false, source = 'scheduled' }) {
     const okCount = (results || []).filter((r) => r.ok).length;
     const stmt = this.db.prepare(`
-      INSERT INTO maintenance_runs (started_at, ok_count, total_count, dry_run, results_json)
-      VALUES (@startedAt, @okCount, @totalCount, @dryRun, @resultsJson)
+      INSERT INTO maintenance_runs (started_at, ok_count, total_count, dry_run, source, results_json)
+      VALUES (@startedAt, @okCount, @totalCount, @dryRun, @source, @resultsJson)
     `);
     return stmt.run({
       startedAt: startedAt || new Date().toISOString(),
       okCount,
       totalCount: (results || []).length,
       dryRun: dryRunCleanup ? 1 : 0,
+      source: source || 'scheduled',
       resultsJson: JSON.stringify(results || [])
     });
   }
@@ -405,6 +418,31 @@ class DatabaseService {
 
   deleteMaintenanceRun(id) {
     return this.db.prepare('DELETE FROM maintenance_runs WHERE id = ?').run(id);
+  }
+
+  getScheduledMaintenanceHistory(limit = 25) {
+    const bounded = Math.max(1, Math.min(Number(limit) || 25, 250));
+    return this.db.prepare(`
+      SELECT id, timestamp, started_at, ok_count, total_count, dry_run, source, results_json
+      FROM maintenance_runs
+      WHERE source IN ('scheduled', 'manual-scheduled')
+      ORDER BY timestamp DESC, id DESC LIMIT ?
+    `).all(bounded).map((row) => ({
+      id: row.id,
+      timestamp: row.timestamp,
+      started_at: row.started_at,
+      ok_count: row.ok_count,
+      total_count: row.total_count,
+      dry_run: !!row.dry_run,
+      source: row.source || 'scheduled',
+      results: (() => {
+        try { return JSON.parse(row.results_json || '[]'); } catch (_) { return []; }
+      })()
+    }));
+  }
+
+  deleteToolRun(runId) {
+    return this.db.prepare('DELETE FROM tool_runs WHERE run_id = ?').run(runId);
   }
 
   pruneMaintenanceRuns(keepCount = 100) {

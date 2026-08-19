@@ -590,10 +590,12 @@ async function renderIgnoredList() {
       const ignoredList = document.getElementById('ignoredWarningList');
       if (!ignoredList || ignoredList.hidden) return;
       const ignored = await window.api.invoke('warnings:listIgnored');
+      const auditTranslations = window.Pages?.audit?.auditTranslations || {};
       // Also translate ignored warnings if they match our known warnings
       const translatedIgnored = ignored.map(w => {
         const meta = warningActions[w.title];
         if (meta) return { ...w, title: t(meta.title), detail: t(meta.detail) };
+        if (auditTranslations[w.title]) return { ...w, title: t(auditTranslations[w.title]), detail: w.detail && auditTranslations[w.detail] ? t(auditTranslations[w.detail]) : w.detail };
         return w;
       });
       ignoredList.innerHTML = translatedIgnored.length ? translatedIgnored.map((w) => `
@@ -635,9 +637,26 @@ async function loadWarnings() {
           dashboardCache.overview.ts = now;
         }
 
-        const translatedWarnings = (data.recommendations || [])
-          .filter((i) => i.level === 'warn' || i.level === 'danger')
-          .map(translateWarning);
+        const [ignoredRows, auditRows] = await Promise.all([
+          window.api.invoke('warnings:listIgnored'),
+          window.api.invoke('warnings:listAudit')
+        ]);
+        const ignoredIds = new Set((ignoredRows || []).map((w) => w.id));
+        const auditTranslations = window.Pages?.audit?.auditTranslations || {};
+        const auditItems = (auditRows || [])
+          .filter((w) => !ignoredIds.has(w.id))
+          .map((w) => {
+            const translated = { ...w, actionPage: 'audit' };
+            if (auditTranslations[w.title]) translated.title = t(auditTranslations[w.title]);
+            if (w.detail && auditTranslations[w.detail]) translated.detail = t(auditTranslations[w.detail]);
+            return translated;
+          });
+        const translatedWarnings = [
+          ...auditItems,
+          ...(data.recommendations || [])
+            .filter((i) => i.level === 'warn' || i.level === 'danger')
+            .map(translateWarning)
+        ];
         warningList.innerHTML = translatedWarnings.length ? translatedWarnings.map((w) => {
           const action = warningActions[w.title];
           const actionButton = action ? `<button class="btn btn-sm btn-primary" data-action-warning="${escapeHtml(w.title)}">${escapeHtml(t(action.label))}</button>` : '';

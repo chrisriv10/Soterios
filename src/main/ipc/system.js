@@ -326,10 +326,26 @@ function register(mainWindow, {
 
   ipcMain.handle('maintenance:getHistory', () => ({ ok: true, data: db.getMaintenanceHistory(25) }));
 
+  ipcMain.handle('maintenance:getScheduledHistory', () => ({ ok: true, data: db.getScheduledMaintenanceHistory(25) }));
+
+  const MAINTENANCE_TOOL_IDS = new Set(['clear-temp-files', 'disk-space-report', 'large-files-report', 'browser-cache-report']);
+  ipcMain.handle('maintenance:getManualHistory', () => {
+    const all = db.getToolHistory(100);
+    const manual = all.filter((run) => MAINTENANCE_TOOL_IDS.has(run.toolId) && run.source === 'manual');
+    return { ok: true, data: manual.slice(0, 25) };
+  });
+
   ipcMain.handle('maintenance:deleteRun', (_event, id) => {
     const runId = Number(id);
     if (!Number.isInteger(runId) || runId <= 0) return { ok: false, error: 'Invalid maintenance run id.' };
     const result = db.deleteMaintenanceRun(runId);
+    return { ok: true, changes: result.changes };
+  });
+
+  ipcMain.handle('maintenance:deleteToolRun', (_event, runId) => {
+    if (!runId || typeof runId !== 'string') return { ok: false, error: 'Invalid tool run id.' };
+    const result = db.deleteToolRun(runId);
+    if (!result.changes) return { ok: false, error: 'Maintenance run was not found.' };
     return { ok: true, changes: result.changes };
   });
 
