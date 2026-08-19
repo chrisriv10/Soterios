@@ -6,7 +6,7 @@
       "inputs": ["minimumAgeDays", "mode", "selectedPaths"], "progress": true, "cancellation": true, "scheduling": ["analyze", "auto-clean"], "visible": true
     },
     {
-      "id": "large-files-report", "name": "Large Files", "description": "Find and sort large files, then select items to stage for deletion in the Safety Vault.",
+      "id": "large-files-report", "name": "Large Files", "description": "Find and sort large files, then select items to stage for deletion in the File Vault.",
       "file": "safeScripts/largeFilesReport.js", "runner": "script", "category": "cleanup-storage", "impact": "medium", "icon": "file",
       "inputs": ["scanPath", "thresholdMB", "page", "pageSize"], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
     },
@@ -21,7 +21,7 @@
       "inputs": [], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
     },
     {
-      "id": "duplicate-finder", "name": "Duplicate Finder", "description": "Find duplicate files with streamed SHA-256 hashing and move selected copies to the Safety Vault.",
+      "id": "duplicate-finder", "name": "Duplicate Finder", "description": "Find duplicate files with streamed SHA-256 hashing and move selected copies to the File Vault.",
       "file": "safeScripts/duplicateFinder.js", "runner": "script", "category": "cleanup-storage", "impact": "medium", "icon": "copy",
       "inputs": ["scanPath", "minSize", "extensions"], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
     },

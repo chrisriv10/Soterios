@@ -235,7 +235,7 @@ class MaintenanceSafetyVault {
     if (typeof fs.statfsSync !== 'function') return;
     const stats = fs.statfsSync(path.dirname(destination));
     const available = Number(stats.bavail) * Number(stats.bsize);
-    if (available < sizeBytes) throw new Error('The Safety Vault does not have enough free space.');
+    if (available < sizeBytes) throw new Error('The File Vault does not have enough free space.');
   }
 }
 

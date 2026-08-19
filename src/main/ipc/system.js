@@ -349,6 +349,12 @@ function register(mainWindow, {
     return { ok: true, changes: result.changes };
   });
 
+  ipcMain.handle('maintenance:clearToolHistory', (_event, toolId) => {
+    if (!toolId || typeof toolId !== 'string') return { ok: false, error: 'Invalid tool id.' };
+    const result = db.deleteToolHistory(toolId);
+    return { ok: true, changes: result.changes };
+  });
+
   ipcMain.handle('maintenance:runNow', async () => {
     if (!maintenanceScheduler) return { ok: false, error: 'Maintenance scheduler unavailable.' };
     const result = await maintenanceScheduler.runNow({ dryRunCleanup: false, manual: true });
@@ -884,14 +890,14 @@ function register(mainWindow, {
     data: toolRunManager ? toolRunManager.getHistory(limit, toolId || null) : []
   }));
 
-  // -- Maintenance Safety Vault --
+  // -- Maintenance File Vault --
   ipcMain.handle('vault:list', () => {
-    if (!maintenanceSafetyVault) return { ok: false, error: 'Safety Vault unavailable' };
+    if (!maintenanceSafetyVault) return { ok: false, error: 'File Vault unavailable' };
     return { ok: true, data: maintenanceSafetyVault.list() };
   });
 
   ipcMain.handle('vault:stage', async (event, items, options) => {
-    if (!maintenanceSafetyVault) return { ok: false, error: 'Safety Vault unavailable' };
+    if (!maintenanceSafetyVault) return { ok: false, error: 'File Vault unavailable' };
     try {
       const result = await maintenanceSafetyVault.stage(items, {
         ...(options || {}),
@@ -906,13 +912,13 @@ function register(mainWindow, {
   });
 
   ipcMain.handle('vault:restore', async (_event, id) => {
-    if (!maintenanceSafetyVault) return { ok: false, error: 'Safety Vault unavailable' };
+    if (!maintenanceSafetyVault) return { ok: false, error: 'File Vault unavailable' };
     try { return { ok: true, data: await maintenanceSafetyVault.restore(String(id || '')) }; }
     catch (err) { return { ok: false, error: err.message }; }
   });
 
   ipcMain.handle('vault:purge', async (_event, id) => {
-    if (!maintenanceSafetyVault) return { ok: false, error: 'Safety Vault unavailable' };
+    if (!maintenanceSafetyVault) return { ok: false, error: 'File Vault unavailable' };
     try { return { ok: true, data: await maintenanceSafetyVault.purge(String(id || '')) }; }
     catch (err) { return { ok: false, error: err.message }; }
   });

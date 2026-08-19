@@ -475,7 +475,7 @@
       }
       const candidates = result.candidates || [];
       return `${this._summaryTiles([['Eligible files', result.candidateCount || 0], ['Potential recovery', this.bytes(result.reclaimableBytes), 'ok'], ['Scanned', result.statistics?.scanned || 0]])}
-        <div class="maintenance-result-toolbar"><span>Temp/cache cleanup is permanent and does not use the Safety Vault.</span><button type="button" class="btn btn-danger" data-action="clean-temp" ${candidates.length ? '' : 'disabled'}>Permanently clear listed files</button></div>
+        <div class="maintenance-result-toolbar"><span>Temp/cache cleanup is permanent and does not use the File Vault.</span><div class="maintenance-toolbar-actions"><button type="button" class="btn btn-danger" data-action="clean-temp" ${candidates.length ? '' : 'disabled'}>Permanently clear listed files</button>${candidates.length > 500 ? '<button type="button" class="btn btn-danger" data-action="clean-temp-all">Clear all eligible files</button>' : ''}</div></div>
         ${candidates.length ? `<div class="maintenance-table-wrap"><table class="maintenance-table"><thead><tr><th>Remove</th><th>Path</th><th>Size</th><th>Modified</th></tr></thead><tbody>
           ${candidates.slice(0, 500).map((item) => `<tr><td><input type="checkbox" class="temp-select" data-path="${this.e(item.path)}" checked aria-label="Remove ${this.e(item.path)}"></td><td class="path-cell" title="${this.e(item.path)}">${this.e(item.path)}</td><td>${this.bytes(item.sizeBytes)}</td><td>${this.e(new Date(item.modifiedAt).toLocaleString())}</td></tr>`).join('')}
         </tbody></table></div>${candidates.length > 500 ? '<p class="maintenance-footnote">Showing the first 500 eligible files. Narrow the age window to review a smaller set.</p>' : ''}` : '<div class="maintenance-empty"><h3>Nothing eligible for cleanup</h3><p>Recent, active, protected, and inaccessible files were left alone.</p></div>'}`;
@@ -484,7 +484,7 @@
     _renderLarge(result) {
       const files = result.files || [];
       return `${this._summaryTiles([['Matching files', result.count || 0], ['Combined size', this.bytes(result.totalSizeBytes)], ['Scanned', result.statistics?.scannedFiles || 0]])}
-        <div class="maintenance-result-toolbar"><span>Page ${result.page || 1} of ${result.pageCount || 1} · ${this.e(result.root)}</span><button type="button" class="btn btn-primary" data-action="vault-large" ${files.length ? '' : 'disabled'}>Move selected to Safety Vault</button></div>
+        <div class="maintenance-result-toolbar"><span>Page ${result.page || 1} of ${result.pageCount || 1} · ${this.e(result.root)}</span><button type="button" class="btn btn-primary" data-action="vault-large" ${files.length ? '' : 'disabled'}>Move selected to File Vault</button></div>
         ${files.length ? `<div class="maintenance-table-wrap"><table class="maintenance-table"><thead><tr><th>Stage</th><th>File</th><th>Size</th><th>Modified</th><th></th></tr></thead><tbody>
           ${files.map((file) => `<tr><td><input type="checkbox" class="large-select" data-path="${this.e(file.path)}" aria-label="Stage ${this.e(file.path)}"></td><td class="path-cell" title="${this.e(file.path)}">${this.e(file.path)}</td><td>${this.bytes(file.sizeBytes)}</td><td>${this.e(new Date(file.modifiedAt).toLocaleDateString())}</td><td><button type="button" class="btn btn-xs btn-ghost" data-action="reveal" data-path="${this.e(file.path)}">Reveal</button></td></tr>`).join('')}
         </tbody></table></div><div class="pagination"><button class="btn btn-sm btn-ghost" data-action="large-page" data-page="${Math.max(1, result.page - 1)}" ${result.page <= 1 ? 'disabled' : ''}>Previous</button><button class="btn btn-sm btn-ghost" data-action="large-page" data-page="${Math.min(result.pageCount, result.page + 1)}" ${result.page >= result.pageCount ? 'disabled' : ''}>Next</button></div>`
@@ -501,7 +501,14 @@
 
     _renderDisk(result) {
       const volumes = result.volumes || [];
-      return volumes.length ? `<div class="volume-grid">${volumes.map((volume) => `<article class="volume-card status-${this.e(volume.status)}"><header><div><strong>${this.e(volume.label)}</strong><span>${this.e(volume.mount)} · ${this.e(volume.filesystem)} · ${this.e(volume.driveType)}</span></div><span>${this.e(volume.status)}</span></header><div class="volume-meter"><span style="width:${Math.min(100, volume.usePercent)}%"></span></div><div class="volume-stats"><span>${volume.freeGB} GB free</span><span>${volume.usePercent}% used</span></div><div class="volume-actions"><button class="btn btn-sm btn-ghost" data-action="drill-tool" data-tool="large-files-report" data-path="${this.e(volume.mount)}">Large Files</button><button class="btn btn-sm btn-ghost" data-action="drill-tool" data-tool="duplicate-finder" data-path="${this.e(volume.mount)}">Duplicate Finder</button></div></article>`).join('')}</div>` : '<div class="maintenance-empty"><h3>No user-facing volumes found</h3></div>';
+      return volumes.length ? `<div class="volume-grid">${volumes.map((volume) => {
+        const label = String(volume.label || '');
+        const mount = String(volume.mount || '');
+        const duplicateLabel = mount && label && mount.toLowerCase() === label.toLowerCase();
+        const metadata = [mount, volume.filesystem, volume.driveType]
+          .filter(Boolean).map((value) => this.e(value)).join(' · ');
+        return `<article class="volume-card status-${this.e(volume.status)}"><header><div>${duplicateLabel ? '' : `<strong>${this.e(label)}</strong>`}<span>${metadata}</span></div><span>${this.e(volume.status)}</span></header><div class="volume-meter"><span style="width:${Math.min(100, volume.usePercent)}%"></span></div><div class="volume-stats"><span>${volume.freeGB} GB free</span><span>${volume.usePercent}% used</span></div><div class="volume-actions"><button class="btn btn-sm btn-ghost" data-action="drill-tool" data-tool="large-files-report" data-path="${this.e(mount)}">Large Files</button><button class="btn btn-sm btn-ghost" data-action="drill-tool" data-tool="duplicate-finder" data-path="${this.e(mount)}">Duplicate Finder</button></div></article>`;
+      }).join('')}</div>` : '<div class="maintenance-empty"><h3>No user-facing volumes found</h3></div>';
     },
 
     _renderServices(result) {
@@ -531,7 +538,7 @@
     _renderDuplicates(result) {
       const groups = result.duplicateGroups || [];
       return `${this._summaryTiles([['Files scanned', result.totalFilesScanned || 0], ['Duplicate groups', groups.length], ['Recoverable', this.bytes(result.totalWastedSpace), groups.length ? 'ok' : '']])}
-        ${groups.length ? `<div class="maintenance-result-toolbar"><span>Choose the retained copy in every group. Selected duplicates are staged for seven days.</span><button class="btn btn-primary" data-action="vault-duplicates">Move selected to Safety Vault</button></div><div class="duplicate-workspace">${groups.map((group) => this._renderDuplicateGroup(group)).join('')}</div>` : '<div class="maintenance-empty"><h3>No duplicate files found</h3><p>The scan completed successfully; every eligible file has unique content.</p></div>'}`;
+        ${groups.length ? `<div class="maintenance-result-toolbar"><span>Choose the retained copy in every group. Selected duplicates are staged for seven days.</span><button class="btn btn-primary" data-action="vault-duplicates">Move selected to File Vault</button></div><div class="duplicate-workspace">${groups.map((group) => this._renderDuplicateGroup(group)).join('')}</div>` : '<div class="maintenance-empty"><h3>No duplicate files found</h3><p>The scan completed successfully; every eligible file has unique content.</p></div>'}`;
     },
 
     _renderDuplicateGroup(group) {
@@ -558,7 +565,7 @@
     _renderLeftovers(result) {
       const folders = result.leftovers.filter((item) => item.kind === 'directory');
       const registry = result.leftovers.filter((item) => item.kind === 'registry');
-      return `<section class="leftover-results"><h3>Potential leftovers for ${this.e(result.scannedApp)}</h3><p>Folder suggestions can be staged in the Safety Vault. Registry suggestions are read-only.</p>${folders.map((item) => `<label class="leftover-row"><input type="checkbox" class="leftover-select" data-path="${this.e(item.path)}"><span class="path-cell">${this.e(item.path)}</span><span>${this.bytes(item.sizeBytes)} · ${item.fileCount || 0} files</span></label>`).join('')}${folders.length ? '<button class="btn btn-primary" data-action="vault-leftovers">Stage selected folders</button>' : ''}${registry.map((item) => `<div class="leftover-row"><span class="tag-pill tag-none">Read-only</span><span class="path-cell">${this.e(item.path)}</span></div>`).join('')}</section>`;
+      return `<section class="leftover-results"><h3>Potential leftovers for ${this.e(result.scannedApp)}</h3><p>Folder suggestions can be staged in the File Vault. Registry suggestions are read-only.</p>${folders.map((item) => `<label class="leftover-row"><input type="checkbox" class="leftover-select" data-path="${this.e(item.path)}"><span class="path-cell">${this.e(item.path)}</span><span>${this.bytes(item.sizeBytes)} · ${item.fileCount || 0} files</span></label>`).join('')}${folders.length ? '<button class="btn btn-primary" data-action="vault-leftovers">Stage selected folders</button>' : ''}${registry.map((item) => `<div class="leftover-row"><span class="tag-pill tag-none">Read-only</span><span class="path-cell">${this.e(item.path)}</span></div>`).join('')}</section>`;
     },
 
     _renderShredder(result) {
@@ -573,7 +580,7 @@
     _renderVault(result) {
       const items = result.items || [];
       const staged = items.filter((item) => item.status === 'staged');
-      return `${this._summaryTiles([[this.t('tools.vault.availableToRestore', 'Available to restore'), staged.length], [this.t('tools.vault.stagedData', 'Staged data'), this.bytes(staged.reduce((sum, item) => sum + item.sizeBytes, 0))], [this.t('tools.vault.actuallyReclaimed', 'Actually reclaimed'), this.bytes(items.filter((item) => item.status === 'purged').reduce((sum, item) => sum + item.sizeBytes, 0))]])}<div class="maintenance-result-banner result-clean"><strong>${this.e(this.t('tools.vault.stagedNotDeleted', 'Staged files are never deleted'))}</strong><span>${this.e(this.t('tools.vault.stagedNotDeletedDesc', 'Staged files stay on disk until they expire or you delete them.'))}</span></div>${items.length ? `<div class="maintenance-table-wrap"><table class="maintenance-table"><thead><tr><th>${this.e(this.t('tools.vault.originalPath', 'Original path'))}</th><th>${this.e(this.t('tools.vault.operation', 'Operation'))}</th><th>${this.e(this.t('tools.vault.size', 'Size'))}</th><th>${this.e(this.t('tools.vault.expires', 'Expires'))}</th><th>${this.e(this.t('tools.vault.status', 'Status'))}</th><th></th></tr></thead><tbody>${items.map((item) => `<tr><td class="path-cell" title="${this.e(item.originalPath)}">${this.e(item.originalPath)}</td><td>${this.e(item.operation)}</td><td>${this.bytes(item.sizeBytes)}</td><td>${this.e(new Date(item.expiresAt).toLocaleString())}</td><td>${this.e(this.t(`tools.vault.status.${item.status}`, item.status))}</td><td class="button-cell">${item.status === 'staged' ? `<button class="btn btn-sm btn-primary" data-action="restore-vault" data-vault-id="${this.e(item.id)}">${this.e(this.t('tools.vault.restore', 'Restore'))}</button><button class="btn btn-sm btn-danger" data-action="purge-vault" data-vault-id="${this.e(item.id)}">${this.e(this.t('tools.vault.purgeNow', 'Delete Now'))}</button>` : ''}<button class="btn btn-sm btn-ghost" data-action="reveal" data-path="${this.e(item.originalPath)}">${this.e(this.t('tools.vault.originalLocation', 'Original location'))}</button></td></tr>`).join('')}</tbody></table></div>` : `<div class="maintenance-empty"><h3>${this.e(this.t('tools.vault.empty', 'The Safety Vault is empty'))}</h3><p>${this.e(this.t('tools.vault.emptyDesc', 'Files staged from Large Files, Duplicate Finder, and leftover cleanup will appear here.'))}</p></div>`}`;
+      return `${this._summaryTiles([[this.t('tools.vault.availableToRestore', 'Available to restore'), staged.length], [this.t('tools.vault.stagedData', 'Staged data'), this.bytes(staged.reduce((sum, item) => sum + item.sizeBytes, 0))], [this.t('tools.vault.actuallyReclaimed', 'Actually reclaimed'), this.bytes(items.filter((item) => item.status === 'purged').reduce((sum, item) => sum + item.sizeBytes, 0))]])}<div class="maintenance-result-banner result-clean"><strong>${this.e(this.t('tools.vault.stagedNotDeleted', 'Staged files are never deleted'))}</strong><span>${this.e(this.t('tools.vault.stagedNotDeletedDesc', 'Staged files stay on disk until they expire or you delete them.'))}</span></div>${items.length ? `<div class="maintenance-table-wrap"><table class="maintenance-table"><thead><tr><th>${this.e(this.t('tools.vault.originalPath', 'Original path'))}</th><th>${this.e(this.t('tools.vault.operation', 'Operation'))}</th><th>${this.e(this.t('tools.vault.size', 'Size'))}</th><th>${this.e(this.t('tools.vault.expires', 'Expires'))}</th><th>${this.e(this.t('tools.vault.status', 'Status'))}</th><th></th></tr></thead><tbody>${items.map((item) => `<tr><td class="path-cell" title="${this.e(item.originalPath)}">${this.e(item.originalPath)}</td><td>${this.e(item.operation)}</td><td>${this.bytes(item.sizeBytes)}</td><td>${this.e(new Date(item.expiresAt).toLocaleString())}</td><td>${this.e(this.t(`tools.vault.status.${item.status}`, item.status))}</td><td class="button-cell">${item.status === 'staged' ? `<button class="btn btn-sm btn-primary" data-action="restore-vault" data-vault-id="${this.e(item.id)}">${this.e(this.t('tools.vault.restore', 'Restore'))}</button><button class="btn btn-sm btn-danger" data-action="purge-vault" data-vault-id="${this.e(item.id)}">${this.e(this.t('tools.vault.purgeNow', 'Delete Now'))}</button>` : ''}<button class="btn btn-sm btn-ghost" data-action="reveal" data-path="${this.e(item.originalPath)}">${this.e(this.t('tools.vault.originalLocation', 'Original location'))}</button></td></tr>`).join('')}</tbody></table></div>` : `<div class="maintenance-empty"><h3>${this.e(this.t('tools.vault.empty', 'The File Vault is empty'))}</h3><p>${this.e(this.t('tools.vault.emptyDesc', 'Files staged from Large Files, Duplicate Finder, and leftover cleanup will appear here.'))}</p></div>`}`;
     },
 
     _renderPersistence(result) {
@@ -604,7 +611,7 @@
     _renderHistory(toolId) {
       const rows = this._history.filter((item) => item.toolId === toolId).slice(0, 8);
       if (!rows.length) return '';
-      return `<section class="maintenance-history"><h3>Run history</h3><div class="maintenance-table-wrap"><table class="maintenance-table"><thead><tr><th>Started</th><th>Source</th><th>Status</th><th>Duration</th><th>Summary</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${this.e(new Date(row.startedAt).toLocaleString())}</td><td>${this.e(row.source)}</td><td><span class="maintenance-state ${this.e(row.status)}">${this.e(row.status)}</span></td><td>${this.duration(row.durationMs)}</td><td>${this.e(Object.entries(row.summary || {}).map(([key, value]) => `${key}: ${value}`).join(' · ') || '—')}</td></tr>`).join('')}</tbody></table></div></section>`;
+      return `<section class="maintenance-history"><div class="flex-between"><h3>${this.e(this.t('reports.maintenanceHistory', 'Run history'))}</h3><button type="button" class="btn btn-xs btn-ghost" data-action="clear-tool-history" data-tool-id="${this.e(toolId)}">${this.e(this.t('reports.clearAllMaintenance', 'Clear all'))}</button></div><div class="maintenance-table-wrap"><table class="maintenance-table"><thead><tr><th>Started</th><th>Source</th><th>Status</th><th>Duration</th><th>Summary</th><th></th></tr></thead><tbody>${rows.map((row) => `<tr><td>${this.e(new Date(row.startedAt).toLocaleString())}</td><td>${this.e(row.source)}</td><td><span class="maintenance-state ${this.e(row.status)}">${this.e(row.status)}</span></td><td>${this.duration(row.durationMs)}</td><td>${this.e(Object.entries(row.summary || {}).map(([key, value]) => `${key}: ${value}`).join(' · ') || '—')}</td><td><button type="button" class="btn btn-xs btn-ghost" data-action="delete-tool-run" data-run-id="${this.e(row.runId)}">${this.e(this.t('reports.deleteMaintenance', 'Delete'))}</button></td></tr>`).join('')}</tbody></table></div></section>`;
     },
 
     _wire(root) {
@@ -639,6 +646,28 @@
       if (action === 'back-hub') { this._selectedToolId = null; this._notice = null; this._renderView(); return; }
       if (action === 'run-tool') { await this._runSelectedTool(); return; }
       if (action === 'cancel-run') { await Api.cancelTool(target.dataset.runId); return; }
+      if (action === 'delete-tool-run') {
+        const runId = target.dataset.runId;
+        if (!runId) return;
+        const skipConfirm = await window.api.invoke('db:getSetting', 'reports.skipDeleteConfirm', false);
+        if (!skipConfirm && window.confirm?.(this.t('reports.deleteMaintenanceConfirm', 'Delete this maintenance run from history?')) === false) return;
+        const response = await window.api.invoke('maintenance:deleteToolRun', runId);
+        if (!response?.ok) throw new Error(response?.error || this.t('reports.failedDeleteMaintenance', 'Unable to delete maintenance run.'));
+        this._history = this._history.filter((item) => item.runId !== runId);
+        this._renderView();
+        return;
+      }
+      if (action === 'clear-tool-history') {
+        const toolId = target.dataset.toolId;
+        if (!toolId) return;
+        const skipConfirm = await window.api.invoke('db:getSetting', 'reports.skipDeleteConfirm', false);
+        if (!skipConfirm && window.confirm?.(this.t('reports.clearAllMaintenanceConfirm', 'Clear all run history for this tool?')) === false) return;
+        const response = await window.api.invoke('maintenance:clearToolHistory', toolId);
+        if (!response?.ok) throw new Error(response?.error || this.t('reports.failedDeleteMaintenance', 'Unable to delete maintenance history.'));
+        this._history = this._history.filter((item) => item.toolId !== toolId);
+        this._renderView();
+        return;
+      }
       if (action === 'browse-large') { const folder = await Api.pickFolder(); if (folder) this._largePath = folder; this._renderView(); return; }
       if (action === 'browse-duplicate') { const folder = await Api.pickFolder(); if (folder) this._duplicatePath = folder; this._renderView(); return; }
       if (action === 'browse-shred') { const files = await Api.pickFiles(); if (files?.length) this._shredPaths = files; this._renderView(); return; }
@@ -648,7 +677,8 @@
         catch (error) { this._notice = { type: 'error', message: error?.message || 'Unable to open the original location.' }; this._renderView(); }
         return;
       }
-      if (action === 'clean-temp') { await this._cleanTemp(); return; }
+      if (action === 'clean-temp') { await this._cleanTemp(false); return; }
+      if (action === 'clean-temp-all') { await this._cleanTemp(true); return; }
       if (action === 'large-page') { await this._runScript('large-files-report', this._largeArgs(Number(target.dataset.page))); return; }
       if (action === 'vault-large') { await this._vaultLarge(); return; }
       if (action === 'clear-cache') { await this._clearCache(target.dataset.browser); return; }
@@ -869,14 +899,17 @@
       this._renderView();
     },
 
-    async _cleanTemp() {
+    async _cleanTemp(allEligible = false) {
       const result = this._results['clear-temp-files'];
+      if (!result?.candidates?.length) throw new Error('No eligible temp files found.');
       const displayed = (result?.candidates || []).slice(0, 500);
-      const checked = [...this._container.querySelectorAll('.temp-select:checked')].map((input) => input.dataset.path);
+      const checked = allEligible
+        ? result.candidates.map((item) => item.path)
+        : [...this._container.querySelectorAll('.temp-select:checked')].map((input) => input.dataset.path);
       if (!checked.length) throw new Error('Select at least one temp file.');
-      const ok = await this._confirm({ title: 'Permanently clear temp files?', message: `${checked.length} selected files will be deleted immediately and cannot be restored from the Safety Vault.`, confirmLabel: 'Delete permanently', danger: true });
+      const ok = await this._confirm({ title: 'Permanently clear temp files?', message: `${checked.length} ${allEligible ? 'eligible' : 'selected'} file(s) will be deleted immediately and cannot be restored from the File Vault.`, confirmLabel: 'Delete permanently', danger: true });
       if (!ok) return;
-      const selected = checked.map((filePath) => displayed.find((item) => item.path === filePath)).filter(Boolean);
+      const selected = checked.map((filePath) => (allEligible ? result.candidates : displayed).find((item) => item.path === filePath)).filter(Boolean);
       await this._runScript('clear-temp-files', { mode: 'clean', minimumAgeDays: result.minimumAgeDays, selectedPaths: selected });
     },
 
@@ -891,7 +924,7 @@
       const result = this._results['large-files-report'];
       const selectedPaths = [...this._container.querySelectorAll('.large-select:checked')].map((input) => input.dataset.path);
       if (!selectedPaths.length) throw new Error('Select at least one file.');
-      const ok = await this._confirm({ title: 'Stage selected large files?', message: 'The files will move to the Safety Vault for seven days. They will still use disk space until deleted.', confirmLabel: 'Stage files' });
+      const ok = await this._confirm({ title: 'Stage selected large files?', message: 'The files will move to the File Vault for seven days. They will still use disk space until deleted.', confirmLabel: 'Stage files' });
       if (!ok) return;
       const items = selectedPaths.map((filePath) => result.files.find((file) => file.path === filePath)).filter(Boolean);
       await this._stageVault(items, 'Large Files cleanup');
@@ -932,7 +965,7 @@
         const selectedCount = group.files.filter((file) => selected.includes(file.path)).length;
         if (selectedCount >= group.files.length) throw new Error('At least one file must remain in every duplicate group.');
       }
-      const ok = await this._confirm({ title: 'Stage selected duplicate copies?', message: `${selected.length} file(s) will move to the Safety Vault for seven days. At least one copy in every group will remain.`, confirmLabel: 'Stage duplicates' });
+      const ok = await this._confirm({ title: 'Stage selected duplicate copies?', message: `${selected.length} file(s) will move to the File Vault for seven days. At least one copy in every group will remain.`, confirmLabel: 'Stage duplicates' });
       if (!ok) return;
       const files = (result.duplicateGroups || []).flatMap((group) => group.files);
       await this._stageVault(selected.map((filePath) => files.find((file) => file.path === filePath)).filter(Boolean), 'Duplicate Finder cleanup');
@@ -983,7 +1016,7 @@
       const result = this._results['uninstaller-report'];
       const selected = [...this._container.querySelectorAll('.leftover-select:checked')].map((input) => input.dataset.path);
       if (!selected.length) throw new Error('Select at least one leftover folder.');
-      const ok = await this._confirm({ title: 'Stage leftover folders?', message: 'Selected folders will move to the Safety Vault for seven days. Registry suggestions are never changed.', confirmLabel: 'Stage folders' });
+      const ok = await this._confirm({ title: 'Stage leftover folders?', message: 'Selected folders will move to the File Vault for seven days. Registry suggestions are never changed.', confirmLabel: 'Stage folders' });
       if (!ok) return;
       const items = selected.map((filePath) => result.leftovers.find((item) => item.path === filePath)).filter(Boolean);
       await this._stageVault(items, `Leftovers for ${result.scannedApp}`);
@@ -991,7 +1024,7 @@
 
     async _executeShred() {
       const method = this._container.querySelector('#shredMethod')?.value || 'simple';
-      const ok = await this._confirm({ title: 'Permanently shred selected files?', message: 'This cannot be undone and does not use the Safety Vault. Backups and shadow copies are not affected.', confirmLabel: 'Shred permanently', danger: true, typed: 'SHRED' });
+      const ok = await this._confirm({ title: 'Permanently shred selected files?', message: 'This cannot be undone and does not use the File Vault. Backups and shadow copies are not affected.', confirmLabel: 'Shred permanently', danger: true, typed: 'SHRED' });
       if (!ok) return;
       await this._runScript('file-shredder', { targets: this._shredPaths, method, confirmation: 'SHRED', mode: 'shred' });
     },
