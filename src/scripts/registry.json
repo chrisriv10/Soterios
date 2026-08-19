@@ -6,8 +6,8 @@
       "inputs": ["minimumAgeDays", "mode", "selectedPaths"], "progress": true, "cancellation": true, "scheduling": ["analyze", "auto-clean"], "visible": true
     },
     {
-      "id": "large-files-report", "name": "Large Files", "description": "Find, sort, reveal, and vault large files without a hidden result limit.",
-      "file": "safeScripts/largeFilesReport.js", "runner": "script", "category": "cleanup-storage", "impact": "low", "icon": "file",
+      "id": "large-files-report", "name": "Large Files", "description": "Find and sort large files, then select items to stage for deletion in the Safety Vault.",
+      "file": "safeScripts/largeFilesReport.js", "runner": "script", "category": "cleanup-storage", "impact": "medium", "icon": "file",
       "inputs": ["scanPath", "thresholdMB", "page", "pageSize"], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
     },
     {
@@ -26,7 +26,7 @@
       "inputs": ["scanPath", "minSize", "extensions"], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
     },
     {
-      "id": "maintenance-safety-vault", "name": "Maintenance Safety Vault", "description": "Restore or permanently delete user files staged by maintenance during the last seven days.",
+      "id": "maintenance-safety-vault", "name": "File Vault", "description": "Restore staged files, delete them immediately, or let them expire after seven days.",
       "runner": "service", "category": "privacy-recovery", "impact": "low", "icon": "archive-restore",
       "inputs": [], "progress": true, "cancellation": false, "scheduling": [], "visible": true
     },
@@ -52,7 +52,7 @@
     },
     {
       "id": "list-startup-items", "name": "Startup Items", "description": "Inspect comprehensive Run, RunOnce, 32/64-bit registry, and Startup-folder entries with source-aware reversible controls.",
-      "file": "safeScripts/listStartupItems.js", "runner": "script", "category": "app-management", "impact": "medium", "icon": "rocket",
+      "file": "safeScripts/listStartupItems.js", "runner": "script", "category": "app-management", "impact": "low", "icon": "rocket",
       "inputs": [], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
     },
     {

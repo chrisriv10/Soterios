@@ -101,6 +101,8 @@ function isExtensionLoaded(browserId, extensionId) {
 }
 function openExtensionsPage(browserId) { const browser = getBrowser(browserId); if (!browser) return { ok: false, error: `Unknown browser: ${browserId}` }; const executable = browser.exeCandidates.find((candidate) => candidate && fs.existsSync(candidate)); if (!executable) return { ok: false, error: `${browser.name} is not installed` }; try { spawn(executable, [browser.extensionsUrl], { detached: true, stdio: 'ignore' }).unref(); return { ok: true }; } catch (error) { return { ok: false, error: error.message || String(error) }; } }
 
+function openExtensionFolder(bundledDir) { const extDir = bundledDir || getNativeHostDir(); if (!fs.existsSync(extDir)) return { ok: false, error: 'Extension folder does not exist yet' }; try { spawn(IS_WIN ? 'explorer.exe' : 'xdg-open', [extDir], { detached: true, stdio: 'ignore' }).unref(); return { ok: true }; } catch (error) { return { ok: false, error: error.message || String(error) }; } }
+
 function readVersion(directory) { try { return JSON.parse(fs.readFileSync(path.join(directory, 'manifest.json'), 'utf8')).version || null; } catch (_) { return null; } }
 function install(browserId, { srcDir, appPath, nativeHostBinary } = {}) {
   const browser = getBrowser(browserId); if (!browser) return { ok: false, error: `Unknown browser: ${browserId}` }; if (!browser.exeCandidates.some((candidate) => candidate && fs.existsSync(candidate))) return { ok: false, error: `${browser.name} is not installed` };
@@ -115,4 +117,4 @@ function getState({ bundledDir } = {}) {
   return { extensionId, extDir, extDirExists, installedVersion: readVersion(extDir), bundledVersion: bundledDir ? readVersion(bundledDir) : null, nativeHostBinaryPresent: fs.existsSync(hostBinary), browsers: BROWSERS.map((browser) => ({ id: browser.id, name: browser.name, installed: browser.exeCandidates.some((candidate) => candidate && fs.existsSync(candidate)), extensionsUrl: browser.extensionsUrl, loaded: extDirExists ? isExtensionLoaded(browser.id, extensionId) : false, nativeHostActive: getNativeHostStatus(browser.id) })) };
 }
 
-module.exports = { IS_WIN, BROWSERS, NATIVE_HOST_NAME, EXPECTED_EXTENSION_VERSION, getBrowser, detectInstalledBrowsers, getNativeHostDir, findAppPath, predictExtensionId, validateExtensionDirectory, copyExtensionSource: copyDirectory, writeNativeHostFiles, registerNativeHost, unregisterNativeHost, getNativeHostStatus, isExtensionLoaded, openExtensionsPage, install, getState };
+module.exports = { IS_WIN, BROWSERS, NATIVE_HOST_NAME, EXPECTED_EXTENSION_VERSION, getBrowser, detectInstalledBrowsers, getNativeHostDir, findAppPath, predictExtensionId, validateExtensionDirectory, copyExtensionSource: copyDirectory, writeNativeHostFiles, registerNativeHost, unregisterNativeHost, getNativeHostStatus, isExtensionLoaded, openExtensionsPage, openExtensionFolder, install, getState };

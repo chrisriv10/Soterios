@@ -2965,6 +2965,8 @@ body {
 .maintenance-tool-card-icon {
   width: 42px;
   height: 42px;
+  padding: 2px;
+  box-sizing: border-box;
 }
 
 .maintenance-tool-card-icon svg,
@@ -3319,8 +3321,15 @@ body {
 
 .button-cell {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 5px;
-  min-width: 220px;
+  min-width: 260px;
+}
+
+.button-cell .btn {
+  flex: 0 1 auto;
+  white-space: nowrap;
 }
 
 .pagination {
@@ -3903,10 +3912,19 @@ body.setup-mode .app-shell { display: block; }
   .setup-step.active {
     align-self: stretch;
     padding-block: 12px;
+    overflow: auto; /* allow scrolling if content exceeds viewport */
   }
-  .setup-logo { margin-bottom: 16px; }
-  .setup-logo-image { width: min(100%, 320px); max-height: 190px; }
+  .setup-logo { margin-bottom: 12px; }
+  .setup-logo-image { width: min(100%, 320px); max-height: 140px; }
+  .setup-title { font-size: clamp(1.5rem, 3.5vw, 2.25rem); }
+  .setup-subtitle { margin-top: 8px; font-size: 1rem; }
   .setup-actions { margin-top: 10px; padding-top: 12px; }
+
+  /* Theme step: compact cards to fit more in viewport */
+  .setup-theme-grid { gap: 8px; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  .setup-theme-card { min-height: 70px; padding: 8px 6px; }
+  .setup-theme-swatch { width: 28px; height: 28px; }
+  .setup-theme-name { font-size: 0.8rem; }
 }
 
 [dir="rtl"] .setup-skip { right: auto; left: 24px; }

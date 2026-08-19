@@ -331,7 +331,7 @@ class MaintenanceScheduler {
       const dryRun = options.dryRunCleanup !== undefined
         ? options.dryRunCleanup
         : !Object.values(effectivePolicies).map((entry) => typeof entry === 'string' ? entry : (entry?.mode || 'off')).includes('auto-clean');
-      this.db.addMaintenanceRun({ startedAt, results, dryRunCleanup: dryRun });
+      this.db.addMaintenanceRun({ startedAt, results, dryRunCleanup: dryRun, source: options.manual ? 'manual-scheduled' : 'scheduled' });
       this.db.addAlert(okCount === results.length ? 'info' : 'warning', `[Maintenance] ${summary}`);
       const lastResult = { startedAt, okCount, totalCount: results.length, reclaimedBytes, results };
       if (okCount > 0) this.saveConfig({ lastRun: startedAt, lastResult });

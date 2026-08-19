@@ -154,12 +154,25 @@ function register(mainWindow, {
   ipcMain.handle('warnings:ignore', (_event, warning) => db.ignoreWarning(warning));
   ipcMain.handle('warnings:unignore', (_event, id) => db.unignoreWarning(id));
   ipcMain.handle('warnings:listIgnored', () => db.getIgnoredWarnings());
+  ipcMain.handle('warnings:listAudit', () => db.getAuditWarnings());
 
   // -- Audit --
   ipcMain.handle('audit:run', async (event) => {
-    return systemAudit.runAudit((progress) => {
+    const results = await systemAudit.runAudit((progress) => {
       event.sender.send('audit:progress', progress);
     });
+    const auditWarnings = (results || []).filter((r) => r.status === 'warn' || r.status === 'fail').map((r) => {
+      const id = 'audit:' + String(r.name || r.message || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      return {
+        id,
+        title: r.name || '',
+        detail: r.message || r.detail || '',
+        level: r.status === 'fail' ? 'danger' : 'warn',
+        scannedAt: new Date().toISOString()
+      };
+    });
+    db.replaceAuditWarnings(auditWarnings);
+    return results;
   });
 
   // -- Scheduled maintenance (#71) --
@@ -588,6 +601,14 @@ function register(mainWindow, {
     }
   });
 
+  ipcMain.handle('browserExtension:openFolder', () => {
+    try {
+      return extInstaller.openExtensionFolder(resolveExtensionSourceDir());
+    } catch (e) {
+      return { ok: false, error: e.message || String(e) };
+    }
+  });
+
   // -- Dialogs & Shell --
   ipcMain.handle('dialog:pickFolder', async () => {
     const result = await dialog.showOpenDialog(mainWindow || BrowserWindow.getFocusedWindow(), {
@@ -606,7 +627,15 @@ function register(mainWindow, {
   });
 
   ipcMain.handle('shell:showItemInFolder', (_event, filePath) => {
-    shell.showItemInFolder(filePath);
+    const resolved = path.resolve(String(filePath || ''));
+    if (fs.existsSync(resolved)) {
+      shell.showItemInFolder(resolved);
+    } else {
+      // Staged vault items no longer exist at their original path; open the
+      // containing folder so the action remains useful after staging.
+      shell.openPath(path.dirname(resolved));
+    }
+    return { success: true };
   });
 
   ipcMain.handle('shell:openPath', async (_event, filePath) => {

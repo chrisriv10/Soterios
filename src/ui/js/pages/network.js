@@ -49,7 +49,8 @@ window.Pages['network'] = {
       hx: parseFloat(el.dataset.hx), hy: parseFloat(el.dataset.hy),
       cx0: parseFloat(el.dataset.cx0), cy0: parseFloat(el.dataset.cy0),
       tx: parseFloat(el.dataset.tx), ty: parseFloat(el.dataset.ty),
-      dur: parseFloat(el.dataset.dur) || 2,
+      travel: parseFloat(el.dataset.travel) || 2.5,
+      dur: parseFloat(el.dataset.dur) || 6,
       delay: parseFloat(el.dataset.delay) || 0
     }));
     const start = performance.now();
@@ -57,14 +58,19 @@ window.Pages['network'] = {
       const elapsed = (now - start) / 1000;
       for (const it of items) {
         if (!it.el.isConnected) continue;
-        const t = (((elapsed + it.delay) % it.dur) / it.dur);
+        const cycleTime = (elapsed + it.delay) % it.dur;
+        if (cycleTime > it.travel) {
+          it.el.style.opacity = '0';
+          continue;
+        }
+        const t = cycleTime / it.travel;
         const mt = 1 - t;
         const x = mt * mt * it.hx + 2 * mt * t * it.cx0 + t * t * it.tx;
         const y = mt * mt * it.hy + 2 * mt * t * it.cy0 + t * t * it.ty;
         it.el.setAttribute('cx', x.toFixed(3));
         it.el.setAttribute('cy', y.toFixed(3));
         const fade = Math.min(1, t * 6, (1 - t) * 6);
-        it.el.style.opacity = Math.max(0.15, fade).toFixed(2);
+        it.el.style.opacity = Math.max(0.0, fade).toFixed(2);
       }
       this._heatmapPulseRaf = requestAnimationFrame(tick);
     };
@@ -72,7 +78,15 @@ window.Pages['network'] = {
   },
 
   _clampHeatmapPan(zoom, pan, viewportW, viewportH) {
-    const minX = viewportW - viewportW * zoom;
+    let panelWidth = 0;
+    if (this._heatmapWidgetEl) {
+      const panel = this._heatmapWidgetEl.querySelector('#heatmapClusterPanel');
+      const isFullscreen = this._heatmapWidgetEl.classList.contains('heatmap-fullscreen');
+      if (panel && !panel.hidden && window.innerWidth >= 900 && !isFullscreen) {
+        panelWidth = panel.offsetWidth || 340;
+      }
+    }
+    const minX = viewportW - panelWidth - viewportW * zoom;
     const minY = viewportH - viewportH * zoom;
     return {
       x: Math.min(0, Math.max(minX, pan.x)),
@@ -88,6 +102,9 @@ window.Pages['network'] = {
     const viewport = content.querySelector('#heatmapViewport');
     if (viewport) {
       viewport.style.cursor = this._heatmapZoom > 1.001 ? 'grab' : 'default';
+      // Set a single CSS variable for zoom scale to avoid JS lag during panning
+      const zoomScale = Math.max(0.35, 1 / Math.sqrt(this._heatmapZoom));
+      viewport.style.setProperty('--zoom-scale', zoomScale);
     }
     const label = content.querySelector('#heatmapZoomLabel');
     if (label) label.textContent = `${Math.round(this._heatmapZoom * 100)}%`;
@@ -218,6 +235,7 @@ window.Pages['network'] = {
             <button type="button" id="heatmapZoomIn" class="heatmap-zoom-btn" title="${escapeHtml(t('network.heatmapZoomIn'))}" aria-label="${escapeHtml(t('network.heatmapZoomIn'))}">+</button>
           </div>
           <button type="button" id="heatmapZoomReset" class="heatmap-zoom-btn heatmap-reset" title="${escapeHtml(t('network.heatmapZoomReset'))}"><span id="heatmapZoomLabel">100%</span>&nbsp;&#8635;</button>
+          <button type="button" id="heatmapFullscreen" class="heatmap-zoom-btn heatmap-fullscreen-btn" title="Fullscreen" aria-label="Toggle fullscreen">&#x26F6;</button>
         </div>
       </div>
       <aside id="heatmapClusterPanel" class="heatmap-cluster-panel" hidden></aside>`;
@@ -360,21 +378,28 @@ window.Pages['network'] = {
       path.setAttribute('class', `heatmap-arc ${riskClass}`);
       existing.delete(`path:${cluster.id}`);
       let dot = existing.get(`particle:${cluster.id}`);
-      if (dot && dot.tagName.toLowerCase() !== 'circle') {
+      if (dot && dot.tagName.toLowerCase() !== 'ellipse') {
         dot.remove();
         dot = null;
       }
-      if (!dot) { dot = document.createElementNS(namespace, 'circle'); svg.appendChild(dot); }
+      if (!dot) { dot = document.createElementNS(namespace, 'ellipse'); svg.appendChild(dot); }
       dot.dataset.clusterId = cluster.id;
       dot.setAttribute('class', `heatmap-pulse-dot ${riskClass}`);
       const dotRadius = cluster.highestRisk === 'MALICIOUS' ? 1.15 : 0.9;
-      dot.setAttribute('r', String(dotRadius));
+      // SVG viewBox is 100x100 but element aspect ratio is 2:1, so we halve rx to make it visually circular
+      dot.setAttribute('rx', String(dotRadius * 0.5));
+      dot.setAttribute('ry', String(dotRadius));
       dot.dataset.hx = String(home.x); dot.dataset.hy = String(home.y);
       dot.dataset.cx0 = String(midX); dot.dataset.cy0 = String(controlY);
       dot.dataset.tx = String(cluster.x); dot.dataset.ty = String(cluster.y);
-      dot.dataset.dur = String(Math.max(1.4, Math.min(3.4, 1 + distance / 32)));
+      
+      const travel = Math.max(1.8, Math.min(4.0, 1.2 + distance / 28));
+      dot.dataset.travel = String(travel);
       const hash = Array.from(cluster.id).reduce((total, character) => ((total * 31) + character.charCodeAt(0)) | 0, 0);
-      dot.dataset.delay = String((Math.abs(hash) % 20) / 10);
+      // Wait between 3 to 10 seconds before firing again
+      const pause = 3 + (Math.abs(hash) % 70) / 10;
+      dot.dataset.dur = String(travel + pause);
+      dot.dataset.delay = String((Math.abs(hash) % 80) / 10);
       existing.delete(`particle:${cluster.id}`);
     }
     for (const node of existing.values()) node.remove();
@@ -386,13 +411,59 @@ window.Pages['network'] = {
     }
   },
 
-  _selectHeatmapCluster(clusterId) {
+  _selectHeatmapCluster(clusterId, content) {
     const selected = this._heatmapClusters.find((cluster) => cluster.id === clusterId) || null;
     this._selectedClusterId = selected?.id || null;
     this._selectedClusterIps = selected?.ips || null;
     this._selectedClusterLoc = selected?.locations.join(' | ') || null;
     this._heatmapWidgetEl?.querySelectorAll('.heatmap-marker').forEach((marker) => marker.classList.toggle('is-selected', marker.dataset.clusterId === this._selectedClusterId));
     this._renderHeatmapDrawer(this._heatmapWidgetEl, selected, (key, vars) => window.I18n?.t(key, vars) ?? key);
+    if (selected && content) {
+      queueMicrotask(() => this._panToClusterVisibleCenter(selected, content));
+    }
+  },
+
+  _panToClusterVisibleCenter(cluster, content) {
+    const viewport = content.querySelector('#heatmapViewport');
+    const panel = content.querySelector('#heatmapClusterPanel');
+    if (!viewport) return;
+    const rect = viewport.getBoundingClientRect();
+    const widget = this._heatmapWidgetEl;
+    const isFullscreen = widget?.classList.contains('heatmap-fullscreen');
+    // Panel sits on the RIGHT side of the map (or below on narrow screens).
+    // We want the marker centered in the visible map area (left of the panel).
+    const panelWidth = (!panel || panel.hidden) ? 0 :
+      (window.innerWidth < 900 || isFullscreen ? 0 : panel.offsetWidth);
+    const visibleWidth = rect.width - panelWidth;
+    if (visibleWidth < 60) return; // too narrow, skip
+    const worldX = (cluster.x / 100) * rect.width;
+    const worldY = (cluster.y / 100) * rect.height;
+    // Center of the map area (excluding panel) in viewport coordinates
+    const targetCenterX = visibleWidth / 2;
+    const targetCenterY = rect.height / 2;
+    
+    let originalZoom = this._heatmapZoom;
+    let zoom = originalZoom;
+    let pan = { x: targetCenterX - worldX * zoom, y: targetCenterY - worldY * zoom };
+    let clampedPan = this._clampHeatmapPan(zoom, pan, rect.width, rect.height);
+    
+    // If clamp prevented us from centering, and zoom is low, automatically zoom in
+    if ((clampedPan.x !== pan.x || clampedPan.y !== pan.y) && zoom < 1.75) {
+       zoom = 1.75;
+       pan = { x: targetCenterX - worldX * zoom, y: targetCenterY - worldY * zoom };
+       clampedPan = this._clampHeatmapPan(zoom, pan, rect.width, rect.height);
+       this._heatmapZoom = zoom;
+    }
+
+    this._heatmapPan = clampedPan;
+    viewport.classList.add('is-focusing');
+    viewport.addEventListener('transitionend', () => viewport.classList.remove('is-focusing'), { once: true });
+    
+    if (zoom !== originalZoom) {
+       this._refreshHeatmapTier(content);
+    } else {
+       this._applyHeatmapTransform(content);
+    }
   },
 
   _renderHeatmapDrawer(widget, cluster, t) {
@@ -556,7 +627,28 @@ async _renderAsync(container, t) {
         const zoomIn = e.target.closest('#heatmapZoomIn');
         const zoomOut = e.target.closest('#heatmapZoomOut');
         const zoomReset = e.target.closest('#heatmapZoomReset');
+        const fullscreenBtn = e.target.closest('#heatmapFullscreen');
         const arcsToggle = e.target.closest('#heatmapArcsToggle');
+        if (fullscreenBtn) {
+          const page = window.Pages['network'];
+          const widget = page._heatmapWidgetEl;
+          if (widget) {
+            const isFs = widget.classList.toggle('heatmap-fullscreen');
+            fullscreenBtn.title = isFs ? 'Exit fullscreen' : 'Fullscreen';
+            fullscreenBtn.setAttribute('aria-label', isFs ? 'Exit fullscreen' : 'Toggle fullscreen');
+            fullscreenBtn.innerHTML = isFs ? '&#x2715;' : '&#x26F6;';
+            // Re-clamp pan for new viewport dimensions
+            queueMicrotask(() => {
+              const vp = content.querySelector('#heatmapViewport');
+              if (vp) {
+                const r = vp.getBoundingClientRect();
+                page._heatmapPan = page._clampHeatmapPan(page._heatmapZoom, page._heatmapPan, r.width, r.height);
+                page._applyHeatmapTransform(content);
+              }
+            });
+          }
+          return;
+        }
         if (zoomIn || zoomOut || zoomReset) {
           const viewport = content.querySelector('#heatmapViewport');
           const rect = viewport ? viewport.getBoundingClientRect() : { width: 0, height: 0 };
@@ -626,9 +718,9 @@ async _renderAsync(container, t) {
             tooltip.style.top = `${Math.max(4, Math.min(vpRect.height - 70, localY + 14))}px`;
           }
         } else if (marker) {
-          window.Pages['network']._selectHeatmapCluster(marker.dataset.clusterId);
+          window.Pages['network']._selectHeatmapCluster(marker.dataset.clusterId, content);
         } else if (e.target.closest('.heatmap-infobox-close')) {
-          window.Pages['network']._selectHeatmapCluster(null);
+          window.Pages['network']._selectHeatmapCluster(null, content);
         } else if (e.target.closest('#heatmapViewport') && window.Pages['network']._selectedClusterIps) {
           // click on empty map background closes the open cluster panel
           window.Pages['network']._selectHeatmapCluster(null);
@@ -724,29 +816,36 @@ async _renderAsync(container, t) {
           if (tooltip.style.display !== 'none') tooltip.style.display = 'none';
           return;
         }
-        const vpRect = viewport.getBoundingClientRect();
-        const localX = e.clientX - vpRect.left;
-        const localY = e.clientY - vpRect.top;
-        if (tooltip.dataset.forIps !== marker.dataset.ips) {
-          tooltip.dataset.forIps = marker.dataset.ips;
-          const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
-          let classColor = 'var(--ok)';
-          if (marker.dataset.classification === 'MALICIOUS') classColor = 'var(--danger)';
-          else if (marker.dataset.classification === 'UNKNOWN') classColor = 'var(--warn)';
-          tooltip.innerHTML = `
-            <div style="font-weight:600; color:var(--text-main); margin-bottom:3px;">${escapeHtml(marker.dataset.loc)}</div>
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:14px;">
-              <span style="color:var(--text-dim);">${escapeHtml(t('network.heatmapTooltipConnections', { count: marker.dataset.count }))}</span>
-              <span style="font-weight:600; color:${classColor};">${escapeHtml(marker.dataset.classLabel)}</span>
-            </div>`;
-        }
-        tooltip.style.display = 'block';
-        let left = localX + 14;
-        let top = localY + 14;
-        if (left > vpRect.width - 200) left = localX - 214;
-        if (top > vpRect.height - 70) top = localY - 60;
-        tooltip.style.left = `${Math.max(4, left)}px`;
-        tooltip.style.top = `${Math.max(4, top)}px`;
+        
+        if (page._tooltipRaf) return;
+        page._tooltipRaf = requestAnimationFrame(() => {
+          page._tooltipRaf = null;
+          // Ensure we didn't mouseout while waiting
+          if (!document.body.contains(marker) || !marker.matches(':hover')) return;
+          const vpRect = viewport.getBoundingClientRect();
+          const localX = e.clientX - vpRect.left;
+          const localY = e.clientY - vpRect.top;
+          if (tooltip.dataset.forIps !== marker.dataset.ips) {
+            tooltip.dataset.forIps = marker.dataset.ips;
+            const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+            let classColor = 'var(--ok)';
+            if (marker.dataset.classification === 'MALICIOUS') classColor = 'var(--danger)';
+            else if (marker.dataset.classification === 'UNKNOWN') classColor = 'var(--warn)';
+            tooltip.innerHTML = `
+              <div style="font-weight:600; color:var(--text-main); margin-bottom:3px;">${escapeHtml(marker.dataset.loc)}</div>
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:14px;">
+                <span style="color:var(--text-dim);">${escapeHtml(t('network.heatmapTooltipConnections', { count: marker.dataset.count }))}</span>
+                <span style="font-weight:600; color:${classColor};">${escapeHtml(marker.dataset.classLabel)}</span>
+              </div>`;
+          }
+          tooltip.style.display = 'block';
+          let left = localX + 14;
+          let top = localY + 14;
+          if (left > vpRect.width - 200) left = localX - 214;
+          if (top > vpRect.height - 70) top = localY - 60;
+          tooltip.style.left = `${Math.max(4, left)}px`;
+          tooltip.style.top = `${Math.max(4, top)}px`;
+        });
       });
 
       content.addEventListener('mouseleave', (e) => {

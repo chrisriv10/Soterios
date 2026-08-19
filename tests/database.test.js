@@ -206,4 +206,78 @@ describe('DatabaseService maintenance_runs', () => {
     assert.equal(service.deleteMaintenanceRun(target).changes, 0);
     service.db.close();
   });
+
+  it('addMaintenanceRun persists the source column', () => {
+    const service = new DatabaseService(tempDbPath());
+    const manual = service.addMaintenanceRun({
+      startedAt: new Date().toISOString(),
+      results: [{ scriptId: 'disk-space-report', ok: true }],
+      dryRunCleanup: false,
+      source: 'manual'
+    });
+    const row = service.db.prepare('SELECT source FROM maintenance_runs WHERE id = ?').get(Number(manual.lastInsertRowid));
+    assert.equal(row.source, 'manual');
+    service.db.close();
+  });
+
+  it('getScheduledMaintenanceHistory returns only scheduled and manual-scheduled runs', () => {
+    const service = new DatabaseService(tempDbPath());
+    const sources = ['scheduled', 'manual-scheduled', 'manual'];
+    for (let i = 0; i < sources.length; i += 1) {
+      service.addMaintenanceRun({
+        startedAt: new Date(Date.now() + i).toISOString(),
+        results: [{ scriptId: 'disk-space-report', ok: true }],
+        dryRunCleanup: false,
+        source: sources[i]
+      });
+    }
+    const scheduled = service.getScheduledMaintenanceHistory(10);
+    assert.equal(scheduled.length, 2);
+    assert.ok(scheduled.every((row) => row.source === 'scheduled' || row.source === 'manual-scheduled'));
+    assert.ok(!scheduled.some((row) => row.source === 'manual'));
+    service.db.close();
+  });
+});
+
+describe('DatabaseService audit_warnings', () => {
+  const tempDbs = [];
+
+  afterEach(() => {
+    while (tempDbs.length) {
+      const p = tempDbs.pop();
+      try { fs.rmSync(p, { force: true }); } catch (_) {}
+      try { fs.rmSync(p + '-wal', { force: true }); } catch (_) {}
+      try { fs.rmSync(p + '-shm', { force: true }); } catch (_) {}
+    }
+  });
+
+  function tempDbPath() {
+    const p = path.join(os.tmpdir(), `soterios-db-audit-${Date.now()}-${Math.random().toString(16).slice(2)}.db`);
+    tempDbs.push(p);
+    return p;
+  }
+
+  it('replaceAuditWarnings stores rows and getAuditWarnings returns them', () => {
+    const service = new DatabaseService(tempDbPath());
+    service.replaceAuditWarnings([
+      { id: 'audit:test-one', title: 'Test one', detail: 'Details', level: 'warn', scannedAt: new Date().toISOString() },
+      { id: 'audit:test-two', title: 'Test two', detail: 'More details', level: 'danger', scannedAt: new Date().toISOString() }
+    ]);
+    const rows = service.getAuditWarnings();
+    assert.equal(rows.length, 2);
+    const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+    assert.equal(byId['audit:test-one'].level, 'warn');
+    assert.equal(byId['audit:test-two'].level, 'danger');
+    service.db.close();
+  });
+
+  it('replaceAuditWarnings overwrites previous findings', () => {
+    const service = new DatabaseService(tempDbPath());
+    service.replaceAuditWarnings([
+      { id: 'audit:old', title: 'Old', detail: 'x', level: 'warn', scannedAt: new Date().toISOString() }
+    ]);
+    service.replaceAuditWarnings([]);
+    assert.equal(service.getAuditWarnings().length, 0);
+    service.db.close();
+  });
 });

@@ -391,6 +391,8 @@ window.Pages = window.Pages || {};
           });
         }
         const first = detected[0];
+        const buttonRow = document.createElement('div');
+        buttonRow.style.cssText = 'display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;';
         const openBtn = document.createElement('button');
         openBtn.type = 'button';
         openBtn.className = 'btn btn-sm setup-extension-open';
@@ -398,7 +400,16 @@ window.Pages = window.Pages || {};
         openBtn.addEventListener('click', async () => {
           try { await window.api.invoke('browserExtension:openPage', first.id); } catch (_) {}
         });
-        body.appendChild(openBtn);
+        buttonRow.appendChild(openBtn);
+        const openFolderBtn = document.createElement('button');
+        openFolderBtn.type = 'button';
+        openFolderBtn.className = 'btn btn-sm setup-extension-open-folder';
+        openFolderBtn.textContent = t('settings.browserExtension.openFolder');
+        openFolderBtn.addEventListener('click', async () => {
+          try { await window.api.invoke('browserExtension:openFolder'); } catch (_) {}
+        });
+        buttonRow.appendChild(openFolderBtn);
+        body.appendChild(buttonRow);
       } catch (err) {
         body.innerHTML = escapeHtml(err.message || String(err));
       }

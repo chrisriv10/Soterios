@@ -89,21 +89,6 @@ window.Pages.settings = {
             <label class="toggle"><input type="checkbox" id="networkTrafficHistoryToggle" ${settings.features.networkTrafficHistory !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
 
-          <div class="toggle-row">
-            <div>
-              <div class="toggle-label">${escapeHtml(t('settings.autoReports.label'))}</div>
-              <div class="toggle-desc">${escapeHtml(t('settings.autoReports.desc'))}</div>
-            </div>
-            <label class="toggle"><input type="checkbox" id="autoReportToggle" ${settings.features.autoReports ? 'checked' : ''} /><span class="toggle-slider"></span></label>
-          </div>
-
-          <div class="toggle-row">
-            <div>
-              <div class="toggle-label">${escapeHtml(t('settings.scanHistory.label'))}</div>
-              <div class="toggle-desc">${escapeHtml(t('settings.scanHistory.desc'))}</div>
-            </div>
-            <label class="toggle"><input type="checkbox" id="scanHistoryToggle" ${settings.features.scanHistory ? 'checked' : ''} /><span class="toggle-slider"></span></label>
-          </div>
           <div class="privacy-lock-hint" style="display:none; margin-top:8px; font-size:0.8rem; color:var(--text-dim);"></div>
         </div>
 
@@ -161,7 +146,48 @@ window.Pages.settings = {
         </div>
 
         <div class="card">
+          <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.reportsCard'))}</div>
+
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">${escapeHtml(t('settings.generateToolRunReports.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.generateToolRunReports.desc'))}</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="generateToolRunReportsToggle" ${settings.features.generateToolRunReports !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+          </div>
+
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">${escapeHtml(t('settings.skipDeleteConfirm.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.skipDeleteConfirm.desc'))}</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="skipDeleteConfirmToggle" ${settings.features.skipDeleteConfirm ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+          </div>
+
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">${escapeHtml(t('settings.autoReports.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.autoReports.desc'))}</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="autoReportToggle" ${settings.features.autoReports ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+          </div>
+
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">${escapeHtml(t('settings.scanHistory.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.scanHistory.desc'))}</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="scanHistoryToggle" ${settings.features.scanHistory ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+          </div>
+        </div>
+
+        <div class="card">
           <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.browserExtension.label'))}</div>
+          <details class="browser-ext-disclosure">
+            <summary><span class="toggle-label">${escapeHtml(t('settings.browserExtension.disclosureTitle'))}</span><span class="browser-ext-disclosure-chevron" aria-hidden="true">▸</span></summary>
+            <div class="toggle-desc">${escapeHtml(t('settings.browserExtension.disclosureText'))}</div>
+            <label style="display:flex; align-items:flex-start; gap:8px; margin-top:10px; font-size:0.85rem;"><input type="checkbox" id="browserExtDisclosureConfirm" style="margin-top:3px;"> <span>${escapeHtml(t('settings.browserExtension.disclosureConfirm'))}</span></label>
+          </details>
           <div class="toggle-desc" style="margin-bottom:12px;">${escapeHtml(t('settings.browserExtension.desc'))}</div>
           <div id="browserExtensionBody">${escapeHtml(t('settings.browserExtension.checking'))}</div>
         </div>
@@ -199,20 +225,6 @@ window.Pages.settings = {
           <div id="languageWarning" style="display:none; margin-bottom:12px; padding:12px; background:var(--warning-bg, #fff3cd); border:1px solid var(--warning-border, #ffc107); border-radius:4px; color:var(--warning-text, #856404); font-size:0.85rem;"></div>
           <button class="btn btn-primary" id="saveLanguage" style="margin-top:4px;">${escapeHtml(t('settings.applyLanguage'))}</button>
           <div id="languageStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
-        </div>
-
-        <div class="card">
-          <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.scannerDefaults'))}</div>
-
-          <div class="field"><label class="field-label">${escapeHtml(t('settings.defaultScanPath'))}</label><input type="text" id="defaultPath" value="${escapeHtml(settings.scanner.defaultPath || '')}" placeholder="e.g. C:\\Users\\..." /></div>
-          <div class="grid grid-2">
-            <div class="field"><label class="field-label">${escapeHtml(t('settings.maxDepth'))}</label><input type="number" id="maxDepthSetting" min="1" max="32" value="${escapeHtml(settings.scanner.maxDepth)}" /></div>
-            <div class="field"><label class="field-label">${escapeHtml(t('settings.maxFileSize'))}</label><input type="number" id="maxFileSizeSetting" min="1" max="4096" value="${escapeHtml(settings.scanner.maxFileSizeMB)}" /></div>
-          </div>
-          <label class="checkbox-row"><input type="checkbox" id="includeCleanSetting" ${settings.scanner.includeCleanResults ? 'checked' : ''} />${escapeHtml(t('settings.includeClean'))}</label>
-          <div class="field"><label class="field-label">${escapeHtml(t('settings.excludedDirs'))}</label><input type="text" id="excludedDirs" value="${escapeHtml((settings.scanner.excludedDirNames || []).join(', '))}" /></div>
-          <button class="btn btn-primary" id="saveSettings" style="margin-top:12px;">${escapeHtml(t('settings.saveScannerSettings'))}</button>
-          <div id="settingsStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
         </div>
 
         <div class="card">
@@ -392,25 +404,6 @@ window.Pages.settings = {
       }
     });
 
-    container.querySelector('#saveSettings').addEventListener('click', async () => {
-      const btn = container.querySelector('#saveSettings');
-      const status = container.querySelector('#settingsStatus');
-      setButtonLoading(btn, true, t('common.saving'));
-      try {
-        await Api.updateSettings({
-          scanner: {
-            defaultPath: container.querySelector('#defaultPath').value.trim(),
-            maxDepth: Number(container.querySelector('#maxDepthSetting').value || 12),
-            maxFileSizeMB: Number(container.querySelector('#maxFileSizeSetting').value || 512),
-            includeCleanResults: container.querySelector('#includeCleanSetting').checked,
-            excludedDirNames: container.querySelector('#excludedDirs').value.split(',').map(i => i.trim()).filter(Boolean)
-          }
-        });
-        status.textContent = t('settings.settingsSaved');
-      } catch (err) { status.textContent = err.message || String(err); }
-      finally { setButtonLoading(btn, false); }
-    });
-
     async function saveFeature(key, value, input) {
       input.disabled = true;
       try {
@@ -445,6 +438,8 @@ window.Pages.settings = {
     container.querySelector('#externalLookupsToggle').addEventListener('change', (event) => saveFeature('externalLookups', event.target.checked, event.target));
     container.querySelector('#geoLookupToggle').addEventListener('change', (event) => saveFeature('geoLookup', event.target.checked, event.target));
     container.querySelector('#networkPerimeterMapToggle').addEventListener('change', (event) => saveFeature('networkPerimeterMap', event.target.checked, event.target));
+    container.querySelector('#generateToolRunReportsToggle').addEventListener('change', (event) => saveFeature('generateToolRunReports', event.target.checked, event.target));
+    container.querySelector('#skipDeleteConfirmToggle').addEventListener('change', (event) => saveFeature('skipDeleteConfirm', event.target.checked, event.target));
 
     const privacyModeToggle = container.querySelector('#privacyModeToggle');
     const privacyModeStatus = container.querySelector('#privacyModeStatus');
@@ -578,11 +573,6 @@ updatePrivacyModeStatus();
           </div>`;
         }).join('');
 body.innerHTML = `
-          <details class="browser-ext-disclosure">
-            <summary><span class="toggle-label">${escapeHtml(t('settings.browserExtension.disclosureTitle'))}</span><span class="browser-ext-disclosure-chevron" aria-hidden="true">▸</span></summary>
-            <div class="toggle-desc">${escapeHtml(t('settings.browserExtension.disclosureText'))}</div>
-            <label style="display:flex; align-items:flex-start; gap:8px; margin-top:10px; font-size:0.85rem;"><input type="checkbox" id="browserExtDisclosureConfirm" style="margin-top:3px;"> <span>${escapeHtml(t('settings.browserExtension.disclosureConfirm'))}</span></label>
-          </details>
           <div class="toggle-desc" style="margin-bottom:8px;">Bundled extension: ${escapeHtml(state.bundledVersion || 'unavailable')} &nbsp;·&nbsp; Installed: ${escapeHtml(state.installedVersion || 'not staged')} &nbsp;·&nbsp; Native binary: ${state.nativeHostBinaryPresent ? 'present' : 'not staged'} &nbsp;·&nbsp; Desktop bridge: ${state.bridge?.connected ? 'host connected' : state.bridge?.listening ? 'ready' : 'unavailable'}</div>
           ${rows}
           <div id="browserExtSteps" style="display:none; margin-top:12px; padding:12px; background:var(--panel-bg-alt, rgba(128,128,128,0.08)); border-radius:6px;">
@@ -601,7 +591,8 @@ body.innerHTML = `
           </div>
           <div id="browserExtStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
         `;
-        const disclosure = body.querySelector('#browserExtDisclosureConfirm');
+        const card = body.closest('.card');
+        const disclosure = card?.querySelector('#browserExtDisclosureConfirm');
         if (disclosure) disclosure.addEventListener('change', () => {
           body.querySelectorAll('.browser-ext-install').forEach((button) => { button.disabled = !disclosure.checked; });
         });

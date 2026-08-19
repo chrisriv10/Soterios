@@ -93,11 +93,11 @@ window.Pages.reports = {
           </div>
           <div id="reportHistory" class="history-list"><div class="empty-state">${escapeHtml(t('reports.loadingSavedReports'))}</div></div>
 
-          <div class="panel-title" style="margin-top:18px;">${escapeHtml(t('reports.maintenanceStatus'))}</div>
-          <div class="card" id="maintenanceStatus" style="padding:14px;"><div class="empty-state">${escapeHtml(t('reports.loadingMaintenance'))}</div></div>
-
           <div class="panel-title" style="margin-top:18px;">${escapeHtml(t('reports.maintenanceHistory'))}</div>
           <div id="maintenanceHistory" class="history-list"><div class="empty-state">${escapeHtml(t('reports.loadingMaintenance'))}</div></div>
+
+          <div class="panel-title" style="margin-top:18px;">${escapeHtml(t('reports.scheduledMaintenanceHistory'))}</div>
+          <div id="scheduledMaintenanceHistory" class="history-list"><div class="empty-state">${escapeHtml(t('reports.loadingMaintenance'))}</div></div>
         </section>
 
         <section class="panel report-viewer">
@@ -124,8 +124,8 @@ window.Pages.reports = {
     container.querySelector('#exportReportCsv').addEventListener('click', () => this.exportCurrentReport(container, 'csv'));
     this.listScanReports(container);
     this.listReports(container);
-    this.renderMaintenanceStatus(container);
-    this.listMaintenanceHistory(container);
+    this.listManualMaintenanceHistory(container);
+    this.listScheduledMaintenanceHistory(container);
   },
 
   clearViewer(container) {
@@ -433,25 +433,32 @@ window.Pages.reports = {
 
     if (scriptId === 'clear-temp-files') {
       const parts = [];
-      if (summary.reclaimedBytes) parts.push(`${t('reports.reclaimed', { size: this.formatBytes(summary.reclaimedBytes) })}`);
-      if (summary.deletedCount) parts.push(`${summary.deletedCount} ${t('reports.files')}`);
-      if (summary.skippedCount) parts.push(`${summary.skippedCount} ${t('reports.skipped')}`);
-      if (summary.candidateCount) parts.push(`${summary.candidateCount} ${t('reports.candidates')}`);
+      if (summary.reclaimedBytes !== undefined) parts.push(`${t('reports.reclaimed', { size: this.formatBytes(summary.reclaimedBytes) })}`);
+      if (summary.deletedCount !== undefined) parts.push(`${summary.deletedCount} ${t('reports.files')}`);
+      if (summary.skippedCount !== undefined) parts.push(`${summary.skippedCount} ${t('reports.skipped')}`);
+      if (summary.candidateCount !== undefined) parts.push(`${summary.candidateCount} ${t('reports.candidates')}`);
       detail = parts.join(', ');
     } else if (scriptId === 'browser-cache-report') {
       const parts = [];
-      if (summary.totalBytes) parts.push(`${t('reports.reclaimed', { size: this.formatBytes(summary.totalBytes) })}`);
-      if (summary.browserCount) parts.push(`${summary.browserCount} ${t('reports.browsers')}`);
+      if (summary.totalBytes !== undefined) parts.push(`${t('reports.reclaimed', { size: this.formatBytes(summary.totalBytes) })}`);
+      if (summary.browserCount !== undefined) parts.push(`${summary.browserCount} ${t('reports.browsers')}`);
       detail = parts.join(', ');
     } else if (scriptId === 'disk-space-report') {
       const parts = [];
-      if (summary.volumeCount) parts.push(`${summary.volumeCount} ${t('reports.volumes')}`);
-      if (summary.warningCount) parts.push(`${summary.warningCount} ${t('reports.warnings')}`);
+      if (summary.volumeCount !== undefined) parts.push(`${summary.volumeCount} ${t('reports.volumes')}`);
+      if (summary.warningCount !== undefined) parts.push(`${summary.warningCount} ${t('reports.warnings')}`);
       detail = parts.join(', ');
     } else if (scriptId === 'large-files-report') {
       const parts = [];
-      if (summary.count) parts.push(`${summary.count} ${t('reports.files')}`);
-      if (summary.totalSizeBytes) parts.push(`${t('reports.totalSize', { size: this.formatBytes(summary.totalSizeBytes) })}`);
+      if (summary.count !== undefined && summary.count !== null) parts.push(`${summary.count} ${t('reports.files')}`);
+      if (summary.totalSizeBytes !== undefined) parts.push(`${t('reports.totalSize', { size: this.formatBytes(summary.totalSizeBytes) })}`);
+      if (summary.totalFilesScanned !== undefined) parts.push(`${summary.totalFilesScanned} ${t('reports.filesScanned')}`);
+      detail = parts.join(', ');
+    } else if (scriptId === 'duplicate-finder') {
+      const parts = [];
+      if (summary.totalFilesScanned !== undefined) parts.push(`${summary.totalFilesScanned} ${t('reports.filesScanned')}`);
+      if (summary.groupCount !== undefined) parts.push(`${summary.groupCount} groups`);
+      if (summary.totalWastedSpace !== undefined) parts.push(`${t('reports.totalSize', { size: this.formatBytes(summary.totalWastedSpace) })}`);
       detail = parts.join(', ');
     }
 
@@ -469,10 +476,19 @@ window.Pages.reports = {
     return `${t('reports.script.' + scriptId) || r.scriptId}: ${detail}`;
   },
 
-  async listMaintenanceHistory(container) {
+  formatManualResultDetail(summary, scriptId, t) {
+    const bytes = (mb) => mb * 1024 * 1024;
+    const summaryWithBytes = { ...summary };
+    if (summary.freedMB) summaryWithBytes.reclaimedBytes = bytes(summary.freedMB);
+    if (summary.totalMB) summaryWithBytes.totalBytes = bytes(summary.totalMB);
+    const fakeResult = { scriptId, ok: true, summary: summaryWithBytes, skippedReason: summary.skippedReason, error: summary.error };
+    return this.formatResultDetail(fakeResult, t);
+  },
+
+  async listManualMaintenanceHistory(container) {
     const el = container.querySelector('#maintenanceHistory');
     try {
-      const response = await window.api.invoke('maintenance:getHistory').catch(() => ({ ok: false, data: [] }));
+      const response = await window.api.invoke('maintenance:getManualHistory').catch(() => ({ ok: false, data: [] }));
       const rows = response?.data || [];
       if (!rows.length) {
         el.innerHTML = `<div class="empty-state">${escapeHtml(tFactory()('reports.noMaintenance'))}</div>`;
@@ -480,23 +496,92 @@ window.Pages.reports = {
       }
       const t = tFactory();
       const items = rows.map((row, index) => {
-        const when = row.started_at || row.timestamp;
+        const when = row.startedAt || row.started_at || row.timestamp;
         const whenLabel = when ? new Date(when).toLocaleString() : t('common.unknown');
-        const detail = (row.results || []).map((r) => this.formatResultDetail(r, t)).join('; ');
+        const summary = row.summary || {};
+        const detail = this.formatManualResultDetail(summary, row.toolId, t);
+        const status = row.status === 'completed' ? 'clean' : row.status === 'canceled' ? 'warn' : 'match';
+        const toolLabel = t('reports.script.' + row.toolId) || row.toolId || t('common.unknown');
+        const statusLabel = row.status === 'completed' ? t('reports.completed') : String(row.status || t('common.unknown')).replace(/^./, (c) => c.toUpperCase());
         return `
           <div class="history-item">
             <div style="min-width:0;">
-              <div class="history-title">${escapeHtml(t('reports.maintenanceRun', { ok: row.ok_count || 0, total: row.total_count || 0 }))}</div>
+              <div class="history-title">${escapeHtml(toolLabel)} <span class="log-tag ${status}">${escapeHtml(statusLabel)}</span></div>
               <div class="history-meta">${escapeHtml(whenLabel)}${detail ? ` — ${escapeHtml(detail)}` : ''}</div>
             </div>
             <div style="display:flex; gap:8px; flex-shrink:0;">
-              <button class="btn btn-sm view-maintenance" data-index="${index}">${escapeHtml(t('reports.viewDetails'))}</button>
-              <button class="btn btn-sm delete-maintenance" data-index="${index}" title="${escapeHtml(t('reports.deleteMaintenance'))}">${escapeHtml(t('reports.deleteMaintenance'))}</button>
+              <button class="btn btn-sm view-maintenance" data-index="${index}" data-source="manual">${escapeHtml(t('reports.viewDetails'))}</button>
+              <button class="btn btn-sm delete-maintenance" data-index="${index}" data-source="manual" title="${escapeHtml(t('reports.deleteMaintenance'))}">${escapeHtml(t('reports.deleteMaintenance'))}</button>
             </div>
           </div>`;
       }).join('');
       el.innerHTML = `<div class="history-list">${items}</div>`;
-      
+
+      el.querySelectorAll('.view-maintenance').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const index = parseInt(btn.dataset.index, 10);
+          const row = rows[index];
+          if (row) {
+            this.showManualMaintenanceDetails(container, row);
+          }
+        });
+      });
+      el.querySelectorAll('.delete-maintenance').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const index = parseInt(btn.dataset.index, 10);
+          const row = rows[index];
+          if (!row) return;
+          const skipConfirm = await window.api.invoke('db:getSetting', 'reports.skipDeleteConfirm', false);
+          if (!skipConfirm && !window.confirm(t('reports.deleteMaintenanceConfirm'))) return;
+          try {
+            const response = await window.api.invoke('maintenance:deleteToolRun', row.runId);
+            if (!response?.ok) {
+              window.alert(response?.error || t('reports.failedDeleteMaintenance'));
+              return;
+            }
+            this.listManualMaintenanceHistory(container);
+          } catch (err) {
+            window.alert(t('reports.failedDeleteMaintenance'));
+          }
+        });
+      });
+    } catch (err) {
+      el.innerHTML = `<div class="empty-state">${escapeHtml(tFactory()('reports.errorPrefix', { error: err.message }))}</div>`;
+    }
+  },
+
+  async listScheduledMaintenanceHistory(container) {
+    const el = container.querySelector('#scheduledMaintenanceHistory');
+    try {
+      const response = await window.api.invoke('maintenance:getScheduledHistory').catch(() => ({ ok: false, data: [] }));
+      const rows = response?.data || [];
+      if (!rows.length) {
+        el.innerHTML = `<div class="empty-state">${escapeHtml(tFactory()('reports.noMaintenance'))}</div>`;
+        return;
+      }
+      const t = tFactory();
+      const items = rows.map((row, index) => {
+        const when = row.startedAt || row.started_at || row.timestamp;
+        const whenLabel = when ? new Date(when).toLocaleString() : t('common.unknown');
+        const detail = (row.results || []).map((r) => this.formatResultDetail(r, t)).join('; ');
+        const statusLabel = row.ok_count === row.total_count
+          ? t('reports.completed')
+          : row.ok_count > 0 ? 'Partial' : 'Failed';
+        const status = row.ok_count === row.total_count ? 'clean' : row.ok_count > 0 ? 'warn' : 'match';
+        return `
+          <div class="history-item">
+            <div style="min-width:0;">
+              <div class="history-title">${escapeHtml(t('reports.scheduledMaintenanceHistory'))} <span class="log-tag ${status}">${escapeHtml(statusLabel)}</span></div>
+              <div class="history-meta">${escapeHtml(whenLabel)}${detail ? ` — ${escapeHtml(detail)}` : ''}</div>
+            </div>
+            <div style="display:flex; gap:8px; flex-shrink:0;">
+              <button class="btn btn-sm view-maintenance" data-index="${index}" data-source="scheduled">${escapeHtml(t('reports.viewDetails'))}</button>
+              <button class="btn btn-sm delete-maintenance" data-index="${index}" data-source="scheduled" title="${escapeHtml(t('reports.deleteMaintenance'))}">${escapeHtml(t('reports.deleteMaintenance'))}</button>
+            </div>
+          </div>`;
+      }).join('');
+      el.innerHTML = `<div class="history-list">${items}</div>`;
+
       el.querySelectorAll('.view-maintenance').forEach((btn) => {
         btn.addEventListener('click', () => {
           const index = parseInt(btn.dataset.index, 10);
@@ -511,14 +596,15 @@ window.Pages.reports = {
           const index = parseInt(btn.dataset.index, 10);
           const row = rows[index];
           if (!row) return;
-          if (!window.confirm(t('reports.deleteMaintenanceConfirm'))) return;
+          const skipConfirm = await window.api.invoke('db:getSetting', 'reports.skipDeleteConfirm', false);
+          if (!skipConfirm && !window.confirm(t('reports.deleteMaintenanceConfirm'))) return;
           try {
             const response = await window.api.invoke('maintenance:deleteRun', row.id);
             if (!response?.ok) {
               window.alert(response?.error || t('reports.failedDeleteMaintenance'));
               return;
             }
-            this.listMaintenanceHistory(container);
+            this.listScheduledMaintenanceHistory(container);
           } catch (err) {
             window.alert(t('reports.failedDeleteMaintenance'));
           }
@@ -529,9 +615,32 @@ window.Pages.reports = {
     }
   },
 
+  showManualMaintenanceDetails(container, row) {
+    const t = tFactory();
+    const when = row.startedAt || row.started_at || row.timestamp;
+    const whenLabel = when ? new Date(when).toLocaleString() : t('common.unknown');
+    const summary = row.summary || {};
+    const scriptId = row.toolId;
+    const toolLabel = t('reports.script.' + scriptId) || scriptId || t('common.unknown');
+
+    const detailHtml = this.formatManualResultDetail(summary, scriptId, t);
+
+    const html = `
+      <div class="report-stats">
+        <div class="stat-tile"><div class="stat-label">${escapeHtml(t('reports.duration'))}</div><div class="stat-value">${escapeHtml(whenLabel)}</div></div>
+        <div class="stat-tile"><div class="stat-label">${escapeHtml(t('reports.completed'))}</div><div class="stat-value">${escapeHtml(1)}/${escapeHtml(1)}</div></div>
+      </div>
+      <div class="report-section"><div class="panel-title">${escapeHtml(t('reports.results'))}</div>
+        ${detailHtml || `<div class="empty-state compact-empty">${escapeHtml(t('reports.noResults'))}</div>`}
+      </div>
+    `;
+
+    this.showViewer(container, `${toolLabel} - ${whenLabel}`, html);
+  },
+
   showMaintenanceDetails(container, row) {
     const t = tFactory();
-    const when = row.started_at || row.timestamp;
+    const when = row.startedAt || row.started_at || row.timestamp;
     const whenLabel = when ? new Date(when).toLocaleString() : t('common.unknown');
 
     const resultsHtml = (row.results || []).map((r) => `
@@ -542,7 +651,7 @@ window.Pages.reports = {
 
     const html = `
       <div class="report-stats">
-        <div class="stat-tile"><div class="stat-label">${escapeHtml(t('reports.maintenanceHistory'))}</div><div class="stat-value">${escapeHtml(whenLabel)}</div></div>
+        <div class="stat-tile"><div class="stat-label">${escapeHtml(t('reports.scheduledMaintenanceHistory'))}</div><div class="stat-value">${escapeHtml(whenLabel)}</div></div>
         <div class="stat-tile"><div class="stat-label">${escapeHtml(t('reports.completed'))}</div><div class="stat-value">${escapeHtml(row.ok_count || 0)}/${escapeHtml(row.total_count || 0)}</div></div>
       </div>
       <div class="report-section"><div class="panel-title">${escapeHtml(t('reports.results'))}</div>
@@ -550,95 +659,6 @@ window.Pages.reports = {
       </div>
     `;
 
-    this.showViewer(container, `${t('reports.maintenanceHistory')} - ${whenLabel}`, html);
-  },
-
-  async renderMaintenanceStatus(container) {
-    const el = container.querySelector('#maintenanceStatus');
-    const t = tFactory();
-    try {
-      const response = await window.api.invoke('maintenance:get').catch(() => null);
-      const config = response?.data || null;
-      if (!config) {
-        el.innerHTML = `<div class="empty-state">${escapeHtml(t('reports.noMaintenance'))}</div>`;
-        return;
-      }
-      const enabled = !!config.enabled;
-      const preset = config.schedulePreset || 'weekly';
-      const presetKey = `reports.schedule${preset.charAt(0).toUpperCase()}${preset.slice(1)}`;
-      const scheduleLabel = t(presetKey);
-      const scheduleValue = preset === 'custom'
-        ? `${scheduleLabel} (${config.intervalHours} h)`
-        : scheduleLabel;
-      const autoClean = Object.values(config.policies || {}).filter((mode) => mode === 'auto-clean').length;
-      const total = (config.scriptIds || []).length;
-      const scriptsValue = autoClean > 0
-        ? t('reports.scriptCountAutoClean', { count: total, auto: autoClean })
-        : t('reports.scriptCount', { count: total });
-      const nextRun = config.nextEligibleRun
-        ? new Date(config.nextEligibleRun).toLocaleString()
-        : t('reports.notRunYet');
-      const lastResult = config.lastResult;
-      const lastRunValue = lastResult && lastResult.startedAt
-        ? `${new Date(lastResult.startedAt).toLocaleString()} — ${lastResult.okCount}/${lastResult.totalCount} ${t('reports.completed')}`
-        : t('reports.notRunYet');
-
-      el.innerHTML = `
-        <div class="report-stats" style="grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px;">
-          <div class="stat-tile" style="padding:10px 12px;">
-            <div class="stat-label">${escapeHtml(t('reports.statusLabel'))}</div>
-            <div class="stat-value" style="font-size:0.95rem; padding-top:6px;"><span class="log-tag ${enabled ? 'clean' : 'warn'}">${escapeHtml(enabled ? t('reports.scheduleEnabled') : t('reports.scheduleDisabled'))}</span></div>
-          </div>
-          <div class="stat-tile" style="padding:10px 12px;">
-            <div class="stat-label">${escapeHtml(t('reports.scheduleLabel'))}</div>
-            <div class="stat-value small" style="padding-top:6px;">${escapeHtml(scheduleValue)}</div>
-          </div>
-          <div class="stat-tile" style="padding:10px 12px;">
-            <div class="stat-label">${escapeHtml(t('reports.scriptsLabel'))}</div>
-            <div class="stat-value small" style="padding-top:6px;">${escapeHtml(scriptsValue)}</div>
-          </div>
-          <div class="stat-tile" style="padding:10px 12px;">
-            <div class="stat-label">${escapeHtml(t('reports.nextRunLabel'))}</div>
-            <div class="stat-value small" style="padding-top:6px;">${escapeHtml(nextRun)}</div>
-          </div>
-        </div>
-        <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; margin:12px 2px 0;">
-          <span class="page-subtitle" style="flex-shrink:0;">${escapeHtml(t('reports.lastRunLabel'))}</span>
-          <span style="text-align:right; font-size:0.85rem; line-height:1.35; color:var(--text-muted);">${escapeHtml(lastRunValue)}</span>
-        </div>
-        <div style="display:flex; gap:8px; margin-top:12px;">
-          <button class="btn btn-primary btn-sm" id="runMaintenanceNow">${escapeHtml(t('reports.runNow'))}</button>
-          <button class="btn btn-sm" id="configureMaintenance">${escapeHtml(t('reports.configureSchedule'))}</button>
-        </div>`;
-
-      container.querySelector('#runMaintenanceNow').addEventListener('click', () => this.runMaintenanceNow(container));
-      container.querySelector('#configureMaintenance').addEventListener('click', () => {
-        if (window.AppRouter && typeof window.AppRouter.navigate === 'function') {
-          window.AppRouter.navigate('tools');
-        }
-      });
-    } catch (err) {
-      el.innerHTML = `<div class="empty-state">${escapeHtml(t('reports.errorPrefix', { error: err.message }))}</div>`;
-    }
-  },
-
-  async runMaintenanceNow(container) {
-    const t = tFactory();
-    const btn = container.querySelector('#runMaintenanceNow');
-    if (!btn) return;
-    setButtonLoading(btn, true, t('reports.running'));
-    try {
-      const response = await window.api.invoke('maintenance:runNow').catch(() => null);
-      if (!response?.ok) {
-        window.alert(t('reports.runFailed', { error: response?.error || t('common.unknown') }));
-        return;
-      }
-      this.renderMaintenanceStatus(container);
-      this.listMaintenanceHistory(container);
-    } catch (err) {
-      window.alert(t('reports.runFailed', { error: err.message }));
-    } finally {
-      setButtonLoading(btn, false);
-    }
+    this.showViewer(container, `${t('reports.scheduledMaintenanceHistory')} - ${whenLabel}`, html);
   }
 };

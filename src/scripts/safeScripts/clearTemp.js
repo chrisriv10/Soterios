@@ -62,7 +62,11 @@ function analyze(roots, cutoff, onProgress) {
         skipped.push({ path: fullPath, reason: 'access-denied' });
       }
       if (stats.scanned === 1 || stats.scanned % 50 === 0) {
-        onProgress?.({ phase: 'analyzing', label: 'Analyzing temp files', count: stats.scanned, currentActivity: fullPath, cancelable: true });
+        // Directory size is unknown until traversal completes, so expose a
+        // conservative estimate that advances during long scans and leaves
+        // the final jump to 100% for the completed report.
+        const estimatedPct = Math.min(95, Math.max(1, Math.round((stats.scanned / (stats.scanned + 250)) * 100)));
+        onProgress?.({ phase: 'analyzing', label: 'Analyzing temp files', count: stats.scanned, pct: estimatedPct, currentActivity: fullPath, cancelable: true });
       }
     }
   }

@@ -126,8 +126,9 @@ async function scanDirectory(dir, options = {}) {
       stats.indexed += 1;
       results.push({ path: fullPath, size: stat.size, modified: stat.mtime.toISOString() });
       if (stats.indexed === 1 || stats.indexed % 25 === 0) {
+        const estimatedPct = Math.min(70, Math.max(1, Math.round((stats.indexed / (stats.indexed + 150)) * 70)));
         onProgress?.({
-          phase: 'indexing', label: 'Indexing files', count: stats.indexed,
+          phase: 'scanning', label: 'Scanning files', count: stats.indexed, pct: estimatedPct,
           currentActivity: fullPath, cancelable: true
         });
       }

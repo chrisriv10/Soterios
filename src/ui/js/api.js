@@ -89,11 +89,6 @@ const Api = {
   async openFolder(filePath) { return window.soterios.shell.openFolder(filePath); },
   async getStoreSnapshot() { return {}; },
   async getSettings() {
-    const defaultPath = await window.api.invoke('db:getSetting', 'scanner.defaultPath', '');
-    const maxDepth = await window.api.invoke('db:getSetting', 'scanner.maxDepth', 12);
-    const maxFileSizeMB = await window.api.invoke('db:getSetting', 'scanner.maxFileSizeMB', 512);
-    const includeCleanResults = await window.api.invoke('db:getSetting', 'scanner.includeCleanResults', false);
-    const excludedDirNames = await window.api.invoke('db:getSetting', 'scanner.excludedDirNames', []);
     const realtimeProtection = await window.api.invoke('db:getSetting', 'feature.realtimeProtection', true);
     const autoReports = await window.api.invoke('db:getSetting', 'feature.autoReports', true);
     const scanHistory = await window.api.invoke('db:getSetting', 'feature.scanHistory', true);
@@ -103,6 +98,8 @@ const Api = {
     const notificationsEnabled = await window.api.invoke('db:getSetting', 'feature.notificationsEnabled', true);
     const scanNotifications = await window.api.invoke('db:getSetting', 'feature.scanNotifications', true);
     const emergencyLockdown = await window.api.invoke('db:getSetting', 'feature.emergencyLockdown', false);
+    const generateToolRunReports = await window.api.invoke('db:getSetting', 'reports.generateToolRunReports', true);
+    const skipDeleteConfirm = await window.api.invoke('db:getSetting', 'reports.skipDeleteConfirm', false);
     // Cached fallback only -- settings.js queries 'app:getLaunchAtStartup'
     // directly for the real OS-level state and uses this purely as a
     // fallback if that IPC call fails.
@@ -141,7 +138,6 @@ const Api = {
       || 'dark';
     if (window.AppState) window.AppState.currentTheme = theme;
     return {
-      scanner: { defaultPath, maxDepth, maxFileSizeMB, includeCleanResults, excludedDirNames },
       features: {
         realtimeProtection,
         autoReports,
@@ -157,19 +153,13 @@ const Api = {
         networkTrafficHistory,
         aiAssistant,
         emergencyLockdown,
-        privacyMode
+        privacyMode,
+        generateToolRunReports,
+        skipDeleteConfirm
       },      ui: { theme, language }
     };
   },
   async updateSettings(patch) {
-    if (patch.scanner) {
-      const s = patch.scanner;
-      await window.api.invoke('db:setSetting', 'scanner.defaultPath', s.defaultPath || '');
-      await window.api.invoke('db:setSetting', 'scanner.maxDepth', s.maxDepth || 12);
-      await window.api.invoke('db:setSetting', 'scanner.maxFileSizeMB', s.maxFileSizeMB || 512);
-      await window.api.invoke('db:setSetting', 'scanner.includeCleanResults', !!s.includeCleanResults);
-      await window.api.invoke('db:setSetting', 'scanner.excludedDirNames', s.excludedDirNames || []);
-    }
     if (patch.features) {
       const f = patch.features;
       if (Object.prototype.hasOwnProperty.call(f, 'realtimeProtection')) {
@@ -208,6 +198,12 @@ const Api = {
       }
       if (Object.prototype.hasOwnProperty.call(f, 'privacyMode')) {
         await window.api.invoke('db:setSetting', 'feature.privacyMode', !!f.privacyMode);
+      }
+      if (Object.prototype.hasOwnProperty.call(f, 'generateToolRunReports')) {
+        await window.api.invoke('db:setSetting', 'reports.generateToolRunReports', !!f.generateToolRunReports);
+      }
+      if (Object.prototype.hasOwnProperty.call(f, 'skipDeleteConfirm')) {
+        await window.api.invoke('db:setSetting', 'reports.skipDeleteConfirm', !!f.skipDeleteConfirm);
       }
     }
     if (patch.ui) {

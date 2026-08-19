@@ -107,6 +107,16 @@ class DatabaseService {
     `);
 
     this.db.exec(`
+      CREATE TABLE IF NOT EXISTS audit_warnings (
+        id TEXT PRIMARY KEY,
+        title TEXT,
+        detail TEXT,
+        level TEXT,
+        scanned_at TEXT
+      )
+    `);
+
+    this.db.exec(`
       CREATE TABLE IF NOT EXISTS maintenance_runs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -531,6 +541,17 @@ class DatabaseService {
 
   isWarningIgnored(id) {
     return !!this.db.prepare('SELECT id FROM ignored_warnings WHERE id = ?').get(id);
+  }
+
+  replaceAuditWarnings(rows) {
+    this.db.prepare('DELETE FROM audit_warnings').run();
+    const stmt = this.db.prepare('INSERT INTO audit_warnings (id, title, detail, level, scanned_at) VALUES (@id, @title, @detail, @level, @scannedAt)');
+    for (const row of rows) stmt.run(row);
+    return rows.length;
+  }
+
+  getAuditWarnings() {
+    return this.db.prepare('SELECT * FROM audit_warnings ORDER BY scanned_at DESC').all();
   }
 
   // --- Settings API ---

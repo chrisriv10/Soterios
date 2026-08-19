@@ -158,18 +158,22 @@ describe('adaptive geo activity model', () => {
     const widgetStart = css.indexOf('.heatmap-widget {');
     const widgetEnd = css.indexOf('.heatmap-viewport {', widgetStart);
     const widgetRules = css.slice(widgetStart, widgetEnd);
-    assert.match(widgetRules, /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto/);
-    assert.match(widgetRules, /align-items:\s*stretch/);
+    assert.match(widgetRules, /display:\s*flex/);
+    assert.match(widgetRules, /position:\s*relative/);
 
     const viewportStart = css.indexOf('.heatmap-viewport {');
     const viewportEnd = css.indexOf('.heatmap-world {', viewportStart);
-    assert.match(css.slice(viewportStart, viewportEnd), /min-height:\s*0/);
+    const viewportRules = css.slice(viewportStart, viewportEnd);
+    assert.match(viewportRules, /flex:\s*1/);
+    assert.match(viewportRules, /min-height:\s*0/);
+    assert.match(viewportRules, /padding-right:\s*min\(340px,\s*36vw\)/);
 
     const panelStart = css.indexOf('.heatmap-cluster-panel {');
     const panelEnd = css.indexOf('.heatmap-cluster-panel[hidden]', panelStart);
     const panelRules = css.slice(panelStart, panelEnd);
+    assert.match(panelRules, /position:\s*absolute/);
+    assert.match(panelRules, /right:\s*0/);
     assert.match(panelRules, /min-height:\s*0/);
-    assert.match(panelRules, /height:\s*100%/);
     assert.match(panelRules, /display:\s*flex/);
     assert.doesNotMatch(panelRules, /max-height:\s*min\(620px/);
 
@@ -184,7 +188,8 @@ describe('adaptive geo activity model', () => {
     const mobileStart = css.indexOf('@media (max-width: 900px)');
     const mobileEnd = css.indexOf('@media (prefers-reduced-motion:', mobileStart);
     const mobileRules = css.slice(mobileStart, mobileEnd);
-    assert.match(mobileRules, /grid-template-columns:\s*1fr/);
+    assert.match(mobileRules, /flex-direction:\s*column/);
+    assert.match(mobileRules, /position:\s*static/);
     assert.match(mobileRules, /height:\s*min\(420px,\s*70vh\)/);
   });
 

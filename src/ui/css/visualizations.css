@@ -248,9 +248,8 @@
 .heatmap-risk-malicious { color: var(--danger); }
 
 .heatmap-widget {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: stretch;
+  display: flex;
+  position: relative;
   padding: 0;
   margin-bottom: 18px;
   overflow: hidden;
@@ -260,11 +259,15 @@
 
 .heatmap-viewport {
   position: relative;
+  flex: 1;
   min-width: 0;
   min-height: 0;
   /* Plate Carrée maps span 360° x 180°; keep the artwork and markers in that 2:1 plane. */
   aspect-ratio: 2 / 1;
   overflow: hidden;
+  /* Reserve space for the detail panel so markers near the right edge stay visible. */
+  padding-right: min(340px, 36vw);
+  box-sizing: border-box;
   background:
     radial-gradient(circle at 50% 48%, color-mix(in srgb, var(--accent-primary) 12%, transparent), transparent 62%),
     linear-gradient(150deg, var(--bg-panel), var(--bg-surface));
@@ -357,7 +360,7 @@
   padding: 3px;
   border: 0;
   border-radius: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(var(--zoom-scale, 1));
   background: conic-gradient(
     var(--ok) 0 var(--safe-stop),
     var(--warn) var(--safe-stop) var(--unknown-stop),
@@ -424,7 +427,7 @@
 .heatmap-marker:focus-visible,
 .heatmap-marker.is-selected {
   z-index: 8;
-  transform: translate(-50%, -50%) scale(1.16);
+  transform: translate(-50%, -50%) scale(calc(var(--zoom-scale, 1) * 1.16));
   outline: none;
   box-shadow: 0 0 0 3px var(--bg-surface), 0 0 0 5px currentColor, 0 0 20px currentColor;
 }
@@ -523,9 +526,13 @@
 }
 
 .heatmap-cluster-panel {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 20;
   width: min(340px, 36vw);
   min-height: 0;
-  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -588,11 +595,11 @@
 }
 
 @keyframes heatmapMarkerEnter {
-  from { transform: translate(-50%, -50%) scale(.5); opacity: 0; }
+  from { transform: translate(-50%, -50%) scale(calc(var(--zoom-scale, 1) * 0.5)); opacity: 0; }
 }
 
 @keyframes heatmapMarkerExit {
-  to { transform: translate(-50%, -50%) scale(.35); opacity: 0; }
+  to { transform: translate(-50%, -50%) scale(calc(var(--zoom-scale, 1) * 0.35)); opacity: 0; }
 }
 
 @keyframes flashHighlight {
@@ -600,9 +607,32 @@
   to { background-color: transparent; }
 }
 
+.heatmap-fullscreen-btn { font-size: .85rem; }
+
+/* Fullscreen mode */
+.heatmap-widget.heatmap-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  margin: 0;
+  border-radius: 0;
+  height: 100dvh;
+  width: 100dvw;
+}
+
+.heatmap-widget.heatmap-fullscreen .heatmap-viewport {
+  aspect-ratio: unset;
+  height: 100%;
+}
+
+.heatmap-widget.heatmap-fullscreen .heatmap-cluster-panel {
+  position: absolute;
+}
+
 @media (max-width: 900px) {
-  .heatmap-widget { grid-template-columns: 1fr; }
-  .heatmap-cluster-panel { width: auto; height: min(420px, 70vh); border-top: 1px solid var(--glass-border); border-left: 0; }
+  .heatmap-widget { flex-direction: column; }
+  .heatmap-viewport { padding-right: 0; }
+  .heatmap-cluster-panel { position: static; width: auto; height: min(420px, 70vh); border-top: 1px solid var(--glass-border); border-left: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

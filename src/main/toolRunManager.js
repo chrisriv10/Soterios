@@ -13,8 +13,10 @@ function resultSummary(result) {
   const summary = {};
   const fields = [
     'count', 'totalMB', 'freedMB', 'deletedCount', 'removedCount', 'skippedCount',
-    'totalFilesScanned', 'totalDuplicates', 'totalWastedSpace', 'appCount',
-    'flaggedCount', 'autoStartCount', 'status', 'verdict'
+    'totalFilesScanned', 'totalDuplicates', 'totalWastedSpace', 'totalSizeBytes',
+    'candidateCount', 'volumeCount', 'warningCount', 'browserCount', 'appCount',
+    'fileCount', 'groupCount', 'itemCount', 'flaggedCount', 'autoStartCount',
+    'status', 'verdict'
   ];
   for (const field of fields) {
     if (Object.prototype.hasOwnProperty.call(result, field)) summary[field] = result[field];
@@ -22,6 +24,17 @@ function resultSummary(result) {
   if (Array.isArray(result.duplicateGroups)) summary.groupCount = result.duplicateGroups.length;
   if (Array.isArray(result.entries)) summary.entryCount = result.entries.length;
   if (Array.isArray(result.items)) summary.itemCount = result.items.length;
+  if (Array.isArray(result.volumes)) {
+    summary.volumeCount = result.volumes.length;
+    summary.warningCount = result.lowSpaceWarnings?.length || 0;
+  }
+  // File shredder specific fields
+  if (result.estimatedOverwriteBytes != null) summary.totalMB = Math.round(result.estimatedOverwriteBytes / (1024 * 1024));
+  if (result.freedMB != null) summary.freedMB = result.freedMB;
+  if (result.deletedCount != null) summary.deletedCount = result.deletedCount;
+  if (result.shredded != null) summary.deletedCount = Array.isArray(result.shredded) ? result.shredded.length : result.shredded;
+  if (result.errors != null) summary.errors = result.errors;
+  if (result.fileCount != null) summary.count = result.fileCount;
   return summary;
 }
 
@@ -162,15 +175,19 @@ class ToolRunManager extends EventEmitter {
       error: error ? (error.message || String(error)) : null
     };
     this.active.delete(state.runId);
-    this.db?.finishToolRun({
-      runId: state.runId,
-      status,
-      completedAt,
-      durationMs,
-      summary: resultSummary(result),
-      warnings: result?.warnings || [],
-      errors: error ? [completion.error] : (result?.errors || [])
-    });
+    // Check if tool run reports should be generated
+    const genReports = this.db?.getSetting?.('reports.generateToolRunReports', true);
+    if (genReports !== false) {
+      this.db?.finishToolRun({
+        runId: state.runId,
+        status,
+        completedAt,
+        durationMs,
+        summary: resultSummary(result),
+        warnings: result?.warnings || [],
+        errors: error ? [completion.error] : (result?.errors || [])
+      });
+    }
     this.emit('complete', completion);
     return completion;
   }

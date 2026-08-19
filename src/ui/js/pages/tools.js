@@ -269,6 +269,7 @@
           </div>
           <label class="toggle"><input type="checkbox" id="maintenanceEnabledToggle" ${config && config.enabled ? 'checked' : ''} /><span class="toggle-slider"></span></label>
         </div>
+        <div id="maintenanceScheduleDetails" ${config && config.enabled ? '' : 'hidden'}>
         <div class="field" style="margin-top:12px;">
           <label class="field-label">${this.e(this.t('settings.schedule', 'Schedule'))}</label>
           <select id="maintenancePreset" class="field-input">
@@ -311,6 +312,7 @@
           </div>
         </div>
         <div id="maintenanceStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);">${statusText}</div>
+        </div>
       </section>`;
     },
 
@@ -355,7 +357,7 @@
             ${run ? `<span class="maintenance-state running">Running · ${this.e(run.phase)}</span>`
               : latest ? `<span class="maintenance-state ${this.e(latest.status)}">Last run ${this.e(latest.status)}</span>`
                 : '<span class="maintenance-state">Not run this session</span>'}
-            ${this._impactPill(tool.impact)}
+            ${tool.id === 'maintenance-safety-vault' ? '' : this._impactPill(tool.impact)}
           </span>
         </span>
         <span class="maintenance-card-arrow" aria-hidden="true">${this.icon('chevron-right')}</span>
@@ -376,7 +378,7 @@
         <header class="maintenance-workspace-header">
           <span class="maintenance-workspace-icon">${this.icon(tool.icon)}</span>
           <div class="maintenance-workspace-title"><h2>${this.e(text.name)}</h2><p>${this.e(text.description)}</p></div>
-          ${this._impactPill(tool.impact)}
+          ${tool.id === 'maintenance-safety-vault' ? '' : this._impactPill(tool.impact)}
         </header>
         ${this._notice ? `<div class="maintenance-notice ${this.e(this._notice.type || 'info')}" role="status">${this.e(this._notice.message)}</div>` : ''}
         ${this._renderControls(tool, run)}
@@ -563,7 +565,7 @@
       if (result.success === false) return `<div class="maintenance-result-banner result-failed"><strong>Cannot continue</strong><span>${this.e(result.error)}</span></div>`;
       if (result.mode === 'preview') {
         const multiPass = result.multiPassAvailable;
-        return `${this._summaryTiles([['Files', result.fileCount || 0], ['File data', this.bytes(result.totalFileBytes)], ['Overwrite data', this.bytes(result.estimatedOverwriteBytes)]])}<div class="maintenance-result-banner result-warning"><strong>Irreversible deletion</strong><span>${this.e(result.warning)}</span></div><div class="maintenance-result-toolbar"><label>Method <select id="shredMethod"><option value="simple">One pass (default)</option>${multiPass ? '<option value="dod">Three passes (HDD)</option><option value="schneier">Seven passes (HDD)</option>' : ''}</select></label><label>Type SHRED <input id="shredConfirmation" autocomplete="off"></label><button class="btn btn-danger" data-action="execute-shred">Shred permanently</button></div>${this._renderPathList(result.files || [])}`;
+        return `${this._summaryTiles([['Files', result.fileCount || 0], ['File data', this.bytes(result.totalFileBytes)], ['Overwrite data', this.bytes(result.estimatedOverwriteBytes)]])}<div class="maintenance-result-banner result-warning"><strong>Warning: Irreversible Deletion</strong><span>This tool permanently overwrites and deletes the selected files. They cannot be recovered from the Recycle Bin or by recovery software. Make sure you have selected the right files.</span></div><div class="maintenance-result-toolbar"><label>Method <select id="shredMethod"><option value="simple">One pass (default)</option>${multiPass ? '<option value="dod">Three passes (HDD)</option><option value="schneier">Seven passes (HDD)</option>' : ''}</select></label><button class="btn btn-danger" data-action="execute-shred">Shred permanently</button></div>${this._renderPathList(result.files || [])}`;
       }
       return `${this._summaryTiles([['Shredded', result.fileCount || 0, result.errors?.length ? 'warn' : 'ok'], ['Overwrite data', this.bytes(result.estimatedOverwriteBytes)], ['Errors', result.errors?.length || 0, result.errors?.length ? 'warn' : 'ok']])}${result.errors?.length ? this._renderIssueList(result.errors, 'Files or folders retained') : '<div class="maintenance-result-banner result-completed">Selected files were overwritten and removed.</div>'}`;
     },
@@ -641,6 +643,11 @@
       if (action === 'browse-duplicate') { const folder = await Api.pickFolder(); if (folder) this._duplicatePath = folder; this._renderView(); return; }
       if (action === 'browse-shred') { const files = await Api.pickFiles(); if (files?.length) this._shredPaths = files; this._renderView(); return; }
       if (action === 'reveal') { await Api.showItemInFolder(target.dataset.path); return; }
+      if (action === 'reveal-vault') {
+        try { await Api.showItemInFolder(target.dataset.path); }
+        catch (error) { this._notice = { type: 'error', message: error?.message || 'Unable to open the original location.' }; this._renderView(); }
+        return;
+      }
       if (action === 'clean-temp') { await this._cleanTemp(); return; }
       if (action === 'large-page') { await this._runScript('large-files-report', this._largeArgs(Number(target.dataset.page))); return; }
       if (action === 'vault-large') { await this._vaultLarge(); return; }
@@ -685,6 +692,12 @@
     },
 
     _handleChange(target) {
+      if (target.id === 'maintenanceEnabledToggle') {
+        const details = this._container.querySelector('#maintenanceScheduleDetails');
+        if (details) details.hidden = !target.checked;
+        this._saveMaintenance();
+        return;
+      }
       if (target.id === 'showMicrosoftTasks') { this._taskShowMicrosoft = target.checked; this._renderView(); return; }
       if (target.id === 'serviceRiskFilter') { this._serviceRiskFilter = target.value; this._renderView(); return; }
       if (target.id === 'maintenancePreset') {
@@ -978,8 +991,6 @@
 
     async _executeShred() {
       const method = this._container.querySelector('#shredMethod')?.value || 'simple';
-      const confirmation = this._container.querySelector('#shredConfirmation')?.value || '';
-      if (confirmation !== 'SHRED') throw new Error('Type SHRED exactly to confirm irreversible deletion.');
       const ok = await this._confirm({ title: 'Permanently shred selected files?', message: 'This cannot be undone and does not use the Safety Vault. Backups and shadow copies are not affected.', confirmLabel: 'Shred permanently', danger: true, typed: 'SHRED' });
       if (!ok) return;
       await this._runScript('file-shredder', { targets: this._shredPaths, method, confirmation: 'SHRED', mode: 'shred' });

@@ -60,7 +60,10 @@ module.exports = async function largeFilesReport(args = {}, onProgress) {
         }
       } catch (_) { statistics.errors += 1; }
       if (statistics.scannedFiles === 1 || statistics.scannedFiles % 100 === 0) {
-        onProgress?.({ phase: 'indexing', label: 'Scanning files', count: statistics.scannedFiles, currentActivity: fullPath, cancelable: true });
+        // The total is unknown until traversal completes; show a conservative
+        // estimate while retaining the exact scanned-file count.
+        const estimatedPct = Math.min(95, Math.max(1, Math.round(100 * (1 - Math.exp(-statistics.scannedFiles / 500)))));
+        onProgress?.({ phase: 'scanning', label: 'Scanning files', count: statistics.scannedFiles, pct: estimatedPct, currentActivity: fullPath, cancelable: true });
       }
     }
   }
