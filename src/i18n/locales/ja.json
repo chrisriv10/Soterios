@@ -413,7 +413,7 @@
   "ai.suggest.quarantine": "隔離された脅威はどうすればよいですか？",
   "ai.suggest.firewall": "ファイアウォールは私を守っていますか？",
   "ai.suggest.cleanup": "安全にディスク容量を解放するには？",
-  "ai.placeholder": "メッセージを入力…（Enter で送信、Shift+Enter で改行）",
+  "ai.placeholder": "メッセージを入力",
   "ai.send": "送信",
   "ai.stop": "停止",
   "ai.thinking": "思考中…",

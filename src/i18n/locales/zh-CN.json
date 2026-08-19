@@ -413,7 +413,7 @@
   "ai.suggest.quarantine": "隔离的威胁该如何处理？",
   "ai.suggest.firewall": "我的防火墙在保护我吗？",
   "ai.suggest.cleanup": "如何安全地释放磁盘空间？",
-  "ai.placeholder": "输入您的消息…（Enter 发送，Shift+Enter 换行）",
+  "ai.placeholder": "输入您的消息",
   "ai.send": "发送",
   "ai.stop": "停止",
   "ai.thinking": "正在思考…",

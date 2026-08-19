@@ -413,7 +413,7 @@
   "ai.suggest.quarantine": "क्वारंटाइन किए गए खतरों का क्या करूँ?",
   "ai.suggest.firewall": "क्या मेरा फ़ायरवॉल मेरी रक्षा कर रहा है?",
   "ai.suggest.cleanup": "मैं सुरक्षित रूप से डिस्क स्थान कैसे खाली करूँ?",
-  "ai.placeholder": "अपना संदेश टाइप करें… (भेजने के लिए Enter, नई पंक्ति के लिए Shift+Enter)",
+  "ai.placeholder": "अपना संदेश टाइप करें",
   "ai.send": "भेजें",
   "ai.stop": "रोकें",
   "ai.thinking": "सोच रहा है…",

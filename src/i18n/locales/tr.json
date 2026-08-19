@@ -413,7 +413,7 @@
   "ai.suggest.quarantine": "Karantinaya alınan tehditler için ne yapmalıyım?",
   "ai.suggest.firewall": "Güvenlik duvarım beni koruyor mu?",
   "ai.suggest.cleanup": "Disk alanını güvenle nasıl boşaltabilirim?",
-  "ai.placeholder": "Mesajınızı yazın… (göndermek için Enter, yeni satır için Shift+Enter)",
+  "ai.placeholder": "Mesajınızı yazın",
   "ai.send": "Gönder",
   "ai.stop": "Durdur",
   "ai.thinking": "Düşünüyor…",

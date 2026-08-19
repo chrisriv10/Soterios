@@ -413,7 +413,7 @@
   "ai.suggest.quarantine": "ماذا أفعل بالتهديدات المعزولة؟",
   "ai.suggest.firewall": "هل يحميني جدار الحماية؟",
   "ai.suggest.cleanup": "كيف يمكنني تحرير مساحة القرص بأمان؟",
-  "ai.placeholder": "اكتب رسالتك… (Enter للإرسال، Shift+Enter لسطر جديد)",
+  "ai.placeholder": "اكتب رسالتك",
   "ai.send": "إرسال",
   "ai.stop": "إيقاف",
   "ai.thinking": "جارٍ التفكير…",

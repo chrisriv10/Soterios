@@ -413,7 +413,7 @@
   "ai.suggest.quarantine": "격리된 위협은 어떻게 처리해야 하나요?",
   "ai.suggest.firewall": "방화벽이 나를 보호하고 있나요?",
   "ai.suggest.cleanup": "디스크 공간을 안전하게 확보하려면?",
-  "ai.placeholder": "메시지를 입력하세요… (Enter로 전송, Shift+Enter로 줄 바꿈)",
+  "ai.placeholder": "메시지를 입력하세요",
   "ai.send": "보내기",
   "ai.stop": "중지",
   "ai.thinking": "생각하는 중…",

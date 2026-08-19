@@ -413,7 +413,7 @@
   "ai.suggest.quarantine": "Wat moet ik doen met bedreigingen in quarantaine?",
   "ai.suggest.firewall": "Beschermt mijn firewall mij?",
   "ai.suggest.cleanup": "Hoe kan ik veilig schijfruimte vrijmaken?",
-  "ai.placeholder": "Typ je bericht… (Enter om te verzenden, Shift+Enter voor een nieuwe regel)",
+  "ai.placeholder": "Typ je bericht",
   "ai.send": "Verzenden",
   "ai.stop": "Stoppen",
   "ai.thinking": "Nadenken…",

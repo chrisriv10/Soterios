@@ -413,7 +413,7 @@
   "ai.suggest.quarantine": "¿Qué debo hacer con las amenazas en cuarentena?",
   "ai.suggest.firewall": "¿Me está protegiendo mi cortafuegos?",
   "ai.suggest.cleanup": "¿Cómo puedo liberar espacio en disco de forma segura?",
-  "ai.placeholder": "Escribe tu mensaje… (Intro para enviar, Mayús+Intro para nueva línea)",
+  "ai.placeholder": "Escribe tu mensaje",
   "ai.send": "Enviar",
   "ai.stop": "Detener",
   "ai.thinking": "Pensando…",

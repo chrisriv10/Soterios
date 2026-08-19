@@ -413,7 +413,7 @@
   "ai.suggest.quarantine": "Что делать с угрозами в карантине?",
   "ai.suggest.firewall": "Защищает ли меня брандмауэр?",
   "ai.suggest.cleanup": "Как безопасно освободить место на диске?",
-  "ai.placeholder": "Введите сообщение… (Enter — отправить, Shift+Enter — новая строка)",
+  "ai.placeholder": "Введите сообщение",
   "ai.send": "Отправить",
   "ai.stop": "Стоп",
   "ai.thinking": "Думаю…",

@@ -414,7 +414,7 @@
   "ai.suggest.quarantine": "What should I do about quarantined threats?",
   "ai.suggest.firewall": "Is my firewall protecting me?",
   "ai.suggest.cleanup": "How can I free up disk space safely?",
-  "ai.placeholder": "Type your message… (Enter to send, Shift+Enter for a new line)",
+  "ai.placeholder": "Type your message",
   "ai.send": "Send",
   "ai.stop": "Stop",
   "ai.thinking": "Thinking…",

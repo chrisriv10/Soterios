@@ -413,7 +413,7 @@
   "ai.suggest.quarantine": "Was soll ich mit Bedrohungen in Quarantäne tun?",
   "ai.suggest.firewall": "Schützt mich meine Firewall?",
   "ai.suggest.cleanup": "Wie kann ich sicher Speicherplatz freigeben?",
-  "ai.placeholder": "Nachricht eingeben… (Eingabetaste zum Senden, Umschalt+Eingabetaste für neue Zeile)",
+  "ai.placeholder": "Nachricht eingeben",
   "ai.send": "Senden",
   "ai.stop": "Stopp",
   "ai.thinking": "Denkt nach…",
