@@ -2,7 +2,10 @@ import publicKey from './feed-public-key.json';
 import bootstrap from './feed/bootstrap.json';
 import { canonicalSiteToken, registrableDomain } from './domains';
 
-export const FEED_ORIGIN = 'https://chrisriv10.github.io';
+// Use the canonical custom-domain origin directly. The GitHub Pages URL
+// redirects here, and following that redirect from an extension can fail
+// host-permission/CORS checks before the feed response is reached.
+export const FEED_ORIGIN = 'https://christopher-rivera.me';
 export const FEED_BASE_URL = `${FEED_ORIGIN}/Soterios/threat-feed`;
 const DB_NAME = 'soterios-threat-feed-v2';
 const DB_VERSION = 1;

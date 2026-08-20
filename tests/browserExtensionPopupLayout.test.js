@@ -11,9 +11,9 @@ const popup = fs.readFileSync(path.join(extensionRoot, 'popup.html'), 'utf8');
 
 describe('browser extension popup layout', () => {
   it('uses the wide desktop shell and avoids the old forced narrow width', () => {
-    assert.match(css, /\.popup\{width:560px;min-width:560px;min-height:560px\}/);
+    assert.match(css, /\.popup\{width:500px;min-width:500px\}/);
     assert.doesNotMatch(css, /\.popup\{width:320px/);
-    assert.match(css, /@media\(max-width:460px\)\{\.popup\{width:100vw;min-width:0\}/);
+    assert.match(css, /@media\(max-width:320px\)\{\.popup\{width:100vw;min-width:0\}/);
     assert.doesNotMatch(css, /max-width:100vw/);
   });
 

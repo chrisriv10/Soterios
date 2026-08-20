@@ -36,3 +36,5 @@ document.getElementById('copy-generated')!.addEventListener('click', async () =>
 document.getElementById('on-demand')!.addEventListener('click', async () => { await send('RUN_ON_DEMAND'); window.close(); });
 document.getElementById('pause-hour')!.addEventListener('click', async () => { await send('PAUSE_SITE', { duration: 'hour' }); await loadState(); }); document.getElementById('pause-site')!.addEventListener('click', async () => { await send('PAUSE_SITE', { duration: 'indefinite' }); await loadState(); }); document.getElementById('resume-site')!.addEventListener('click', async () => { await send('RESUME_SITE'); await loadState(); });
 document.getElementById('open-history')!.addEventListener('click', () => chrome.tabs.create({ url: chrome.runtime.getURL('activity.html') })); void loadState();
+const generatorHeading = document.querySelector('#tools-view .card:nth-child(2) h2');
+if (generatorHeading) generatorHeading.textContent = 'Password/passphrase generator';

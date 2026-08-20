@@ -330,6 +330,8 @@ window.Pages.reports = {
       });
       el.querySelectorAll('.delete-scan-report').forEach((btn) => {
         btn.addEventListener('click', async () => {
+          const skipConfirm = await window.api.invoke('db:getSetting', 'reports.skipDeleteConfirm', false);
+          if (!skipConfirm && !window.confirm(tFactory()('reports.confirmDelete'))) return;
           const res = await window.api.invoke('scanReports:delete', Number(btn.dataset.id));
           if (!res.success) alert(res.error || tFactory()('reports.failedDelete'));
           this.listScanReports(container);
@@ -424,6 +426,8 @@ window.Pages.reports = {
       });
       el.querySelectorAll('.delete-report').forEach(btn => {
         btn.addEventListener('click', async () => {
+          const skipConfirm = await window.api.invoke('db:getSetting', 'reports.skipDeleteConfirm', false);
+          if (!skipConfirm && !window.confirm(tFactory()('reports.confirmDelete'))) return;
           const paths = btn.dataset.paths.split('|').filter(Boolean);
           for (const p of paths) {
             const res = await window.api.invoke('reports:delete', p);

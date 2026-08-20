@@ -625,7 +625,7 @@ function register(mainWindow, {
 
   ipcMain.handle('browserExtension:openFolder', () => {
     try {
-      return extInstaller.openExtensionFolder(resolveExtensionSourceDir());
+      return extInstaller.openExtensionFolder(extInstaller.getNativeHostDir());
     } catch (e) {
       return { ok: false, error: e.message || String(e) };
     }
@@ -681,8 +681,8 @@ function register(mainWindow, {
     if (!fs.existsSync(resolved)) {
       return { success: false, error: 'Folder not found.' };
     }
-    const errorMessage = await shell.openPath(resolved);
-    return errorMessage ? { success: false, error: errorMessage } : { success: true };
+    shell.showItemInFolder(resolved);
+    return { success: true };
   });
 
   ipcMain.handle('shell:openExternal', (_event, url) => openExternal(shell, url));

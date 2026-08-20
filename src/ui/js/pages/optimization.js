@@ -56,6 +56,7 @@ window.Pages.optimization = {
         if (!result?.ok) throw new Error(result?.error || t('settings.performanceMode.loadError'));
         active = busy;
         status.textContent = t('settings.performanceMode.applied', { mode: t(`settings.performanceMode.${active}.name`) });
+        if (showToast) showToast(t('settings.performanceMode.applied', { mode: t(`settings.performanceMode.${active}.name`) }), 'success');
       } catch (error) {
         status.textContent = error.message || t('settings.performanceMode.error', { error: '' });
       } finally {
