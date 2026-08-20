@@ -423,7 +423,7 @@
         case 'windows-services-report':
           return `<div class="maintenance-controls"><label>Show <select id="serviceRiskFilter"><option value="all">All services</option><option value="flagged" ${this._serviceRiskFilter === 'flagged' ? 'selected' : ''}>Flagged only</option></select></label>${runButton('Analyze services')}<button type="button" class="btn btn-ghost" data-action="open-utility" data-utility="services">Open Services</button></div>`;
         case 'uninstaller-report':
-          return `<div class="maintenance-controls maintenance-controls-wrap"><label>Search <input id="softwareSearch" type="search" value="${this.e(this._softwareSearch)}" placeholder="Name or publisher"></label>${runButton('Refresh installed apps')}<button type="button" class="btn btn-ghost" data-action="open-apps-settings">Windows Apps settings</button><label>Recently uninstalled app <input id="leftoverAppName" type="text" value="${this.e(this._leftoverAppName)}" placeholder="Exact application name"></label><button type="button" class="btn btn-ghost" data-action="scan-leftovers">Scan leftovers</button></div>`;
+          return `<div class="maintenance-controls maintenance-controls-wrap"><label>Search <input id="softwareSearch" type="search" value="${this.e(this._softwareSearch)}" placeholder="Name or publisher"></label>${runButton('Refresh installed apps')}<button type="button" class="btn btn-ghost" data-action="open-apps-settings">Windows Apps settings</button><div class="maintenance-leftover-controls"><label>Recently uninstalled app <input id="leftoverAppName" type="text" value="${this.e(this._leftoverAppName)}" placeholder="Application name"></label><button type="button" class="btn btn-ghost" data-action="scan-leftovers">Scan leftovers</button></div></div>`;
         default:
           return `<div class="maintenance-controls">${runButton(tool.impact === 'low' ? 'Run check' : 'Run analysis')}</div>`;
       }
@@ -441,7 +441,7 @@
     },
 
     _renderNoResult(tool, run) {
-      return `<div class="maintenance-empty"><span>${this.icon(run ? 'loader-circle' : 'clipboard-check')}</span><h3>${run ? 'Analysis in progress' : 'No results yet'}</h3><p>${run ? 'You can leave this page and return without losing the run.' : `Run ${this.e(tool.name)} to see an explained, actionable report here.`}</p></div>`;
+      return `<div class="maintenance-empty"><span>${this.icon(run ? 'loader-circle' : 'clipboard-check')}</span><h3>${run ? 'Analysis in progress' : 'No results yet'}</h3><p>${run ? 'You can leave this page and return without losing the run.' : `Run ${this.e(tool.name)} to see a report here.`}</p></div>`;
     },
 
     _renderResult(toolId, result) {
@@ -475,7 +475,7 @@
       }
       const candidates = result.candidates || [];
       return `${this._summaryTiles([['Eligible files', result.candidateCount || 0], ['Potential recovery', this.bytes(result.reclaimableBytes), 'ok'], ['Scanned', result.statistics?.scanned || 0]])}
-        <div class="maintenance-result-toolbar"><span>Temp/cache cleanup is permanent and does not use the File Vault.</span><div class="maintenance-toolbar-actions"><button type="button" class="btn btn-danger" data-action="clean-temp" ${candidates.length ? '' : 'disabled'}>Permanently clear listed files</button>${candidates.length > 500 ? '<button type="button" class="btn btn-danger" data-action="clean-temp-all">Clear all eligible files</button>' : ''}</div></div>
+        <div class="maintenance-result-toolbar"><span>${this.e(this.t('tools.tempCleanupPermanent', 'Temp/cache cleanup is permanent.'))}</span><div class="maintenance-toolbar-actions"><button type="button" class="btn btn-danger" data-action="clean-temp" ${candidates.length ? '' : 'disabled'}>Permanently clear listed files</button>${candidates.length > 500 ? '<button type="button" class="btn btn-danger" data-action="clean-temp-all">Clear all eligible files</button>' : ''}</div></div>
         ${candidates.length ? `<div class="maintenance-table-wrap"><table class="maintenance-table"><thead><tr><th>Remove</th><th>Path</th><th>Size</th><th>Modified</th></tr></thead><tbody>
           ${candidates.slice(0, 500).map((item) => `<tr><td><input type="checkbox" class="temp-select" data-path="${this.e(item.path)}" checked aria-label="Remove ${this.e(item.path)}"></td><td class="path-cell" title="${this.e(item.path)}">${this.e(item.path)}</td><td>${this.bytes(item.sizeBytes)}</td><td>${this.e(new Date(item.modifiedAt).toLocaleString())}</td></tr>`).join('')}
         </tbody></table></div>${candidates.length > 500 ? '<p class="maintenance-footnote">Showing the first 500 eligible files. Narrow the age window to review a smaller set.</p>' : ''}` : '<div class="maintenance-empty"><h3>Nothing eligible for cleanup</h3><p>Recent, active, protected, and inaccessible files were left alone.</p></div>'}`;
@@ -484,7 +484,7 @@
     _renderLarge(result) {
       const files = result.files || [];
       return `${this._summaryTiles([['Matching files', result.count || 0], ['Combined size', this.bytes(result.totalSizeBytes)], ['Scanned', result.statistics?.scannedFiles || 0]])}
-        <div class="maintenance-result-toolbar"><span>Page ${result.page || 1} of ${result.pageCount || 1} · ${this.e(result.root)}</span><button type="button" class="btn btn-primary" data-action="vault-large" ${files.length ? '' : 'disabled'}>Move selected to File Vault</button></div>
+        <div class="maintenance-result-toolbar"><span>Page ${result.page || 1} of ${result.pageCount || 1} · ${this.e(result.root)}</span><div class="maintenance-toolbar-actions"><button type="button" class="btn btn-primary" data-action="vault-large" ${files.length ? '' : 'disabled'}>Move selected to File Vault</button><button type="button" class="btn btn-primary" data-action="vault-all-large" ${result.count ? '' : 'disabled'}>Move all to File Vault</button></div></div>
         ${files.length ? `<div class="maintenance-table-wrap"><table class="maintenance-table"><thead><tr><th>Stage</th><th>File</th><th>Size</th><th>Modified</th><th></th></tr></thead><tbody>
           ${files.map((file) => `<tr><td><input type="checkbox" class="large-select" data-path="${this.e(file.path)}" aria-label="Stage ${this.e(file.path)}"></td><td class="path-cell" title="${this.e(file.path)}">${this.e(file.path)}</td><td>${this.bytes(file.sizeBytes)}</td><td>${this.e(new Date(file.modifiedAt).toLocaleDateString())}</td><td><button type="button" class="btn btn-xs btn-ghost" data-action="reveal" data-path="${this.e(file.path)}">Reveal</button></td></tr>`).join('')}
         </tbody></table></div><div class="pagination"><button class="btn btn-sm btn-ghost" data-action="large-page" data-page="${Math.max(1, result.page - 1)}" ${result.page <= 1 ? 'disabled' : ''}>Previous</button><button class="btn btn-sm btn-ghost" data-action="large-page" data-page="${Math.min(result.pageCount, result.page + 1)}" ${result.page >= result.pageCount ? 'disabled' : ''}>Next</button></div>`
@@ -507,7 +507,8 @@
         const duplicateLabel = mount && label && mount.toLowerCase() === label.toLowerCase();
         const metadata = [mount, volume.filesystem, volume.driveType]
           .filter(Boolean).map((value) => this.e(value)).join(' · ');
-        return `<article class="volume-card status-${this.e(volume.status)}"><header><div>${duplicateLabel ? '' : `<strong>${this.e(label)}</strong>`}<span>${metadata}</span></div><span>${this.e(volume.status)}</span></header><div class="volume-meter"><span style="width:${Math.min(100, volume.usePercent)}%"></span></div><div class="volume-stats"><span>${volume.freeGB} GB free</span><span>${volume.usePercent}% used</span></div><div class="volume-actions"><button class="btn btn-sm btn-ghost" data-action="drill-tool" data-tool="large-files-report" data-path="${this.e(mount)}">Large Files</button><button class="btn btn-sm btn-ghost" data-action="drill-tool" data-tool="duplicate-finder" data-path="${this.e(mount)}">Duplicate Finder</button></div></article>`;
+        const actionLabel = (key, fallback) => this.e(this.t(key, fallback));
+        return `<article class="volume-card status-${this.e(volume.status)}"><header><div>${duplicateLabel ? '' : `<strong>${this.e(label)}</strong>`}<span>${metadata}</span></div><span>${this.e(volume.status)}</span></header><div class="volume-meter"><span style="width:${Math.min(100, volume.usePercent)}%"></span></div><div class="volume-stats"><span>${volume.freeGB} GB free</span><span>${volume.usePercent}% used</span></div><div class="volume-actions"><button class="btn btn-sm btn-ghost" data-action="drill-tool" data-tool="clear-temp-files" data-path="${this.e(mount)}">${actionLabel('tools.script.clearTempFiles.name', 'Clear Temp Files')}</button><button class="btn btn-sm btn-ghost" data-action="drill-tool" data-tool="browser-cache-report" data-path="${this.e(mount)}">${actionLabel('tools.script.browserCacheReport.name', 'Browser Cache')}</button><button class="btn btn-sm btn-ghost" data-action="drill-tool" data-tool="large-files-report" data-path="${this.e(mount)}">${actionLabel('tools.script.largeFilesReport.name', 'Large Files Finder')}</button><button class="btn btn-sm btn-ghost" data-action="drill-tool" data-tool="duplicate-finder" data-path="${this.e(mount)}">${actionLabel('tools.script.duplicateFinder.name', 'Duplicate Finder')}</button></div></article>`;
       }).join('')}</div>` : '<div class="maintenance-empty"><h3>No user-facing volumes found</h3></div>';
     },
 
@@ -544,7 +545,7 @@
     _renderDuplicateGroup(group) {
       const keep = this._duplicateKeep.get(group.id) || group.files[0]?.path;
       const expanded = this._duplicateExpanded.has(group.id);
-      return `<article class="duplicate-result-group ${expanded ? 'expanded' : ''}"><header><button class="duplicate-group-toggle" data-action="toggle-duplicate" data-group-id="${this.e(group.id)}" aria-expanded="${expanded}">${this.icon('chevron-right')}<span><strong>${group.files.length} identical files</strong><small>${this.bytes(group.size)} each · ${this.bytes(group.size * (group.files.length - 1))} recoverable</small></span></button><label>Keep <select class="duplicate-keep" data-group-id="${this.e(group.id)}">${group.files.map((file) => `<option value="${this.e(file.path)}" ${file.path === keep ? 'selected' : ''}>${this.e(file.path)}</option>`).join('')}</select></label><button class="btn btn-xs btn-ghost" data-action="duplicate-per-folder" data-group-id="${this.e(group.id)}">Keep one per folder</button></header>${expanded ? `<div class="duplicate-file-list">${group.files.map((file) => `<label class="duplicate-file-row"><input type="checkbox" class="duplicate-select" data-group-id="${this.e(group.id)}" data-path="${this.e(file.path)}" ${file.path === keep ? 'disabled' : ''} ${this._selectedDuplicates.has(file.path) ? 'checked' : ''}><span class="path-cell" title="${this.e(file.path)}">${this.e(file.path)}</span><small>${this.e(file.parentFolder)}</small><button type="button" class="btn btn-xs btn-ghost" data-action="reveal" data-path="${this.e(file.path)}">Reveal</button></label>`).join('')}</div>` : ''}</article>`;
+      return `<article class="duplicate-result-group ${expanded ? 'expanded' : ''}"><header><button class="duplicate-group-toggle" data-action="toggle-duplicate" data-group-id="${this.e(group.id)}" aria-expanded="${expanded}">${this.icon('chevron-right')}<span><strong>${group.files.length} identical files</strong><small>${this.bytes(group.size)} each · ${this.bytes(group.size * (group.files.length - 1))} recoverable</small></span></button><label>Keep <select class="duplicate-keep" data-group-id="${this.e(group.id)}">${group.files.map((file) => `<option value="${this.e(file.path)}" ${file.path === keep ? 'selected' : ''}>${this.e(file.path)}</option>`).join('')}</select></label><button class="btn btn-xs btn-ghost" data-action="duplicate-per-folder" data-group-id="${this.e(group.id)}">Keep one per folder</button></header>${expanded ? `<div class="duplicate-file-list">${group.files.map((file) => `<label class="duplicate-file-row"><input type="checkbox" class="duplicate-select" data-group-id="${this.e(group.id)}" data-path="${this.e(file.path)}" ${this._selectedDuplicates.has(file.path) ? 'checked' : ''}><span class="path-cell" title="${this.e(file.path)}">${this.e(file.path)}</span><small>${this.e(file.parentFolder)}</small><button type="button" class="btn btn-xs btn-ghost" data-action="reveal" data-path="${this.e(file.path)}">Reveal</button></label>`).join('')}</div>` : ''}</article>`;
     },
 
     _renderStartup(result) {
@@ -587,7 +588,7 @@
       const pending = result.pending || (result.items ? result : null);
       const changes = pending?.changes || { added: [], modified: [], removed: [], total: 0 };
       if (!result.baselineExists && !pending) return '<div class="maintenance-empty"><h3>No approved baseline yet</h3><p>Run a scan, review the collected persistence mechanisms, then explicitly approve the first baseline.</p></div>';
-      return `${this._summaryTiles([['Baseline items', result.baselineItemCount || pending?.itemCount || 0], ['Added', changes.added?.length || 0, changes.added?.length ? 'warn' : ''], ['Modified', changes.modified?.length || 0, changes.modified?.length ? 'warn' : ''], ['Removed', changes.removed?.length || 0]])}<div class="maintenance-result-banner result-${pending?.needsBaselineApproval ? 'warning' : (changes.total ? 'warning' : 'clean')}"><strong>${pending?.needsBaselineApproval ? 'Baseline approval required' : (changes.total ? 'Persistence changes need review' : 'No persistence changes detected')}</strong><span>Analysis stayed local. External lookups used: no.</span></div>${pending?.needsBaselineApproval ? '<div class="maintenance-result-toolbar"><span>Approving establishes the first trusted state. It will never update automatically.</span><button class="btn btn-primary" data-action="approve-persistence" data-scope="all">Approve reviewed baseline</button></div>' : ''}${this._renderChangeSection('Added', changes.added)}${this._renderChangeSection('Modified', changes.modified)}${this._renderChangeSection('Removed', changes.removed)}${pending?.warnings?.length ? this._renderIssueList(pending.warnings.map((message) => ({ reason: message })), 'Collector warnings') : ''}`;
+      return `${this._summaryTiles([['Baseline items', result.baselineItemCount || pending?.itemCount || 0], ['Added', changes.added?.length || 0, changes.added?.length ? 'warn' : ''], ['Modified', changes.modified?.length || 0, changes.modified?.length ? 'warn' : ''], ['Removed', changes.removed?.length || 0]])}<div class="maintenance-result-banner result-${pending?.needsBaselineApproval ? 'warning' : (changes.total ? 'warning' : 'clean')}"><strong>${pending?.needsBaselineApproval ? 'Baseline approval required' : (changes.total ? 'Persistence changes need review' : 'No persistence changes detected')}</strong></div>${pending?.needsBaselineApproval ? '<div class="maintenance-result-toolbar"><span>Approving establishes the first trusted state. It will never update automatically.</span><button class="btn btn-primary" data-action="approve-persistence" data-scope="all">Approve reviewed baseline</button></div>' : ''}${this._renderChangeSection('Added', changes.added)}${this._renderChangeSection('Modified', changes.modified)}${this._renderChangeSection('Removed', changes.removed)}${pending?.warnings?.length ? this._renderIssueList(pending.warnings.map((message) => ({ reason: message })), 'Collector warnings') : ''}`;
     },
 
     _renderChangeSection(label, changes = []) {
@@ -680,9 +681,16 @@
       if (action === 'clean-temp') { await this._cleanTemp(false); return; }
       if (action === 'clean-temp-all') { await this._cleanTemp(true); return; }
       if (action === 'large-page') { await this._runScript('large-files-report', this._largeArgs(Number(target.dataset.page))); return; }
+      if (action === 'vault-all-large') { await this._vaultAllLarge(); return; }
       if (action === 'vault-large') { await this._vaultLarge(); return; }
       if (action === 'clear-cache') { await this._clearCache(target.dataset.browser); return; }
-      if (action === 'drill-tool') { this._selectedToolId = target.dataset.tool; if (target.dataset.tool === 'large-files-report') this._largePath = target.dataset.path; else this._duplicatePath = target.dataset.path; this._renderView(); return; }
+      if (action === 'drill-tool') {
+        this._selectedToolId = target.dataset.tool;
+        if (target.dataset.tool === 'large-files-report') this._largePath = target.dataset.path;
+        if (target.dataset.tool === 'duplicate-finder') this._duplicatePath = target.dataset.path;
+        this._renderView();
+        return;
+      }
       if (action === 'toggle-duplicate') { const id = target.dataset.groupId; this._duplicateExpanded.has(id) ? this._duplicateExpanded.delete(id) : this._duplicateExpanded.add(id); this._renderView(); return; }
       if (action === 'duplicate-per-folder') { this._selectDuplicatePerFolder(target.dataset.groupId); this._renderView(); return; }
       if (action === 'vault-duplicates') { await this._vaultDuplicates(); return; }
@@ -742,7 +750,24 @@
       }
       if (target.classList.contains('large-select')) { target.checked ? this._selectedLarge.add(target.dataset.path) : this._selectedLarge.delete(target.dataset.path); return; }
       if (target.classList.contains('temp-select')) { target.checked ? this._selectedTemp.add(target.dataset.path) : this._selectedTemp.delete(target.dataset.path); return; }
-      if (target.classList.contains('duplicate-select')) { target.checked ? this._selectedDuplicates.add(target.dataset.path) : this._selectedDuplicates.delete(target.dataset.path); return; }
+      if (target.classList.contains('duplicate-select')) {
+        const group = this._results['duplicate-finder']?.duplicateGroups?.find((entry) => entry.id === target.dataset.groupId);
+        if (target.checked) {
+          this._selectedDuplicates.add(target.dataset.path);
+          // A retained copy is no longer protected from selection. Move the
+          // retained marker to another unselected copy when possible, so any
+          // individual file can be chosen without allowing accidental loss of
+          // the entire duplicate group.
+          if (group && this._duplicateKeep.get(group.id) === target.dataset.path) {
+            const replacement = group.files.find((file) => file.path !== target.dataset.path && !this._selectedDuplicates.has(file.path));
+            if (replacement) this._duplicateKeep.set(group.id, replacement.path);
+          }
+        } else {
+          this._selectedDuplicates.delete(target.dataset.path);
+        }
+        this._renderView();
+        return;
+      }
       if (target.classList.contains('duplicate-keep')) {
         const previous = this._duplicateKeep.get(target.dataset.groupId);
         this._duplicateKeep.set(target.dataset.groupId, target.value);
@@ -873,7 +898,7 @@
       await this._runScript(toolId, args);
     },
 
-    _largeArgs(page = 1) {
+    _largeArgs(page = 1, all = false) {
       return {
         scanPath: this._largePath || undefined,
         thresholdMB: (() => {
@@ -883,6 +908,7 @@
         })(),
         page,
         pageSize: 100,
+        all,
         sortBy: 'size',
         sortDirection: 'desc'
       };
@@ -930,6 +956,19 @@
       await this._stageVault(items, 'Large Files cleanup');
       this._selectedLarge.clear();
       await this._runScript('large-files-report', this._largeArgs(result.page || 1));
+    },
+
+    async _vaultAllLarge() {
+      const result = this._results['large-files-report'];
+      if (!result?.count) throw new Error('No large files found.');
+      const ok = await this._confirm({ title: 'Stage all large files?', message: `${result.count} matching file(s) will move to the File Vault for seven days. They will still use disk space until deleted.`, confirmLabel: 'Stage all files' });
+      if (!ok) return;
+      const allResult = await Api.runTool('run-script', { scriptId: 'large-files-report', scriptArgs: this._largeArgs(1, true) });
+      const items = allResult.files || [];
+      if (!items.length) throw new Error('No large files were available to stage.');
+      await this._stageVault(items, 'Large Files cleanup');
+      this._selectedLarge.clear();
+      await this._runScript('large-files-report', this._largeArgs(1));
     },
 
     async _clearCache(browser) {
@@ -1024,7 +1063,7 @@
 
     async _executeShred() {
       const method = this._container.querySelector('#shredMethod')?.value || 'simple';
-      const ok = await this._confirm({ title: 'Permanently shred selected files?', message: 'This cannot be undone and does not use the File Vault. Backups and shadow copies are not affected.', confirmLabel: 'Shred permanently', danger: true, typed: 'SHRED' });
+      const ok = await this._confirm({ title: 'Permanently shred selected files?', message: this.t('tools.shredPermanent', 'The selected files will be permanently destroyed. Backups and shadow copies are not affected.'), confirmLabel: 'Shred permanently', danger: true, typed: 'SHRED' });
       if (!ok) return;
       await this._runScript('file-shredder', { targets: this._shredPaths, method, confirmation: 'SHRED', mode: 'shred' });
     },

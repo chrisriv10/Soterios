@@ -95,12 +95,14 @@ async function collectExtraPersistence() {
   const warnings = [];
   if (process.platform === 'win32') {
     const winlogon = await runJsonPowerShell(`
+      @(
       $key = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon'
       $p = Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue
       foreach ($name in @('Shell','Userinit','Taskman')) {
         $value = [string]$p.$name
         if ($value) { [PSCustomObject]@{ Name=$name; Command=$value; Location=$key } }
       }
+      )
     `, [], 15000);
     if (!winlogon.ok) warnings.push(`Winlogon values could not be read: ${winlogon.error}`);
     for (const row of (Array.isArray(winlogon.data) ? winlogon.data : (winlogon.data ? [winlogon.data] : []))) {
@@ -108,6 +110,7 @@ async function collectExtraPersistence() {
     }
 
     const wmi = await runJsonPowerShell(`
+      @(
       $ns = 'root/subscription'
       Get-CimInstance -Namespace $ns -ClassName __EventFilter -ErrorAction SilentlyContinue | ForEach-Object {
         [PSCustomObject]@{ Kind='Filter'; Name=$_.Name; Command=$_.Query; Location=$ns }
@@ -121,6 +124,7 @@ async function collectExtraPersistence() {
       Get-CimInstance -Namespace $ns -ClassName __FilterToConsumerBinding -ErrorAction SilentlyContinue | ForEach-Object {
         [PSCustomObject]@{ Kind='Binding'; Name=$_.Consumer; Command=$_.Filter; Location=$ns }
       }
+      )
     `, [], 30000);
     if (!wmi.ok) warnings.push(`WMI subscriptions could not be read: ${wmi.error}`);
     for (const row of (Array.isArray(wmi.data) ? wmi.data : (wmi.data ? [wmi.data] : []))) {

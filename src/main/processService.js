@@ -692,7 +692,11 @@ class ProcessService extends EventEmitter {
     }
     if (mask <= 0n || mask > ((1n << 64n) - 1n)) throw new Error('Invalid processor affinity mask.');
     const decimalMask = mask.toString(10);
-    const script = `$p = Get-Process -Id ${pid} -ErrorAction Stop; $p.ProcessorAffinity = [intptr]([uint64]${decimalMask}); [Console]::Write(([uint64]$p.ProcessorAffinity).ToString())`;
+    // PowerShell cannot directly cast a UInt64 value to IntPtr on some
+    // versions (even for ordinary masks such as 255). Convert through Int64
+    // first so the ProcessorAffinity setter receives the expected pointer
+    // type while retaining the decimal-only validation above.
+    const script = `$p = Get-Process -Id ${pid} -ErrorAction Stop; $mask = [uint64]${decimalMask}; $p.ProcessorAffinity = [intptr]([int64]$mask); [Console]::Write(([uint64]$p.ProcessorAffinity).ToString())`;
     const result = await this._execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', powershellEncoded(script)], {
       timeout: 10000,
       windowsHide: true,

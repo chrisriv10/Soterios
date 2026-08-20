@@ -19,7 +19,8 @@ module.exports = async function largeFilesReport(args = {}, onProgress) {
   const thresholdMB = Math.max(1, Number(args.thresholdMB || args.minSizeMB || 100));
   const thresholdBytes = thresholdMB * 1024 * 1024;
   const page = Math.max(1, Number(args.page) || 1);
-  const pageSize = Math.max(10, Math.min(500, Number(args.pageSize) || 100));
+  const includeAll = args.all === true;
+  const pageSize = includeAll ? Number.MAX_SAFE_INTEGER : Math.max(10, Math.min(500, Number(args.pageSize) || 100));
   const sortBy = ['size', 'modified', 'path'].includes(args.sortBy) ? args.sortBy : 'size';
   const sortDirection = args.sortDirection === 'asc' ? 'asc' : 'desc';
   const maxDepth = Math.max(1, Math.min(64, Number(args.maxDepth) || 32));
@@ -75,7 +76,7 @@ module.exports = async function largeFilesReport(args = {}, onProgress) {
     return (a.sizeBytes - b.sizeBytes) * direction;
   });
   const offset = (page - 1) * pageSize;
-  const pagedFiles = files.slice(offset, offset + pageSize);
+  const pagedFiles = includeAll ? files : files.slice(offset, offset + pageSize);
   const totalSizeBytes = files.reduce((sum, file) => sum + file.sizeBytes, 0);
   onProgress?.({ phase: 'complete', label: 'Large file report ready', pct: 100, count: statistics.scannedFiles, cancelable: false });
   return {
@@ -85,7 +86,7 @@ module.exports = async function largeFilesReport(args = {}, onProgress) {
     totalSizeBytes,
     page,
     pageSize,
-    pageCount: Math.max(1, Math.ceil(files.length / pageSize)),
+    pageCount: includeAll ? 1 : Math.max(1, Math.ceil(files.length / pageSize)),
     sortBy,
     sortDirection,
     files: pagedFiles,

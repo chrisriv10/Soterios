@@ -5,6 +5,11 @@
   cursor: help;
 }
 
+.network-state-term {
+  border-bottom: 1px dotted var(--text-dim);
+  cursor: help;
+}
+
 .perimeter-radar .perim-risk-band {
   fill: none;
   pointer-events: none;
@@ -55,7 +60,8 @@
 }
 
 .perimeter-radar .perim-ring-label {
-  pointer-events: none;
+  pointer-events: all;
+  cursor: help;
   font-size: 8px;
   font-weight: 700;
   letter-spacing: .08em;
@@ -72,6 +78,26 @@
 .perimeter-radar .perim-ring-label-safe text { fill: var(--ok); }
 .perimeter-radar .perim-ring-label-unknown text { fill: var(--warn); }
 .perimeter-radar .perim-ring-label-malicious text { fill: var(--danger); }
+
+.perimeter-radar .perim-ring-label:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.perimeter-radar .perim-ring-label:hover rect,
+.perimeter-radar .perim-ring-label:focus rect {
+  fill: var(--bg-surface-hover);
+  stroke: var(--accent-primary);
+  opacity: 1;
+}
+
+.perimeter-radar.perim-label-focus-safe .perim-risk-outline-safe,
+.perimeter-radar.perim-label-focus-unknown .perim-risk-outline-unknown,
+.perimeter-radar.perim-label-focus-malicious .perim-risk-outline-malicious {
+  stroke-width: 3.5;
+  opacity: 1;
+  filter: drop-shadow(0 0 3px var(--accent-primary-glow));
+}
 
 .perimeter-radar .perim-hub > circle:first-child {
   fill: var(--accent-primary-glow);

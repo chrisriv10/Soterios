@@ -210,6 +210,9 @@ window.Pages.settings = {
               <option value="monochrome" ${settings.ui?.theme === 'monochrome' ? 'selected' : ''}>${escapeHtml(t('settings.theme.monochrome'))}</option>
               <option value="rose" ${settings.ui?.theme === 'rose' ? 'selected' : ''}>${escapeHtml(t('settings.theme.rose'))}</option>
               <option value='aurora' ${settings.ui?.theme === 'aurora' ? 'selected' : ''}>${escapeHtml(t('settings.theme.aurora'))}</option>
+              <option value="sand" ${settings.ui?.theme === 'sand' ? 'selected' : ''}>${escapeHtml(t('settings.theme.sand'))}</option>
+              <option value="cyber" ${settings.ui?.theme === 'cyber' ? 'selected' : ''}>${escapeHtml(t('settings.theme.cyber'))}</option>
+              <option value="mint" ${settings.ui?.theme === 'mint' ? 'selected' : ''}>${escapeHtml(t('settings.theme.mint'))}</option>
             </select>
           </div>
           <div class="toggle-desc" style="margin-bottom:12px;">${escapeHtml(t('settings.themeDesc'))}</div>
@@ -290,6 +293,9 @@ window.Pages.settings = {
           <div style="font-size:0.9rem; line-height:1.8;">
             <div><strong>Soterios</strong> v${escapeHtml(appInfo.version || '1.3.0')}</div>
             <div style="color:var(--text-muted); margin-top:8px;">${escapeHtml(t('settings.aboutDesc'))}</div>
+            <div style="margin-top:8px;">
+              <a href="https://github.com/chrisriv10/Soterios" id="githubLink" style="color:var(--accent-primary); text-decoration:none;">${escapeHtml(t('settings.githubRepo'))}</a>
+            </div>
             <div style="margin-top:12px; font-size:0.8rem;">
               <div>${escapeHtml(t('settings.clamavPath'))}</div>
               <div>${escapeHtml(t('settings.quarantinePath'))}</div>
@@ -316,6 +322,14 @@ window.Pages.settings = {
     if (replaySetupBtn) {
       replaySetupBtn.addEventListener('click', () => {
         if (window.AppRouter) window.AppRouter.navigate('setup');
+      });
+    }
+
+    const githubLink = container.querySelector('#githubLink');
+    if (githubLink) {
+      githubLink.addEventListener('click', (event) => {
+        event.preventDefault();
+        window.api.invoke('shell:openExternal', 'https://github.com/chrisriv10/Soterios');
       });
     }
 
@@ -544,6 +558,7 @@ window.Pages.settings = {
 updatePrivacyModeStatus();
     applyPrivacyModeLock(!!settings.features.privacyMode);
 
+    let selectedExtensionBrowserId = null;
     async function renderBrowserExtensionSection(container) {
       const body = container.querySelector('#browserExtensionBody');
       if (!body) return;
@@ -555,6 +570,9 @@ updatePrivacyModeStatus();
           body.innerHTML = `<div class="toggle-desc">${escapeHtml(t('settings.browserExtension.noBrowser'))}</div>`;
           return;
         }
+        if (!detected.some((browser) => browser.id === selectedExtensionBrowserId)) {
+          selectedExtensionBrowserId = detected[0].id;
+        }
         const rows = detected.map((b) => {
           const status = b.loaded
             ? `<span style="color:var(--success, #28a745);">&#9679; ${escapeHtml(t('settings.browserExtension.loaded'))}</span>`
@@ -563,13 +581,13 @@ updatePrivacyModeStatus();
             ? '<span style="color:var(--success, #28a745);">Native host registered</span>'
             : '<span style="color:var(--text-muted);">Native host not registered</span>';
           return `
-          <div class="browser-ext-row" style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--border, rgba(128,128,128,0.2));">
+          <div class="browser-ext-row${b.id === selectedExtensionBrowserId ? ' is-selected' : ''}" role="button" tabindex="0" aria-pressed="${b.id === selectedExtensionBrowserId}" data-browser-select="${escapeHtml(b.id)}" style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px; margin:4px 0; border:1px solid var(--border, rgba(128,128,128,0.2)); border-radius:8px; cursor:pointer;">
             <div style="min-width:0;">
               <div class="toggle-label">${escapeHtml(b.name)} &nbsp; ${status}</div>
               <div class="toggle-desc">${escapeHtml(t('settings.browserExtension.extensionId', { id: state.extensionId }))}</div>
               <div class="toggle-desc">${hostStatus}</div>
             </div>
-            <button class="btn btn-sm browser-ext-install" data-browser="${escapeHtml(b.id)}" style="flex-shrink:0;" disabled>${escapeHtml(t('settings.browserExtension.installBtn'))}</button>
+            <button class="btn btn-sm browser-ext-install" data-browser="${escapeHtml(b.id)}" style="flex-shrink:0;">${escapeHtml(t('settings.browserExtension.installBtn'))}</button>
           </div>`;
         }).join('');
 body.innerHTML = `
@@ -591,10 +609,21 @@ body.innerHTML = `
           </div>
           <div id="browserExtStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);"></div>
         `;
-        const card = body.closest('.card');
-        const disclosure = card?.querySelector('#browserExtDisclosureConfirm');
-        if (disclosure) disclosure.addEventListener('change', () => {
-          body.querySelectorAll('.browser-ext-install').forEach((button) => { button.disabled = !disclosure.checked; });
+        body.querySelectorAll('[data-browser-select]').forEach((row) => {
+          const select = () => {
+            selectedExtensionBrowserId = row.dataset.browserSelect;
+            body.querySelectorAll('[data-browser-select]').forEach((candidate) => {
+              const selected = candidate.dataset.browserSelect === selectedExtensionBrowserId;
+              candidate.classList.toggle('is-selected', selected);
+              candidate.setAttribute('aria-pressed', String(selected));
+            });
+          };
+          row.addEventListener('click', (event) => {
+            if (!event.target.closest('button')) select();
+          });
+          row.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(); }
+          });
         });
         body.querySelectorAll('.browser-ext-install').forEach((btn) => {
           btn.addEventListener('click', async () => {
@@ -639,7 +668,7 @@ body.innerHTML = `
         const openPageBtn = body.querySelector('#browserExtOpenPage');
         if (openPageBtn) {
           openPageBtn.addEventListener('click', async () => {
-            const current = detected.find((b) => b.id);
+            const current = detected.find((b) => b.id === selectedExtensionBrowserId) || detected[0];
             if (!current) return;
             await window.api.invoke('browserExtension:openPage', current.id);
           });

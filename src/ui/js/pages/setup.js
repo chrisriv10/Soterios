@@ -1,11 +1,12 @@
 window.Pages = window.Pages || {};
 
 (function () {
-  const THEMES = ['dark', 'light', 'ocean', 'emerald', 'sunset', 'violet', 'crimson', 'terminal', 'midnight', 'bumblebee', 'monochrome', 'rose', 'aurora'];
+  const THEMES = ['dark', 'light', 'ocean', 'emerald', 'sunset', 'violet', 'crimson', 'terminal', 'midnight', 'bumblebee', 'monochrome', 'rose', 'aurora', 'sand', 'cyber', 'mint'];
   const ACCENTS = {
     dark: '#4169E1', light: '#2563eb', ocean: '#2dd4bf', emerald: '#32e06f',
     sunset: '#f97316', violet: '#8b5cf6', crimson: '#dc2626', terminal: '#16a34a',
-    midnight: '#38bdf8', bumblebee: '#facc15', monochrome: '#e5e5e5', rose: '#f472b6', aurora: '#60a5fa'
+    midnight: '#38bdf8', bumblebee: '#facc15', monochrome: '#e5e5e5', rose: '#f472b6', aurora: '#60a5fa',
+    sand: '#c2571b', cyber: '#ff00ff', mint: '#86efac'
   };
   const STEPS = ['welcome', 'language', 'theme', 'notifications', 'privacy', 'extension', 'scan'];
 
@@ -18,6 +19,7 @@ window.Pages = window.Pages || {};
     _theme: 'dark',
     _settings: null,
     _finishing: false,
+    _selectedExtensionBrowserId: null,
 
     async render(container) {
       const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
@@ -368,8 +370,11 @@ window.Pages = window.Pages || {};
           body.innerHTML = escapeHtml(t('settings.browserExtension.noBrowser'));
           return;
         }
+        if (!detected.some((browser) => browser.id === this._selectedExtensionBrowserId)) {
+          this._selectedExtensionBrowserId = detected[0].id;
+        }
         body.innerHTML = detected.map((b) => `
-          <div class="setup-ext-row">
+          <div class="setup-ext-row ${b.id === this._selectedExtensionBrowserId ? 'selected' : ''}" data-browser-select="${escapeHtml(b.id)}" role="button" tabindex="0" aria-pressed="${b.id === this._selectedExtensionBrowserId ? 'true' : 'false'}">
             <div style="min-width:0;">
               <div class="toggle-label">${escapeHtml(b.name)}</div>
               <div class="toggle-desc">${escapeHtml(t('settings.browserExtension.extensionId', { id: state.extensionId }))}</div>
@@ -377,6 +382,24 @@ window.Pages = window.Pages || {};
             <button type="button" class="btn btn-sm" id="setupExtBtn-${escapeHtml(b.id)}" data-browser="${escapeHtml(b.id)}">${escapeHtml(t('settings.browserExtension.installBtn'))}</button>
           </div>`).join('');
         for (const b of detected) {
+          const row = body.querySelector(`[data-browser-select="${b.id}"]`);
+          const select = () => {
+            this._selectedExtensionBrowserId = b.id;
+            body.querySelectorAll('[data-browser-select]').forEach((item) => {
+              const selected = item.dataset.browserSelect === b.id;
+              item.classList.toggle('selected', selected);
+              item.setAttribute('aria-pressed', String(selected));
+            });
+          };
+          row?.addEventListener('click', (event) => {
+            if (!event.target.closest('button')) select();
+          });
+          row?.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              select();
+            }
+          });
           const btn = body.querySelector('#setupExtBtn-' + b.id);
           if (!btn) continue;
           btn.addEventListener('click', async () => {
@@ -390,15 +413,16 @@ window.Pages = window.Pages || {};
             }
           });
         }
-        const first = detected[0];
         const buttonRow = document.createElement('div');
         buttonRow.style.cssText = 'display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;';
         const openBtn = document.createElement('button');
         openBtn.type = 'button';
         openBtn.className = 'btn btn-sm setup-extension-open';
-        openBtn.textContent = t('settings.browserExtension.openPage');
+        const openBrowserKey = 'settings.browserExtension.openBrowser';
+        const translatedOpenBrowser = t(openBrowserKey);
+        openBtn.textContent = translatedOpenBrowser === openBrowserKey ? 'Open browser' : translatedOpenBrowser;
         openBtn.addEventListener('click', async () => {
-          try { await window.api.invoke('browserExtension:openPage', first.id); } catch (_) {}
+          try { await window.api.invoke('browserExtension:openPage', this._selectedExtensionBrowserId || detected[0].id); } catch (_) {}
         });
         buttonRow.appendChild(openBtn);
         const openFolderBtn = document.createElement('button');

@@ -6,7 +6,7 @@
       "inputs": ["minimumAgeDays", "mode", "selectedPaths"], "progress": true, "cancellation": true, "scheduling": ["analyze", "auto-clean"], "visible": true
     },
     {
-      "id": "large-files-report", "name": "Large Files", "description": "Find and sort large files, then select items to stage for deletion in the File Vault.",
+      "id": "large-files-report", "name": "Large Files Finder", "description": "Find and sort large files, then select items to stage for deletion in the File Vault.",
       "file": "safeScripts/largeFilesReport.js", "runner": "script", "category": "cleanup-storage", "impact": "medium", "icon": "file",
       "inputs": ["scanPath", "thresholdMB", "page", "pageSize"], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
     },

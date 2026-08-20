@@ -25,6 +25,9 @@ window.Pages.processes = {
   t(key, vars) { return window.I18n?.t(key, vars) ?? key; },
   esc(value) { return window.escapeHtml ? window.escapeHtml(String(value ?? '')) : String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]); },
   keyOf(proc) { return `${Number(proc?.key?.pid ?? proc?.pid)}@${String(proc?.key?.startedAt ?? proc?.startedAt ?? '')}`; },
+  hasExecutablePath(value) {
+    return typeof value === 'string' && /^[A-Za-z]:[\\/]/.test(value.trim());
+  },
 
   formatPercent(value) {
     return Number.isFinite(Number(value)) ? `${Number(value).toFixed(1)}%` : this.t('processes.notAvailable');
@@ -532,15 +535,23 @@ window.Pages.processes = {
 
   _detailActions(proc) {
     const technical = this._mode === 'technical';
-    return `<button class="btn btn-xs" data-detail-action="properties">${this.esc(this.t('processes.properties'))}</button><button class="btn btn-xs" data-detail-action="location">${this.esc(this.t('processes.openFileLocation'))}</button><button class="btn btn-xs" data-detail-action="search">${this.esc(this.t('processes.searchOnline'))}</button>
+    const hasPath = this.hasExecutablePath(proc.path);
+    const unavailable = hasPath ? '' : ` disabled title="${this.esc(this.t('processes.pathUnavailable'))}"`;
+    return `<button class="btn btn-xs" data-detail-action="properties"${unavailable}>${this.esc(this.t('processes.properties'))}</button><button class="btn btn-xs" data-detail-action="location"${unavailable}>${this.esc(this.t('processes.openFileLocation'))}</button><button class="btn btn-xs" data-detail-action="search">${this.esc(this.t('processes.searchOnline'))}</button>
       ${technical ? `<select id="piPriority" class="pi-select compact" aria-label="${this.esc(this.t('processes.setPriority'))}"><option value="">${this.esc(this.t('processes.setPriority'))}</option><option>Idle</option><option>BelowNormal</option><option>Normal</option><option>AboveNormal</option><option>High</option></select><button class="btn btn-xs" data-detail-action="affinity">${this.esc(this.t('processes.setAffinity'))}</button><button class="btn btn-xs" data-detail-action="efficiency">${this.esc(proc.efficiencyMode ? this.t('processes.disableEfficiency') : this.t('processes.enableEfficiency'))}</button><button class="btn btn-xs" data-detail-action="suspend">${this.esc(this.t('processes.suspend'))}</button><button class="btn btn-xs" data-detail-action="resume">${this.esc(this.t('processes.resume'))}</button><button class="btn btn-xs" data-detail-action="createDump">${this.esc(this.t('processes.createDump'))}</button>` : ''}
       <button class="btn btn-xs" data-detail-action="restart">${this.esc(this.t('processes.restart'))}</button><button class="btn btn-xs danger" data-detail-action="terminate">${this.esc(this.t('processes.endProcess'))}</button>`;
   },
 
   async _detailAction(action, proc) {
     if (action === 'reputation') return this._checkReputation(proc);
-    if (action === 'properties') return window.soterios.process.showProperties(proc.path).catch((error) => alert(error.message || String(error)));
-    if (action === 'location') return proc.path ? window.soterios.shell.showItemInFolder(proc.path) : alert(this.t('processes.pathUnavailable'));
+    if (action === 'properties') {
+      if (!this.hasExecutablePath(proc.path)) return alert(this.t('processes.pathUnavailable'));
+      return window.soterios.process.showProperties(proc.path).catch((error) => alert(error.message || String(error)));
+    }
+    if (action === 'location') {
+      if (!this.hasExecutablePath(proc.path)) return alert(this.t('processes.pathUnavailable'));
+      return window.soterios.shell.showItemInFolder(proc.path).catch((error) => alert(error.message || String(error)));
+    }
     if (action === 'search') return window.soterios.process.searchOnline(`${proc.name} ${proc.publisher || ''}`).catch((error) => alert(error.message || String(error)));
     if (action === 'affinity') return this._showAffinityDialog(proc);
     if (action === 'efficiency') return this._runAction(this._selectedKey, 'setEfficiencyMode', { enabled: !proc.efficiencyMode });
@@ -602,7 +613,7 @@ window.Pages.processes = {
       if (status.privacyMode) throw new Error(this.t('processes.reputationPrivacyDisabled'));
       if (!status.enabled || !status.keyConfigured) {
         if (!window.confirm(this.t('processes.reputationDisclosure'))) return;
-        const apiKey = window.prompt(this.t('processes.reputationKeyPrompt'));
+        const apiKey = await this._requestReputationKey();
         if (!apiKey) return;
         status = await window.soterios.process.configureReputation(apiKey, true);
       }
@@ -615,6 +626,23 @@ window.Pages.processes = {
     } catch (error) {
       alert(error.message || String(error));
     }
+  },
+
+  _requestReputationKey() {
+    return new Promise((resolve) => {
+      const dialog = document.createElement('div');
+      dialog.className = 'pi-modal-backdrop';
+      dialog.innerHTML = `<form class="pi-modal" aria-labelledby="piReputationTitle"><h2 id="piReputationTitle">${this.esc(this.t('processes.checkReputation'))}</h2><p>${this.esc(this.t('processes.reputationKeyPrompt'))}</p><label><span class="sr-only">${this.esc(this.t('processes.reputationKeyPrompt'))}</span><input id="piReputationKey" type="password" autocomplete="off" required></label><div class="pi-modal-actions"><button type="button" class="btn btn-sm" data-cancel>${this.esc(this.t('common.cancel'))}</button><button type="submit" class="btn btn-sm primary">${this.esc(this.t('common.confirm'))}</button></div></form>`;
+      document.body.appendChild(dialog);
+      const close = (value) => { dialog.remove(); resolve(value); };
+      dialog.querySelector('[data-cancel]').addEventListener('click', () => close(null));
+      dialog.addEventListener('click', (event) => { if (event.target === dialog) close(null); });
+      dialog.querySelector('form').addEventListener('submit', (event) => {
+        event.preventDefault();
+        close(dialog.querySelector('#piReputationKey').value.trim());
+      });
+      dialog.querySelector('#piReputationKey').focus();
+    });
   },
 
   _closeDetails() {

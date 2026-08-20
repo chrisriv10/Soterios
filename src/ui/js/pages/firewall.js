@@ -824,9 +824,20 @@ window.Pages['firewall'] = {
       <circle class="perim-risk-outline perim-risk-outline-safe" cx="${cx}" cy="${cy}" r="114"/>
       <circle class="perim-risk-outline perim-risk-outline-unknown" cx="${cx}" cy="${cy}" r="149"/>
       <circle class="perim-risk-outline perim-risk-outline-malicious ${blockedCount ? 'has-blocked' : ''}" cx="${cx}" cy="${cy}" r="184"/>
-      <g class="perim-ring-label perim-ring-label-safe"><rect x="18" y="18" width="128" height="16" rx="8"/><text x="28" y="29" text-anchor="start">${escapeHtml(t('firewall.perimeterBandSafe'))}</text></g>
-      <g class="perim-ring-label perim-ring-label-unknown"><rect x="18" y="40" width="148" height="16" rx="8"/><text x="28" y="51" text-anchor="start">${escapeHtml(t('firewall.perimeterBandUnknown'))}</text></g>
-      <g class="perim-ring-label perim-ring-label-malicious"><rect x="18" y="62" width="148" height="16" rx="8"/><text x="28" y="73" text-anchor="start">${escapeHtml(t('firewall.perimeterBandMalicious'))}</text></g>`;
+      <g class="perim-ring-label perim-ring-label-safe" data-ring="safe" tabindex="0" aria-label="${escapeHtml(t('firewall.perimeterBandSafe'))}"><rect x="18" y="18" width="128" height="16" rx="8"/><text x="28" y="29" text-anchor="start">${escapeHtml(t('firewall.perimeterBandSafe'))}</text></g>
+      <g class="perim-ring-label perim-ring-label-unknown" data-ring="unknown" tabindex="0" aria-label="${escapeHtml(t('firewall.perimeterBandUnknown'))}"><rect x="18" y="40" width="148" height="16" rx="8"/><text x="28" y="51" text-anchor="start">${escapeHtml(t('firewall.perimeterBandUnknown'))}</text></g>
+      <g class="perim-ring-label perim-ring-label-malicious" data-ring="malicious" tabindex="0" aria-label="${escapeHtml(t('firewall.perimeterBandMalicious'))}"><rect x="18" y="62" width="148" height="16" rx="8"/><text x="28" y="73" text-anchor="start">${escapeHtml(t('firewall.perimeterBandMalicious'))}</text></g>`;
+
+    // Let users identify a ring without making the decorative boundaries
+    // interfere with node hit targets. Keyboard focus mirrors pointer hover.
+    foregroundG.querySelectorAll('.perim-ring-label').forEach((label) => {
+      const ring = label.dataset.ring;
+      const setHighlight = (active) => svg.classList.toggle(`perim-label-focus-${ring}`, active);
+      label.addEventListener('mouseenter', () => setHighlight(true));
+      label.addEventListener('mouseleave', () => setHighlight(false));
+      label.addEventListener('focus', () => setHighlight(true));
+      label.addEventListener('blur', () => setHighlight(false));
+    });
 
     if (this._selectedKey && nodeMap.has(this._selectedKey)) {
       this._renderDetailPanel(container, nodeMap.get(this._selectedKey));
