@@ -99,16 +99,26 @@ function isExtensionLoaded(browserId, extensionId) {
   }
   return false;
 }
-function openExtensionsPage(browserId) { const browser = getBrowser(browserId); if (!browser) return { ok: false, error: `Unknown browser: ${browserId}` }; const executable = browser.exeCandidates.find((candidate) => candidate && fs.existsSync(candidate)); if (!executable) return { ok: false, error: `${browser.name} is not installed` }; try { spawn(executable, [browser.extensionsUrl], { detached: true, stdio: 'ignore' }).unref(); return { ok: true }; } catch (error) { return { ok: false, error: error.message || String(error) }; } }
+function openExtensionsPage(browserId) { const browser = getBrowser(browserId); if (!browser) return { ok: false, error: `Unknown browser: ${browserId}` }; const executable = browser.exeCandidates.find((candidate) => candidate && fs.existsSync(candidate)); if (!executable) return { ok: false, error: `${browser.name} is not installed` }; try { spawn(executable, ['--new-window', browser.extensionsUrl], { detached: true, stdio: 'ignore' }).unref(); return { ok: true }; } catch (error) { return { ok: false, error: error.message || String(error) }; } }
 
-function openExtensionFolder(bundledDir) { const extDir = bundledDir || getNativeHostDir(); if (!fs.existsSync(extDir)) return { ok: false, error: 'Extension folder does not exist yet' }; try { spawn(IS_WIN ? 'explorer.exe' : 'xdg-open', [extDir], { detached: true, stdio: 'ignore' }).unref(); return { ok: true }; } catch (error) { return { ok: false, error: error.message || String(error) }; } }
+function openExtensionFolder(bundledDir) {
+  const extDir = bundledDir || getNativeHostDir();
+  const parentDir = path.dirname(extDir);
+  const target = fs.existsSync(parentDir) ? parentDir : extDir;
+  try {
+    spawn(IS_WIN ? 'explorer.exe' : 'xdg-open', [target], { detached: true, stdio: 'ignore' }).unref();
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error.message || String(error) };
+  }
+}
 
 function readVersion(directory) { try { return JSON.parse(fs.readFileSync(path.join(directory, 'manifest.json'), 'utf8')).version || null; } catch (_) { return null; } }
-function install(browserId, { srcDir, appPath, nativeHostBinary } = {}) {
+function install(browserId, { srcDir, appPath, nativeHostBinary, openPage } = {}) {
   const browser = getBrowser(browserId); if (!browser) return { ok: false, error: `Unknown browser: ${browserId}` }; if (!browser.exeCandidates.some((candidate) => candidate && fs.existsSync(candidate))) return { ok: false, error: `${browser.name} is not installed` };
   try {
     const extDir = getNativeHostDir(); const staged = atomicStageExtension(srcDir, extDir, { appPath: appPath || findAppPath(), nativeHostBinary });
-    const host = registerNativeHost(browser.id, staged.manifestPath); const page = openExtensionsPage(browser.id);
+    const host = registerNativeHost(browser.id, staged.manifestPath); const page = openPage === true ? openExtensionsPage(browser.id) : { ok: false, pageOpened: false };
     return { ok: true, browser: browser.id, extensionId: staged.extensionId, extDir, manifestPath: staged.manifestPath, installedVersion: readVersion(extDir), extensionsUrl: browser.extensionsUrl, nativeHostOk: host.ok, nativeHostBinaryPresent: fs.existsSync(staged.executablePath), pageOpened: page.ok };
   } catch (error) { return { ok: false, error: error.message || String(error) }; }
 }
