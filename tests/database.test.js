@@ -281,3 +281,77 @@ describe('DatabaseService audit_warnings', () => {
     service.db.close();
   });
 });
+
+describe('DatabaseService quarantine history', () => {
+  const tempDbs = [];
+
+  afterEach(() => {
+    while (tempDbs.length) {
+      const p = tempDbs.pop();
+      try { fs.rmSync(p, { force: true }); } catch (_) {}
+      try { fs.rmSync(p + '-wal', { force: true }); } catch (_) {}
+      try { fs.rmSync(p + '-shm', { force: true }); } catch (_) {}
+    }
+  });
+
+  function tempDbPath() {
+    const p = path.join(os.tmpdir(), `soterios-db-qhistory-${Date.now()}-${Math.random().toString(16).slice(2)}.db`);
+    tempDbs.push(p);
+    return p;
+  }
+
+  function seed(service) {
+    const rows = [
+      { status: 'quarantined', engine: 'clamav', threatName: 'Active', originalPath: 'C:\\a.exe', quarantinePath: null, hash: null, reason: null },
+      { status: 'deleted', engine: 'clamav', threatName: 'Deleted', originalPath: 'C:\\b.exe', quarantinePath: null, hash: null, reason: null },
+      { status: 'restored', engine: 'clamav', threatName: 'Restored', originalPath: 'C:\\c.exe', quarantinePath: null, hash: null, reason: null }
+    ];
+    return rows.map((r) => {
+      const id = Number(service.addQuarantineRecord(r).lastInsertRowid);
+      if (r.status !== 'quarantined') service.updateQuarantineStatus(id, r.status);
+      return id;
+    });
+  }
+
+  it('clearQuarantineHistory removes only non-quarantined rows', () => {
+    const service = new DatabaseService(tempDbPath());
+    seed(service);
+    const result = service.clearQuarantineHistory();
+    assert.equal(result.changes, 2);
+    const remaining = service.db.prepare("SELECT * FROM quarantine WHERE status = 'quarantined'").all();
+    assert.equal(remaining.length, 1);
+    assert.equal(remaining[0].threat_name, 'Active');
+    service.db.close();
+  });
+
+  it('deleteQuarantineHistory removes selected history rows by id', () => {
+    const service = new DatabaseService(tempDbPath());
+    const ids = seed(service);
+    const result = service.deleteQuarantineHistory([ids[1], ids[2]]);
+    assert.equal(result.changes, 2);
+    const remaining = service.db.prepare('SELECT * FROM quarantine').all();
+    assert.equal(remaining.length, 1);
+    assert.equal(remaining[0].id, ids[0]);
+    service.db.close();
+  });
+
+  it('deleteQuarantineHistory never removes active quarantined rows', () => {
+    const service = new DatabaseService(tempDbPath());
+    const ids = seed(service);
+    const result = service.deleteQuarantineHistory([ids[0], ids[1]]);
+    assert.equal(result.changes, 1);
+    const active = service.db.prepare("SELECT * FROM quarantine WHERE status = 'quarantined'").all();
+    assert.equal(active.length, 1);
+    assert.equal(active[0].id, ids[0]);
+    service.db.close();
+  });
+
+  it('deleteQuarantineHistory with empty array is a no-op', () => {
+    const service = new DatabaseService(tempDbPath());
+    seed(service);
+    const result = service.deleteQuarantineHistory([]);
+    assert.equal(result.changes, 0);
+    assert.equal(service.db.prepare('SELECT COUNT(*) AS n FROM quarantine').get().n, 3);
+    service.db.close();
+  });
+});

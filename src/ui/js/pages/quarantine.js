@@ -64,8 +64,9 @@ window.Pages['quarantine'] = {
       const engines = [...new Set(list.map((i) => i.engine).filter(Boolean))].sort();
       const activeCount = list.filter((i) => i.status === 'quarantined').length;
       const trustedCount = (trusted && Array.isArray(trusted) ? trusted : []).length;
+      const historyCount = list.length - activeCount;
 
-      this._renderToolbar(container, { engines, activeCount, trustedCount });
+      this._renderToolbar(container, { engines, activeCount, trustedCount, historyCount });
       this._renderList(container, { list, trusted });
     } catch (e) {
       document.getElementById('quarantineList').innerHTML =
@@ -78,7 +79,7 @@ window.Pages['quarantine'] = {
     return list.filter((i) => i.status === 'quarantined');
   },
 
-  _renderToolbar(container, { engines, activeCount, trustedCount }) {
+  _renderToolbar(container, { engines, activeCount, trustedCount, historyCount }) {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const toolbar = container.querySelector('#qToolbar');
     if (!toolbar) return;
@@ -139,6 +140,10 @@ window.Pages['quarantine'] = {
       });
     } else {
       toolbar.innerHTML = `
+        <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+          <input type="checkbox" id="qHSelectAll" />
+          <span>${escapeHtml(t('quarantine.selectAll'))}</span>
+        </label>
         <input type="text" id="qSearch" class="q-search" placeholder="${escapeHtml(t('quarantine.searchPlaceholder'))}"
           value="${escapeHtml(this._search)}">
         <select id="qSort" class="q-select">
@@ -147,6 +152,7 @@ window.Pages['quarantine'] = {
           <option value="name-asc" ${this._sort === 'name-asc' ? 'selected' : ''}>${escapeHtml(t('quarantine.sortName'))}</option>
           <option value="path-asc" ${this._sort === 'path-asc' ? 'selected' : ''}>${escapeHtml(t('quarantine.sortPath'))}</option>
         </select>
+        <div id="qHistoryBulkActions" style="display:flex; gap:8px;"></div>
       `;
       const searchInput = toolbar.querySelector('#qSearch');
       searchInput.addEventListener('input', () => {
@@ -158,6 +164,7 @@ window.Pages['quarantine'] = {
         this._sort = sortSelect.value;
         this._refreshVisible(container);
       });
+      this._bindHistoryActions(container, historyCount);
     }
 
     this._bindBulkActions(container, activeCount);
@@ -190,6 +197,62 @@ window.Pages['quarantine'] = {
     bulk.querySelector('#qDeleteSelected').addEventListener('click', async () => {
       await this._bulkAction(container, 'delete');
     });
+    this._updateDisabled = updateDisabled;
+  },
+
+  _bindHistoryActions(container, historyCount) {
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+    const bulk = container.querySelector('#qHistoryBulkActions');
+    if (!bulk) return;
+
+    bulk.innerHTML = `
+      <button class="btn btn-sm" style="color: var(--accent-danger);" id="qHistoryDeleteSelected" disabled>${escapeHtml(t('quarantine.deleteSelectedHistory'))}</button>
+      ${historyCount > 0 ? `<button class="btn btn-sm" style="color: var(--accent-danger);" id="qClearHistory">${escapeHtml(t('quarantine.clearHistory'))}</button>` : ''}
+    `;
+
+    const deleteBtn = bulk.querySelector('#qHistoryDeleteSelected');
+    const updateDisabled = () => {
+      deleteBtn.disabled = this._selected.size === 0;
+    };
+
+    const selectAll = container.querySelector('#qHSelectAll');
+    if (selectAll) {
+      selectAll.addEventListener('change', () => {
+        const visible = this._currentVisibleIds(container);
+        if (selectAll.checked) visible.forEach((id) => this._selected.add(id));
+        else visible.forEach((id) => this._selected.delete(id));
+        this._refreshVisible(container);
+      });
+    }
+
+    deleteBtn.addEventListener('click', async () => {
+      const ids = [...this._selected];
+      if (!ids.length) return;
+      if (!confirmAction(t('quarantine.confirmDeleteHistoryMany', { count: ids.length }))) return;
+      const res = await window.api.invoke('quarantine:deleteHistory', ids);
+      if (!res || !res.success) {
+        alert(t('quarantine.failedClearHistory', { error: (res && res.error) || 'unknown' }));
+        return;
+      }
+      this._selected.clear();
+      this.render(container);
+    });
+
+    const clearBtn = bulk.querySelector('#qClearHistory');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', async () => {
+        if (!confirmAction(t('quarantine.confirmClearHistory', { count: historyCount }))) return;
+        const res = await window.api.invoke('quarantine:clearHistory');
+        if (!res || !res.success) {
+          alert(t('quarantine.failedClearHistory', { error: (res && res.error) || 'unknown' }));
+          return;
+        }
+        alert(t('quarantine.historyCleared'));
+        this._selected.clear();
+        this.render(container);
+      });
+    }
+
     this._updateDisabled = updateDisabled;
   },
 
@@ -267,7 +330,7 @@ window.Pages['quarantine'] = {
       this._byTab(this._allItems || []).filter((i) => this._matchesFilters(i))
     );
 
-    const selectAll = container.querySelector('#qSelectAll');
+    const selectAll = container.querySelector('#qSelectAll') || container.querySelector('#qHSelectAll');
     if (selectAll) selectAll.checked = filtered.length > 0 && filtered.every((i) => this._selected.has(i.id));
     if (this._updateDisabled) this._updateDisabled();
 
@@ -295,7 +358,7 @@ window.Pages['quarantine'] = {
 
     const filtered = this._sortItems(this._byTab(list).filter((i) => this._matchesFilters(i)));
 
-    const selectAll = container.querySelector('#qSelectAll');
+    const selectAll = container.querySelector('#qSelectAll') || container.querySelector('#qHSelectAll');
     if (selectAll) selectAll.checked = filtered.length > 0 && filtered.every((i) => this._selected.has(i.id));
     if (this._updateDisabled) this._updateDisabled();
 
@@ -340,7 +403,7 @@ window.Pages['quarantine'] = {
     row.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
         <div style="display:flex; align-items:center; gap:10px; min-width:0;">
-          ${this._tab === 'quarantined' ? `<input type="checkbox" class="q-check" data-id="${item.id}" ${this._selected.has(item.id) ? 'checked' : ''} />` : ''}
+          ${this._tab !== 'trusted' ? `<input type="checkbox" class="q-check" data-id="${item.id}" ${this._selected.has(item.id) ? 'checked' : ''} />` : ''}
           <button class="btn btn-sm q-expand" data-id="${item.id}" title="${escapeHtml(t('quarantine.details'))}" style="padding:2px 8px; background:transparent; border:none; color:inherit; cursor:pointer;">${isExpanded ? '▾' : '▸'}</button>
           <div style="min-width:0;">
             <div style="font-weight:500; word-break:break-word;">${escapeHtml(item.threat_name || '—')}</div>
@@ -375,7 +438,7 @@ window.Pages['quarantine'] = {
         const id = Number(check.getAttribute('data-id'));
         if (check.checked) this._selected.add(id);
         else this._selected.delete(id);
-        const selectAll = this._container && this._container.querySelector('#qSelectAll');
+        const selectAll = this._container && (this._container.querySelector('#qSelectAll') || this._container.querySelector('#qHSelectAll'));
         if (selectAll) {
           const visible = this._currentVisibleIds(this._container);
           selectAll.checked = visible.length > 0 && visible.every((i) => this._selected.has(i));

@@ -34,6 +34,17 @@ function register(mainWindow, { quarantineManager, db }) {
     return enrichSizes(db.getQuarantineHistory(status || null));
   });
 
+  ipcMain.handle('quarantine:clearHistory', async () => {
+    const result = db.clearQuarantineHistory();
+    return { success: true, cleared: result.changes };
+  });
+
+  ipcMain.handle('quarantine:deleteHistory', async (_event, ids) => {
+    const list = Array.isArray(ids) ? ids.filter((n) => Number.isInteger(n)) : [];
+    const result = db.deleteQuarantineHistory(list);
+    return { success: true, deleted: result.changes };
+  });
+
   ipcMain.handle('quarantine:getTrusted', async () => {
     return db.getTrustedHashes();
   });

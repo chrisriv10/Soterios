@@ -344,6 +344,19 @@ class DatabaseService {
     return this.db.prepare('SELECT * FROM quarantine WHERE id = ?').get(id);
   }
 
+  clearQuarantineHistory() {
+    return this.db.prepare("DELETE FROM quarantine WHERE status != 'quarantined'").run();
+  }
+
+  deleteQuarantineHistory(ids) {
+    if (!Array.isArray(ids) || !ids.length) return { changes: 0 };
+    const placeholders = ids.map(() => '?').join(',');
+    const stmt = this.db.prepare(
+      `DELETE FROM quarantine WHERE id IN (${placeholders}) AND status != 'quarantined'`
+    );
+    return stmt.run(...ids);
+  }
+
   // --- Trusted hash (false-positive whitelist) API ---
   addTrustedHash(hash, originalPath, threatName) {
     if (!hash) return { changes: 0 };
