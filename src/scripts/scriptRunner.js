@@ -3,7 +3,7 @@ const path = require('path');
 const workerManager = require('../core/workerManager');
 
 const REGISTRY_PATH = path.join(__dirname, 'registry.json');
-const SCRIPT_TIMEOUTS = Object.freeze({ 'large-files-report': 30 * 60 * 1000 });
+const SCRIPT_TIMEOUTS = Object.freeze({ 'large-files-report': 30 * 60 * 1000, 'duplicate-finder': 30 * 60 * 1000 });
 
 function loadRegistry() {
   const raw = fs.readFileSync(REGISTRY_PATH, 'utf-8');
