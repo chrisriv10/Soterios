@@ -511,6 +511,22 @@ window.Pages['network'] = {
     }
   },
 
+  _stateGlossaryKey(state) {
+    const normalized = String(state || 'UNKNOWN').toUpperCase().replace(/[-\s]/g, '_');
+    const keys = {
+      ESTABLISHED: 'established', LISTEN: 'listen', LISTENING: 'listen', BOUND: 'bound',
+      SYN_SENT: 'syn_sent', SYN_RECEIVED: 'syn_received', FIN_WAIT_1: 'fin_wait_1',
+      FIN_WAIT_2: 'fin_wait_2', CLOSING: 'closing', LAST_ACK: 'last_ack',
+      DELETE_TCB: 'delete_tcb', CLOSED: 'closed', TIME_WAIT: 'time_wait',
+      TIMEWAIT: 'time_wait', CLOSE_WAIT: 'close_wait', CLOSEWAIT: 'close_wait'
+    };
+    return keys[normalized] || 'unknown';
+  },
+
+  _stateGlossary(state) {
+    return window.I18n?.t(`firewall.glossary.${this._stateGlossaryKey(state)}`) || '';
+  },
+
   _renderConnectionRow(c, t, getState, firstDefined, simpleView) {
     const proc = c.processName ? ` (${escapeHtml(c.processName)})` : (c.pid ? ` (PID: ${escapeHtml(c.pid)})` : '');
     const hostname = c.hostname ? ` \u2192 ${escapeHtml(c.hostname)}` : '';
@@ -547,7 +563,7 @@ window.Pages['network'] = {
       stateColor = 'var(--danger)';
     }
     const stateBadge = state
-      ? `<span style="font-size:0.7rem; font-weight:600; color:${stateColor}; background:${stateColor}15; padding:2px 6px; border-radius:4px; margin-right:6px;">${escapeHtml(state)}</span>`
+      ? `<span class="glossary-term network-state-term" title="${escapeHtml(this._stateGlossary(state))}" style="font-size:0.7rem; font-weight:600; color:${stateColor}; background:${stateColor}15; padding:2px 6px; border-radius:4px; margin-right:6px;">${escapeHtml(state)}</span>`
       : '';
 
     const searchBlob = [
@@ -914,6 +930,9 @@ async _renderAsync(container, t) {
         } else if (e.target.closest('#vpnToggleBtn')) {
           const btn = e.target.closest('#vpnToggleBtn');
           window.Pages['network'].toggleVpn(container, btn.dataset.vpnName, btn.dataset.vpnAction);
+        } else if (e.target.closest('#vpnRemoveBtn')) {
+          const btn = e.target.closest('#vpnRemoveBtn');
+          window.Pages['network'].removeVpn(container, btn.dataset.vpnName);
         } else if (e.target.closest('#vpnAddBtn')) {
           console.log('[Network] Add VPN button clicked');
           if (window.VpnAddModal) {
@@ -1132,9 +1151,12 @@ if (content) this.paintHistoryChart(content).catch(() => {});
           statusText = this._vpnError;
           statusColor = 'var(--danger)';
         } else if (this._vpnPending) {
-          statusText = this._vpnPending.action === 'disconnect'
+          const action = this._vpnPending.action;
+          statusText = action === 'disconnect'
             ? t('network.vpnDisconnecting', { name: this._vpnPending.name })
-            : t('network.vpnConnecting', { name: this._vpnPending.name });
+            : action === 'remove'
+              ? t('network.vpnRemoving', { name: this._vpnPending.name })
+              : t('network.vpnConnecting', { name: this._vpnPending.name });
         } else if (connected) {
           statusText = t('network.vpnConnected', { name: selVpn.name });
           statusColor = 'var(--ok)';
@@ -1144,6 +1166,9 @@ if (content) this.paintHistoryChart(content).catch(() => {});
         html += `<span id="vpnStatusText" style="font-size:0.8rem; color:${statusColor};">${escapeHtml(statusText)}</span>`;
         // Add VPN button
         html += `<button id="vpnAddBtn" class="btn btn-sm btn-secondary" style="margin-left:8px;" data-i18n="network.vpn.addBtn">Add VPN</button>`;
+        if (selVpn.managed) {
+          html += `<button id="vpnRemoveBtn" class="btn btn-sm btn-danger" data-vpn-name="${escapeHtml(selVpn.name)}" ${busy ? 'disabled' : ''}>${escapeHtml(t('common.delete'))}</button>`;
+        }
         html += '</div>';
       }
       }
@@ -1200,9 +1225,10 @@ if (content) this.paintHistoryChart(content).catch(() => {});
           for (const [name, count] of stateEntries) {
             const color = STATE_COLORS[name] || fallbackPalette[paletteIdx++ % fallbackPalette.length];
             const pct = Math.round((count / stateTotal) * 100);
+            const glossary = this._stateGlossary(name);
             html += `<div style="display:flex; align-items:center; gap:6px;">
               <span style="width:9px; height:9px; border-radius:50%; background:${color}; display:inline-block;"></span>
-              <span>${escapeHtml(name)}: ${count} (${pct}%)</span>
+              <span class="glossary-term network-state-term" title="${escapeHtml(glossary)}">${escapeHtml(name)}: ${count} (${pct}%)</span>
             </div>`;
           }
           html += '</div></div>';
@@ -2082,6 +2108,24 @@ async renderAlertHits(content) {
         status.style.color = 'var(--danger)';
         status.textContent = this._vpnError;
       }
+    } finally {
+      this._vpnPending = null;
+      this.load(container, false);
+    }
+  },
+
+  async removeVpn(container, name) {
+    if (this._vpnPending || !name) return;
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+    if (!window.confirm(t('network.vpnRemoveConfirm', { name }))) return;
+    this._vpnPending = { name, action: 'remove' };
+    this._vpnError = '';
+    try {
+      const res = await window.api.invoke('network:vpn:remove', name);
+      if (!res || !res.ok) this._vpnError = (res && res.error) || 'VPN action failed';
+      else if (this._vpnSelection === name) this._vpnSelection = '';
+    } catch (err) {
+      this._vpnError = err.message || String(err);
     } finally {
       this._vpnPending = null;
       this.load(container, false);

@@ -13,6 +13,8 @@ const { getEapConfigXml, getServerForProvider } = require('./vpnProviders');
 const LIST_TTL_MS = 4000;
 const CONNECT_TIMEOUT_MS = 90000;
 const ADD_TIMEOUT_MS = 60000;
+const REMOVE_TIMEOUT_MS = 30000;
+const SOTERIOS_PROFILE_PREFIX = 'Soterios - ';
 
 function powershellEscape(value) {
   return String(value || '').replace(/'/g, "''");
@@ -69,6 +71,18 @@ function disconnectFallbackScript(name) {
 $ErrorActionPreference = 'Continue'
 rasdial '${powershellEscape(name)}' /d
 exit $LASTEXITCODE`;
+}
+
+function removeVpnScript(name) {
+  return `
+$ErrorActionPreference = 'Stop'
+try {
+  Remove-VpnConnection -Name '${powershellEscape(name)}' -Force -ErrorAction Stop
+  cmdkey /delete:"LegacyGeneric:target=${powershellEscape(name)}" | Out-Null
+  Write-Output 'OK'
+} catch {
+  Write-Output ('FAIL|' + $_.Exception.Message)
+}`;
 }
 
 function addVpnScript(profileName, serverAddress, username, password) {
@@ -131,6 +145,7 @@ class VpnManager {
       const rows = JSON.parse(stdout.trim() || '[]');
       parsed = (Array.isArray(rows) ? rows : [rows]).map((row) => ({
         name: row.Name || 'Unknown',
+        managed: String(row.Name || '').startsWith(SOTERIOS_PROFILE_PREFIX),
         connected: String(row.ConnectionStatus || '').toLowerCase() === 'connected',
         serverAddress: row.ServerAddress || '',
         tunnelType: row.TunnelType || '',
@@ -197,6 +212,30 @@ class VpnManager {
       return this._disconnectFallback(trimmed, (err && err.message) ? err.message : String(err));
     }
     return this._disconnectFallback(trimmed, 'Disconnect failed.');
+  }
+
+  async remove(name) {
+    this._clearCache();
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return { ok: false, error: 'No VPN selected.' };
+    }
+    const trimmed = name.trim();
+    if (!trimmed.startsWith(SOTERIOS_PROFILE_PREFIX)) {
+      return { ok: false, error: 'Only Soterios-created VPN profiles can be removed.' };
+    }
+    try {
+      const result = await this._run(removeVpnScript(trimmed), REMOVE_TIMEOUT_MS);
+      const line = String(result.stdout || '').trim().split(/\r?\n/).pop() || '';
+      if (line === 'OK') {
+        if (this._db && this._db.getSetting('vpn.lastProfile') === trimmed) this._db.setSetting('vpn.lastProfile', '');
+        return { ok: true };
+      }
+      if (line.startsWith('FAIL|')) return { ok: false, error: line.slice(5) };
+    } catch (err) {
+      const error = (err && err.message) ? err.message : String(err);
+      return { ok: false, error: `Failed to remove VPN profile: ${error}` };
+    }
+    return { ok: false, error: 'Failed to remove VPN profile.' };
   }
 
   async _disconnectFallback(name, primaryError) {

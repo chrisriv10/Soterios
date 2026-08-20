@@ -230,13 +230,7 @@
       // Custom only — helper text tells the user where to find a hostname
       serverSelect.innerHTML = '<option value="__custom__" selected data-i18n="network.vpn.customServerOption">Custom server&hellip;</option>';
       customServerInput.classList.remove('hidden');
-      if (currentProvider.id !== 'custom') {
-        providerHint.textContent = (window.I18n?.t('network.vpn.builtInServerHint') || 'Soterios no longer ships built-in server lists for {provider} because their hostnames change often and stale entries fail to connect. Paste an IKEv2 server hostname from your {provider} account/setup page instead.')
-          .replaceAll('{provider}', currentProvider.name);
-        providerHint.classList.remove('hidden');
-      } else {
-        providerHint.classList.add('hidden');
-      }
+      providerHint.classList.add('hidden');
       customServerInput.focus();
     }
 

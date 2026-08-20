@@ -28,6 +28,18 @@ describe('vpnManager - list', () => {
     assert.equal(result.vpns[0].serverAddress, 'vpn.example.com');
   });
 
+  it('marks only Soterios-created profiles as removable', async () => {
+    const run = fakeRun(() => ({
+      stdout: JSON.stringify([
+        { Name: 'Soterios - ProtonVPN - Chicago', ConnectionStatus: 'Disconnected' },
+        { Name: 'Work VPN', ConnectionStatus: 'Disconnected' },
+      ]),
+    }));
+    const result = await new VpnManager({ runPowerShell: run }).list();
+    assert.equal(result.vpns[0].managed, true);
+    assert.equal(result.vpns[1].managed, false);
+  });
+
   it('flags a connected profile', async () => {
     const run = fakeRun(() => ({
       stdout: JSON.stringify([{ Name: 'Home VPN', ConnectionStatus: 'Connected', ServerAddress: 'home.vpn', TunnelType: 'SSTP' }]),
@@ -198,5 +210,29 @@ describe('vpnManager - disconnect', () => {
     
     const result4 = await manager.addFromProvider('provider', 'server', 'user', '');
     assert.equal(result4.ok, false);
+  });
+});
+
+describe('vpnManager - remove', () => {
+  it('removes a Soterios-created profile and clears the remembered profile', async () => {
+    const run = fakeRun(() => ({ stdout: 'OK' }));
+    const db = {
+      value: 'Soterios - ProtonVPN - Chicago',
+      getSetting() { return this.value; },
+      setSetting(_key, value) { this.value = value; },
+    };
+    const manager = new VpnManager({ runPowerShell: run, db });
+    const result = await manager.remove('Soterios - ProtonVPN - Chicago');
+    assert.equal(result.ok, true);
+    assert.match(run.calls[0].command, /Remove-VpnConnection -Name 'Soterios - ProtonVPN - Chicago'/);
+    assert.equal(db.value, '');
+  });
+
+  it('refuses to remove profiles that were not created by Soterios', async () => {
+    const run = fakeRun(() => ({ stdout: 'OK' }));
+    const result = await new VpnManager({ runPowerShell: run }).remove('Work VPN');
+    assert.equal(result.ok, false);
+    assert.match(result.error, /Only Soterios-created/);
+    assert.equal(run.calls.length, 0);
   });
 });

@@ -1,30 +1,12 @@
 'use strict';
 
 const PROVIDERS = {
-  // Built-in provider server lists were removed: provider hostnames change
-  // often and stale entries produce dead connections. Users paste the IKEv2
-  // server hostname shown in their provider's setup guide / account page instead.
-  protonvpn: {
-    name: 'ProtonVPN',
-    protocol: 'IKEv2',
-    usernameFormat: '{username}',
-    servers: [],
-  },
-
-  nordvpn: {
-    name: 'NordVPN',
-    protocol: 'IKEv2',
-    usernameFormat: '{username}',
-    servers: [],
-  },
-  ivpn: {
-    name: 'IVPN',
-    protocol: 'IKEv2',
-    usernameFormat: '{username}',
-    servers: [],
-  },
+  // Named provider shells were removed: provider hostnames change often and
+  // stale entries produce dead connections, so built-in server lists were not
+  // viable. The modal offers a single custom IKEv2 flow where users paste the
+  // server hostname shown in their provider's setup guide / account page.
   custom: {
-    name: 'Custom IKEv2',
+    name: 'IKEv2 / Custom',
     protocol: 'IKEv2',
     usernameFormat: '{username}',
     servers: [],

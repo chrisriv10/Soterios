@@ -298,6 +298,11 @@ function register(mainWindow, { db, eventBus, networkMonitor, networkEnricher, n
     return vpnManager.disconnect(name);
   });
 
+  ipcMain.handle('network:vpn:remove', async (_event, name) => {
+    if (!vpnManager) throw new Error('VPN manager is unavailable.');
+    return vpnManager.remove(name);
+  });
+
   ipcMain.handle('network:vpn:add', async (_event, { providerId, serverId, username, password }) => {
     if (!vpnManager) throw new Error('VPN manager is unavailable.');
     return vpnManager.addFromProvider(providerId, serverId, username, password);
