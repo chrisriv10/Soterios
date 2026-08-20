@@ -105,6 +105,7 @@ function openExtensionFolder(bundledDir) {
   const extDir = bundledDir || getNativeHostDir();
   const parentDir = path.dirname(extDir);
   const target = fs.existsSync(parentDir) ? parentDir : extDir;
+  if (!fs.existsSync(target)) return { ok: false, error: 'Extension folder does not exist yet' };
   try {
     spawn(IS_WIN ? 'explorer.exe' : 'xdg-open', [target], { detached: true, stdio: 'ignore' }).unref();
     return { ok: true };

@@ -35,6 +35,15 @@ describe('Soterios extension 2.0 public and privacy contracts', () => {
     assert.equal(manifest.version, '2.0.0');
     assert.match(installer.predictExtensionId(installer.getNativeHostDir()), /^[a-p]{32}$/);
   });
+
+  it('refuses to open a folder that does not exist', () => {
+    const os = require('node:os');
+    const missing = path.join(os.tmpdir(), `soterios-missing-ext-${process.pid}`, 'extension');
+    assert.equal(fs.existsSync(path.dirname(missing)), false);
+    const result = installer.openExtensionFolder(missing);
+    assert.equal(result.ok, false);
+    assert.equal(result.error, 'Extension folder does not exist yet');
+  });
 });
 
 describe('NativeEnvelopeV2 framing and validation', () => {
