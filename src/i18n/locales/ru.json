@@ -469,6 +469,7 @@
   "dashboard.firewallActive": "Активно",
   "dashboard.firewallDisabled": "Отключено",
   "dashboard.firewallManage": "Управление брандмауэром",
+  "dashboard.networkFirewallTitle": "Сеть и брандмауэр",
   "dashboard.lastScan": "Последний скан",
   "dashboard.lastScanLoading": "Загрузка...",
   "dashboard.lastScanNever": "Никогда",

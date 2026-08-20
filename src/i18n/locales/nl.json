@@ -469,6 +469,7 @@
   "dashboard.firewallActive": "Actief",
   "dashboard.firewallDisabled": "Uitgeschakeld",
   "dashboard.firewallManage": "Firewall beheren",
+  "dashboard.networkFirewallTitle": "Netwerk & firewall",
   "dashboard.lastScan": "Laatste scan",
   "dashboard.lastScanLoading": "Laden...",
   "dashboard.lastScanNever": "Nooit",

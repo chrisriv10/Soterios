@@ -469,6 +469,7 @@
   "dashboard.firewallActive": "نشط",
   "dashboard.firewallDisabled": "معطل",
   "dashboard.firewallManage": "إدارة جدار الحماية",
+  "dashboard.networkFirewallTitle": "الشبكة وجدار الحماية",
   "dashboard.lastScan": "آخر فحص",
   "dashboard.lastScanLoading": "جاري التحميل...",
   "dashboard.lastScanNever": "أبداً",

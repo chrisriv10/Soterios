@@ -469,6 +469,7 @@
   "dashboard.firewallActive": "Actif",
   "dashboard.firewallDisabled": "Désactivé",
   "dashboard.firewallManage": "Gérer le pare-feu",
+  "dashboard.networkFirewallTitle": "Réseau et pare-feu",
   "dashboard.lastScan": "Dernier scan",
   "dashboard.lastScanLoading": "Chargement...",
   "dashboard.lastScanNever": "Jamais",

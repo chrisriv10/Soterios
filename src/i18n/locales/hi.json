@@ -469,6 +469,7 @@
   "dashboard.firewallActive": "सक्रिय",
   "dashboard.firewallDisabled": "अक्षम",
   "dashboard.firewallManage": "फायरवॉल प्रबंधित करें",
+  "dashboard.networkFirewallTitle": "नेटवर्क और फ़ायरवॉल",
   "dashboard.lastScan": "अंतिम स्कैन",
   "dashboard.lastScanLoading": "लोड हो रहा है...",
   "dashboard.lastScanNever": "कभी नहीं",

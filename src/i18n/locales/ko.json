@@ -469,6 +469,7 @@
   "dashboard.firewallActive": "활성",
   "dashboard.firewallDisabled": "비활성",
   "dashboard.firewallManage": "방화벽 관리",
+  "dashboard.networkFirewallTitle": "네트워크 및 방화벽",
   "dashboard.lastScan": "마지막 검사",
   "dashboard.lastScanLoading": "로드 중...",
   "dashboard.lastScanNever": "없음",

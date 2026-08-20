@@ -469,6 +469,7 @@
   "dashboard.firewallActive": "Aktif",
   "dashboard.firewallDisabled": "Devre dışı",
   "dashboard.firewallManage": "Güvenlik duvarını yönet",
+  "dashboard.networkFirewallTitle": "Ağ ve Güvenlik Duvarı",
   "dashboard.lastScan": "Son Tarama",
   "dashboard.lastScanLoading": "Yükleniyor...",
   "dashboard.lastScanNever": "Hiç",

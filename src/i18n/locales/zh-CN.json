@@ -469,6 +469,7 @@
   "dashboard.firewallActive": "活动",
   "dashboard.firewallDisabled": "已禁用",
   "dashboard.firewallManage": "管理防火墙",
+  "dashboard.networkFirewallTitle": "网络与防火墙",
   "dashboard.lastScan": "上次扫描",
   "dashboard.lastScanLoading": "加载中...",
   "dashboard.lastScanNever": "从未",

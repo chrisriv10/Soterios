@@ -215,29 +215,29 @@ window.Pages['dashboard'] = {
             </div>
           </div>
 
-          <!-- Firewall Status -->
+          <!-- Network & Firewall -->
           <div class="card">
             <div class="status-card">
               <div class="status-icon info" id="fwIcon">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-
-  <rect x="3" y="6" width="18" height="12" rx="1" />
-  <line x1="3" y1="10" x2="21" y2="10" />
-  <line x1="3" y1="14" x2="21" y2="14" />
-  <line x1="9" y1="6" x2="9" y2="10" />
-  <line x1="15" y1="10" x2="15" y2="14" />
-  <line x1="9" y1="14" x2="9" y2="18" />
-
+  <path d="M12 2 20 5v6c0 5.5-3.5 9-8 11-4.5-2-8-5.5-8-11V5z"/>
+  <circle cx="8" cy="10.5" r="1.2"/>
+  <circle cx="16" cy="10.5" r="1.2"/>
+  <circle cx="12" cy="15.5" r="1.2"/>
+  <line x1="9.2" y1="10.9" x2="10.8" y2="14.6"/>
+  <line x1="14.8" y1="10.9" x2="13.2" y2="14.6"/>
+  <line x1="9.2" y1="10.5" x2="14.8" y2="10.5"/>
 </svg>
               </div>
               <div class="status-info">
-                <h3>${escapeHtml(t('nav.firewall'))}</h3>
+                <h3>${escapeHtml(t('dashboard.networkFirewallTitle'))}</h3>
                 <div class="value" id="fwStatusText">${escapeHtml(t('common.loading'))}</div>
               </div>
             </div>
-            <div style="margin-top: 16px;">
+            <div style="margin-top: 16px; display: flex; gap: 12px; flex-wrap: wrap;">
               <button class="btn" id="btnManageFirewall">${escapeHtml(t('dashboard.firewallManage'))}</button>
+              <button class="btn" id="btnOpenNetwork">${escapeHtml(t('nav.network'))}</button>
             </div>
           </div>
 
@@ -827,6 +827,12 @@ async function loadWarnings() {
     if (btnManageFirewall) {
       btnManageFirewall.addEventListener('click', () => {
         if (window.AppRouter) window.AppRouter.navigate('firewall');
+      });
+    }
+    const btnOpenNetwork = document.getElementById('btnOpenNetwork');
+    if (btnOpenNetwork) {
+      btnOpenNetwork.addEventListener('click', () => {
+        if (window.AppRouter) window.AppRouter.navigate('network');
       });
     }
 

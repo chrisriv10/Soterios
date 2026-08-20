@@ -469,6 +469,7 @@
   "dashboard.firewallActive": "Aktywny",
   "dashboard.firewallDisabled": "Wyłączony",
   "dashboard.firewallManage": "Zarządzaj Zapora",
+  "dashboard.networkFirewallTitle": "Sieć i zapora",
   "dashboard.lastScan": "Ostatni skan",
   "dashboard.lastScanLoading": "Ładowanie...",
   "dashboard.lastScanNever": "Nigdy",

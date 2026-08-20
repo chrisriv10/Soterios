@@ -470,6 +470,7 @@
   "dashboard.firewallActive": "Active",
   "dashboard.firewallDisabled": "Disabled",
   "dashboard.firewallManage": "Manage Firewall",
+  "dashboard.networkFirewallTitle": "Network & Firewall",
   "dashboard.lastScan": "Last Scan",
   "dashboard.lastScanLoading": "Loading...",
   "dashboard.lastScanNever": "Never",
