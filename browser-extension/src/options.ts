@@ -10,7 +10,8 @@ const themeColors: Record<ThemeKey, [string, string]> = {
   sunset: ['#1c1214', '#f97316'], violet: ['#140f1f', '#8b5cf6'], crimson: ['#020202', '#dc2626'],
   terminal: ['#010201', '#16a34a'],
   ocean: ['#07131f', '#2dd4bf'], emerald: ['#0a1f17', '#32e06f'], midnight: ['#0a0e1a', '#38bdf8'],
-  bumblebee: ['#0c0b08', '#facc15'], monochrome: ['#0a0a0a', '#e5e5e5'], rose: ['#1a1216', '#f472b6'], aurora: ['#0b1220', '#7dd3fc']
+  bumblebee: ['#0c0b08', '#facc15'], monochrome: ['#0a0a0a', '#e5e5e5'], rose: ['#1a1216', '#f472b6'], aurora: ['#0b1220', '#7dd3fc'],
+  sand: ['#f6ecd8', '#c2571b'], cyber: ['#05030a', '#ff00ff'], mint: ['#08120a', '#86efac']
 };
 
 function showProviderMessage(message: string, warning = false): void {

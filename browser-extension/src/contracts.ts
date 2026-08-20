@@ -6,7 +6,7 @@ export const MAX_RUNTIME_MESSAGE_BYTES = 64 * 1024;
 export const THEME_KEYS = [
   'system', 'dark', 'light', 'sunset', 'violet', 'crimson',
   'terminal', 'ocean', 'emerald', 'midnight', 'bumblebee',
-  'monochrome', 'rose', 'aurora'
+  'monochrome', 'rose', 'aurora', 'sand', 'cyber', 'mint'
 ] as const;
 
 export type ThemeKey = typeof THEME_KEYS[number];

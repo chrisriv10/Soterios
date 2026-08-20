@@ -259,6 +259,66 @@
   --accent-primary-contrast: #0b1220;
 }
 
+:root[data-theme="sand"] {
+  --bg-base: #f6ecd8;
+  --bg-surface: rgba(255, 251, 240, 0.96);
+  --bg-surface-hover: rgba(246, 237, 218, 0.98);
+  --glass-border: rgba(120, 80, 40, 0.14);
+  --body-gradient: var(--bg-base);
+  --text-main: #43301f;
+  --text-muted: #8b7657;
+  --accent-primary: #c2571b;
+  --accent-primary-dark: #9a3d10;
+  --accent-primary-glow: rgba(194, 87, 27, 0.16);
+  --accent-success: #15803d;
+  --accent-success-glow: rgba(21, 128, 61, 0.16);
+  --accent-warning: #b45309;
+  --accent-warning-glow: rgba(180, 83, 9, 0.16);
+  --accent-danger: #b91c1c;
+  --accent-danger-glow: rgba(185, 28, 28, 0.16);
+  --accent-primary-contrast: #fff;
+}
+
+:root[data-theme="cyber"] {
+  --bg-base: #05030a;
+  --bg-surface: rgba(22, 6, 36, 0.92);
+  --bg-surface-hover: rgba(34, 10, 56, 0.96);
+  --glass-border: rgba(34, 211, 238, 0.2);
+  --body-gradient: var(--bg-base);
+  --text-main: #e9fbff;
+  --text-muted: #a0c0d8;
+  --accent-primary: #ff00ff;
+  --accent-primary-dark: #d600d6;
+  --accent-primary-glow: rgba(255, 0, 255, 0.25);
+  --accent-success: #3ddc97;
+  --accent-success-glow: rgba(61, 220, 151, 0.2);
+  --accent-warning: #facc15;
+  --accent-warning-glow: rgba(250, 204, 21, 0.2);
+  --accent-danger: #fb7185;
+  --accent-danger-glow: rgba(251, 113, 133, 0.2);
+  --accent-primary-contrast: #1a001a;
+}
+
+:root[data-theme="mint"] {
+  --bg-base: #08120a;
+  --bg-surface: rgba(12, 28, 16, 0.92);
+  --bg-surface-hover: rgba(18, 40, 24, 0.96);
+  --glass-border: rgba(134, 239, 172, 0.18);
+  --body-gradient: var(--bg-base);
+  --text-main: #e9fceb;
+  --text-muted: #a5d8ad;
+  --accent-primary: #86efac;
+  --accent-primary-dark: #4ade80;
+  --accent-primary-glow: rgba(134, 239, 172, 0.2);
+  --accent-success: #34d399;
+  --accent-success-glow: rgba(52, 211, 153, 0.2);
+  --accent-warning: #facc15;
+  --accent-warning-glow: rgba(250, 204, 21, 0.2);
+  --accent-danger: #fb7185;
+  --accent-danger-glow: rgba(251, 113, 133, 0.2);
+  --accent-primary-contrast: #04260f;
+}
+
 @media (prefers-color-scheme: light) {
   :root[data-theme="system"] {
     --bg-base: #f5f7fb;
