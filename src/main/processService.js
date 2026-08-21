@@ -287,13 +287,22 @@ class ProcessService extends EventEmitter {
     const hasProcessIo = processes.some((proc) => proc.ioReadBytesPerSec != null || proc.ioWriteBytesPerSec != null);
     const processIoRead = hasProcessIo ? processes.reduce((sum, proc) => sum + (Number(proc.ioReadBytesPerSec) || 0), 0) : null;
     const processIoWrite = hasProcessIo ? processes.reduce((sum, proc) => sum + (Number(proc.ioWriteBytesPerSec) || 0), 0) : null;
+    // Keep the headline GPU value consistent with the values rendered for
+    // each process. Native collectors can provide a stale/independent total
+    // while the per-process counter has already dropped to zero.
+    const processGpuValues = processes
+      .map((proc) => Number(proc.gpuPercent))
+      .filter((value) => Number.isFinite(value));
+    const processGpuTotal = processGpuValues.length
+      ? Math.min(100, processGpuValues.reduce((sum, value) => sum + Math.max(0, value), 0))
+      : null;
     const totals = {
       ...(raw.totals || {}),
       diskReadBytesPerSec: this._auxMetrics.diskReadBytesPerSec ?? raw.totals?.diskReadBytesPerSec ?? processIoRead,
       diskWriteBytesPerSec: this._auxMetrics.diskWriteBytesPerSec ?? raw.totals?.diskWriteBytesPerSec ?? processIoWrite,
       networkReceiveBytesPerSec: this._auxMetrics.networkReceiveBytesPerSec ?? raw.totals?.networkReceiveBytesPerSec ?? null,
       networkSendBytesPerSec: this._auxMetrics.networkSendBytesPerSec ?? raw.totals?.networkSendBytesPerSec ?? null,
-      gpuPercent: this._auxMetrics.gpuPercent ?? raw.totals?.gpuPercent ?? null,
+      gpuPercent: processGpuTotal ?? this._auxMetrics.gpuPercent ?? raw.totals?.gpuPercent ?? null,
     };
     const capabilities = {
       ...(raw.capabilities || this.collector?.capabilities || {}),
@@ -327,17 +336,16 @@ class ProcessService extends EventEmitter {
       const gpuScript = [
         "$samples = (Get-Counter '\\GPU Engine(*)\\Utilization Percentage' -ErrorAction Stop).CounterSamples",
         '$byPid = @{}',
-        '$maximum = 0.0',
         'foreach ($sample in $samples) {',
         '  if ($sample.InstanceName -match "pid_(\\d+)") {',
         '    $pidValue = [int]$Matches[1]',
         '    $value = [Math]::Max(0.0, [double]$sample.CookedValue)',
         '    if (-not $byPid.ContainsKey($pidValue)) { $byPid[$pidValue] = 0.0 }',
         '    $byPid[$pidValue] = [Math]::Min(100.0, $byPid[$pidValue] + $value)',
-        '    $maximum = [Math]::Max($maximum, $value)',
         '  }',
         '}',
-        '[PSCustomObject]@{ total = [Math]::Min(100.0, $maximum); processes = @($byPid.GetEnumerator() | ForEach-Object { [PSCustomObject]@{ pid = [int]$_.Key; gpu = [double]$_.Value } }) } | ConvertTo-Json -Compress -Depth 4',
+        '$total = [Math]::Min(100.0, (($byPid.Values | Measure-Object -Sum).Sum))',
+        '[PSCustomObject]@{ total = [double]$total; processes = @($byPid.GetEnumerator() | ForEach-Object { [PSCustomObject]@{ pid = [int]$_.Key; gpu = [double]$_.Value } }) } | ConvertTo-Json -Compress -Depth 4',
       ].join('; ');
       this._refreshGpuMetrics(gpuScript);
       const [diskResult, networkResult, connectionResult] = await Promise.allSettled([
@@ -692,11 +700,10 @@ class ProcessService extends EventEmitter {
     }
     if (mask <= 0n || mask > ((1n << 64n) - 1n)) throw new Error('Invalid processor affinity mask.');
     const decimalMask = mask.toString(10);
-    // PowerShell cannot directly cast a UInt64 value to IntPtr on some
-    // versions (even for ordinary masks such as 255). Convert through Int64
-    // first so the ProcessorAffinity setter receives the expected pointer
-    // type while retaining the decimal-only validation above.
-    const script = `$p = Get-Process -Id ${pid} -ErrorAction Stop; $mask = [uint64]${decimalMask}; $p.ProcessorAffinity = [intptr]([int64]$mask); [Console]::Write(([uint64]$p.ProcessorAffinity).ToString())`;
+    // PowerShell's property binder can still treat a cast expression as
+    // UInt64 on some Windows builds. Construct IntPtr explicitly before
+    // assigning ProcessorAffinity so ordinary masks such as 255 are accepted.
+    const script = `$p = Get-Process -Id ${pid} -ErrorAction Stop; $mask = [uint64]${decimalMask}; $pointer = [System.IntPtr]::new([int64]$mask); $p.ProcessorAffinity = $pointer; [Console]::Write(([uint64]$p.ProcessorAffinity).ToString())`;
     const result = await this._execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', powershellEncoded(script)], {
       timeout: 10000,
       windowsHide: true,
@@ -710,7 +717,12 @@ class ProcessService extends EventEmitter {
     const defaultName = `process-${pid}-${new Date().toISOString().replace(/[:.]/g, '-')}.dmp`;
     const dumpPath = requestedPath ? path.resolve(requestedPath) : path.join(dumpDir, defaultName);
     if (path.extname(dumpPath).toLowerCase() !== '.dmp') throw new Error('Process dumps must use the .dmp extension.');
-    await execFileAsync('rundll32.exe', ['C:\\Windows\\System32\\comsvcs.dll, MiniDump', String(pid), dumpPath, 'full'], {
+    fs.mkdirSync(path.dirname(dumpPath), { recursive: true });
+    // rundll32 treats the DLL and exported entry point as one argument. The
+    // space after the comma makes it interpret the whole string as a module
+    // path, producing the misleading "comsvcs.dll ... could not be found"
+    // dialog instead of writing the dump.
+    await execFileAsync('rundll32.exe', ['C:\\Windows\\System32\\comsvcs.dll,MiniDump', String(pid), dumpPath, 'full'], {
       timeout: 120000,
       windowsHide: true,
     });
@@ -790,16 +802,7 @@ class ProcessService extends EventEmitter {
     if (typeof filePath !== 'string' || filePath.length < 3 || filePath.length > 32767 || !path.isAbsolute(filePath) || !fs.existsSync(filePath)) {
       throw new Error('Invalid executable path.');
     }
-    const script = [
-      "$folderPath = Split-Path -LiteralPath $env:SOTERIOS_TARGET_PATH",
-      "$leaf = Split-Path -Leaf -Path $env:SOTERIOS_TARGET_PATH",
-      "$shell = New-Object -ComObject Shell.Application",
-      "$folder = $shell.Namespace($folderPath)",
-      "if (-not $folder) { throw 'Folder unavailable' }",
-      "$item = $folder.ParseName($leaf)",
-      "if (-not $item) { throw 'File unavailable' }",
-      "$item.InvokeVerb('properties')",
-    ].join('; ');
+    const script = "Start-Process -FilePath $env:SOTERIOS_TARGET_PATH -Verb Properties";
     const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', powershellEncoded(script)], {
       detached: true,
       stdio: 'ignore',
