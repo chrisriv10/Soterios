@@ -22,6 +22,7 @@
     "prepack": "node tools/download-clamav.js",
     "pretest": "npm run extension:build",
     "test": "node tests/node-test-runner.js && jest tests/passwordTools.test.js tests/reportExport.test.js tests/splashProgress.test.js",
+    "test:force": "node --test --test-force-exit tests/",
     "sync-wiki": "node tools/sync-wiki.js",
     "extension:build": "node tools/build-extension.mjs",
     "extension:package": "node tools/package-extension.mjs",
