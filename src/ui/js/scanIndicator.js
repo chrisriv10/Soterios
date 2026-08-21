@@ -15,7 +15,6 @@
   let progressTimer = null;
   let currentScanType = null;
   let completedOperationStartedAt = null;
-  const PROGRESS_THROTTLE_MS = 500;
   const DONE_DISPLAY_MS = 3000;
 
   function show() {
@@ -111,10 +110,12 @@
       : t('scanIndicator.scanning');
     show();
     
+    // The scanner page renders the same IPC event synchronously. Debouncing
+    // this indicator meant a busy scan could continuously reset the timer and
+    // leave the sidebar showing an older percentage for the entire scan.
     clearTimeout(progressTimer);
-    progressTimer = setTimeout(() => {
-      setProgress(data.pct, data.message);
-    }, PROGRESS_THROTTLE_MS);
+    progressTimer = null;
+    setProgress(data.pct, data.message);
   });
 
   window.api.on('scan:complete', (data) => {
