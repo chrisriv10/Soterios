@@ -10,7 +10,7 @@ const DEFAULT_SCHEDULE = {
   lastRun: null,
 };
 
-function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputationEngine }) {
+function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputationEngine, folderWatchAbortWaitMs }) {
   const definitionState = {
     isScanning: false,
     currentScan: null,
@@ -66,7 +66,27 @@ function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputation
 
   ipcMain.handle('scan:updateDefinitions', async () => {
     const engineScanStatus = scanEngine.getStatus();
-    if (engineScanStatus && (engineScanStatus.isScanning || engineScanStatus.isFolderWatchScanning)) {
+    if (engineScanStatus && engineScanStatus.isScanning) {
+      const locale = db.getSetting('ui.language', 'en');
+      return { success: false, error: i18n.t('scanner.defsBlockedDuringScan', locale) };
+    }
+
+    // Folder-watch scans are background work, not a user-requested scan. Stop
+    // one before updating the shared ClamAV database so a download triggered by
+    // a recent file event cannot make every manual update look "stuck".
+if (engineScanStatus && engineScanStatus.isFolderWatchScanning) {
+      if (typeof scanEngine.abortScan === 'function') scanEngine.abortScan();
+      const deadline = Date.now() + (folderWatchAbortWaitMs || 10000);
+      while (scanEngine.getStatus().isFolderWatchScanning && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      if (scanEngine.getStatus().isFolderWatchScanning) {
+        const locale = db.getSetting('ui.language', 'en');
+        return { success: false, error: i18n.t('scanner.defsBlockedDuringScan', locale) };
+      }
+    }
+
+if (definitionState.isScanning) {
       const locale = db.getSetting('ui.language', 'en');
       return { success: false, error: i18n.t('scanner.defsBlockedDuringScan', locale) };
     }

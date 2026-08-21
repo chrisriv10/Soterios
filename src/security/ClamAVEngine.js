@@ -33,6 +33,7 @@ class ClamAVEngine {
     this.lastUpdateError = null;
     this.activeScanProcess = null;
     this.activeUpdateProcess = null;
+    this.activeUpdatePromise = null;
     this.cancelScanRequested = false;
     this.cancelUpdateRequested = false;
   }
@@ -92,12 +93,17 @@ class ClamAVEngine {
       return Promise.resolve({ success: false, error: 'freshclam.exe not found at ' + this.freshclamPath, output: '' });
     }
 
+    // Startup initialization and a manual update can overlap. Share the
+    // in-flight operation instead of spawning competing freshclam processes,
+    // which otherwise contend for freshclam's database lock and both fail.
+    if (this.activeUpdatePromise) return this.activeUpdatePromise;
+
     const timeoutMs = options.timeoutMs || DEFAULT_UPDATE_TIMEOUT_MS;
 
     fs.mkdirSync(this.dbDir, { recursive: true });
     const configPath = this.ensureFreshclamConfig();
 
-    return new Promise((resolve) => {
+    const updatePromise = new Promise((resolve) => {
       const args = [
         '--config-file=' + configPath,
         '--stdout',
@@ -178,6 +184,12 @@ class ClamAVEngine {
         finish({ success: false, error: err.message, output });
       });
     });
+    let trackedPromise;
+    trackedPromise = updatePromise.finally(() => {
+      if (this.activeUpdatePromise === trackedPromise) this.activeUpdatePromise = null;
+    });
+    this.activeUpdatePromise = trackedPromise;
+    return trackedPromise;
   }
 
   ensureFreshclamConfig() {

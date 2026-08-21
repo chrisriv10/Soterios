@@ -331,7 +331,7 @@ class ScanEngine {
             hasReportedProgress = true;
           }
         }, {
-          inactivityTimeoutMs: scanType === 'folderwatch' ? 600000 : scanType === 'full' ? 1800000 : 600000
+          inactivityTimeoutMs: scanType === 'folderwatch' ? 600000 : 1800000
         });
         
         // If no progress was reported during this path scan, emit a minimal progress update

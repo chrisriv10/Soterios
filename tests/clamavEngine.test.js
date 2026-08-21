@@ -180,6 +180,17 @@ describe('ClamAVEngine', () => {
     assert.equal(result.success, true);
   });
 
+  it('shares an in-flight definition update instead of spawning freshclam twice', async () => {
+    const engine = new ClamAVEngine({ baseDir: path.join(tmp, 'clamav') });
+    const first = engine.updateDefinitions();
+    const second = engine.updateDefinitions();
+    assert.equal(first, second);
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+    assert.equal(firstResult.success, true);
+    assert.equal(secondResult.success, true);
+    assert.equal(mockSpawnArgs.filter(({ exe }) => exe.includes('freshclam')).length, 1);
+  });
+
   it('updateDefinitions returns error when freshclam not found', async () => {
     const badDir = path.join(tmp, 'bad-clamav');
     fs.mkdirSync(badDir, { recursive: true });
