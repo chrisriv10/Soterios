@@ -244,6 +244,10 @@ class MaintenanceScheduler {
           const age = Math.floor(Number(raw.args.minimumAgeDays));
           if (Number.isFinite(age)) args.minimumAgeDays = Math.max(1, Math.min(365, age));
         }
+        if (raw.args.thresholdMB !== undefined) {
+          const mb = Math.floor(Number(raw.args.thresholdMB));
+          if (Number.isFinite(mb)) args.thresholdMB = Math.max(1, Math.min(100000, mb));
+        }
         if (Array.isArray(raw.args.browsers)) {
           args.browsers = raw.args.browsers.map((value) => String(value).toLowerCase()).filter(Boolean);
         }
@@ -303,7 +307,7 @@ class MaintenanceScheduler {
       for (const [scriptId, policyEntry] of Object.entries(effectivePolicies)) {
         const mode = typeof policyEntry === 'string' ? policyEntry : (policyEntry?.mode || 'off');
         const overrideArgs = policyEntry && typeof policyEntry === 'object' && policyEntry.args && typeof policyEntry.args === 'object' ? policyEntry.args : {};
-        const persistedArgs = options.manual ? {} : ((config.scriptArgs || {})[scriptId] || {});
+        const persistedArgs = (options.manual && options.policyOverrides) ? {} : ((config.scriptArgs || {})[scriptId] || {});
         const argsOverride = { ...persistedArgs, ...overrideArgs };
         if (this._cancelRequested) {
           results.push({ scriptId, policy: mode, ok: false, skipped: true, error: 'Canceled before start.' });

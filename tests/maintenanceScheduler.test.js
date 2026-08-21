@@ -237,7 +237,7 @@ describe('MaintenanceScheduler', () => {
     assert.deepEqual(cleanup.scriptArgs.browsers, ['chrome', 'edge']);
   });
 
-  it('ignores persisted script args on manual runs', async () => {
+  it('uses persisted script args on manual runs without overrides', async () => {
     const db = createDb();
     const ran = [];
     const scheduler = new MaintenanceScheduler({
@@ -264,11 +264,52 @@ describe('MaintenanceScheduler', () => {
     });
     await scheduler.runNow({ manual: true });
     const temp = ran.find((args) => args.scriptId === 'clear-temp-files' && args.scriptArgs.mode === 'analyze');
-    assert.equal(temp.scriptArgs.minimumAgeDays, 7);
+    assert.equal(temp.scriptArgs.minimumAgeDays, 30);
     const large = ran.find((args) => args.scriptId === 'large-files-report');
-    assert.equal(large.scriptArgs.thresholdMB, undefined);
+    assert.equal(large.scriptArgs.thresholdMB, 500);
     const cleanup = ran.find((args) => args.scriptId === 'clear-browser-cache');
-    assert.deepEqual(cleanup.scriptArgs.browsers, []);
+    assert.deepEqual(cleanup.scriptArgs.browsers, ['chrome', 'edge']);
+  });
+
+  it('manual policy overrides win over persisted args', async () => {
+    const db = createDb();
+    const ran = [];
+    const scheduler = new MaintenanceScheduler({
+      db,
+      toolRegistry: {
+        run: async (_toolId, args) => {
+          ran.push(args);
+          return { ok: true };
+        }
+      }
+    });
+    scheduler.saveConfig({
+      enabled: true,
+      policies: {
+        'clear-temp-files': 'analyze',
+        'large-files-report': 'analyze',
+        'browser-cache-report': 'auto-clean'
+      },
+      scriptArgs: {
+        'clear-temp-files': { minimumAgeDays: 30 },
+        'large-files-report': { thresholdMB: 500 },
+        'browser-cache-report': { browsers: ['chrome', 'edge'] }
+      }
+    });
+    await scheduler.runNow({
+      manual: true,
+      policyOverrides: {
+        'clear-temp-files': { mode: 'analyze', args: { minimumAgeDays: 45 } },
+        'large-files-report': { mode: 'analyze', args: { thresholdMB: 800 } },
+        'browser-cache-report': { mode: 'auto-clean', args: { browsers: ['firefox'] } }
+      }
+    });
+    const temp = ran.find((args) => args.scriptId === 'clear-temp-files' && args.scriptArgs.mode === 'analyze');
+    assert.equal(temp.scriptArgs.minimumAgeDays, 45);
+    const large = ran.find((args) => args.scriptId === 'large-files-report');
+    assert.equal(large.scriptArgs.thresholdMB, 800);
+    const cleanup = ran.find((args) => args.scriptId === 'clear-browser-cache');
+    assert.deepEqual(cleanup.scriptArgs.browsers, ['firefox']);
   });
 
   it('manual overrides win over persisted args on scheduled runs', async () => {
