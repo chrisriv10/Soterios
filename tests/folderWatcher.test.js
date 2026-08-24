@@ -19,6 +19,9 @@ describe('FolderWatcher', () => {
       watchDirs: [tmp],
       debounceMs: 50,
       clamEngine: { isReady: true },
+      watchFactory() {
+        return { on() { return this; }, close() {} };
+      },
       scanEngine: {
         isScanning: false,
         async runScan(scanType, paths) {
@@ -48,6 +51,23 @@ describe('FolderWatcher', () => {
     assert.deepEqual(status.watched, []);
     missing.stop();
     assert.equal(missing.getStatus().running, false);
+  });
+
+  it('opens the native watcher with the canonical temp directory', () => {
+    const canonicalTmp = typeof fs.realpathSync.native === 'function'
+      ? fs.realpathSync.native(tmp)
+      : fs.realpathSync(tmp);
+    const nativeWatcher = new FolderWatcher({
+      watchDirs: [tmp],
+      scanEngine: { async runCustomScan() { return {}; } }
+    });
+
+    try {
+      const status = nativeWatcher.start();
+      assert.deepEqual(status.watched, [canonicalTmp]);
+    } finally {
+      nativeWatcher.stop();
+    }
   });
 
   it('debounces and queues a folderwatch scan for new files', async () => {
