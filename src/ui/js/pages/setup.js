@@ -6,7 +6,7 @@ window.Pages = window.Pages || {};
     dark: '#4169E1', light: '#2563eb', ocean: '#2dd4bf', emerald: '#32e06f',
     sunset: '#f97316', violet: '#8b5cf6', crimson: '#dc2626', terminal: '#16a34a',
     midnight: '#38bdf8', bumblebee: '#facc15', monochrome: '#e5e5e5', rose: '#f472b6', aurora: '#60a5fa',
-    sand: '#c2571b', cyber: '#ff00ff', mint: '#86efac'
+    sand: '#c2571b', cyber: '#ff00ff', mint: '#1abc9c'
   };
   const STEPS = ['welcome', 'language', 'theme', 'notifications', 'privacy', 'extension', 'scan'];
 
