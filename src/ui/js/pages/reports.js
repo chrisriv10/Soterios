@@ -82,21 +82,33 @@ window.Pages.reports = {
         </div>
       </div>
 
-      <div class="reports-layout">
+<div class="reports-layout">
         <section class="panel report-browser">
-          <div class="panel-title report-section-toggle" data-collapse-target="scanReportHistory" role="button" tabindex="0" aria-expanded="true">${escapeHtml(t('reports.scanReports'))}</div>
+          <div class="panel-title report-section-toggle" data-collapse-target="scanReportHistory" role="button" tabindex="0" aria-expanded="true" style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+            ${escapeHtml(t('reports.scanReports'))}
+            <button class="btn btn-xs btn-ghost hidden" id="clearAllScanReports">${escapeHtml(t('reports.clearAllScanReports'))}</button>
+          </div>
           <div id="scanReportHistory" class="history-list"><div class="empty-state">${escapeHtml(t('reports.loadingScanReports'))}</div></div>
 
           <div class="panel-title report-section-toggle" data-collapse-target="reportHistory" role="button" tabindex="0" aria-expanded="true" style="margin-top:18px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
             ${escapeHtml(t('reports.savedReports'))}
-            <button class="btn btn-primary btn-sm" id="generateReport">${escapeHtml(t('reports.generateReport'))}</button>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <button class="btn btn-xs btn-ghost hidden" id="clearAllSavedReports">${escapeHtml(t('reports.clearAllSavedReports'))}</button>
+              <button class="btn btn-primary btn-sm" id="generateReport">${escapeHtml(t('reports.generateReport'))}</button>
+            </div>
           </div>
           <div id="reportHistory" class="history-list"><div class="empty-state">${escapeHtml(t('reports.loadingSavedReports'))}</div></div>
 
-          <div class="panel-title report-section-toggle" data-collapse-target="maintenanceHistory" role="button" tabindex="0" aria-expanded="true" style="margin-top:18px;">${escapeHtml(t('reports.maintenanceHistory'))}</div>
+          <div class="panel-title report-section-toggle" data-collapse-target="maintenanceHistory" role="button" tabindex="0" aria-expanded="true" style="margin-top:18px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
+            ${escapeHtml(t('reports.maintenanceHistory'))}
+            <button class="btn btn-xs btn-ghost hidden" id="clearAllManualMaintenance">${escapeHtml(t('reports.clearAllMaintenance'))}</button>
+          </div>
           <div id="maintenanceHistory" class="history-list"><div class="empty-state">${escapeHtml(t('reports.loadingMaintenance'))}</div></div>
 
-          <div class="panel-title report-section-toggle" data-collapse-target="scheduledMaintenanceHistory" role="button" tabindex="0" aria-expanded="true" style="margin-top:18px;">${escapeHtml(t('reports.scheduledMaintenanceHistory'))}</div>
+          <div class="panel-title report-section-toggle" data-collapse-target="scheduledMaintenanceHistory" role="button" tabindex="0" aria-expanded="true" style="margin-top:18px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
+            ${escapeHtml(t('reports.scheduledMaintenanceHistory'))}
+            <button class="btn btn-xs btn-ghost hidden" id="clearAllScheduledMaintenance">${escapeHtml(t('reports.clearAllScheduledMaintenance'))}</button>
+          </div>
           <div id="scheduledMaintenanceHistory" class="history-list"><div class="empty-state">${escapeHtml(t('reports.loadingMaintenance'))}</div></div>
         </section>
 
@@ -118,10 +130,41 @@ window.Pages.reports = {
       </div>
     `;
 
-    container.querySelector('#generateReport').addEventListener('click', () => this.generate(container));
+container.querySelector('#generateReport').addEventListener('click', () => this.generate(container));
     container.querySelector('#closeReportViewer').addEventListener('click', () => this.clearViewer(container));
     container.querySelector('#exportReportPdf').addEventListener('click', () => this.exportCurrentReport(container, 'pdf'));
     container.querySelector('#exportReportCsv').addEventListener('click', () => this.exportCurrentReport(container, 'csv'));
+
+    // Clear All buttons
+    const clearAllScanBtn = container.querySelector('#clearAllScanReports');
+    if (clearAllScanBtn) {
+      clearAllScanBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await this.handleClearAll(container, 'scanReports:deleteAll', 'reports.clearAllScanReportsConfirm', () => this.listScanReports(container));
+      });
+    }
+    const clearAllSavedBtn = container.querySelector('#clearAllSavedReports');
+    if (clearAllSavedBtn) {
+      clearAllSavedBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await this.handleClearAll(container, 'reports:deleteAll', 'reports.clearAllSavedReportsConfirm', () => this.listReports(container));
+      });
+    }
+    const clearAllManualBtn = container.querySelector('#clearAllManualMaintenance');
+    if (clearAllManualBtn) {
+      clearAllManualBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await this.handleClearAll(container, 'maintenance:deleteAllManual', 'reports.clearAllMaintenanceConfirm', () => this.listManualMaintenanceHistory(container));
+      });
+    }
+    const clearAllScheduledBtn = container.querySelector('#clearAllScheduledMaintenance');
+    if (clearAllScheduledBtn) {
+      clearAllScheduledBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await this.handleClearAll(container, 'maintenance:deleteAllScheduled', 'reports.clearAllScheduledMaintenanceConfirm', () => this.listScheduledMaintenanceHistory(container));
+      });
+    }
+
     container.querySelectorAll('.report-section-toggle').forEach((heading) => {
       const toggle = () => {
         const content = container.querySelector(`#${heading.dataset.collapseTarget}`);
@@ -158,6 +201,43 @@ window.Pages.reports = {
     container.querySelector('#exportReportToast').style.display = 'none';
     container.querySelector('#reportResult').className = 'empty-state';
     container.querySelector('#reportResult').innerHTML = tFactory()('reports.chooseReport');
+  },
+
+  async handleClearAll(container, ipcChannel, confirmKey, refreshFn) {
+    const t = tFactory();
+    const skipConfirm = await window.api.invoke('db:getSetting', 'reports.skipDeleteConfirm', false);
+    if (!skipConfirm && !window.confirm(t(confirmKey))) return;
+    try {
+      const result = await window.api.invoke(ipcChannel);
+      if (!result.success) {
+        alert(t('reports.failedDelete'));
+        return;
+      }
+      await refreshFn();
+    } catch (err) {
+      const errMsg = err && err.message ? err.message : String(err);
+      alert(t('reports.errorPrefix', { error: errMsg }));
+      return;
+    }
+
+    const listMap = {
+      'scanReports:deleteAll': '#scanReportHistory',
+      'reports:deleteAll': '#reportHistory',
+      'maintenance:deleteAllManual': '#maintenanceHistory',
+      'maintenance:deleteAllScheduled': '#scheduledMaintenanceHistory',
+    };
+    const btnMap = {
+      'scanReports:deleteAll': '#clearAllScanReports',
+      'reports:deleteAll': '#clearAllSavedReports',
+      'maintenance:deleteAllManual': '#clearAllManualMaintenance',
+      'maintenance:deleteAllScheduled': '#clearAllScheduledMaintenance',
+    };
+    const listEl = container.querySelector(listMap[ipcChannel]);
+    const clearBtn = container.querySelector(btnMap[ipcChannel]);
+    if (clearBtn && listEl) {
+      const hasItems = listEl.children.length > 0;
+      clearBtn.classList.toggle('hidden', !hasItems);
+    }
   },
 
   setScanReportViewer(container, report) {
@@ -439,6 +519,8 @@ window.Pages.reports = {
     } catch (err) {
       el.innerHTML = `<div class="empty-state">${escapeHtml(tFactory()('reports.errorPrefix', { error: err.message }))}</div>`;
     }
+    const clearBtn = container.querySelector('#clearAllSavedReports');
+    if (clearBtn) clearBtn.classList.toggle('hidden', !groups.length);
   },
 
   formatBytes(bytes) {
@@ -576,6 +658,8 @@ window.Pages.reports = {
     } catch (err) {
       el.innerHTML = `<div class="empty-state">${escapeHtml(tFactory()('reports.errorPrefix', { error: err.message }))}</div>`;
     }
+    const clearBtn = container.querySelector('#clearAllManualMaintenance');
+    if (clearBtn) clearBtn.classList.toggle('hidden', !rows.length);
   },
 
   async listScheduledMaintenanceHistory(container) {
@@ -641,6 +725,8 @@ window.Pages.reports = {
     } catch (err) {
       el.innerHTML = `<div class="empty-state">${escapeHtml(tFactory()('reports.errorPrefix', { error: err.message }))}</div>`;
     }
+    const clearBtn = container.querySelector('#clearAllScheduledMaintenance');
+    if (clearBtn) clearBtn.classList.toggle('hidden', !rows.length);
   },
 
   showManualMaintenanceDetails(container, row) {
