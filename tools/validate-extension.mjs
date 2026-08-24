@@ -26,7 +26,7 @@ for (const file of allFiles.filter((entry) => /\.(?:js|html)$/i.test(entry))) {
   if (/google-analytics|segment\.com|mixpanel|amplitude|posthog|sentry\.io/i.test(value)) failures.push(`${path.basename(file)} contains a telemetry or analytics reference`);
   if (/<script(?![^>]*\bsrc=)/i.test(value)) failures.push(`${path.basename(file)} contains an inline script`);
   const remoteValues = value.match(/https?:\/\/[^\s"'`),]+/gi) || [];
-  const allowedOrigins = ['https://api.pwnedpasswords.com', 'https://chrisriv10.github.io', 'https://safebrowsing.googleapis.com', 'https://github.com/chrisriv10/Soterios', 'http://*/*', 'https://*/*'];
+  const allowedOrigins = ['https://api.pwnedpasswords.com', 'https://christopher-rivera.me', 'https://chrisriv10.github.io', 'https://safebrowsing.googleapis.com', 'https://github.com/chrisriv10/Soterios', 'http://*/*', 'https://*/*'];
   if (remoteValues.some((remote) => !allowedOrigins.some((allowed) => remote.startsWith(allowed)))) failures.push(`${path.basename(file)} contains an undeclared remote origin`);
 }
 if (!allFiles.some((file) => file.endsWith(path.join('icons', 'icon128.png')))) failures.push('icon128.png is missing');

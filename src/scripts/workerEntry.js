@@ -23,6 +23,7 @@ childProcess.spawn = (...args) => {
 
 let canceled = false;
 let portClosed = false;
+let cleanupStarted = false;
 function safePost(message) {
   if (portClosed) return false;
   try { parentPort.postMessage(message); return true; } catch (_) { return false; }
@@ -32,18 +33,37 @@ function closePort() {
   portClosed = true;
   try { parentPort.close(); } catch (_) {}
 }
-parentPort.on('message', (message) => {
-  if (message?.type !== 'cancel' || canceled) return;
+function cleanupChildProcesses() {
+  if (cleanupStarted) return Promise.resolve();
+  cleanupStarted = true;
+  const pending = [];
   canceled = true;
   for (const child of childProcesses) {
     try {
       if (process.platform === 'win32' && child.pid) {
-        originalExecFile('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }, () => {});
+        pending.push(new Promise((resolve) => {
+          let settled = false;
+          const complete = () => { if (settled) return; settled = true; resolve(); };
+          const killer = originalExecFile('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }, complete);
+          const timer = setTimeout(() => {
+            try { killer.kill(); } catch (_) {}
+            complete();
+          }, 400);
+          if (typeof timer.unref === 'function') timer.unref();
+        }));
       } else {
         child.kill('SIGTERM');
       }
     } catch (_) {}
   }
+  return Promise.race([
+    Promise.all(pending),
+    new Promise((resolve) => setTimeout(resolve, 450))
+  ]);
+}
+parentPort.on('message', async (message) => {
+  if (message?.type !== 'cancel' || canceled) return;
+  await cleanupChildProcesses();
   safePost({ type: 'done', ok: false, error: 'Task canceled' });
   closePort();
 });

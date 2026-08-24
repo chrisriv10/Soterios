@@ -1,10 +1,5 @@
 'use strict';
 
-// NOTE: This test file requires `node --test --test-force-exit tests/scanIpc.test.js`
-// when run in isolation, because requiring src/main/ipc/scan.js transitively loads
-// logger/i18n which opens persistent Socket handles that prevent normal test-runner exit.
-// The full suite runner (tests/node-test-runner.js) calls process.exit() explicitly.
-
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
 const path = require('path');

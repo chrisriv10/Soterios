@@ -272,8 +272,12 @@ if (definitionState.isScanning) {
 
   // Check once a minute whether a scan is due, plus a check shortly after
   // startup in case one was missed while the app was closed.
-  setInterval(() => { runScheduledScanIfDue(); }, 60 * 1000);
-  setTimeout(() => { runScheduledScanIfDue(); }, 15 * 1000);
+  const scheduledScanTimer = setInterval(() => { runScheduledScanIfDue(); }, 60 * 1000);
+  const startupScanTimer = setTimeout(() => { runScheduledScanIfDue(); }, 15 * 1000);
+  // These checks must not keep the process alive during shutdown or tests.
+  // The main process/window remains the lifecycle owner while it is running.
+  if (typeof scheduledScanTimer.unref === 'function') scheduledScanTimer.unref();
+  if (typeof startupScanTimer.unref === 'function') startupScanTimer.unref();
 }
 
 module.exports = { register };
