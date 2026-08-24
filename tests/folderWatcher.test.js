@@ -82,4 +82,23 @@ describe('FolderWatcher', () => {
     assert.equal(scanned.length, 0);
     assert.equal(watcher.getStatus().queued, 1);
   });
+
+  it('contains errors from late or malformed watcher events', () => {
+    let onEvent;
+    const fakeWatcher = { on() { return this; }, close() {} };
+    const guarded = new FolderWatcher({
+      watchDirs: [tmp],
+      watchFactory(_dir, _options, callback) {
+        onEvent = callback;
+        return fakeWatcher;
+      },
+      scanEngine: { async runCustomScan() { return {}; } }
+    });
+    guarded.start();
+    guarded._schedule = () => { throw new Error('stale watcher event'); };
+    assert.doesNotThrow(() => onEvent('rename', Buffer.from('payload.bin')));
+    assert.doesNotThrow(() => onEvent('rename', 'C:\\outside\\payload.bin'));
+    assert.doesNotThrow(() => onEvent('rename', 'bad\0name'));
+    guarded.stop();
+  });
 });
