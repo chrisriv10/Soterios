@@ -510,6 +510,13 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 6px;
+  transition: right .18s ease-out;
+}
+
+/* The detail drawer overlays the map's right edge; shift controls into the
+   remaining map area so every control stays reachable after selection. */
+.heatmap-widget.has-heatmap-panel .heatmap-controls {
+  right: calc(min(340px, 36vw) + 8px);
 }
 
 .heatmap-controls-row { display: flex; gap: 4px; }
@@ -659,6 +666,7 @@
   .heatmap-widget { flex-direction: column; }
   .heatmap-viewport { padding-right: 0; }
   .heatmap-cluster-panel { position: static; width: auto; height: min(420px, 70vh); border-top: 1px solid var(--glass-border); border-left: 0; }
+  .heatmap-widget.has-heatmap-panel .heatmap-controls { right: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

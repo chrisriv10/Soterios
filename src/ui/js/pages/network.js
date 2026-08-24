@@ -469,6 +469,7 @@ window.Pages['network'] = {
   _renderHeatmapDrawer(widget, cluster, t) {
     const panel = widget?.querySelector('#heatmapClusterPanel');
     if (!panel) return;
+    widget.classList.toggle('has-heatmap-panel', !!cluster);
     if (!cluster) { panel.hidden = true; panel.innerHTML = ''; return; }
     const location = cluster.locations.join(' | ') || t('common.unverifiedLocation');
     const list = (items, empty) => items.length ? items.slice(0, 5).map((item) => `<span>${escapeHtml(item.label)} <b>${item.count}</b></span>`).join('') : `<span>${escapeHtml(empty)}</span>`;
@@ -1135,7 +1136,7 @@ if (content) this.paintHistoryChart(content).catch(() => {});
         const busy = !!this._vpnPending;
         const connected = !!selVpn.connected && !busy;
 
-        html += '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">';
+        html += '<div class="vpn-controls">';
         html += `<select id="vpnSelect" ${busy ? 'disabled' : ''} style="padding:6px 10px; border-radius:8px; border:1px solid var(--glass-border); background:var(--bg-surface); color:inherit; font-size:0.85rem; max-width:280px;">`;
         for (const v of vpns) {
           html += `<option value="${escapeHtml(v.name)}" ${v.name === selectedName ? 'selected' : ''}>${escapeHtml(v.name)}${v.connected ? ' \u2713' : ''}</option>`;
@@ -1167,7 +1168,7 @@ if (content) this.paintHistoryChart(content).catch(() => {});
         // Add VPN button
         html += `<button id="vpnAddBtn" class="btn btn-sm btn-secondary" style="margin-left:8px;" data-i18n="network.vpn.addBtn">Add VPN</button>`;
         if (selVpn.managed) {
-          html += `<button id="vpnRemoveBtn" class="btn btn-sm btn-danger" data-vpn-name="${escapeHtml(selVpn.name)}" ${busy ? 'disabled' : ''}>${escapeHtml(t('common.delete'))}</button>`;
+          html += `<button id="vpnRemoveBtn" class="btn btn-sm btn-danger vpn-remove-btn" data-vpn-name="${escapeHtml(selVpn.name)}" ${busy ? 'disabled' : ''}>${escapeHtml(t('common.delete'))}</button>`;
         }
         html += '</div>';
       }
