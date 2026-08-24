@@ -1162,7 +1162,7 @@
   "reports.securityReport": "Sistem Raporu",
   "reports.scan": "tarama",
   "reports.maintenanceHistory": "Bakım Geçmişi",
-  "reports.scheduledMaintenanceHistory": "Planlı Bakım Geçmişi",
+  "reports.scheduledMaintenanceHistory": "Planlı Bakım Raporu",
   "reports.loadingMaintenance": "Bakım geçmişi yükleniyor...",
   "reports.noMaintenance": "Kayıtlı bakım çalıştırması yok.",
   "reports.maintenanceRun": "{ok}/{total} görev tamamlandı",
@@ -1753,5 +1753,13 @@
   "settings.browserCacheBrowsersHint": "Seçilmezse tüm algılanan tarayıcıların önbelleği temizlenir.",
   "settings.noBrowsersDetected": "Desteklenen tarayıcı bulunamadı.",
   "reports.confirmDelete": "Bu rapor silinsin mi? Bu işlem geri alınamaz.",
-  "settings.githubRepo": "GitHub'da görüntüle"
+  "settings.githubRepo": "GitHub'da görüntüle",
+  "reports.clearAllScanReports": "Tümünü Temizle",
+  "reports.clearAllScanReportsConfirm": "Tüm tarama raporları silinsin mi? Bu işlem geri alınamaz.",
+  "reports.clearAllSavedReports": "Tümünü Temizle",
+  "reports.clearAllSavedReportsConfirm": "Tüm kaydedilmiş raporlar silinsin mi? Bu işlem geri alınamaz.",
+  "reports.clearAllMaintenance": "Tümünü Temizle",
+  "reports.clearAllMaintenanceConfirm": "Tüm manuel bakım geçmişi silinsin mi? Bu işlem geri alınamaz.",
+  "reports.clearAllScheduledMaintenance": "Tümünü Temizle",
+  "reports.clearAllScheduledMaintenanceConfirm": "Tüm zamanlanmış bakım geçmişi silinsin mi? Bu işlem geri alınamaz."
 }

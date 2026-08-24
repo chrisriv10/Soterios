@@ -1184,7 +1184,7 @@
   "reports.securityReport": "System Report",
   "reports.scan": "scan",
   "reports.maintenanceHistory": "Maintenance History",
-  "reports.scheduledMaintenanceHistory": "Scheduled Maintenance History",
+  "reports.scheduledMaintenanceHistory": "Scheduled Maintenance Report",
   "reports.loadingMaintenance": "Loading maintenance history...",
   "reports.noMaintenance": "No maintenance runs recorded.",
   "reports.maintenanceRun": "{ok}/{total} tasks completed",
@@ -1753,5 +1753,13 @@
   "settings.browserCacheBrowsersHint": "Leave unchecked to clear cache in all detected browsers.",
   "settings.noBrowsersDetected": "No supported browsers detected.",
   "reports.confirmDelete": "Delete this report? This cannot be undone.",
-  "settings.githubRepo": "View on GitHub"
+  "settings.githubRepo": "View on GitHub",
+  "reports.clearAllScanReports": "Clear All",
+  "reports.clearAllScanReportsConfirm": "Delete all scan reports? This cannot be undone.",
+  "reports.clearAllSavedReports": "Clear All",
+  "reports.clearAllSavedReportsConfirm": "Delete all saved reports? This cannot be undone.",
+  "reports.clearAllMaintenance": "Clear All",
+  "reports.clearAllMaintenanceConfirm": "Delete all manual maintenance history? This cannot be undone.",
+  "reports.clearAllScheduledMaintenance": "Clear All",
+  "reports.clearAllScheduledMaintenanceConfirm": "Delete all scheduled maintenance history? This cannot be undone."
 }

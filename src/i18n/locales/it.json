@@ -1162,7 +1162,7 @@
   "reports.securityReport": "Rapporto di sistema",
   "reports.scan": "scansione",
   "reports.maintenanceHistory": "Cronologia Manutenzione",
-  "reports.scheduledMaintenanceHistory": "Cronologia Manutenzione Programmata",
+  "reports.scheduledMaintenanceHistory": "Reporto di manutenzione programmata",
   "reports.loadingMaintenance": "Caricamento cronologia manutenzione...",
   "reports.noMaintenance": "Nessuna esecuzione di manutenzione registrata.",
   "reports.maintenanceRun": "{ok}/{total} attività completate",
@@ -1753,5 +1753,13 @@
   "settings.browserCacheBrowsersHint": "Lascia deselezionato per pulire la cache in tutti i browser rilevati.",
   "settings.noBrowsersDetected": "Nessun browser supportato rilevato.",
   "reports.confirmDelete": "Eliminare questo report? Questa operazione non può essere annullata.",
-  "settings.githubRepo": "Vedi su GitHub"
+  "settings.githubRepo": "Vedi su GitHub",
+  "reports.clearAllScanReports": "Elimina tutto",
+  "reports.clearAllScanReportsConfirm": "Eliminare tutti i rapporti di scansione? Questa operazione non può essere annullata.",
+  "reports.clearAllSavedReports": "Elimina tutto",
+  "reports.clearAllSavedReportsConfirm": "Eliminare tutti i report salvati? Questa operazione non può essere annullata.",
+  "reports.clearAllMaintenance": "Elimina tutto",
+  "reports.clearAllMaintenanceConfirm": "Eliminare tutta la cronologia manutenzione manuale? Questa operazione non può essere annullata.",
+  "reports.clearAllScheduledMaintenance": "Elimina tutto",
+  "reports.clearAllScheduledMaintenanceConfirm": "Eliminare tutta la cronologia manutenzione pianificata? Questa operazione non può essere annullata."
 }

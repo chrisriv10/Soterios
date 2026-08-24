@@ -1162,7 +1162,7 @@
   "reports.securityReport": "시스템 보고서",
   "reports.scan": "검사",
   "reports.maintenanceHistory": "유지 관리 기록",
-  "reports.scheduledMaintenanceHistory": "예약된 유지 관리 기록",
+  "reports.scheduledMaintenanceHistory": "예약된 유지 관리 보고서",
   "reports.loadingMaintenance": "유지 관리 기록 로드 중...",
   "reports.noMaintenance": "기록된 유지 관리 실행이 없습니다.",
   "reports.maintenanceRun": "{ok}/{total} 작업 완료",
@@ -1753,5 +1753,13 @@
   "settings.browserCacheBrowsersHint": "선택하지 않으면 감지된 모든 브라우저의 캐시를 정리합니다.",
   "settings.noBrowsersDetected": "지원되는 브라우저가 없습니다.",
   "reports.confirmDelete": "이 보고서를 삭제하시겠습니까? 돌리키는 수 없습니다.",
-  "settings.githubRepo": "GitHub에서 보기"
+  "settings.githubRepo": "GitHub에서 보기",
+  "reports.clearAllScanReports": "전체 삭제",
+  "reports.clearAllScanReportsConfirm": "모든 검사 보고서를 삭제하시겠습니까? 되돌릴 수 없습니다.",
+  "reports.clearAllSavedReports": "전체 삭제",
+  "reports.clearAllSavedReportsConfirm": "모든 저장된 보고서를 삭제하시겠습니까? 되돌릴 수 없습니다.",
+  "reports.clearAllMaintenance": "전체 삭제",
+  "reports.clearAllMaintenanceConfirm": "모든 수동 유지 관리 기록을 삭제하시겠습니까? 되돌릴 수 없습니다.",
+  "reports.clearAllScheduledMaintenance": "전체 삭제",
+  "reports.clearAllScheduledMaintenanceConfirm": "모든 예약된 유지 관리 기록을 삭제하시겠습니까? 되돌릴 수 없습니다."
 }

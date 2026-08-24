@@ -1162,7 +1162,7 @@
   "reports.securityReport": "Relatório do sistema",
   "reports.scan": "verificação",
   "reports.maintenanceHistory": "Histórico de Manutenção",
-  "reports.scheduledMaintenanceHistory": "Histórico de Manutenção Agendada",
+  "reports.scheduledMaintenanceHistory": "Relatório de manutenção agendada",
   "reports.loadingMaintenance": "Carregando histórico de manutenção...",
   "reports.noMaintenance": "Nenhuma execução de manutenção registrada.",
   "reports.maintenanceRun": "{ok}/{total} tarefas concluídas",
@@ -1753,5 +1753,13 @@
   "settings.browserCacheBrowsersHint": "Deixe desmarcado para limpar o cache em todos os navegadores detectados.",
   "settings.noBrowsersDetected": "Nenhum navegador compatível detectado.",
   "reports.confirmDelete": "Excluir este relatório? Esta ação não pode ser desfeita.",
-  "settings.githubRepo": "Ver no GitHub"
+  "settings.githubRepo": "Ver no GitHub",
+  "reports.clearAllScanReports": "Limpar tudo",
+  "reports.clearAllScanReportsConfirm": "Excluir todos os relatórios de verificação? Esta ação não pode ser desfeita.",
+  "reports.clearAllSavedReports": "Limpar tudo",
+  "reports.clearAllSavedReportsConfirm": "Excluir todos os relatórios salvos? Esta ação não pode ser desfeita.",
+  "reports.clearAllMaintenance": "Limpar tudo",
+  "reports.clearAllMaintenanceConfirm": "Excluir todo o histórico de manutenção manual? Esta ação não pode ser desfeita.",
+  "reports.clearAllScheduledMaintenance": "Limpar tudo",
+  "reports.clearAllScheduledMaintenanceConfirm": "Excluir todo o histórico de manutenção agendada? Esta ação não pode ser desfeita."
 }

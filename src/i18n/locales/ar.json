@@ -1162,7 +1162,7 @@
   "reports.securityReport": "تقرير النظام",
   "reports.scan": "فحص",
   "reports.maintenanceHistory": "سجل الصيانة",
-  "reports.scheduledMaintenanceHistory": "سجل الصيانة المجدولة",
+  "reports.scheduledMaintenanceHistory": "تقرير الصيانة المجدولة",
   "reports.loadingMaintenance": "جارٍ تحميل سجل الصيانة...",
   "reports.noMaintenance": "لا توجد عمليات صيانة مسجلة.",
   "reports.maintenanceRun": "{ok}/{total} مهمة مكتملة",
@@ -1753,5 +1753,13 @@
   "settings.browserCacheBrowsersHint": "اتركه بدون تحديد لمسح ذاكرة التخزين المؤقتة في جميع المتصفحات المكتشفة.",
   "settings.noBrowsersDetected": "لم يتم العثور على متصفحات مدعومة.",
   "reports.confirmDelete": "حذف هذا التقرير؟ لا يمكن التراجع عن هذا.",
-  "settings.githubRepo": "عرض على GitHub"
+  "settings.githubRepo": "عرض على GitHub",
+  "reports.clearAllScanReports": "مسح الكل",
+  "reports.clearAllScanReportsConfirm": "حذف جميع تقارير الفحص؟ لا يمكن التراجع عن هذا.",
+  "reports.clearAllSavedReports": "مسح الكل",
+  "reports.clearAllSavedReportsConfirm": "حذف جميع التقارير المحفوظة؟ لا يمكن التراجع عن هذا.",
+  "reports.clearAllMaintenance": "مسح الكل",
+  "reports.clearAllMaintenanceConfirm": "حذف كل سجل الصيانة اليدوية؟ لا يمكن التراجع عن هذا.",
+  "reports.clearAllScheduledMaintenance": "مسح الكل",
+  "reports.clearAllScheduledMaintenanceConfirm": "حذف كل سجل الصيانة المجدولة؟ لا يمكن التراجع عن هذا."
 }

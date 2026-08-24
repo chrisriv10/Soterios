@@ -1162,7 +1162,7 @@
   "reports.securityReport": "Systeemrapport",
   "reports.scan": "scan",
   "reports.maintenanceHistory": "Onderhoudshistorie",
-  "reports.scheduledMaintenanceHistory": "Geplande onderhoudshistorie",
+  "reports.scheduledMaintenanceHistory": "Gepland onderhoudsrapport",
   "reports.loadingMaintenance": "Onderhoudsgeschiedenis laden...",
   "reports.noMaintenance": "Geen onderhoudsruns geregistreerd.",
   "reports.maintenanceRun": "{ok}/{total} taken voltooid",
@@ -1753,5 +1753,13 @@
   "settings.browserCacheBrowsersHint": "Laat uitgeschakeld om de cache in alle gedetecteerde browsers te wissen.",
   "settings.noBrowsersDetected": "Geen ondersteunde browsers gedetecteerd.",
   "reports.confirmDelete": "Dit rapport verwijderen? Dit kan niet ongedaan worden gemaakt.",
-  "settings.githubRepo": "Bekijken op GitHub"
+  "settings.githubRepo": "Bekijken op GitHub",
+  "reports.clearAllScanReports": "Alles wissen",
+  "reports.clearAllScanReportsConfirm": "Alle scanrapporten verwijderen? Dit kan niet ongedaan worden gemaakt.",
+  "reports.clearAllSavedReports": "Alles wissen",
+  "reports.clearAllSavedReportsConfirm": "Alle opgeslagen rapporten verwijderen? Dit kan niet ongedaan worden gemaakt.",
+  "reports.clearAllMaintenance": "Alles wissen",
+  "reports.clearAllMaintenanceConfirm": "Alle handmatige onderhoudsgeschiedenis verwijderen? Dit kan niet ongedaan worden gemaakt.",
+  "reports.clearAllScheduledMaintenance": "Alles wissen",
+  "reports.clearAllScheduledMaintenanceConfirm": "Alle geplande onderhoudsgeschiedenis verwijderen? Dit kan niet ongedaan worden gemaakt."
 }

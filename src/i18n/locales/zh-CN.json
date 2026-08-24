@@ -1162,7 +1162,7 @@
   "reports.securityReport": "系统报告",
   "reports.scan": "扫描",
   "reports.maintenanceHistory": "维护历史",
-  "reports.scheduledMaintenanceHistory": "计划维护历史记录",
+  "reports.scheduledMaintenanceHistory": "计划维护报告",
   "reports.loadingMaintenance": "正在加载维护历史记录...",
   "reports.noMaintenance": "暂无维护运行记录。",
   "reports.maintenanceRun": "{ok}/{total} 任务完成",
@@ -1753,5 +1753,13 @@
   "settings.browserCacheBrowsersHint": "取消勾选将清除所有检测到的浏览器的缓存。",
   "settings.noBrowsersDetected": "未检测到受支持的浏览器。",
   "reports.confirmDelete": "删除此报告？此操作无法撤消。",
-  "settings.githubRepo": "在 GitHub 上查看"
+  "settings.githubRepo": "在 GitHub 上查看",
+  "reports.clearAllScanReports": "全部清除",
+  "reports.clearAllScanReportsConfirm": "删除所有扫描报告？此操作无法撤销。",
+  "reports.clearAllSavedReports": "全部清除",
+  "reports.clearAllSavedReportsConfirm": "删除所有已保存报告？此操作无法撤销。",
+  "reports.clearAllMaintenance": "全部清除",
+  "reports.clearAllMaintenanceConfirm": "删除所有手动维护记录？此操作无法撤销。",
+  "reports.clearAllScheduledMaintenance": "全部清除",
+  "reports.clearAllScheduledMaintenanceConfirm": "删除所有计划维护记录？此操作无法撤销。"
 }

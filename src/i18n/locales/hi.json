@@ -1162,7 +1162,7 @@
   "reports.securityReport": "सिस्टम रिपोर्ट",
   "reports.scan": "स्कैन",
   "reports.maintenanceHistory": "रखरखाव इतिहास",
-  "reports.scheduledMaintenanceHistory": "अनुसूचित रखरखाव इतिहास",
+  "reports.scheduledMaintenanceHistory": "अनुसूचित रखरखाव रिपोर्ट",
   "reports.loadingMaintenance": "रखरखाव इतिहास लोड हो रहा है...",
   "reports.noMaintenance": "कोई रखरखाव रन दर्ज नहीं है।",
   "reports.maintenanceRun": "{ok}/{total} कार्य पूर्ण",
@@ -1753,5 +1753,13 @@
   "settings.browserCacheBrowsersHint": "अनचेक छोड़ने पर सभी पाए गए ब्राउज़रों का कैश साफ़ हो जाता है।",
   "settings.noBrowsersDetected": "कोई समर्थित ब्राउज़र नहीं मिला।",
   "reports.confirmDelete": "इस रिपोर्ट को हटाएँ? इसे पूर्ववत नहीं किया जा सकता।",
-  "settings.githubRepo": "GitHub पर देखें"
+  "settings.githubRepo": "GitHub पर देखें",
+  "reports.clearAllScanReports": "सब हटाएँ",
+  "reports.clearAllScanReportsConfirm": "सभी स्कैन रिपोर्ट हटाएँ? इसे पूर्ववत नहीं किया जा सकता।",
+  "reports.clearAllSavedReports": "सब हटाएँ",
+  "reports.clearAllSavedReportsConfirm": "सभी सहेजी गई रिपोर्ट हटाएँ? इसे पूर्ववत नहीं किया जा सकता।",
+  "reports.clearAllMaintenance": "सब हटाएँ",
+  "reports.clearAllMaintenanceConfirm": "सभी मैन्युअल रखरखाव इतिहास हटाएँ? इसे पूर्ववत नहीं किया जा सकता।",
+  "reports.clearAllScheduledMaintenance": "सब हटाएँ",
+  "reports.clearAllScheduledMaintenanceConfirm": "सभी शेड्यूल्ड रखरखाव इतिहास हटाएँ? इसे पूर्ववत नहीं किया जा सकता।"
 }

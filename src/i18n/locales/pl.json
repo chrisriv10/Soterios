@@ -1162,7 +1162,7 @@
   "reports.securityReport": "Raport systemu",
   "reports.scan": "skanowanie",
   "reports.maintenanceHistory": "Historia konserwacji",
-  "reports.scheduledMaintenanceHistory": "Historia zaplanowanej konserwacji",
+  "reports.scheduledMaintenanceHistory": "Raport zaplanowanej konserwacji",
   "reports.loadingMaintenance": "Ładowanie historii konserwacji...",
   "reports.noMaintenance": "Brak zarejestrowanych przebiegów konserwacji.",
   "reports.maintenanceRun": "{ok}/{total} zadań ukończonych",
@@ -1753,5 +1753,13 @@
   "settings.browserCacheBrowsersHint": "Pozostaw niezaznaczone, aby wyczyścić pamięć podręczną we wszystkich wykrytych przeglądarkach.",
   "settings.noBrowsersDetected": "Nie wykryto obsługiwanych przeglądarek.",
   "reports.confirmDelete": "Usunąć ten raport? Tej operacji nie można cofnąć.",
-  "settings.githubRepo": "Zobacz na GitHub"
+  "settings.githubRepo": "Zobacz na GitHub",
+  "reports.clearAllScanReports": "Usuń wszystko",
+  "reports.clearAllScanReportsConfirm": "Usunąć wszystkie raporty skanowania? Tej operacji nie można cofnąć.",
+  "reports.clearAllSavedReports": "Usuń wszystko",
+  "reports.clearAllSavedReportsConfirm": "Usunąć wszystkie zapisane raporty? Tej operacji nie można cofnąć.",
+  "reports.clearAllMaintenance": "Usuń wszystko",
+  "reports.clearAllMaintenanceConfirm": "Usunąć całą historię konserwacji manualnej? Tej operacji nie można cofnąć.",
+  "reports.clearAllScheduledMaintenance": "Usuń wszystko",
+  "reports.clearAllScheduledMaintenanceConfirm": "Usunąć całą historię konserwacji planowanej? Tej operacji nie można cofnąć."
 }

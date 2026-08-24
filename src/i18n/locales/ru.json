@@ -1162,7 +1162,7 @@
   "reports.securityReport": "Системный отчет",
   "reports.scan": "сканирование",
   "reports.maintenanceHistory": "История обслуживания",
-  "reports.scheduledMaintenanceHistory": "История планового обслуживания",
+  "reports.scheduledMaintenanceHistory": "Отчет о плановом обслуживании",
   "reports.loadingMaintenance": "Загрузка истории обслуживания...",
   "reports.noMaintenance": "Запуски обслуживания не записаны.",
   "reports.maintenanceRun": "{ok}/{total} задач выполнено",
@@ -1753,5 +1753,13 @@
   "settings.browserCacheBrowsersHint": "Оставьте невыбранным, чтобы очистить кэш во всех обнаруженных браузерах.",
   "settings.noBrowsersDetected": "Поддерживаемые браузеры не обнаружены.",
   "reports.confirmDelete": "Удалить этот отчет? Это действие нельзя отменить.",
-  "settings.githubRepo": "Смотреть на GitHub"
+  "settings.githubRepo": "Смотреть на GitHub",
+  "reports.clearAllScanReports": "Очистить всё",
+  "reports.clearAllScanReportsConfirm": "Удалить все отчеты сканирования? Это действие нельзя отменить.",
+  "reports.clearAllSavedReports": "Очистить всё",
+  "reports.clearAllSavedReportsConfirm": "Удалить все сохраненные отчеты? Это действие нельзя отменить.",
+  "reports.clearAllMaintenance": "Очистить всё",
+  "reports.clearAllMaintenanceConfirm": "Удалить всю историю ручного обслуживания? Это действие нельзя отменить.",
+  "reports.clearAllScheduledMaintenance": "Очистить всё",
+  "reports.clearAllScheduledMaintenanceConfirm": "Удалить всю историю запланированного обслуживания? Это действие нельзя отменить."
 }

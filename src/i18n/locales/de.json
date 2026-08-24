@@ -1162,7 +1162,7 @@
   "reports.securityReport": "Systembericht",
   "reports.scan": "Scan",
   "reports.maintenanceHistory": "Wartungshistorie",
-  "reports.scheduledMaintenanceHistory": "Geplante Wartungshistorie",
+  "reports.scheduledMaintenanceHistory": "Geplanter Wartungsbericht",
   "reports.loadingMaintenance": "Wartungsprotokolle werden geladen...",
   "reports.noMaintenance": "Keine Wartungsläufe aufgezeichnet.",
   "reports.maintenanceRun": "{ok}/{total} Aufgaben abgeschlossen",
@@ -1753,5 +1753,13 @@
   "settings.browserCacheBrowsersHint": "Deaktiviert lassen, um den Cache in allen erkannten Browsern zu leeren.",
   "settings.noBrowsersDetected": "Keine unterstützten Browser erkannt.",
   "reports.confirmDelete": "Diesen Bericht löschen? Dies kann nicht rückgängig gemacht werden.",
-  "settings.githubRepo": "Auf GitHub ansehen"
+  "settings.githubRepo": "Auf GitHub ansehen",
+  "reports.clearAllScanReports": "Alle löschen",
+  "reports.clearAllScanReportsConfirm": "Alle Scanberichte löschen? Dies kann nicht rückgängig gemacht werden.",
+  "reports.clearAllSavedReports": "Alle löschen",
+  "reports.clearAllSavedReportsConfirm": "Alle gespeicherten Berichte löschen? Dies kann nicht rückgängig gemacht werden.",
+  "reports.clearAllMaintenance": "Alle löschen",
+  "reports.clearAllMaintenanceConfirm": "Gesamten manuellen Wartungsverlauf löschen? Dies kann nicht rückgängig gemacht werden.",
+  "reports.clearAllScheduledMaintenance": "Alle löschen",
+  "reports.clearAllScheduledMaintenanceConfirm": "Gesamten geplanten Wartungsverlauf löschen? Dies kann nicht rückgängig gemacht werden."
 }

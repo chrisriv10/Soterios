@@ -1162,7 +1162,7 @@
   "reports.securityReport": "Informe del sistema",
   "reports.scan": "escaneo",
   "reports.maintenanceHistory": "Historial de mantenimiento",
-  "reports.scheduledMaintenanceHistory": "Historial de mantenimiento programado",
+  "reports.scheduledMaintenanceHistory": "Informe de mantenimiento programado",
   "reports.loadingMaintenance": "Cargando historial de mantenimiento...",
   "reports.noMaintenance": "No hay ejecuciones de mantenimiento registradas.",
   "reports.maintenanceRun": "{ok}/{total} tareas completadas",
@@ -1753,5 +1753,13 @@
   "settings.browserCacheBrowsersHint": "Déjalo sin marcar para limpiar la caché en todos los navegadores detectados.",
   "settings.noBrowsersDetected": "No se detectaron navegadores compatibles.",
   "reports.confirmDelete": "¿Eliminar este informe? Esto no se puede deshacer.",
-  "settings.githubRepo": "Ver en GitHub"
+  "settings.githubRepo": "Ver en GitHub",
+  "reports.clearAllScanReports": "Borrar todo",
+  "reports.clearAllScanReportsConfirm": "¿Eliminar todos los informes de escaneo? Esto no se puede deshacer.",
+  "reports.clearAllSavedReports": "Borrar todo",
+  "reports.clearAllSavedReportsConfirm": "¿Eliminar todos los informes guardados? Esto no se puede deshacer.",
+  "reports.clearAllMaintenance": "Borrar todo",
+  "reports.clearAllMaintenanceConfirm": "¿Eliminar todo el historial de mantenimiento manual? Esto no se puede deshacer.",
+  "reports.clearAllScheduledMaintenance": "Borrar todo",
+  "reports.clearAllScheduledMaintenanceConfirm": "¿Eliminar todo el historial de mantenimiento programado? Esto no se puede deshacer."
 }

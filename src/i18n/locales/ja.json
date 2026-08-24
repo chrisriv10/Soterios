@@ -1162,7 +1162,7 @@
   "reports.securityReport": "システム レポート",
   "reports.scan": "スキャン",
   "reports.maintenanceHistory": "メンテナンス履歴",
-  "reports.scheduledMaintenanceHistory": "定期メンテナンス履歴",
+  "reports.scheduledMaintenanceHistory": "定期メンテナンスレポート",
   "reports.loadingMaintenance": "メンテナンス履歴を読み込み中...",
   "reports.noMaintenance": "メンテナンス実行の記録はありません。",
   "reports.maintenanceRun": "{ok}/{total} タスク完了",
@@ -1753,5 +1753,13 @@
   "settings.browserCacheBrowsersHint": "未選択の場合は、検出されたすべてのブラウザのキャッシュをクリアします。",
   "settings.noBrowsersDetected": "サポートされているブラウザが見つかりません。",
   "reports.confirmDelete": "このレポートを削除しますか？元に戻すことはできません。",
-  "settings.githubRepo": "GitHub で見る"
+  "settings.githubRepo": "GitHub で見る",
+  "reports.clearAllScanReports": "すべて削除",
+  "reports.clearAllScanReportsConfirm": "すべてのスキャンレポートを削除しますか？元に戻せません。",
+  "reports.clearAllSavedReports": "すべて削除",
+  "reports.clearAllSavedReportsConfirm": "すべての保存済みレポートを削除しますか？元に戻せません。",
+  "reports.clearAllMaintenance": "すべて削除",
+  "reports.clearAllMaintenanceConfirm": "すべての手動メンテナンス履歴を削除しますか？元に戻せません。",
+  "reports.clearAllScheduledMaintenance": "すべて削除",
+  "reports.clearAllScheduledMaintenanceConfirm": "すべてのスケジュール済みメンテナンス履歴を削除しますか？元に戻せません。"
 }

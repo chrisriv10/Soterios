@@ -1162,7 +1162,7 @@
   "reports.securityReport": "Rapport système",
   "reports.scan": "scan",
   "reports.maintenanceHistory": "Historique de maintenance",
-  "reports.scheduledMaintenanceHistory": "Historique de maintenance planifiée",
+  "reports.scheduledMaintenanceHistory": "Rapport de maintenance planifiée",
   "reports.loadingMaintenance": "Chargement de l'historique de maintenance...",
   "reports.noMaintenance": "Aucune exécution de maintenance enregistrée.",
   "reports.maintenanceRun": "{ok}/{total} tâches terminées",
@@ -1753,5 +1753,13 @@
   "settings.browserCacheBrowsersHint": "Laissez décoché pour vider le cache de tous les navigateurs détectés.",
   "settings.noBrowsersDetected": "Aucun navigateur pris en charge détecté.",
   "reports.confirmDelete": "Supprimer ce rapport ? Cette action est irréversible.",
-  "settings.githubRepo": "Voir sur GitHub"
+  "settings.githubRepo": "Voir sur GitHub",
+  "reports.clearAllScanReports": "Tout effacer",
+  "reports.clearAllScanReportsConfirm": "Supprimer tous les rapports de scan ? Cette action est irréversible.",
+  "reports.clearAllSavedReports": "Tout effacer",
+  "reports.clearAllSavedReportsConfirm": "Supprimer tous les rapports sauvegardés ? Cette action est irréversible.",
+  "reports.clearAllMaintenance": "Tout effacer",
+  "reports.clearAllMaintenanceConfirm": "Supprimer tout l'historique de maintenance manuelle ? Cette action est irréversible.",
+  "reports.clearAllScheduledMaintenance": "Tout effacer",
+  "reports.clearAllScheduledMaintenanceConfirm": "Supprimer tout l'historique de maintenance planifiée ? Cette action est irréversible."
 }
