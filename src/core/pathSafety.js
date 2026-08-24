@@ -59,6 +59,22 @@ function defaultMutationRoots() {
   ]);
 }
 
+function hasWindowsShortNameSegment(value) {
+  return String(value || '')
+    .split(/[\\/]+/)
+    .some((segment) => /^[^\\/:*?"<>|]{1,6}~\d(?:\..*)?$/i.test(segment));
+}
+
+function isWindowsShortNameAliasPath(candidate, real) {
+  if (process.platform !== 'win32') return false;
+  const candidateParts = canonical(candidate).split(/[\\/]+/);
+  const realParts = canonical(real).split(/[\\/]+/);
+  if (candidateParts.length !== realParts.length) return false;
+  return candidateParts.every((part, index) => part === realParts[index]
+    || hasWindowsShortNameSegment(part)
+    || hasWindowsShortNameSegment(realParts[index]));
+}
+
 function hasReparseAncestor(candidate, stopAt = null) {
   let current = path.resolve(candidate);
   const stop = stopAt ? path.resolve(stopAt) : path.parse(current).root;
@@ -67,7 +83,7 @@ function hasReparseAncestor(candidate, stopAt = null) {
       const stat = fs.lstatSync(current);
       if (stat.isSymbolicLink()) return true;
       const real = fs.realpathSync.native ? fs.realpathSync.native(current) : fs.realpathSync(current);
-      if (canonical(real) !== canonical(current)) return true;
+      if (canonical(real) !== canonical(current) && !isWindowsShortNameAliasPath(current, real)) return true;
     } catch (err) {
       if (err.code !== 'ENOENT') return true;
     }
@@ -135,4 +151,3 @@ module.exports = {
   captureSnapshot,
   verifySnapshot
 };
-
