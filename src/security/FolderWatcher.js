@@ -18,6 +18,8 @@ class FolderWatcher {
    * @param {(title: string, body: string, level?: string) => void} [options.notify]
    * @param {string[]} [options.watchDirs]
    * @param {number} [options.debounceMs]
+   * @param {(dir: string) => string} [options.resolveWatchPath]
+   * @param {typeof fs.watch} [options.watchFactory]
    */
   constructor(options = {}) {
     this.db = options.db || null;
@@ -26,6 +28,12 @@ class FolderWatcher {
     this.clamEngine = options.clamEngine || null;
     this.notify = options.notify || (() => {});
     this.watchFactory = options.watchFactory || fs.watch;
+    this.resolveWatchPath = options.resolveWatchPath || ((dir) => {
+      const realpath = typeof fs.realpathSync.native === 'function'
+        ? fs.realpathSync.native
+        : fs.realpathSync;
+      return realpath(dir);
+    });
     this.debounceMs = options.debounceMs || 1500;
     this.watchDirs = options.watchDirs || FolderWatcher.defaultWatchDirs();
     this._watchers = new Map();
@@ -79,26 +87,20 @@ class FolderWatcher {
 
   _watchDir(dir) {
     try {
-      if (!fs.existsSync(dir)) return;
-      if (this._watchers.has(dir)) return;
-      const watcher = this.watchFactory(dir, { persistent: false }, (_eventType, filename) => {
-        // fs.watch callbacks run outside the _watchDir try/catch. Windows can
-        // deliver malformed or late events while a directory is being closed;
-        // never let one of those events terminate the test/app process.
-        try {
-          if (!filename || !this._running) return;
-          const relativePath = Buffer.isBuffer(filename) ? filename.toString('utf8') : String(filename);
-          if (!relativePath || relativePath.includes('\0') || path.isAbsolute(relativePath)) return;
-          this._schedule(path.join(dir, relativePath));
-        } catch (_) {
-          /* ignore malformed or stale watcher events */
-        }
+      const watchDir = this.resolveWatchPath(dir);
+      if (!watchDir || !fs.existsSync(watchDir)) return;
+      if (this._watchers.has(watchDir)) return;
+      const watcher = this.watchFactory(watchDir, { persistent: false }, (_eventType, filename) => {
+        if (!filename || !this._running) return;
+        const relativePath = Buffer.isBuffer(filename) ? filename.toString('utf8') : String(filename);
+        if (!relativePath || relativePath.includes('\0') || path.isAbsolute(relativePath)) return;
+        this._schedule(path.join(watchDir, relativePath));
       });
       watcher.on('error', () => {
         try { watcher.close(); } catch (_) {}
-        this._watchers.delete(dir);
+        this._watchers.delete(watchDir);
       });
-      this._watchers.set(dir, watcher);
+      this._watchers.set(watchDir, watcher);
     } catch (_) {
       /* missing or inaccessible directory is fine */
     }

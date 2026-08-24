@@ -83,22 +83,65 @@ describe('FolderWatcher', () => {
     assert.equal(watcher.getStatus().queued, 1);
   });
 
-  it('contains errors from late or malformed watcher events', () => {
+  it('uses the canonical directory for watching, status, and event paths', () => {
+    const shortPath = 'C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\soterios-fw-short';
+    let watchedPath;
     let onEvent;
-    const fakeWatcher = { on() { return this; }, close() {} };
-    const guarded = new FolderWatcher({
-      watchDirs: [tmp],
-      watchFactory(_dir, _options, callback) {
+    const canonical = new FolderWatcher({
+      watchDirs: [shortPath],
+      resolveWatchPath(dir) {
+        assert.equal(dir, shortPath);
+        return tmp;
+      },
+      watchFactory(dir, _options, callback) {
+        watchedPath = dir;
         onEvent = callback;
-        return fakeWatcher;
+        return { on() { return this; }, close() {} };
       },
       scanEngine: { async runCustomScan() { return {}; } }
     });
-    guarded.start();
-    guarded._schedule = () => { throw new Error('stale watcher event'); };
-    assert.doesNotThrow(() => onEvent('rename', Buffer.from('payload.bin')));
-    assert.doesNotThrow(() => onEvent('rename', 'C:\\outside\\payload.bin'));
-    assert.doesNotThrow(() => onEvent('rename', 'bad\0name'));
-    guarded.stop();
+    let scheduledPath;
+    canonical._schedule = (filePath) => { scheduledPath = filePath; };
+
+    const status = canonical.start();
+    assert.equal(watchedPath, tmp);
+    assert.deepEqual(status.watched, [tmp]);
+    onEvent('rename', Buffer.from('payload.bin'));
+    assert.equal(scheduledPath, path.join(tmp, 'payload.bin'));
+    canonical.stop();
+  });
+
+  it('deduplicates configured aliases that resolve to the same directory', () => {
+    let watchCalls = 0;
+    const canonical = new FolderWatcher({
+      watchDirs: ['short-alias', 'long-alias'],
+      resolveWatchPath() { return tmp; },
+      watchFactory() {
+        watchCalls += 1;
+        return { on() { return this; }, close() {} };
+      },
+      scanEngine: { async runCustomScan() { return {}; } }
+    });
+    const status = canonical.start();
+    assert.equal(watchCalls, 1);
+    assert.deepEqual(status.watched, [tmp]);
+    canonical.stop();
+  });
+
+  it('skips a directory when its canonical path cannot be resolved', () => {
+    let watchCalls = 0;
+    const inaccessible = new FolderWatcher({
+      watchDirs: ['C:\\inaccessible'],
+      resolveWatchPath() { throw new Error('access denied'); },
+      watchFactory() {
+        watchCalls += 1;
+        return { on() { return this; }, close() {} };
+      },
+      scanEngine: { async runCustomScan() { return {}; } }
+    });
+    const status = inaccessible.start();
+    assert.equal(watchCalls, 0);
+    assert.deepEqual(status.watched, []);
+    inaccessible.stop();
   });
 });
