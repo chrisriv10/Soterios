@@ -373,7 +373,7 @@
       const result = this._results[toolId];
       return `<div class="maintenance-workspace">
         <div class="maintenance-workspace-nav">
-          <button type="button" class="btn btn-sm btn-ghost" data-action="back-hub">${this.icon('arrow-left')} All tools</button>
+          <button type="button" class="btn btn-sm btn-ghost" data-action="back-hub">All tools</button>
         </div>
         <header class="maintenance-workspace-header">
           <span class="maintenance-workspace-icon">${this.icon(tool.icon)}</span>
