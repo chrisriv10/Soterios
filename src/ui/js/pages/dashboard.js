@@ -177,26 +177,22 @@ window.Pages['dashboard'] = {
         </div>
       </header>
       <div id="dashboardContent" style="overflow-y:auto; margin-right:8px; padding-right:8px;">
-        <div class="dashboard-grid">
-          <div class="card" id="healthCard" style="cursor:pointer;" title="${escapeHtml(t('dashboard.healthClickDetails'))}">
+<div class="dashboard-grid">
+          <!-- Last Scan -->
+          <div class="card">
             <div class="status-card">
-              <div class="status-icon info" id="healthIcon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
- stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-
-  <rect x="3" y="4" width="18" height="13" rx="2"/>
-  <path d="M8 21h8"/>
-  <path d="M12 17v4"/>
-  <path d="m8 11 2 2 5-5"/>
-</svg>
+              <div class="status-icon info">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               </div>
               <div class="status-info">
-                <h3>${escapeHtml(t('dashboard.healthScore'))}</h3>
-                <div class="value" id="healthScore">Loading...</div>
+                <h3>${escapeHtml(t('dashboard.lastScan'))}</h3>
+                <div class="value" id="lastScanTime">${escapeHtml(t('dashboard.lastScanLoading'))}</div>
               </div>
             </div>
-            <div id="healthDetail" class="page-subtitle" style="margin-top:12px; font-size:0.85rem;">${escapeHtml(t('dashboard.healthCalculating'))}</div>
-            <div class="page-subtitle" style="margin-top:8px; font-size:0.75rem; color:var(--accent-primary);">${escapeHtml(t('dashboard.healthClickDetails'))}</div>
+            <div style="margin-top: 16px; display: flex; gap: 12px;">
+              <button class="btn btn-primary" id="btnQuickScan">${escapeHtml(t('dashboard.quickScan'))}</button>
+              <button class="btn" id="btnFullScan">${escapeHtml(t('dashboard.fullScan'))}</button>
+            </div>
           </div>
 
           <!-- Protection Status -->
@@ -215,78 +211,13 @@ window.Pages['dashboard'] = {
             </div>
           </div>
 
-          <!-- Network & Firewall -->
-          <div class="card">
-            <div class="status-card">
-              <div class="status-icon info" id="fwIcon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
- stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M12 2 20 5v6c0 5.5-3.5 9-8 11-4.5-2-8-5.5-8-11V5z"/>
-  <circle cx="8" cy="10.5" r="1.2"/>
-  <circle cx="16" cy="10.5" r="1.2"/>
-  <circle cx="12" cy="15.5" r="1.2"/>
-  <line x1="9.2" y1="10.9" x2="10.8" y2="14.6"/>
-  <line x1="14.8" y1="10.9" x2="13.2" y2="14.6"/>
-  <line x1="9.2" y1="10.5" x2="14.8" y2="10.5"/>
-</svg>
-              </div>
-              <div class="status-info">
-                <h3>${escapeHtml(t('dashboard.networkFirewallTitle'))}</h3>
-                <div class="value" id="fwStatusText">${escapeHtml(t('common.loading'))}</div>
-              </div>
-            </div>
-            <div style="margin-top: 16px; display: flex; gap: 12px; flex-wrap: wrap;">
-              <button class="btn" id="btnManageFirewall">${escapeHtml(t('dashboard.firewallManage'))}</button>
-              <button class="btn" id="btnOpenNetwork">${escapeHtml(t('nav.network'))}</button>
-            </div>
-          </div>
-
-          <!-- Last Scan -->
-          <div class="card">
-            <div class="status-card">
-              <div class="status-icon info">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              </div>
-              <div class="status-info">
-                <h3>${escapeHtml(t('dashboard.lastScan'))}</h3>
-                <div class="value" id="lastScanTime">${escapeHtml(t('dashboard.lastScanLoading'))}</div>
-              </div>
-            </div>
-            <div style="margin-top: 16px; display: flex; gap: 12px;">
-              <button class="btn btn-primary" id="btnQuickScan">${escapeHtml(t('dashboard.quickScan'))}</button>
-              <button class="btn" id="btnFullScan">${escapeHtml(t('dashboard.fullScan'))}</button>
-            </div>
-          </div>
-
-<!-- Device Cleanup -->
-          <div class="card">
-            <div class="status-card">
-              <div class="status-icon info">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M9 2V1M15 2v1"/>
-    <path d="M10 12v8M14 12v8M10 16h4"/>
-  </svg>
-              </div>
-              <div class="status-info">
-                <h3>${escapeHtml(t('dashboard.deviceCleanup'))}</h3>
-                <div class="value" id="lastCleanup">${escapeHtml(t('common.loading'))}</div>
-                <div class="device-cleanup-summary" id="cleanupSummary"></div>
-              </div>
-            </div>
-            <div style="margin-top: 16px; display: flex; gap: 12px; flex-wrap: wrap;">
-              <button class="btn btn-primary" id="btnRunCleanup">${escapeHtml(t('dashboard.runCleanup'))}</button>
-              <button class="btn" id="btnViewCleanupHistory">${escapeHtml(t('dashboard.viewHistory'))}</button>
-            </div>
-          </div>
-
-          <!-- Threats Blocked -->
+<!-- Threats Blocked -->
           <div class="card">
             <div class="status-card">
               <div class="status-icon danger">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-     stroke="currentColor" stroke-width="2"
-     stroke-linecap="round" stroke-linejoin="round">
+ stroke="currentColor" stroke-width="2"
+ stroke-linecap="round" stroke-linejoin="round">
 
   <!-- virus body -->
   <circle cx="12" cy="12" r="5"/>
@@ -317,6 +248,75 @@ window.Pages['dashboard'] = {
             </div>
             <div style="margin-top: 16px;">
               <button class="btn" id="btnViewQuarantine">${escapeHtml(t('dashboard.viewQuarantine'))}</button>
+            </div>
+          </div>
+
+          <div class="card" id="healthCard" style="cursor:pointer;" title="${escapeHtml(t('dashboard.healthClickDetails'))}">
+            <div class="status-card">
+              <div class="status-icon info" id="healthIcon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+  <rect x="3" y="4" width="18" height="13" rx="2"/>
+  <path d="M8 21h8"/>
+  <path d="M12 17v4"/>
+  <path d="m8 11 2 2 5-5"/>
+</svg>
+              </div>
+              <div class="status-info">
+                <h3>${escapeHtml(t('dashboard.healthScore'))}</h3>
+                <div class="value" id="healthScore">Loading...</div>
+              </div>
+            </div>
+            <div id="healthDetail" class="page-subtitle" style="margin-top:12px; font-size:0.85rem;">${escapeHtml(t('dashboard.healthCalculating'))}</div>
+            <div class="page-subtitle" style="margin-top:8px; font-size:0.75rem; color:var(--accent-primary);">${escapeHtml(t('dashboard.healthClickDetails'))}</div>
+          </div>
+
+<!-- Device Cleanup -->
+          <div class="card dashboard-device-cleanup">
+            <div class="status-card">
+              <div class="status-icon info">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M9 2V1M15 2v1"/>
+    <path d="M10 12v8M14 12v8M10 16h4"/>
+  </svg>
+              </div>
+              <div class="status-info">
+                <h3>${escapeHtml(t('dashboard.deviceCleanup'))}</h3>
+                <div class="value" id="lastCleanup">${escapeHtml(t('common.loading'))}</div>
+                <div class="device-cleanup-summary" id="cleanupSummary"></div>
+              </div>
+            </div>
+            <div style="margin-top: 16px; display: flex; gap: 12px; flex-wrap: wrap;">
+              <button class="btn btn-primary" id="btnRunCleanup">${escapeHtml(t('dashboard.runCleanup'))}</button>
+              <button class="btn" id="btnViewCleanupHistory">${escapeHtml(t('dashboard.viewHistory'))}</button>
+            </div>
+          </div>
+
+          <!-- Network & Firewall -->
+          <div class="card">
+            <div class="status-card">
+              <div class="status-icon info" id="fwIcon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M12 2 20 5v6c0 5.5-3.5 9-8 11-4.5-2-8-5.5-8-11V5z"/>
+  <circle cx="8" cy="10.5" r="1.2"/>
+  <circle cx="16" cy="10.5" r="1.2"/>
+  <circle cx="12" cy="15.5" r="1.2"/>
+  <line x1="9.2" y1="10.9" x2="10.8" y2="14.6"/>
+  <line x1="14.8" y1="10.9" x2="13.2" y2="14.6"/>
+  <line x1="9.2" y1="10.5" x2="14.8" y2="10.5"/>
+</svg>
+              </div>
+              <div class="status-info">
+                <h3>${escapeHtml(t('dashboard.networkFirewallTitle'))}</h3>
+                <div class="value" id="fwStatusText">${escapeHtml(t('common.loading'))}</div>
+              </div>
+            </div>
+            <div class="dashboard-network-actions" style="margin-top: 16px;">
+              <button class="btn" id="btnManageFirewall">${escapeHtml(t('dashboard.firewallManage'))}</button>
+              <button class="btn" id="btnOpenNetwork">${escapeHtml(t('nav.network'))}</button>
             </div>
           </div>
         </div>
