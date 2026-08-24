@@ -59,6 +59,25 @@ function defaultMutationRoots() {
   ]);
 }
 
+function isWindowsShortNameSegment(value) {
+  return /^[^\\/:*?"<>|]{1,6}~\d(?:\..*)?$/i.test(String(value || ''));
+}
+
+function isWindowsShortNameAliasPath(candidate, real) {
+  if (process.platform !== 'win32') return false;
+  const candidateParts = canonical(candidate).split(/[\\/]+/);
+  const realParts = canonical(real).split(/[\\/]+/);
+  if (candidateParts.length !== realParts.length) return false;
+  return candidateParts.every((part, index) => {
+    const realPart = realParts[index];
+    if (part === realPart) return true;
+    // A real 8.3 alias changes exactly one side of a path segment. Requiring
+    // the other side to be the long form prevents an unrelated mismatch from
+    // being hidden by a short-name segment elsewhere in the path.
+    return isWindowsShortNameSegment(part) !== isWindowsShortNameSegment(realPart);
+  });
+}
+
 function hasReparseAncestor(candidate, stopAt = null) {
   let current = path.resolve(candidate);
   const stop = stopAt ? path.resolve(stopAt) : path.parse(current).root;
@@ -67,7 +86,7 @@ function hasReparseAncestor(candidate, stopAt = null) {
       const stat = fs.lstatSync(current);
       if (stat.isSymbolicLink()) return true;
       const real = fs.realpathSync.native ? fs.realpathSync.native(current) : fs.realpathSync(current);
-      if (canonical(real) !== canonical(current)) return true;
+      if (canonical(real) !== canonical(current) && !isWindowsShortNameAliasPath(current, real)) return true;
     } catch (err) {
       if (err.code !== 'ENOENT') return true;
     }
@@ -129,10 +148,10 @@ module.exports = {
   isInside,
   protectedRoots,
   defaultMutationRoots,
+  isWindowsShortNameAliasPath,
   hasReparseAncestor,
   isProtectedPath,
   assessMutation,
   captureSnapshot,
   verifySnapshot
 };
-
