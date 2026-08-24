@@ -315,6 +315,39 @@ class DatabaseService {
     return row;
   }
 
+  deleteAllScanReports() {
+    const rows = this.db.prepare('SELECT * FROM scan_reports').all();
+    if (!rows.length) return { deleted: 0 };
+    this.db.prepare('DELETE FROM scan_reports').run();
+    return { deleted: rows.length };
+  }
+
+  deleteAllSecurityReports() {
+    const fs = require('fs');
+    const path = require('path');
+    const os = require('os');
+    const dir = path.join(os.homedir(), '.soterios', 'reports');
+    let deleted = 0;
+    if (fs.existsSync(dir)) {
+      const files = fs.readdirSync(dir);
+      for (const file of files) {
+        try {
+          fs.unlinkSync(path.join(dir, file));
+          deleted++;
+        } catch (_) {}
+      }
+    }
+    return { deleted };
+  }
+
+  deleteAllManualHistory() {
+    return this.db.prepare('DELETE FROM tool_runs WHERE source = ?').run('manual');
+  }
+
+  deleteAllScheduledHistory() {
+    return this.db.prepare('DELETE FROM maintenance_runs').run();
+  }
+
   // --- Quarantine API ---
   addQuarantineRecord(record) {
     const stmt = this.db.prepare(`

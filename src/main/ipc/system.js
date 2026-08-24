@@ -511,6 +511,36 @@ function register(mainWindow, {
     return { success: true };
   });
 
+  ipcMain.handle('scanReports:deleteAll', async () => {
+    const result = db.deleteAllScanReports();
+    if (result.deleted > 0) {
+      // Also clean up files in scan-reports directory
+      const scanDir = path.join(os.homedir(), '.soterios', 'scan-reports');
+      if (fs.existsSync(scanDir)) {
+        const files = fs.readdirSync(scanDir);
+        for (const file of files) {
+          deleteFileIfSafe(path.join(scanDir, file));
+        }
+      }
+    }
+    return { success: true, deleted: result.deleted };
+  });
+
+  ipcMain.handle('reports:deleteAll', async () => {
+    const result = db.deleteAllSecurityReports();
+    return { success: true, deleted: result.deleted };
+  });
+
+  ipcMain.handle('maintenance:deleteAllManual', async () => {
+    const result = db.deleteAllManualHistory();
+    return { success: true, deleted: result.changes || 0 };
+  });
+
+  ipcMain.handle('maintenance:deleteAllScheduled', async () => {
+    const result = db.deleteAllScheduledHistory();
+    return { success: true, deleted: result.changes || 0 };
+  });
+
   ipcMain.handle('reports:read', async (_event, filePath) => {
     const resolved = path.resolve(filePath || '');
     if (!isPathInsideDir(resolved, securityReportsDir())) return { success: false, error: 'Invalid report path.' };
