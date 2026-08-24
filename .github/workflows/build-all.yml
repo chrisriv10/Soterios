@@ -21,6 +21,8 @@ jobs:
         run: rustup toolchain install 1.85.1-x86_64-pc-windows-msvc --profile minimal --component clippy,rustfmt
       - run: npm ci
       - run: npm run native:check
+      - name: Build native host test artifact
+        run: npm run native-host:build
       - run: npm test
       - run: npm run dist:win
         env:

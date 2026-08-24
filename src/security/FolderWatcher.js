@@ -25,6 +25,7 @@ class FolderWatcher {
     this.scanEngine = options.scanEngine;
     this.clamEngine = options.clamEngine || null;
     this.notify = options.notify || (() => {});
+    this.watchFactory = options.watchFactory || fs.watch;
     this.debounceMs = options.debounceMs || 1500;
     this.watchDirs = options.watchDirs || FolderWatcher.defaultWatchDirs();
     this._watchers = new Map();
@@ -80,10 +81,18 @@ class FolderWatcher {
     try {
       if (!fs.existsSync(dir)) return;
       if (this._watchers.has(dir)) return;
-      const watcher = fs.watch(dir, { persistent: false }, (eventType, filename) => {
-        if (!filename || !this._running) return;
-        const fullPath = path.join(dir, filename.toString());
-        this._schedule(fullPath);
+      const watcher = this.watchFactory(dir, { persistent: false }, (_eventType, filename) => {
+        // fs.watch callbacks run outside the _watchDir try/catch. Windows can
+        // deliver malformed or late events while a directory is being closed;
+        // never let one of those events terminate the test/app process.
+        try {
+          if (!filename || !this._running) return;
+          const relativePath = Buffer.isBuffer(filename) ? filename.toString('utf8') : String(filename);
+          if (!relativePath || relativePath.includes('\0') || path.isAbsolute(relativePath)) return;
+          this._schedule(path.join(dir, relativePath));
+        } catch (_) {
+          /* ignore malformed or stale watcher events */
+        }
       });
       watcher.on('error', () => {
         try { watcher.close(); } catch (_) {}

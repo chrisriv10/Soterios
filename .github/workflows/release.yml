@@ -31,6 +31,7 @@ jobs:
       - name: Verify source and native collector
         run: |
           npm run native:check
+          npm run native-host:build
           npm test
 
       - name: Build Windows installer
