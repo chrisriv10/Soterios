@@ -5,6 +5,7 @@ window.Pages['firewall'] = {
   _ruleQuery: '',
   _ruleActionFilter: 'all',
   _ruleDirectionFilter: 'all',
+  _selectedRules: new Set(),
 
   t(key, vars) {
     return window.I18n?.t(key, vars) ?? key;
@@ -22,7 +23,9 @@ window.Pages['firewall'] = {
         <p class="page-subtitle">${escapeHtml(t('firewall.subtitle'))}</p>
       </header>
       <div id="firewallContent">
-        <div class="empty-state"><span class="spinner"></span>&nbsp;${escapeHtml(t('firewall.loading'))}</div>
+        <div class="analysis-loading">
+          <div class="analysis-loading-status"><span class="spinner"></span><span>${escapeHtml(t('firewall.loading'))}</span></div>
+        </div>
       </div>
     `;
     this.load(container);
@@ -64,6 +67,7 @@ window.Pages['firewall'] = {
 
       if (showPerimeterMap) await this._initPerimeter(container);
       await this._initRuleList(container);
+      this._wireRuleBulkBar(container, t);
       this._wireImportExport(container);
 
       content.addEventListener('click', (e) => {
@@ -110,7 +114,7 @@ window.Pages['firewall'] = {
 
     let list = profiles;
     if (!Array.isArray(list)) list = [list];
-    html += '<div class="dashboard-grid">';
+    html += '<div class="grid grid-3">';
     for (const res of list) {
       if (!res) continue;
       const name = res.Name || 'Profile';
@@ -151,18 +155,6 @@ window.Pages['firewall'] = {
   _renderPerimeterHtml(t) {
     return `
       <div class="list-row" id="perimeterCard" style="margin-top:24px; padding:24px 28px;">
-        <style>
-          #perimeterCard .perim-node { cursor:pointer; transition: opacity 0.5s ease; }
-          #perimeterCard .perim-node.entering circle.perim-dot { animation: perimPop 0.4s ease; }
-          #perimeterCard .perim-node.selected circle.perim-dot { stroke:#fff; stroke-width:2; }
-          #perimeterCard .perim-blocked-ring { animation: perimPulse 1.6s ease-out infinite; }
-          #perimeterCard .glossary-term { border-bottom:1px dotted var(--text-dim); cursor:help; }
-          @keyframes perimPop { from { transform: scale(0); } to { transform: scale(1); } }
-          @keyframes perimPulse {
-            0% { opacity:0.55; transform: scale(0.6); }
-            100% { opacity:0; transform: scale(1.8); }
-          }
-        </style>
         <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
           <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2" style="width:18px;height:18px;flex-shrink:0;">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -206,15 +198,23 @@ window.Pages['firewall'] = {
         </div>
 
         <div style="display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start;">
-          <div style="flex:2; min-width:320px;">
-            <svg id="perimeterSvg" viewBox="0 0 600 420" style="width:100%; height:auto; display:block;"></svg>
+          <div style="flex:2; min-width:320px;" id="perimeterVisualContainer">
+            <svg id="perimeterSvg" class="perimeter-radar" viewBox="0 0 600 420" style="width:100%; height:auto; display:block;"></svg>
             <div style="display:flex; justify-content:center; gap:20px; margin-top:10px; flex-wrap:wrap; font-size:0.78rem; color:var(--text-dim);">
               <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--ok);margin-right:5px;"></span>${escapeHtml(t('firewall.legendAllowed'))}</span>
               <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--warn);margin-right:5px;"></span>${escapeHtml(t('firewall.legendUnverified'))}</span>
               <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--danger);margin-right:5px;"></span>${escapeHtml(t('firewall.legendBlocked'))}</span>
             </div>
           </div>
-          <div style="flex:1; min-width:270px; max-width:340px;" id="connectionDetailPanel"></div>
+          <div style="flex:1; min-width:270px; max-width:340px; display:flex; flex-direction:column; gap:8px;" id="connectionDetailPanel">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+              <span style="font-weight:600; font-size:0.85rem;">${escapeHtml(t('firewall.whatAmILookingAt'))}</span>
+            </div>
+            <div id="connectionDetailContent"></div>
+          </div>
+        </div>
+        <div style="display:flex; justify-content:center; margin-top:12px;">
+          <button class="btn btn-sm btn-ghost" id="minimizeDetailBtn" style="padding:4px 8px; font-size:0.75rem;">${escapeHtml(t('common.minimize'))}</button>
         </div>
 
         <div style="margin-top:24px; padding-top:20px; border-top:1px solid var(--glass-border);">
@@ -252,6 +252,17 @@ window.Pages['firewall'] = {
               style="min-width:240px; padding:8px 12px; border-radius:8px; border:1px solid var(--glass-border); background:var(--bg-surface); color:var(--text-main);" />
           </div>
         </div>
+        <div id="ruleBulkBar" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:10px 12px; margin-bottom:10px; background:var(--bg-surface-hover); border-radius:8px;">
+          <label style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:var(--text-dim); cursor:pointer;">
+            <input type="checkbox" id="ruleSelectAll" /> <span>${escapeHtml(t('firewall.selectAll'))}</span>
+          </label>
+          <span id="ruleSelectedCount" style="font-size:0.8rem; color:var(--text-muted);"></span>
+          <div style="display:flex; gap:8px; margin-left:auto; flex-wrap:wrap;">
+            <button class="btn btn-sm" id="ruleBulkToggle" type="button" disabled>${escapeHtml(t('firewall.ruleDisable'))}</button>
+            <button class="btn btn-sm" style="color:var(--accent-danger);" id="ruleBulkDelete" type="button" disabled>${escapeHtml(t('firewall.deleteSelected'))}</button>
+            <button class="btn btn-sm btn-ghost" id="ruleBulkClear" type="button" disabled>${escapeHtml(t('firewall.clearSelection'))}</button>
+          </div>
+        </div>
         <div id="ruleListContainer" style="max-height:380px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;">
           <div class="empty-state">${escapeHtml(t('firewall.loadingRules'))}</div>
         </div>
@@ -271,6 +282,7 @@ window.Pages['firewall'] = {
 
     try {
       await window.api.invoke('firewall:setProfileEnabled', { profile: profileName, enabled: !currentlyEnabled });
+      window.DashboardCache?.invalidate?.();
       await this._refreshSummary(container, t);
     } catch (e) {
       alert(this._friendlyError(e, t('firewall.failedToggle', { action: turningOff ? t('common.disable') : t('common.enable'), profile: profileName })));
@@ -296,6 +308,8 @@ window.Pages['firewall'] = {
   _particleRaf: null,
   _perimeterNodes: new Map(),
   _perimeterNodeEls: new Map(),
+  _perimeterActivity: new Map(),
+  _perimeterConnToGroup: new Map(),
   _selectedKey: null,
   _trustedIps: [],
   _lastConnections: [],
@@ -304,6 +318,219 @@ window.Pages['firewall'] = {
   _directionFilter: 'all',
   _processFilter: 'all',
   _maxVisualNodes: 50,
+
+  _riskRank(risk) {
+    return risk === 'MALICIOUS' ? 3 : risk === 'UNKNOWN' ? 2 : 1;
+  },
+
+  _stableHash(value) {
+    const text = String(value || '');
+    let hash = 2166136261;
+    for (let i = 0; i < text.length; i++) {
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+  },
+
+  _endpointGroupKey(c) {
+    const pid = this._field(c, 'pid', 'OwningProcess');
+    const processName = this._field(c, 'processName') || 'unknown';
+    const remoteAddress = this._field(c, 'remoteAddress', 'RemoteAddress') || 'unknown';
+    return `${pid || processName}|${remoteAddress}`;
+  },
+
+  _aggregatePerimeterEndpoints(connections, applyFilters = true) {
+    const groups = new Map();
+    if (applyFilters) this._perimeterConnToGroup = new Map();
+
+    for (const c of connections || []) {
+      const connKey = this._connKey(c);
+      const memberRisk = this._classifyRisk(c, connKey);
+      if (applyFilters && !this._matchesFilters(c, memberRisk)) continue;
+
+      const key = this._endpointGroupKey(c);
+      const localPort = this._field(c, 'localPort', 'LocalPort');
+      const remotePort = this._field(c, 'remotePort', 'RemotePort');
+      const direction = this._getDirection(c, localPort, remotePort);
+      let group = groups.get(key);
+      if (!group) {
+        group = {
+          key,
+          c,
+          members: [],
+          risk: memberRisk,
+          processName: this._field(c, 'processName') || this.t('network.unknownProcess'),
+          pid: this._field(c, 'pid', 'OwningProcess'),
+          remoteAddress: this._field(c, 'remoteAddress', 'RemoteAddress'),
+          hostname: this._field(c, 'hostname'),
+          services: new Set(),
+          states: new Set(),
+          directions: new Set(),
+          count: 0
+        };
+        groups.set(key, group);
+      }
+      group.members.push(c);
+      group.count++;
+      group.directions.add(direction);
+      const service = this._field(c, 'serviceName');
+      const state = this._getConnState(c);
+      if (service) group.services.add(service);
+      if (state) group.states.add(state);
+      if (!group.hostname && this._field(c, 'hostname')) group.hostname = this._field(c, 'hostname');
+      if (this._riskRank(memberRisk) > this._riskRank(group.risk)) group.risk = memberRisk;
+      if (applyFilters) this._perimeterConnToGroup.set(connKey, key);
+    }
+
+    for (const group of groups.values()) {
+      group.direction = group.directions.size > 1 ? 'mixed' : [...group.directions][0] || 'outbound';
+      group.blocked = group.risk === 'MALICIOUS';
+      const digitRadius = String(group.count).length * 3.8 + 2;
+      group.nodeRadius = Math.min(15, Math.max(9, 6 + Math.log2(group.count + 1) * 2.2, digitRadius));
+      group.edgeWidth = Math.min(2.6, 0.8 + Math.log2(group.count + 1) * 0.45);
+    }
+    return [...groups.values()];
+  },
+
+  _recordPerimeterActivity(connections, now = Date.now()) {
+    const groups = this._aggregatePerimeterEndpoints(connections, false);
+    const current = new Map(groups.map((group) => [group.key, group]));
+    const staleAfterMs = 10 * 60 * 1000;
+
+    for (const [key, activity] of this._perimeterActivity) {
+      const group = current.get(key);
+      const previous = activity.samples[activity.samples.length - 1];
+      if (!group) {
+        activity.samples.push({ at: now, count: 0, risk: activity.lastRisk });
+        activity.samples = activity.samples.slice(-20);
+        activity.activeSince = null;
+        if (now - activity.lastSeen > staleAfterMs) this._perimeterActivity.delete(key);
+        continue;
+      }
+      if (!previous || previous.count === 0 || activity.activeSince == null) activity.activeSince = now;
+      activity.lastSeen = now;
+      activity.lastRisk = group.risk;
+      activity.samples.push({ at: now, count: group.count, risk: group.risk });
+      activity.samples = activity.samples.slice(-20);
+      current.delete(key);
+    }
+
+    for (const group of current.values()) {
+      this._perimeterActivity.set(group.key, {
+        firstSeen: now,
+        activeSince: now,
+        lastSeen: now,
+        lastRisk: group.risk,
+        samples: [{ at: now, count: group.count, risk: group.risk }]
+      });
+    }
+  },
+
+  _layoutPerimeterGroups(groups, cx = 300, cy = 210) {
+    const ringSpec = {
+      SAFE: { radii: [76, 96, 112] },
+      UNKNOWN: { radii: [128, 145] },
+      MALICIOUS: { radii: [174, 190] }
+    };
+    const placed = [];
+    const sectorSpan = Math.PI * 0.9;
+    const slotCount = 25;
+    const ordered = [...(groups || [])].sort((a, b) => {
+      const pa = this._stableHash(`${a.pid || a.processName}|angle`);
+      const pb = this._stableHash(`${b.pid || b.processName}|angle`);
+      return pa - pb || String(a.key).localeCompare(String(b.key));
+    });
+    for (const group of ordered) {
+      const processKey = `${group.pid || group.processName}`;
+      const processAngle = (this._stableHash(`${processKey}|angle`) / 0x100000000) * Math.PI * 2 - Math.PI / 2;
+      const spec = ringSpec[group.risk] || ringSpec.UNKNOWN;
+      const seed = this._stableHash(group.key);
+      const targetOffset = ((seed % 1001) / 1000 - 0.5) * sectorSpan;
+      const candidates = [];
+      for (let lane = 0; lane < spec.radii.length; lane++) {
+        for (let slot = 0; slot < slotCount; slot++) {
+          const slotOffset = ((slot / (slotCount - 1)) - 0.5) * sectorSpan;
+          const angle = processAngle + slotOffset + targetOffset * 0.22;
+          const radius = spec.radii[lane];
+          const x = cx + Math.cos(angle) * radius;
+          const y = cy + Math.sin(angle) * radius;
+          let overlap = 0;
+          for (const other of placed) {
+            const distance = Math.hypot(x - other.x, y - other.y);
+            const required = group.nodeRadius + other.nodeRadius + 4;
+            if (distance < required) overlap += required - distance;
+          }
+          candidates.push({ angle, radius, x, y, overlap, distanceFromTarget: Math.abs(slotOffset - targetOffset) });
+        }
+      }
+      candidates.sort((a, b) => a.overlap - b.overlap || a.distanceFromTarget - b.distanceFromTarget || a.radius - b.radius);
+      const chosen = candidates[0];
+      const item = { ...group, angle: chosen.angle, radius: chosen.radius, x: chosen.x, y: chosen.y };
+      placed.push(item);
+    }
+
+    // Repair the rare case where every deterministic slot is occupied. Keep
+    // each endpoint in its risk band while making the adjustment repeatable.
+    for (let pass = 0; pass < 8; pass++) {
+      let changed = false;
+      for (let i = 0; i < placed.length; i++) {
+        for (let j = i + 1; j < placed.length; j++) {
+          const a = placed[i], b = placed[j];
+          let dx = b.x - a.x, dy = b.y - a.y;
+          let distance = Math.hypot(dx, dy);
+          if (!distance) {
+            const angle = (this._stableHash(`${a.key}|${b.key}|repair`) / 0x100000000) * Math.PI * 2;
+            dx = Math.cos(angle); dy = Math.sin(angle); distance = 1;
+          }
+          const required = a.nodeRadius + b.nodeRadius + 4;
+          if (distance >= required) continue;
+          const push = (required - distance) / 2;
+          const ux = dx / distance, uy = dy / distance;
+          a.x -= ux * push; a.y -= uy * push;
+          b.x += ux * push; b.y += uy * push;
+          for (const item of [a, b]) {
+            const spec = ringSpec[item.risk] || ringSpec.UNKNOWN;
+            const radial = Math.hypot(item.x - cx, item.y - cy) || spec.radii[0];
+            const boundedRadius = Math.max(spec.radii[0], Math.min(spec.radii.at(-1), radial));
+            item.angle = Math.atan2(item.y - cy, item.x - cx);
+            item.radius = boundedRadius;
+            item.x = cx + Math.cos(item.angle) * boundedRadius;
+            item.y = cy + Math.sin(item.angle) * boundedRadius;
+          }
+          changed = true;
+        }
+      }
+      if (!changed) break;
+    }
+    return placed;
+  },
+
+  _orderPerimeterEndpoints(groups) {
+    const priority = { MALICIOUS: 0, UNKNOWN: 1, SAFE: 2 };
+    return [...(groups || [])].sort((a, b) => (
+      priority[a.risk] - priority[b.risk] || b.count - a.count || a.key.localeCompare(b.key)
+    ));
+  },
+
+  _formatObservedDuration(ms) {
+    const seconds = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
+    if (seconds < 60) return this.t('firewall.perimeterDurationSeconds', { count: seconds });
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return this.t('firewall.perimeterDurationMinutes', { count: minutes });
+    return this.t('firewall.perimeterDurationHours', { count: Math.floor(minutes / 60) });
+  },
+
+  _activitySparkline(samples, width = 220, height = 42) {
+    const values = (samples || []).map((sample) => Number(sample.count) || 0);
+    if (!values.length) return '';
+    const max = Math.max(1, ...values);
+    return values.map((value, index) => {
+      const x = values.length === 1 ? width : (index / (values.length - 1)) * width;
+      const y = height - 4 - (value / max) * (height - 8);
+      return `${index ? 'L' : 'M'} ${x.toFixed(1)} ${y.toFixed(1)}`;
+    }).join(' ');
+  },
 
   _glossary(key) {
     return this.t(`firewall.glossary.${key}`);
@@ -409,6 +636,29 @@ window.Pages['firewall'] = {
       });
     });
 
+    const minimizeBtn = container.querySelector('#minimizeDetailBtn');
+    if (minimizeBtn) {
+      minimizeBtn.addEventListener('click', () => {
+        const detailPanel = container.querySelector('#connectionDetailPanel');
+        const visualContainer = container.querySelector('#perimeterVisualContainer');
+        if (!detailPanel || !visualContainer) return;
+        
+        const isMinimized = detailPanel.style.display === 'none';
+        detailPanel.style.display = isMinimized ? 'flex' : 'none';
+        minimizeBtn.textContent = isMinimized ? (window.I18n?.t('common.minimize') ?? 'Minimize') : (window.I18n?.t('common.expand') ?? 'Expand');
+        
+        if (!isMinimized) {
+          visualContainer.style.flex = '1';
+          visualContainer.style.margin = '0 auto';
+          visualContainer.style.maxWidth = '600px';
+        } else {
+          visualContainer.style.flex = '2';
+          visualContainer.style.margin = '';
+          visualContainer.style.maxWidth = '';
+        }
+      });
+    }
+
     if (this._perimeterTimer) clearInterval(this._perimeterTimer);
     this._perimeterTimer = setInterval(() => {
       if (!document.body.contains(container)) {
@@ -434,6 +684,7 @@ window.Pages['firewall'] = {
       connections = Array.isArray(res) ? res : [];
     } catch (_) { return; }
     this._lastConnections = connections;
+    this._recordPerimeterActivity(connections);
     this._updateProcessFilterOptions(container, connections);
     this._renderPerimeter(container, connections);
     this._renderConnectionsTable(container, connections);
@@ -473,9 +724,10 @@ window.Pages['firewall'] = {
   _updateProcessFilterOptions(container, connections) {
     const select = container.querySelector('#processFilterSelect');
     if (!select) return;
-    const names = [...new Set(connections.map((c) => this._field(c, 'processName') || '(unknown process)'))].sort();
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+    const names = [...new Set(connections.map((c) => this._field(c, 'processName') || t('common.unknown')))].sort();
     const previousValue = select.value;
-    select.innerHTML = '<option value="all">All</option>' + names.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+    select.innerHTML = `<option value="all">${escapeHtml(t('common.all'))}</option>` + names.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
     if (previousValue && (previousValue === 'all' || names.includes(previousValue))) {
       select.value = previousValue;
     } else {
@@ -491,73 +743,13 @@ window.Pages['firewall'] = {
     if (!svg) return;
 
     const cx = 300, cy = 210;
-    const boundaryR = 175;
+    const boundaryR = 158;
+    const endpointGroups = this._orderPerimeterEndpoints(this._aggregatePerimeterEndpoints(connections, true));
+    const cap = Number.isFinite(this._maxVisualNodes) ? this._maxVisualNodes : endpointGroups.length;
+    const allItems = this._layoutPerimeterGroups(endpointGroups.slice(0, cap), cx, cy);
+    const hiddenCount = Math.max(0, endpointGroups.length - allItems.length);
 
-    const priority = { MALICIOUS: 0, UNKNOWN: 1, SAFE: 2 };
-    const withMeta = connections
-      .map((c) => {
-        const key = this._connKey(c);
-        const risk = this._classifyRisk(c, key);
-        return { c, key, risk };
-      })
-      .filter((item) => this._matchesFilters(item.c, item.risk));
-    withMeta.sort((a, b) => priority[a.risk] - priority[b.risk]);
-    const cap = Number.isFinite(this._maxVisualNodes) ? this._maxVisualNodes : withMeta.length;
-    const shown = withMeta.slice(0, cap);
-    const hiddenCount = Math.max(0, withMeta.length - shown.length);
-
-    for (const item of shown) {
-      const localPort = this._field(item.c, 'localPort', 'LocalPort');
-      const remotePort = this._field(item.c, 'remotePort', 'RemotePort');
-      item.direction = this._getDirection(item.c, localPort, remotePort);
-      item.blocked = item.risk === 'MALICIOUS';
-    }
-
-    const sectionOrder = ['MALICIOUS', 'UNKNOWN', 'SAFE'];
-    const sectionLabels = { MALICIOUS: t('firewall.legendBlocked'), UNKNOWN: t('firewall.legendUnverified'), SAFE: t('firewall.legendAllowed') };
-    const groups = sectionOrder
-      .map((risk) => ({ risk, items: shown.filter((i) => i.risk === risk) }))
-      .filter((g) => g.items.length > 0);
-
-    const GAP = groups.length > 1 ? (Math.PI * 2 * 0.02) : 0;
-    const totalGapAngle = GAP * groups.length;
-    const availableAngle = Math.PI * 2 - totalGapAngle;
-    const MIN_SECTION_FRACTION = groups.length > 1 ? 0.08 : 0;
-    const totalCount = shown.length || 1;
-    let cursor = -Math.PI / 2;
-    const sectionMeta = [];
-    for (const g of groups) {
-      const rawFraction = g.items.length / totalCount;
-      const fraction = Math.max(rawFraction, MIN_SECTION_FRACTION);
-      sectionMeta.push({ ...g, startAngle: cursor, sweep: availableAngle * fraction });
-      cursor += availableAngle * fraction + GAP;
-    }
-    const totalSweep = sectionMeta.reduce((s, g) => s + g.sweep, 0) + totalGapAngle;
-    const scale = totalSweep > 0 ? (Math.PI * 2) / totalSweep : 1;
-    cursor = -Math.PI / 2;
-    for (const g of sectionMeta) {
-      g.startAngle = cursor;
-      g.sweep *= scale;
-      cursor += g.sweep + GAP * scale;
-    }
-
-    for (const g of sectionMeta) {
-      const count = g.items.length;
-      const numBands = Math.max(1, Math.min(4, Math.ceil(count / 16)));
-      g.items.forEach((item, i) => {
-        const t = count <= 1 ? 0.5 : i / count;
-        const angle = g.startAngle + t * g.sweep;
-        const band = i % numBands;
-        const baseRadius = 108 + band * (58 / numBands);
-        const radius = item.blocked ? boundaryR : baseRadius;
-        item.angle = angle;
-        item.radius = radius;
-        item.x = cx + Math.cos(angle) * radius;
-        item.y = cy + Math.sin(angle) * radius;
-      });
-    }
-
-    const allItems = shown;
+    for (const item of allItems) item.activity = this._perimeterActivity.get(item.key) || null;
     const newKeys = new Set(allItems.map((i) => i.key));
     const prevKeys = new Set(this._perimeterNodes.keys());
     const enteringKeys = new Set([...newKeys].filter((k) => !prevKeys.has(k)));
@@ -571,68 +763,94 @@ window.Pages['firewall'] = {
     this._perimeterNodes = nodeMap;
 
     let chromeG = svg.querySelector('#perimStaticChrome');
+    let foregroundG = svg.querySelector('#perimForegroundChrome');
     let nodesG = svg.querySelector('#perimNodesLayer');
-    if (!chromeG || !nodesG) {
-      svg.innerHTML = '<g id="perimStaticChrome"></g><g id="perimNodesLayer"></g>';
+    if (!chromeG || !foregroundG || !nodesG) {
+      svg.innerHTML = '<g id="perimStaticChrome"></g><g id="perimNodesLayer"></g><g id="perimForegroundChrome"></g>';
       chromeG = svg.querySelector('#perimStaticChrome');
       nodesG = svg.querySelector('#perimNodesLayer');
+      foregroundG = svg.querySelector('#perimForegroundChrome');
       this._perimeterNodeEls = new Map();
     }
 
-    let chromeHtml = `
-      <circle cx="${cx}" cy="${cy}" r="${boundaryR}" fill="none" stroke="var(--glass-border)" stroke-width="1.5" stroke-dasharray="4 5"/>
-      <g>
-        <circle cx="${cx}" cy="${cy}" r="30" fill="var(--bg-surface-hover)" stroke="var(--accent-primary)" stroke-width="1.5"/>
-        <text x="${cx}" y="${cy - 2}" text-anchor="middle" font-size="10" font-weight="600" fill="var(--text-main)">${escapeHtml(t('firewall.thisPC'))}</text>
-        <text x="${cx}" y="${cy + 12}" text-anchor="middle" font-size="9" fill="var(--text-dim)">${allItems.length} shown</text>
-      </g>
-    `;
-    if (sectionMeta.length > 1) {
-      for (const g of sectionMeta) {
-        const color = this._riskColor(g.risk);
-        const midAngle = g.startAngle + g.sweep / 2;
-        const labelR = boundaryR + 16;
-        const lx = cx + Math.cos(midAngle) * labelR;
-        const ly = cy + Math.sin(midAngle) * labelR;
-        const dx1 = cx + Math.cos(g.startAngle) * 95, dy1 = cy + Math.sin(g.startAngle) * 95;
-        const dx2 = cx + Math.cos(g.startAngle) * (boundaryR + 8), dy2 = cy + Math.sin(g.startAngle) * (boundaryR + 8);
-        chromeHtml += `<line x1="${dx1}" y1="${dy1}" x2="${dx2}" y2="${dy2}" stroke="var(--glass-border)" stroke-width="1" stroke-dasharray="2 3"/>`;
-        chromeHtml += `<text x="${lx}" y="${ly}" text-anchor="middle" font-size="9" font-weight="600" fill="${color}">${sectionLabels[g.risk]} (${g.items.length})</text>`;
-      }
-    }
+    const socketsShown = allItems.reduce((sum, item) => sum + item.count, 0);
+    const blockedCount = allItems.filter((item) => item.blocked).length;
+    const hubCount = String(t('firewall.perimeterHubCount', { endpoints: allItems.length, sockets: socketsShown }));
+    const hubLines = hubCount.split(/\s*[·•]\s*/);
+    const endpointLine = hubLines[0] || `${allItems.length}`;
+    const socketLine = hubLines[1] || `${socketsShown}`;
+    const chromeHtml = `
+      <circle class="perim-risk-band perim-risk-band-safe" cx="${cx}" cy="${cy}" r="114"/>
+      <circle class="perim-risk-band perim-risk-band-unknown" cx="${cx}" cy="${cy}" r="149"/>
+      <g class="perim-hub">
+        <circle cx="${cx}" cy="${cy}" r="34"/>
+        <circle class="perim-hub-core" cx="${cx}" cy="${cy}" r="27"/>
+        <text x="${cx}" y="${cy - 6}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(t('firewall.thisPC'))}</text>
+        <text class="perim-hub-count" x="${cx}" y="${cy + 8}" text-anchor="middle" dominant-baseline="middle"><tspan x="${cx}" dy="0">${escapeHtml(endpointLine)}</tspan><tspan x="${cx}" dy="9">${escapeHtml(socketLine)}</tspan></text>
+      </g>`;
     chromeG.innerHTML = chromeHtml;
 
     for (const item of allItems) {
       const existing = this._perimeterNodeEls.get(item.key);
 
-      if (existing && existing.blocked === item.blocked) {
+      if (existing) {
         this._updatePerimeterNodeEl(existing, item, cx, cy);
-        item.particleEl = existing.particleEl;
+        item.particleEls = existing.particleEls;
         continue;
       }
 
-      if (existing) existing.g.remove();
-      const entering = enteringKeys.has(item.key) && !existing;
+      const entering = enteringKeys.has(item.key);
       const el = this._createPerimeterNodeEl(item, cx, cy, entering, container, svg);
       nodesG.appendChild(el.g);
       this._perimeterNodeEls.set(item.key, el);
-      item.particleEl = el.particleEl;
+      item.particleEls = el.particleEls;
     }
 
     for (const [key, el] of this._perimeterNodeEls) {
       if (!nodeMap.has(key)) {
-        el.g.remove();
         this._perimeterNodeEls.delete(key);
+        if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+          el.g.remove();
+        } else {
+          el.g.classList.add('leaving');
+          el.g.addEventListener('animationend', () => el.g.remove(), { once: true });
+        }
       }
     }
 
+    foregroundG.innerHTML = `
+      <circle class="perim-boundary-glow" cx="${cx}" cy="${cy}" r="${boundaryR}"/>
+      <circle class="perim-boundary" cx="${cx}" cy="${cy}" r="${boundaryR}"/>
+      <circle class="perim-risk-outline perim-risk-outline-safe" cx="${cx}" cy="${cy}" r="114"/>
+      <circle class="perim-risk-outline perim-risk-outline-unknown" cx="${cx}" cy="${cy}" r="149"/>
+      <circle class="perim-risk-outline perim-risk-outline-malicious ${blockedCount ? 'has-blocked' : ''}" cx="${cx}" cy="${cy}" r="184"/>
+      <g class="perim-ring-label perim-ring-label-safe" data-ring="safe" tabindex="0" aria-label="${escapeHtml(t('firewall.perimeterBandSafe'))}"><rect x="18" y="18" width="128" height="16" rx="8"/><text x="28" y="29" text-anchor="start">${escapeHtml(t('firewall.perimeterBandSafe'))}</text></g>
+      <g class="perim-ring-label perim-ring-label-unknown" data-ring="unknown" tabindex="0" aria-label="${escapeHtml(t('firewall.perimeterBandUnknown'))}"><rect x="18" y="40" width="148" height="16" rx="8"/><text x="28" y="51" text-anchor="start">${escapeHtml(t('firewall.perimeterBandUnknown'))}</text></g>
+      <g class="perim-ring-label perim-ring-label-malicious" data-ring="malicious" tabindex="0" aria-label="${escapeHtml(t('firewall.perimeterBandMalicious'))}"><rect x="18" y="62" width="148" height="16" rx="8"/><text x="28" y="73" text-anchor="start">${escapeHtml(t('firewall.perimeterBandMalicious'))}</text></g>`;
+
+    // Let users identify a ring without making the decorative boundaries
+    // interfere with node hit targets. Keyboard focus mirrors pointer hover.
+    foregroundG.querySelectorAll('.perim-ring-label').forEach((label) => {
+      const ring = label.dataset.ring;
+      const setHighlight = (active) => svg.classList.toggle(`perim-label-focus-${ring}`, active);
+      label.addEventListener('mouseenter', () => setHighlight(true));
+      label.addEventListener('mouseleave', () => setHighlight(false));
+      label.addEventListener('focus', () => setHighlight(true));
+      label.addEventListener('blur', () => setHighlight(false));
+    });
+
+    if (this._selectedKey && nodeMap.has(this._selectedKey)) {
+      this._renderDetailPanel(container, nodeMap.get(this._selectedKey));
+    }
+
     if (summary) {
-      const blockedCount = allItems.filter((i) => i.blocked).length;
       const unknownCount = allItems.filter((i) => i.risk === 'UNKNOWN').length;
       const totalConnections = connections.length;
-      const filteredCount = withMeta.length;
-      const pluralS = totalConnections === 1 ? '' : 's';
-      let countText = t('firewall.perimeterSummaryText', { total: totalConnections, s: pluralS, filtered: filteredCount, shown: allItems.length });
+      let countText = t('firewall.perimeterEndpointSummary', {
+        total: totalConnections,
+        endpoints: endpointGroups.length,
+        shown: allItems.length
+      });
       if (hiddenCount > 0) {
         countText += t('firewall.perimeterSummaryHidden', { hidden: hiddenCount });
       }
@@ -643,41 +861,46 @@ window.Pages['firewall'] = {
   _createPerimeterNodeEl(item, cx, cy, entering, container, svg) {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const color = this._riskColor(item.risk);
-    const label = escapeHtml(this._field(item.c, 'processName') || this._field(item.c, 'remoteAddress', 'RemoteAddress') || t('common.unknown'));
+    const label = t('firewall.perimeterNodeAria', {
+      process: item.processName,
+      address: item.remoteAddress,
+      count: item.count,
+      risk: this._riskLabel(item.risk)
+    });
     const selected = this._selectedKey === item.key ? 'selected' : '';
 
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    g.setAttribute('class', `perim-node ${entering ? 'entering' : ''} ${selected}`.trim());
+    g.setAttribute('class', `perim-node direction-${item.direction} ${item.blocked ? 'is-blocked' : ''} ${entering ? 'entering' : ''} ${selected}`.trim());
     g.setAttribute('data-key', item.key);
-    g.setAttribute('transform-origin', `${item.x}px ${item.y}px`);
+    g.style.transform = `translate(${item.x}px, ${item.y}px)`;
     g.style.pointerEvents = 'all';
-    // Make keyboard accessible
     g.setAttribute('role', 'button');
     g.setAttribute('tabindex', '0');
     g.setAttribute('aria-label', label);
 
-    let inner = `<title>${label}</title>`;
-    if (item.blocked) {
-      inner += `<circle class="perim-blocked-ring" cx="${item.x}" cy="${item.y}" r="7" fill="none" stroke="${color}" stroke-width="2" pointer-events="all"/>`;
-    } else {
-      const hubR = 32;
-      const lineStartX = cx + Math.cos(item.angle) * hubR;
-      const lineStartY = cy + Math.sin(item.angle) * hubR;
-      inner += `<line class="perim-line" x1="${lineStartX}" y1="${lineStartY}" x2="${item.x}" y2="${item.y}" stroke="${color}" stroke-width="1" opacity="0.25"/>`;
-      inner += `<circle class="perim-particle" data-key="${escapeHtml(item.key)}" cx="${item.x}" cy="${item.y}" r="2.2" fill="${color}" opacity="0.9"/>`;
-    }
-    inner += `<circle class="perim-hit" r="11" cx="${item.x}" cy="${item.y}" fill="rgba(0,0,0,0)" pointer-events="all"/>`;
-    inner += `<circle class="perim-dot" cx="${item.x}" cy="${item.y}" r="6" fill="${color}" pointer-events="all"/>`;
-    g.innerHTML = inner;
+    const edgeStartR = item.blocked ? 158 : 34;
+    const startX = cx + Math.cos(item.angle) * edgeStartR - item.x;
+    const startY = cy + Math.sin(item.angle) * edgeStartR - item.y;
+    g.innerHTML = `
+      <title>${escapeHtml(label)}</title>
+      <line class="perim-line" x1="${startX}" y1="${startY}" x2="0" y2="0" stroke="${color}" stroke-width="${item.edgeWidth}"/>
+      <circle class="perim-particle perim-particle-a" data-key="${escapeHtml(item.key)}" cx="${startX}" cy="${startY}" r="2.2" fill="${color}"/>
+      <circle class="perim-particle perim-particle-b" data-key="${escapeHtml(item.key)}" cx="0" cy="0" r="2.2" fill="${color}"/>
+      <circle class="perim-blocked-ring" cx="0" cy="0" r="${item.nodeRadius + 3}" stroke="${color}"/>
+      <g class="perim-node-core">
+        <circle class="perim-hit" r="${Math.max(13, item.nodeRadius + 5)}" cx="0" cy="0"/>
+        <circle class="perim-dot" cx="0" cy="0" r="${item.nodeRadius}" fill="${color}"/>
+        <text class="perim-node-count" x="0" y="0" dominant-baseline="middle">${item.count}</text>
+      </g>`;
 
     const handleNodeClick = () => {
       this._selectedKey = item.key;
       svg.querySelectorAll('.perim-node').forEach((n) => n.classList.remove('selected'));
       g.classList.add('selected');
+      if (g.parentNode) g.parentNode.appendChild(g);
       this._renderDetailPanel(container, this._perimeterNodes.get(item.key));
     };
-    g.querySelector('.perim-hit').addEventListener('click', handleNodeClick);
-    g.querySelector('.perim-dot').addEventListener('click', handleNodeClick);
+    g.addEventListener('click', handleNodeClick);
 
     // Keyboard accessibility: Enter/Space to activate
     g.addEventListener('keydown', (e) => {
@@ -689,60 +912,68 @@ window.Pages['firewall'] = {
 
     return {
       g,
-      blocked: item.blocked,
       dotEl: g.querySelector('.perim-dot'),
       lineEl: g.querySelector('.perim-line'),
       blockedRingEl: g.querySelector('.perim-blocked-ring'),
-      particleEl: g.querySelector('.perim-particle')
+      countEl: g.querySelector('.perim-node-count'),
+      particleEls: Array.from(g.querySelectorAll('.perim-particle'))
     };
   },
 
   _updatePerimeterNodeEl(existing, item, cx, cy) {
     const color = this._riskColor(item.risk);
-    const { g, dotEl, lineEl, blockedRingEl, particleEl } = existing;
+    const { g, dotEl, lineEl, blockedRingEl, countEl, particleEls } = existing;
 
     g.classList.toggle('selected', this._selectedKey === item.key);
-    g.setAttribute('transform-origin', `${item.x}px ${item.y}px`);
-
-    const hitEl = g.querySelector('.perim-hit');
-    if (hitEl) { hitEl.setAttribute('cx', item.x); hitEl.setAttribute('cy', item.y); }
+    g.classList.toggle('is-blocked', item.blocked);
+    ['inbound', 'outbound', 'mixed'].forEach((direction) => {
+      g.classList.toggle(`direction-${direction}`, item.direction === direction);
+    });
+    g.style.transform = `translate(${item.x}px, ${item.y}px)`;
 
     if (dotEl) {
-      dotEl.setAttribute('cx', item.x);
-      dotEl.setAttribute('cy', item.y);
       dotEl.setAttribute('fill', color);
+      dotEl.setAttribute('r', item.nodeRadius);
     }
 
-    if (item.blocked) {
-      if (blockedRingEl) {
-        blockedRingEl.setAttribute('cx', item.x);
-        blockedRingEl.setAttribute('cy', item.y);
-        blockedRingEl.setAttribute('stroke', color);
-      }
-    } else {
-      const hubR = 32;
-      const lineStartX = cx + Math.cos(item.angle) * hubR;
-      const lineStartY = cy + Math.sin(item.angle) * hubR;
-      if (lineEl) {
-        lineEl.setAttribute('x1', lineStartX);
-        lineEl.setAttribute('y1', lineStartY);
-        lineEl.setAttribute('x2', item.x);
-        lineEl.setAttribute('y2', item.y);
-        lineEl.setAttribute('stroke', color);
-      }
-      if (particleEl) particleEl.setAttribute('fill', color);
+    if (blockedRingEl) {
+      blockedRingEl.setAttribute('r', item.nodeRadius + 3);
+      blockedRingEl.setAttribute('stroke', color);
     }
+    const edgeStartR = item.blocked ? 158 : 34;
+    const startX = cx + Math.cos(item.angle) * edgeStartR - item.x;
+    const startY = cy + Math.sin(item.angle) * edgeStartR - item.y;
+    if (lineEl) {
+      lineEl.setAttribute('x1', startX);
+      lineEl.setAttribute('y1', startY);
+      lineEl.setAttribute('stroke', color);
+      lineEl.setAttribute('stroke-width', item.edgeWidth);
+    }
+    for (const particleEl of particleEls || []) {
+      particleEl.setAttribute('fill', color);
+    }
+    if (countEl) countEl.textContent = item.count;
 
     const titleEl = g.querySelector('title');
-    const label = this._field(item.c, 'processName') || this._field(item.c, 'remoteAddress', 'RemoteAddress') || t('common.unknown');
+    const label = this.t('firewall.perimeterNodeAria', {
+      process: item.processName,
+      address: item.remoteAddress,
+      count: item.count,
+      risk: this._riskLabel(item.risk)
+    });
     if (titleEl && titleEl.textContent !== label) titleEl.textContent = label;
+    g.setAttribute('aria-label', label);
   },
 
   _startParticleLoop(container) {
     if (this._particleRaf) cancelAnimationFrame(this._particleRaf);
+    if (this._particleObserver) {
+      this._particleObserver.disconnect();
+      this._particleObserver = null;
+    }
     const svg = container.querySelector('#perimeterSvg');
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
     const cx = 300, cy = 210;
-    const hubR = 32;
     const speed = 0.00045;
     const FRAME_INTERVAL_MS = 50;
     let lastFrameTime = 0;
@@ -755,14 +986,21 @@ window.Pages['firewall'] = {
       if (this._particleVisible && !document.hidden && (t - lastFrameTime) >= FRAME_INTERVAL_MS) {
         lastFrameTime = t;
         for (const [key, item] of this._perimeterNodes) {
-          if (item.blocked || !item.particleEl) continue;
+          if (item.blocked || !item.particleEls?.length) continue;
+          const hubR = 34;
           const phase = (key.length * 37) % 1000;
-          let frac = ((t * speed) + phase / 1000) % 1;
-          const travel = item.direction === 'inbound' ? (1 - frac) : frac;
+          const frac = ((t * speed) + phase / 1000) % 1;
           const startX = cx + Math.cos(item.angle) * hubR;
           const startY = cy + Math.sin(item.angle) * hubR;
-          item.particleEl.setAttribute('cx', startX + (item.x - startX) * travel);
-          item.particleEl.setAttribute('cy', startY + (item.y - startY) * travel);
+          const travels = item.direction === 'mixed'
+            ? [frac, 1 - ((frac + 0.42) % 1)]
+            : [item.direction === 'inbound' ? 1 - frac : frac];
+          item.particleEls.forEach((particle, index) => {
+            if (index >= travels.length) return;
+            const travel = travels[index];
+            particle.setAttribute('cx', startX + (item.x - startX) * travel - item.x);
+            particle.setAttribute('cy', startY + (item.y - startY) * travel - item.y);
+          });
         }
       }
       this._particleRaf = requestAnimationFrame(loop);
@@ -780,85 +1018,126 @@ window.Pages['firewall'] = {
   _renderDetailPanel(container, item) {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const panel = container.querySelector('#connectionDetailPanel');
+    const contentDiv = container.querySelector('#connectionDetailContent');
     if (!panel) return;
     if (!item) {
-      panel.innerHTML = `
-        <div class="card compact" style="display:flex; flex-direction:column; gap:8px;">
-          <div style="font-weight:600; font-size:0.85rem;">${escapeHtml(t('firewall.perimeterDetail'))}</div>
-          <div style="font-size:0.78rem; color:var(--text-dim); display:flex; flex-direction:column; gap:6px;">
-            <div>${escapeHtml(t('firewall.perimeterDesc1'))}</div>
-            <div style="margin-top:6px;">${t('firewall.perimeterDesc2', { unverified: `<span class="glossary-term" title="${escapeHtml(this._glossary('unverified'))}">${escapeHtml(t('common.unverified'))}</span>` })}</div>
-            <div><span class="glossary-term" title="${escapeHtml(this._glossary('inbound'))}">${escapeHtml(t('firewall.inbound'))}</span> / <span class="glossary-term" title="${escapeHtml(this._glossary('outbound'))}">${escapeHtml(t('firewall.outbound'))}</span> ${escapeHtml(t('firewall.perimeterDesc3'))}</div>
-            <div><span class="glossary-term" title="${escapeHtml(this._glossary('established'))}">${escapeHtml(t('firewall.established'))}</span>, <span class="glossary-term" title="${escapeHtml(this._glossary('listen'))}">${escapeHtml(t('firewall.listen'))}</span>, <span class="glossary-term" title="${escapeHtml(this._glossary('time_wait'))}">${escapeHtml(t('firewall.time_wait'))}</span> ${escapeHtml(t('firewall.perimeterDesc4'))}</div>
-          </div>
-        </div>`;
+      if (contentDiv) {
+        contentDiv.innerHTML = `
+          <div class="card compact" style="display:flex; flex-direction:column; gap:8px;">
+            <div style="font-size:0.78rem; color:var(--text-dim); display:flex; flex-direction:column; gap:6px;">
+              <div>${escapeHtml(t('firewall.perimeterDesc1'))}</div>
+              <div style="margin-top:6px;">${t('firewall.perimeterDesc2', { unverified: `<span class="glossary-term" title="${escapeHtml(this._glossary('unverified'))}">${escapeHtml(t('common.unverified'))}</span>` })}</div>
+              <div><span class="glossary-term" title="${escapeHtml(this._glossary('inbound'))}">${escapeHtml(t('firewall.inbound'))}</span> / <span class="glossary-term" title="${escapeHtml(this._glossary('outbound'))}">${escapeHtml(t('firewall.outbound'))}</span> ${escapeHtml(t('firewall.perimeterDesc3'))}</div>
+              <div><span class="glossary-term" title="${escapeHtml(this._glossary('established'))}">${escapeHtml(t('firewall.established'))}</span>, <span class="glossary-term" title="${escapeHtml(this._glossary('listen'))}">${escapeHtml(t('firewall.listen'))}</span>, <span class="glossary-term" title="${escapeHtml(this._glossary('time_wait'))}">${escapeHtml(t('firewall.time_wait'))}</span> ${escapeHtml(t('firewall.perimeterDesc4'))}</div>
+            </div>
+          </div>`;
+      }
       return;
     }
-    const c = item.c;
-    const remoteAddress = this._field(c, 'remoteAddress', 'RemoteAddress');
-    const remotePort = this._field(c, 'remotePort', 'RemotePort');
-    const localAddress = this._field(c, 'localAddress', 'LocalAddress');
-    const localPort = this._field(c, 'localPort', 'LocalPort');
-    const pid = this._field(c, 'pid', 'OwningProcess');
-    const processName = this._field(c, 'processName') || t('common.unknownProcess');
-    const hostname = this._field(c, 'hostname');
-    const service = this._field(c, 'serviceName');
-    const state = this._getConnState(c);
-    const stateExplain = this._glossary(state.toLowerCase()) || '';
+    const members = item.members?.length ? item.members : [item.c].filter(Boolean);
+    const c = members[0] || item.c;
+    const remoteAddress = item.remoteAddress || this._field(c, 'remoteAddress', 'RemoteAddress');
+    const pid = item.pid || this._field(c, 'pid', 'OwningProcess');
+    const processName = item.processName || this._field(c, 'processName') || t('network.unknownProcess');
+    const hostname = item.hostname || this._field(c, 'hostname');
     const risk = item.risk;
     const riskLabel = this._riskLabel(risk);
     const color = this._riskColor(risk);
     const isTrusted = this._trustedIps.includes(remoteAddress);
-    const bandwidthEligible = this._isIPv4(localAddress) && this._isIPv4(remoteAddress) && state === 'ESTABLISHED';
+    const activity = item.activity || this._perimeterActivity.get(item.key);
+    const activeFor = activity?.activeSince ? this._formatObservedDuration(Date.now() - activity.activeSince) : t('common.unknown');
+    const sparklinePath = this._activitySparkline(activity?.samples || []);
+    const directionLabel = item.direction === 'mixed'
+      ? t('firewall.perimeterDirectionMixed')
+      : item.direction === 'inbound' ? t('firewall.detailDirectionIn') : t('firewall.detailDirectionOut');
+    const services = [...(item.services || [])];
+    const states = [...(item.states || [])];
 
-    panel.innerHTML = `
-      <div class="card compact" style="display:flex; flex-direction:column; gap:10px;">
-        <div style="display:flex; align-items:center; justify-content:space-between;">
-          <span style="font-weight:600;">${escapeHtml(processName)}</span>
-          <span class="glossary-term" title="${escapeHtml(risk === 'UNKNOWN' ? this._glossary('unverified') : '')}" style="font-size:0.7rem; font-weight:600; color:${color}; background:${color}15; padding:3px 8px; border-radius:4px;">${riskLabel.toUpperCase()}${item.blocked ? ' · BLOCKED' : ''}</span>
+    const memberRows = members.map((member, index) => {
+      const memberRemotePort = this._field(member, 'remotePort', 'RemotePort');
+      const memberLocalAddress = this._field(member, 'localAddress', 'LocalAddress');
+      const memberLocalPort = this._field(member, 'localPort', 'LocalPort');
+      const memberState = this._getConnState(member);
+      const memberService = this._field(member, 'serviceName');
+      const memberDirection = this._getDirection(member, memberLocalPort, memberRemotePort);
+      const bandwidthEligible = this._isIPv4(memberLocalAddress) && this._isIPv4(remoteAddress) && memberState === 'ESTABLISHED';
+      return `<div class="perim-member-row" data-member-index="${index}">
+        <div class="perim-member-main">
+          <span>${escapeHtml(memberLocalAddress)}:${escapeHtml(memberLocalPort)}</span>
+          <span class="perim-member-arrow">${memberDirection === 'inbound' ? '&#8592;' : '&#8594;'}</span>
+          <span>${escapeHtml(remoteAddress)}:${escapeHtml(memberRemotePort)}</span>
         </div>
-        <div style="font-size:0.8rem; color:var(--text-dim); display:flex; flex-direction:column; gap:4px;">
-          <div>${escapeHtml(t('firewall.detailRemote', { ip: remoteAddress, port: remotePort }))}${hostname ? ` (${escapeHtml(hostname)})` : ''}</div>
-          ${service ? `<div>${escapeHtml(t('firewall.detailService', { service }))}</div>` : ''}
-          <div>${escapeHtml(t('firewall.detailLocal', { ip: localAddress, port: localPort }))}</div>
-          <div>${escapeHtml(t('firewall.detailDirection', { direction: item.direction === 'inbound' ? t('firewall.detailDirectionIn') : t('firewall.detailDirectionOut'), est: t('firewall.detailDirectionEst') }))}</div>
-          <div>${escapeHtml(t('firewall.detailState', { state }))}</div>
-          <div>${escapeHtml(t('firewall.detailPid', { pid: pid ? escapeHtml(pid) : t('common.unknown') }))}</div>
-          ${bandwidthEligible
-            ? `<div id="detailBandwidthResult" style="opacity:0.85;">${escapeHtml(t('firewall.detailBandwidthNotMeasured'))}</div>`
-            : !this._isIPv4(localAddress) || !this._isIPv4(remoteAddress)
-              ? `<div style="opacity:0.7;">${escapeHtml(t('firewall.detailBandwidthIpv6'))}</div>`
-              : `<div style="opacity:0.7;">${escapeHtml(t('firewall.detailBandwidthState', { state }))}</div>`
-          }
+        <div class="perim-member-meta">
+          <span>${escapeHtml(memberService || t('common.unknown'))}</span>
+          <span>${escapeHtml(memberState)}</span>
+        </div>
+        <div class="perim-member-actions">
+          ${bandwidthEligible ? `<button class="btn btn-sm" data-member-bandwidth="${index}">${escapeHtml(t('firewall.measureBandwidth'))}</button>` : ''}
+          <button class="btn btn-sm" data-member-block="${index}">${escapeHtml(t('firewall.blockConnection'))}</button>
+        </div>
+        <div class="perim-member-result" data-member-result="${index}"></div>
+      </div>`;
+    }).join('');
+
+    if (contentDiv) {
+      contentDiv.innerHTML = `
+      <div class="card compact perim-detail-card">
+        <div class="perim-detail-heading">
+          <span style="font-weight:600;">${escapeHtml(processName)}</span>
+          <span class="glossary-term perim-risk-badge" title="${escapeHtml(risk === 'UNKNOWN' ? this._glossary('unverified') : '')}" style="--perim-risk:${color};">${escapeHtml(riskLabel.toUpperCase())}</span>
+        </div>
+        <div class="perim-endpoint-address">${escapeHtml(remoteAddress)}${hostname ? ` <span>${escapeHtml(hostname)}</span>` : ''}</div>
+        <div class="perim-kpi-grid">
+          <div><strong>${item.count}</strong><span>${escapeHtml(t('firewall.perimeterSockets'))}</span></div>
+          <div><strong>${escapeHtml(activeFor)}</strong><span>${escapeHtml(t('firewall.perimeterObservedFor'))}</span></div>
+          <div><strong>${escapeHtml(directionLabel)}</strong><span>${escapeHtml(t('firewall.direction'))}</span></div>
+        </div>
+        <div class="perim-activity-chart">
+          <div><span>${escapeHtml(t('firewall.perimeterRecentActivity'))}</span><span>${escapeHtml(t('firewall.perimeterPollWindow'))}</span></div>
+          <svg viewBox="0 0 220 42" preserveAspectRatio="none" role="img" aria-label="${escapeHtml(t('firewall.perimeterActivityAria'))}">
+            <path class="perim-sparkline-fill" d="${sparklinePath ? `${sparklinePath} L 220 42 L 0 42 Z` : ''}"></path>
+            <path class="perim-sparkline-line" d="${sparklinePath}"></path>
+          </svg>
+        </div>
+        <div class="perim-detail-meta">
+          <div>${escapeHtml(t('firewall.detailPid', { pid: pid || t('common.unknown') }))}</div>
+          ${services.length ? `<div>${escapeHtml(t('firewall.perimeterServices', { services: services.join(', ') }))}</div>` : ''}
+          ${states.length ? `<div>${escapeHtml(t('firewall.perimeterStates', { states: states.join(', ') }))}</div>` : ''}
         </div>
         <div id="detailWhoisResult" style="font-size:0.78rem; color:var(--text-dim);"></div>
         <div id="detailProcessResult" style="font-size:0.78rem; color:var(--text-dim);"></div>
-        <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
-          ${bandwidthEligible
-            ? `<button class="btn btn-sm" data-action="bandwidth" title="${escapeHtml(t('firewall.bandwidthTooltip'))}">${escapeHtml(t('firewall.measureBandwidth'))}</button>`
-            : ''
-          }
-          <button class="btn btn-sm" data-action="block-conn">${escapeHtml(t('firewall.blockConnection'))}</button>
+        <div class="perim-group-actions">
           <button class="btn btn-sm" data-action="block-ip">${escapeHtml(t('firewall.blockIp'))}</button>
           <button class="btn btn-sm" data-action="block-app" ${pid ? '' : 'disabled'}>${escapeHtml(t('firewall.blockApp'))}</button>
           <button class="btn btn-sm" data-action="trust">${escapeHtml(isTrusted ? t('firewall.untrust') : t('firewall.trust'))}</button>
           <button class="btn btn-sm" data-action="whois" title="${escapeHtml(this._glossary('whois'))}">${escapeHtml(t('firewall.whois'))}</button>
           <button class="btn btn-sm" data-action="process" ${pid ? '' : 'disabled'}>${escapeHtml(t('firewall.viewProcess'))}</button>
         </div>
+        <div class="perim-members-heading">${escapeHtml(t('firewall.perimeterMemberConnections', { count: members.length }))}</div>
+        <div class="perim-members-list">${memberRows}</div>
       </div>
-    `;
+      `;
 
-    panel.querySelector('[data-action="block-conn"]').addEventListener('click', () => this._blockConnection(container, c));
-    panel.querySelector('[data-action="block-ip"]').addEventListener('click', () => this._blockIp(container, remoteAddress));
-    panel.querySelector('[data-action="block-app"]').addEventListener('click', () => this._blockApp(container, pid, processName));
-    panel.querySelector('[data-action="trust"]').addEventListener('click', () => this._toggleTrust(container, remoteAddress, isTrusted));
-    panel.querySelector('[data-action="whois"]').addEventListener('click', () => this._runWhois(container, remoteAddress));
-    panel.querySelector('[data-action="process"]').addEventListener('click', () => this._showProcessDetails(container, pid));
-    const bandwidthBtn = panel.querySelector('[data-action="bandwidth"]');
-    if (bandwidthBtn) {
-      bandwidthBtn.addEventListener('click', () => this._measureBandwidth(container, bandwidthBtn, {
-        localAddress, localPort, remoteAddress, remotePort
-      }));
+      contentDiv.querySelector('[data-action="block-ip"]').addEventListener('click', () => this._blockIp(container, remoteAddress));
+      contentDiv.querySelector('[data-action="block-app"]').addEventListener('click', () => this._blockApp(container, pid, processName));
+      contentDiv.querySelector('[data-action="trust"]').addEventListener('click', () => this._toggleTrust(container, remoteAddress, isTrusted));
+      contentDiv.querySelector('[data-action="whois"]').addEventListener('click', () => this._runWhois(container, remoteAddress));
+      contentDiv.querySelector('[data-action="process"]').addEventListener('click', () => this._showProcessDetails(container, pid));
+      contentDiv.querySelectorAll('[data-member-block]').forEach((btn) => {
+        const member = members[Number(btn.dataset.memberBlock)];
+        btn.addEventListener('click', () => this._blockConnection(container, member));
+      });
+      contentDiv.querySelectorAll('[data-member-bandwidth]').forEach((btn) => {
+        const index = Number(btn.dataset.memberBandwidth);
+        const member = members[index];
+        const target = contentDiv.querySelector(`[data-member-result="${index}"]`);
+        btn.addEventListener('click', () => this._measureBandwidth(container, btn, {
+          localAddress: this._field(member, 'localAddress', 'LocalAddress'),
+          localPort: this._field(member, 'localPort', 'LocalPort'),
+          remoteAddress,
+          remotePort: this._field(member, 'remotePort', 'RemotePort')
+        }, target));
+      });
     }
   },
 
@@ -903,19 +1182,26 @@ window.Pages['firewall'] = {
     tableEl.querySelectorAll('[data-conn-key]').forEach((row) => {
       row.addEventListener('click', () => {
         const key = row.getAttribute('data-conn-key');
-        const node = this._perimeterNodes.get(key);
+        const groupKey = this._perimeterConnToGroup.get(key) || this._endpointGroupKey((withMeta.find((m) => m.key === key) || {}).c || {});
+        const node = this._perimeterNodes.get(groupKey);
         if (node) {
-          this._selectedKey = key;
+          this._selectedKey = groupKey;
           const svg = container.querySelector('#perimeterSvg');
           if (svg) {
             svg.querySelectorAll('.perim-node').forEach((n) => n.classList.remove('selected'));
-            const match = svg.querySelector(`[data-key="${CSS.escape(key)}"]`);
+            const match = svg.querySelector(`[data-key="${CSS.escape(groupKey)}"]`);
             if (match) match.classList.add('selected');
           }
           this._renderDetailPanel(container, node);
         } else {
           const found = withMeta.find((m) => m.key === key);
-          if (found) this._renderDetailPanel(container, { ...found, direction: this._getDirection(found.c, this._field(found.c, 'localPort', 'LocalPort'), this._field(found.c, 'remotePort', 'RemotePort')), blocked: found.risk === 'MALICIOUS' });
+          if (found) {
+            const fallbackGroup = this._aggregatePerimeterEndpoints([found.c], false)[0];
+            if (fallbackGroup) {
+              fallbackGroup.activity = this._perimeterActivity.get(fallbackGroup.key) || null;
+              this._renderDetailPanel(container, fallbackGroup);
+            }
+          }
         }
       });
     });
@@ -991,9 +1277,9 @@ window.Pages['firewall'] = {
     } catch (e) { alert(this._friendlyError(e, t('firewall.failedTrust'))); }
   },
 
-  async _measureBandwidth(container, btn, spec) {
+  async _measureBandwidth(container, btn, spec, resultTarget = null) {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
-    const target = container.querySelector('#detailBandwidthResult');
+    const target = resultTarget || container.querySelector('#detailBandwidthResult');
     const originalLabel = btn.textContent;
     btn.disabled = true;
     btn.textContent = t('firewall.measuringBandwidth');
@@ -1093,6 +1379,96 @@ window.Pages['firewall'] = {
     }
   },
 
+  _wireRuleBulkBar(container, t) {
+    const selectAll = container.querySelector('#ruleSelectAll');
+    const bulkToggle = container.querySelector('#ruleBulkToggle');
+    const bulkDelete = container.querySelector('#ruleBulkDelete');
+    const bulkClear = container.querySelector('#ruleBulkClear');
+
+    if (selectAll) {
+      selectAll.addEventListener('change', () => {
+        const managed = (this._ruleCache || []).filter((r) => r.managedByApp);
+        if (selectAll.checked) managed.forEach((r) => this._selectedRules.add(r.name));
+        else this._selectedRules.clear();
+        this._updateRuleSelectionUi(container, t);
+      });
+    }
+
+    if (bulkToggle) {
+      bulkToggle.addEventListener('click', async () => {
+        const names = [...this._selectedRules];
+        if (!names.length) return;
+        const allEnabled = names.every((n) => {
+          const rule = (this._ruleCache || []).find((r) => r.name === n);
+          return rule ? rule.enabled : false;
+        });
+        try {
+          const res = await window.api.invoke('firewall:setRulesEnabled', { names, enabled: !allEnabled });
+          this._selectedRules.clear();
+          await this._initRuleList(container);
+          this._refreshSummary(container);
+          if (res && res.failed && res.failed.length) {
+            alert(t('firewall.bulkTogglePartial', { updated: res.updated ? res.updated.length : 0, failed: res.failed.length }));
+          }
+        } catch (e) { alert(this._friendlyError(e, t('firewall.failedToggleRule'))); }
+      });
+    }
+
+    if (bulkDelete) {
+      bulkDelete.addEventListener('click', async () => {
+        const names = [...this._selectedRules];
+        if (!names.length) return;
+        if (!window.confirm(t('firewall.confirmDeleteRules', { count: names.length }))) return;
+        try {
+          const res = await window.api.invoke('firewall:deleteRules', names);
+          this._selectedRules.clear();
+          await this._initRuleList(container);
+          this._refreshSummary(container);
+          if (res && res.failed && res.failed.length) {
+            alert(t('firewall.bulkDeletePartial', { deleted: res.deleted ? res.deleted.length : 0, failed: res.failed.length }));
+          }
+        } catch (e) { alert(this._friendlyError(e, t('firewall.failedDeleteRule'))); }
+      });
+    }
+
+    if (bulkClear) {
+      bulkClear.addEventListener('click', () => {
+        this._selectedRules.clear();
+        this._updateRuleSelectionUi(container, t);
+      });
+    }
+  },
+
+  _updateRuleSelectionUi(container, t) {
+    const selectAll = container.querySelector('#ruleSelectAll');
+    const countEl = container.querySelector('#ruleSelectedCount');
+    const bulkToggle = container.querySelector('#ruleBulkToggle');
+    const bulkDelete = container.querySelector('#ruleBulkDelete');
+    const bulkClear = container.querySelector('#ruleBulkClear');
+    const count = this._selectedRules.size;
+    if (countEl) countEl.textContent = count ? t('firewall.selectedCount', { count }) : '';
+    const managedVisible = (this._ruleCache || []).filter((r) => r.managedByApp);
+    const visibleSelected = managedVisible.filter((r) => this._selectedRules.has(r.name)).length;
+    if (selectAll) {
+      selectAll.checked = managedVisible.length > 0 && visibleSelected === managedVisible.length;
+      selectAll.indeterminate = visibleSelected > 0 && visibleSelected < managedVisible.length;
+    }
+    if (bulkToggle) {
+      bulkToggle.disabled = count === 0;
+      if (count) {
+        const allEnabled = [...this._selectedRules].every((n) => {
+          const rule = (this._ruleCache || []).find((r) => r.name === n);
+          return rule ? rule.enabled : false;
+        });
+        bulkToggle.textContent = allEnabled ? t('firewall.ruleDisable') : t('firewall.ruleEnable');
+      } else {
+        bulkToggle.textContent = t('firewall.ruleDisable');
+      }
+    }
+    if (bulkDelete) bulkDelete.disabled = count === 0;
+    if (bulkClear) bulkClear.disabled = count === 0;
+  },
+
   async _initRuleList(container) {
     const listEl = container.querySelector('#ruleListContainer');
     const searchInput = container.querySelector('#ruleSearchInput');
@@ -1115,6 +1491,10 @@ window.Pages['firewall'] = {
 
     try {
       this._ruleCache = (await window.api.invoke('firewall:listRules')) || [];
+      const known = new Set(this._ruleCache.map((r) => r.name));
+      for (const name of [...this._selectedRules]) {
+        if (!known.has(name)) this._selectedRules.delete(name);
+      }
       applyFilters();
     } catch (e) {
       listEl.innerHTML = `<div class="empty-state">Error loading rules: ${escapeHtml(this._friendlyError(e, 'Unable to load rules.'))}</div>`;
@@ -1152,6 +1532,7 @@ window.Pages['firewall'] = {
       const actionColor = r.action === 'Allow' ? 'var(--ok)' : 'var(--danger)';
       const dirLabel = r.direction === 'Inbound' ? 'IN' : 'OUT';
       return `<div class="log-row" style="display:flex; align-items:center; gap:10px; content-visibility:auto; contain-intrinsic-size: 0 30px; ${r.enabled ? '' : 'opacity:0.5;'}">
+        ${r.managedByApp ? `<input type="checkbox" data-rule-select="${escapeHtml(r.name)}" ${this._selectedRules.has(r.name) ? 'checked' : ''} style="flex-shrink:0;" />` : ''}
         <span class="log-tag" style="background:${actionColor}22; color:${actionColor};">${escapeHtml(r.action || '')}</span>
         <span class="log-tag info">${dirLabel}</span>
         <span class="log-path" style="flex:1;">${escapeHtml(r.name || '')}${r.program ? ` — ${escapeHtml(r.program)}` : ''}${r.remoteAddress ? ` — ${escapeHtml(r.remoteAddress)}` : ''}</span>
@@ -1161,6 +1542,16 @@ window.Pages['firewall'] = {
         ` : ''}
       </div>`;
     }).join('');
+
+    listEl.querySelectorAll('[data-rule-select]').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        const name = cb.getAttribute('data-rule-select');
+        if (cb.checked) this._selectedRules.add(name);
+        else this._selectedRules.delete(name);
+        this._updateRuleSelectionUi(container, t);
+      });
+    });
+    this._updateRuleSelectionUi(container, t);
 
     listEl.querySelectorAll('[data-rule-toggle]').forEach((btn) => {
       btn.addEventListener('click', async () => {
@@ -1184,5 +1575,24 @@ window.Pages['firewall'] = {
         } catch (e) { alert(this._friendlyError(e, t('firewall.failedDeleteRule'))); }
       });
     });
+  },
+
+  destroy() {
+    if (this._summaryTimer) clearInterval(this._summaryTimer);
+    if (this._perimeterTimer) clearInterval(this._perimeterTimer);
+    if (this._particleRaf) cancelAnimationFrame(this._particleRaf);
+    if (this._particleObserver) this._particleObserver.disconnect();
+    this._summaryTimer = null;
+    this._perimeterTimer = null;
+    this._particleRaf = null;
+    this._particleObserver = null;
+    this._perimeterPolling = false;
+    this._perimeterNodes = new Map();
+    this._perimeterNodeEls = new Map();
+    this._perimeterActivity = new Map();
+this._perimeterConnToGroup = new Map();
+    this._selectedKey = null;
+    this._lastConnections = [];
+    this._selectedRules = new Set();
   }
 };

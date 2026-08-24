@@ -31,23 +31,31 @@ Download the latest Windows release:
 
 | Platform | Installer | Notes |
 |----------|-----------|-------|
-| **Windows** | `Soterios-Setup-1.2.1.exe` | NSIS installer · requires admin for system-level checks |
+| **Windows** | `Soterios-Setup-1.3.0.exe` | NSIS installer · requires admin for system-level checks |
 
 ---
 
 ## Features
 
-- **Security Dashboard** — health score, scan status, warnings, ignored warnings, quarantine count, and real-time protection controls
-- **Malware Scan** — quick, full, and custom scans powered by ClamAV with definition updates, progress, cancellation, quarantine, and saved reports
-- **Reports** — browse, view, generate, and delete scan and security reports in-app
-- **Process Inspector** — risk-first sorting, then highest CPU/RAM impact within the same risk level
-- **Windows Security Audit** — Defender, UAC, Windows Update, BitLocker, PowerShell policy, and Secure Boot
-- **Firewall Management** — Windows Firewall profile status and rule summaries
-- **Network Monitor** — active connections and interface activity
+- **First-Run Setup Wizard** — theme, language, real-time protection, notifications, privacy mode, and browser extension install in one guided flow; replay it anytime from Settings
+- **Security Dashboard** — health score, scan status, warnings, ignored warnings, quarantine count, and real-time protection controls, plus a tray dashboard for at-a-glance status
+- **Malware Scan** — quick, full, and custom scans powered by ClamAV with definition updates, live progress metrics, cancellation, quarantine, and saved reports (PDF/CSV export)
+- **Process Inspector** — native Rust-backed inspector with risk scoring, Task Manager-style context menu, and detection for Office/PDF-spawned script hosts and processes with an unexpected parent
+- **Reports** — browse, view, generate, and delete scan and system reports in-app
+- **Windows Security Audit** — Defender, UAC, Windows Update, BitLocker, PowerShell policy, and Secure Boot, with per-section management actions
+- **Firewall Management** — profile status, rule summaries, multi-select bulk rule actions, and an endpoint activity radar visualizing live connections
+- **Network Monitor** — active connections, interface activity, an adaptive geo activity map, and selectable traffic history ranges
+- **VPN Management** — on/off control, tray toggle, auto-connect, and a guided provider setup
 - **Credential Safety Hub** — local password generator, strength checker, HIBP k-anonymity password leak checks, and XposedOrNot email breach checks
+- **Browser Extension** — local password reuse detection, breach/reuse toolbar badge, Google Safe Browsing phishing/malware warnings, a signed threat feed, and themes that match the desktop app
+- **AI Assistant** — local Ollama integration with system context awareness and the ability to run safe Soterios actions on request
 - **Real-Time Protection** — toggles Windows Defender real-time monitoring on/off and verifies its state
+- **Privacy Mode** — one Settings toggle that disables Soterios's data-sharing and history features (external breach/geo lookups, AI assistant context, traffic and scan history, auto reports) and restores them when turned off
 - **Quarantine Management** — restore or permanently delete isolated files
-- **Tools & Maintenance** — temp file cleanup, disk reports, large file finder, browser cache reports, startup items, network reports, Windows services reports, and network interface/connection reports
+- **Maintenance Scheduler** — configurable auto-clean policies with per-script settings, run-now overrides, and a Safety Vault that stages files before deletion instead of removing them immediately
+- **Device Optimization** — switch power plan modes to trade performance for battery life or vice versa
+- **Tools & Maintenance** — temp file cleanup, disk reports, large file finder, duplicate file finder, secure file shredder, folder watch, network alerts, browser cache reports, startup items and persistence monitoring, network reports, Windows services reports, scheduled tasks reports, hosts file integrity checks, and network interface/connection reports
+- **Software Uninstaller** — locate and remove installed applications, including leftover files
 
 ---
 
@@ -61,7 +69,9 @@ To capture for a future PR: run `npm run capture:screenshots` (or `npm start` ma
 
 ## Privacy
 
-Soterios does **not** collect telemetry or analytics. All scanning and system analysis happens locally on your machine. Network calls occur **only** when you explicitly trigger features that require them (ClamAV updates, HIBP checks, XposedOrNot lookups).
+Soterios does **not** collect telemetry or analytics. All scanning and system analysis happens locally on your machine. Network calls occur **only** when a feature that needs them is active (ClamAV updates, HIBP checks, XposedOrNot lookups, browser extension Safe Browsing checks and threat feed updates).
+
+**Privacy Mode**, available from Settings, disables every external lookup and history/data-sharing feature (breach/geo lookups, AI assistant context, traffic and scan history, auto reports) with a single toggle, and locks those settings until you turn it back off. The browser extension has its own equivalent Privacy Mode toggle in its options page, which disables its third-party calls (HIBP, Safe Browsing) independently of the desktop app — local-only features like password reuse detection keep working either way, since that data never leaves your device.
 
 ---
 
@@ -107,8 +117,12 @@ In order to utilize these environment variables during runtime, the start comman
 
 | Feature | Service | Privacy |
 |---------|---------|---------|
-| Password leak checks | [Have I Been Pwned – Pwned Passwords](https://haveibeenpwned.com/Passwords) | Only the first 5 characters of the SHA-1 hash are sent (k-anonymity) |
+| Password leak checks | [Have I Been Pwned – Pwned Passwords](https://haveibeenpwned.com/Passwords) | Only the first 5 characters of the SHA-1 hash are sent (k-anonymity); the browser extension never sends your plaintext password to the desktop app either |
 | Email breach checks | [XposedOrNot](https://xposedornot.com/) | Free public email breach API |
+| Browser extension phishing/malware warnings | [Google Safe Browsing v5](https://developers.google.com/safe-browsing) | Only checks the current page's URL; results are cached in-session to reduce lookups |
+| Browser extension threat feed | CERT Polska + URLhaus | Signed feed of known-malicious domains, fetched independently of your browsing activity |
+
+All of the above are gated behind **Privacy Mode**, which disables every external lookup with one toggle (see Features above).
 
 ---
 
@@ -123,8 +137,10 @@ src/security/ scanning, quarantine, audit, firewall, network, process, and realt
 src/tools/ built-in tool modules
 src/scripts/ safe script modules and registry (maintenance, cleanup, reports)
 src/ui/ shell, CSS, shared JS, and page modules
+native/ Rust process-inspector helper binary
+browser-extension/ Soterios browser extension (Manifest V3)
 assets/ Soterios icons and bundled ClamAV files
-tools/ build and install helpers (ClamAV download)
+tools/ build and install helpers (ClamAV download, extension packaging)
 tests/ unit tests, smoke checks, and validation fixtures
 build/ installer resources
 ```
@@ -138,36 +154,22 @@ These features are planned for future updates. There is no fixed release order. 
 ## Planned Features
 
 ### Security
-- Real-time folder monitoring
 - USB device scanning
-- Privacy settings hub
 - Secure local credential vault
 
 ### Monitoring
 - CPU/GPU temperature monitoring
 - Disk SMART monitoring and alerts
-- Network traffic history
 - Process history
 - Startup impact analysis
 
 ### Maintenance
-- Duplicate file finder
-- Secure file shredder (DoD overwrite)
 - Startup manager
 - System Restore manager
 - Additional cleanup and optimization tools
 
-### Reports
-- PDF report export
-- CSV report export
-- More charts and visual analytics
-
 ### Interface
-- System tray support
-- Toast notification improvements
-- Automatic updates
 - UI polish
-- Localization support
 
 ### Future Considerations
 
@@ -175,8 +177,7 @@ These are longer-term ideas that may require significant architectural work:
 
 - Custom real-time protection
 - Proprietary scanning engine
-- Browser guard companion extension
-- Cross-platform support (macOS/Linux) |
+- Cross-platform support (macOS/Linux)
 
 *Order and scope may change based on feedback. Releases have no fixed dates*
 

@@ -5,5 +5,6 @@ contextBridge.exposeInMainWorld('api', {
     const listener = (event, ...args) => callback(...args);
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
-  }
+  },
+  readyShown: () => ipcRenderer.invoke('splash:ready-shown')
 });

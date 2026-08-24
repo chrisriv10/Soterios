@@ -19,6 +19,9 @@ const THEME_BACKGROUNDS = {
   monochrome: '#0a0a0a',
   rose: '#1a1216',
   aurora: '#0b1220',
+  sand: '#f6ecd8',
+  cyber: '#05030a',
+  mint: '#e8fdf5',
 };
 
 const TOAST_THEMES = {
@@ -151,6 +154,36 @@ const TOAST_THEMES = {
     closeBtn: '#7dd3fc',
     closeHover: '#e0faff',
     accents: { info: '#7dd3fc', success: '#3ddc97', warn: '#fbbf24', danger: '#fb7185' },
+  },
+  sand: {
+    bg: 'rgba(246, 236, 216, 0.98)',
+    border: 'rgba(120, 80, 40, 0.12)',
+    textMain: '#43301f',
+    textMuted: '#8b7657',
+    textDim: '#a89a80',
+    closeBtn: '#a89a80',
+    closeHover: '#8b7657',
+    accents: { info: '#0369a1', success: '#15803d', warn: '#b45309', danger: '#b91c1c' },
+  },
+  cyber: {
+    bg: 'rgba(5, 3, 10, 0.97)',
+    border: 'rgba(34, 211, 238, 0.2)',
+    textMain: '#e9fbff',
+    textMuted: '#a0c0d8',
+    textDim: '#6e8aa0',
+    closeBtn: '#6e8aa0',
+    closeHover: '#a0c0d8',
+    accents: { info: '#22d3ee', success: '#3ddc97', warn: '#facc15', danger: '#fb7185' },
+  },
+  mint: {
+    bg: 'rgba(232, 253, 245, 0.98)',
+    border: 'rgba(80, 180, 140, 0.12)',
+    textMain: '#1a3a2a',
+    textMuted: '#5a8a7a',
+    textDim: '#8ab8a8',
+    closeBtn: '#8ab8a8',
+    closeHover: '#5a8a7a',
+    accents: { info: '#34d399', success: '#16a085', warn: '#b45309', danger: '#b91c1c' },
   },
 };
 

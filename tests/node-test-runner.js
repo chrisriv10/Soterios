@@ -4,7 +4,7 @@ const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const JEST_ONLY = new Set(['passwordTools.test.js', 'reportExport.test.js']);
+const JEST_ONLY = new Set(['passwordTools.test.js', 'reportExport.test.js', 'splashProgress.test.js']);
 const testsDir = __dirname;
 const files = fs.readdirSync(testsDir)
   .filter((name) => name.endsWith('.test.js') && !JEST_ONLY.has(name))

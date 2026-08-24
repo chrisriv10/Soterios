@@ -1,6 +1,6 @@
 'use strict';
 
-const { Tray, BrowserWindow, nativeImage, screen } = require('electron');
+const { Tray, BrowserWindow, nativeImage, screen, Menu } = require('electron');
 const path = require('path');
 
 const TRAY_WIDTH = 320;
@@ -25,9 +25,10 @@ function positionTrayWindow(tray, trayWindow) {
   trayWindow.setBounds({ x, y, width: effectiveWidth, height: effectiveHeight }, false);
 }
 
-function initTrayDashboard({ app, mainWindow, getSummary }) {
+function initTrayDashboard({ app, mainWindow, getSummary, vpnManager, db, i18n }) {
   let tray = null;
   let trayWindow = null;
+  let vpnUpdateInterval = null;
 
   const showMain = () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -47,6 +48,66 @@ function initTrayDashboard({ app, mainWindow, getSummary }) {
       const summary = await getSummary();
       trayWindow.webContents.send('tray:summary', summary);
     } catch (_) {}
+  };
+
+  const updateVpnMenu = async () => {
+    if (!vpnManager || !tray) return;
+    try {
+      const lastProfile = db.getSetting('vpn.lastProfile');
+      if (!lastProfile) {
+        // No last profile - show "No VPN configured"
+        const contextMenu = Menu.buildFromTemplate([
+          { label: 'Open Soterios', click: showMain },
+          { type: 'separator' },
+          {
+            label: 'Network',
+            submenu: [
+              { label: i18n.t('tray.vpnNoProfile'), enabled: false },
+              { type: 'separator' },
+              { label: i18n.t('tray.openVPNSettings'), click: () => { showMain(); mainWindow.webContents.send('navigate-to-network'); } },
+            ]
+          },
+          { type: 'separator' },
+          { label: 'Quit', click: () => app.quit() }
+        ]);
+        tray.setContextMenu(contextMenu);
+        return;
+      }
+
+      // Get status of last profile
+      const status = await vpnManager.getStatus(lastProfile);
+      const isConnected = status.ok && status.connected;
+      const statusIcon = isConnected ? '●' : '○';
+      const profileLabel = `${i18n.t('tray.vpnLabel')}: ${statusIcon} ${lastProfile}`;
+
+      const contextMenu = Menu.buildFromTemplate([
+        { label: 'Open Soterios', click: showMain },
+        { type: 'separator' },
+        {
+          label: 'Network',
+          submenu: [
+            {
+              label: profileLabel,
+              click: async () => {
+                try {
+                  await vpnManager.toggleLast();
+                  await refreshTrayWindow();
+                  // Update menu after toggle
+                  setTimeout(updateVpnMenu, 500);
+                } catch (_) {}
+              }
+            },
+            { type: 'separator' },
+            { label: i18n.t('tray.openVPNSettings'), click: () => { showMain(); mainWindow.webContents.send('navigate-to-network'); } },
+          ]
+        },
+        { type: 'separator' },
+        { label: 'Quit', click: () => app.quit() }
+      ]);
+      tray.setContextMenu(contextMenu);
+    } catch (_) {
+      // Ignore errors in menu update
+    }
   };
 
   tray = new Tray(createTrayIcon());
@@ -81,6 +142,7 @@ function initTrayDashboard({ app, mainWindow, getSummary }) {
     positionTrayWindow(tray, trayWindow);
     trayWindow.show();
     await refreshTrayWindow();
+    await updateVpnMenu();
     if (trayWindow && !trayWindow.isDestroyed() && trayWindow.isVisible()) {
       trayWindow.focus();
     }
@@ -88,19 +150,29 @@ function initTrayDashboard({ app, mainWindow, getSummary }) {
 
   tray.on('double-click', showMain);
 
-  const contextMenu = require('electron').Menu.buildFromTemplate([
+  // Initial context menu
+  const contextMenu = Menu.buildFromTemplate([
     { label: 'Open Soterios', click: showMain },
     { type: 'separator' },
     { label: 'Quit', click: () => app.quit() }
   ]);
   tray.setContextMenu(contextMenu);
 
+  // Update VPN menu periodically when tray is open
+  tray.on('click', async () => {
+    if (trayWindow.isVisible()) {
+      await updateVpnMenu();
+    }
+  });
+
   return {
     tray,
     trayWindow,
     refreshTrayWindow,
+    updateVpnMenu,
     dispose: () => {
       hideTrayWindow();
+      if (vpnUpdateInterval) clearInterval(vpnUpdateInterval);
       if (tray) tray.destroy();
       if (trayWindow && !trayWindow.isDestroyed()) trayWindow.destroy();
     }

@@ -1,7 +1,11 @@
 const si = require('systeminformation');
 const os = require('os');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
 
 const MIN_USER_VOLUME_BYTES = 1024 ** 3;
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Ignore tiny recovery/EFI/OEM partitions that are legitimately full but not
@@ -44,12 +48,60 @@ const LABELS = {
   malware: 'Malware Scan Results',
   scanRecency: 'Scan Recency',
   disk: 'Disk Space',
-  memory: 'Memory Usage',
-  load: 'CPU Load',
+  pendingReboot: 'Pending Reboot',
+  windowsUpdate: 'Windows Update',
   uptime: 'System Uptime',
   rtp: 'Real-Time Protection',
   firewall: 'Firewall'
 };
+
+/**
+ * Check if a reboot is pending (Windows Update or pending file operations).
+ * Returns true if reboot required, false otherwise.
+ */
+async function checkPendingReboot() {
+  if (process.platform !== 'win32') return false;
+  try {
+    // Check Windows Update reboot required flag
+    const { stdout: wuOut } = await execFileAsync('powershell', [
+      '-NoProfile', '-Command',
+      'try { $key = "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Auto Update\\RebootRequired"; if (Test-Path $key) { exit 1 } else { exit 0 } } catch { exit 0 }'
+    ], { timeout: 5000 });
+    if (wuOut.trim() === '1') return true;
+
+    // Check pending file rename operations (often indicates pending reboot)
+    const { stdout: pfoOut } = await execFileAsync('powershell', [
+      '-NoProfile', '-Command',
+      'try { $key = "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager"; $val = Get-ItemProperty -Path $key -Name "PendingFileRenameOperations" -ErrorAction SilentlyContinue; if ($val.PendingFileRenameOperations) { exit 1 } else { exit 0 } } catch { exit 0 }'
+    ], { timeout: 5000 });
+    if (pfoOut.trim() === '1') return true;
+
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get days since last successful Windows Update install.
+ * Returns number of days (float), or null if unavailable.
+ */
+async function getWindowsUpdateFreshness() {
+  if (process.platform !== 'win32') return null;
+  try {
+    const { stdout } = await execFileAsync('powershell', [
+      '-NoProfile', '-Command',
+      'try { $session = New-Object -ComObject Microsoft.Update.Session; $searcher = $session.CreateUpdateSearcher(); $history = $searcher.QueryHistory(0, 1); if ($history.Count -gt 0) { $last = $history.Item(0); if ($last.ResultCode -eq 2) { $date = $last.Date; $diff = (Get-Date) - $date; [math]::Round($diff.TotalDays, 1) } else { exit 1 } } else { exit 1 } } catch { exit 1 }'
+    ], { timeout: 10000 });
+    const trimmed = stdout.trim();
+    if (trimmed && !isNaN(Number(trimmed))) {
+      return Number(trimmed);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 // bands: array of [threshold, points] sorted ascending by threshold.
 // Returns the points for the first threshold the value falls under, or 0
@@ -111,20 +163,27 @@ module.exports = {
           : `All volumes healthy (highest usage ${worstUse.toFixed(0)}%).`
     };
 
-    // --- Memory usage: new signal, wasn't scored at all before. ---
-    const mem = await si.mem();
-    const memPct = mem.total ? ((mem.total - mem.available) / mem.total) * 100 : 0;
-    breakdown.memory = {
-      label: LABELS.memory, points: bandedPoints(memPct, [[70, 10], [85, 6], [95, 3]]), max: 10,
-      reason: `${memPct.toFixed(0)}% of memory in use.`
+    // --- Pending reboot: binary signal — reboot required = 0 pts, not required = 10 pts. ---
+    const rebootPending = await checkPendingReboot();
+    breakdown.pendingReboot = {
+      label: LABELS.pendingReboot, points: rebootPending ? 0 : 10, max: 10,
+      reason: rebootPending ? 'A restart is required to complete Windows updates.' : 'No pending restart required.'
     };
 
-    // --- CPU load: graduated bands instead of a single 85% cliff. ---
-    const load = await si.currentLoad();
-    breakdown.load = {
-      label: LABELS.load, points: bandedPoints(load.currentLoad, [[50, 10], [75, 7], [90, 3]]), max: 10,
-      reason: `CPU load at ${load.currentLoad.toFixed(0)}%.`
-    };
+    // --- Windows Update freshness: graduated bands by days since last successful install. ---
+    const wuDays = await getWindowsUpdateFreshness();
+    if (wuDays !== null) {
+      const points = bandedPoints(wuDays, [[1, 10], [7, 7], [30, 3]]);
+      breakdown.windowsUpdate = {
+        label: LABELS.windowsUpdate, points, max: 10,
+        reason: wuDays < 1 ? 'Windows updated within the last day.' : `Last successful update ${Math.floor(wuDays)} day(s) ago.`
+      };
+    } else {
+      breakdown.windowsUpdate = {
+        label: LABELS.windowsUpdate, points: 0, max: 10,
+        reason: 'Unable to determine Windows Update status.'
+      };
+    }
 
     // --- System uptime: new signal. A machine that hasn't restarted in
     // weeks is a common sign that pending security updates are stuck
@@ -175,5 +234,7 @@ module.exports = {
   },
   isUserFacingVolume,
   worstUsageFromVolumes,
-  MIN_USER_VOLUME_BYTES
+  MIN_USER_VOLUME_BYTES,
+  checkPendingReboot,
+  getWindowsUpdateFreshness
 };

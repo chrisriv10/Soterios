@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en" data-theme="system">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Soterios activity</title>
+  <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="ui.css">
+</head>
+<body>
+  <header class="appbar">
+    <div class="brand"><span class="brand-mark">S</span><span>Local findings</span></div>
+    <a class="button small" href="options.html">Settings</a>
+  </header>
+  <main class="activity-page">
+    <div class="row wrap">
+      <div><h1>Protection activity</h1><p class="subtle">Actual findings only, retained locally for up to 30 days. Incognito findings are excluded.</p></div>
+      <div class="actions"><button id="export-history" class="button">Export JSON</button><button id="clear-history" class="button danger">Delete history</button></div>
+    </div>
+    <section id="history-list" class="card" aria-live="polite"><div class="empty">Loading…</div></section>
+  </main>
+  <script src="activity.js"></script>
+</body>
+</html>

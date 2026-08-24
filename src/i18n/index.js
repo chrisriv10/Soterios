@@ -96,7 +96,7 @@ function loadCatalog(locale) {
   const filePath = path.join(LOCALES_DIR, `${normalized}.json`);
   let catalog = {};
   try {
-    catalog = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    catalog = JSON.parse(fs.readFileSync(filePath, 'utf-8').replace(/^\uFEFF/, ''));
   } catch (_) {
     if (normalized !== DEFAULT_LOCALE) {
       return loadCatalog(DEFAULT_LOCALE);

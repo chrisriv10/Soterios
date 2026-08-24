@@ -1,6 +1,7 @@
 {
   "name": "soterios",
-  "version": "1.2.1",
+  "productName": "Soterios",
+  "version": "1.3.0",
   "description": "A local-first desktop suite for system maintenance, monitoring, and basic security checks.",
   "main": "src/main/main.js",
   "author": "Soterios",
@@ -10,21 +11,33 @@
     "node": ">=26"
   },
   "scripts": {
-    "start": "electronmon . --disable-logging --disable-gpu --disable-gpu-compositing --disable-gpu-shader-disk-cache --disable-software-rasterizer --disable-background-networking --disable-features=NetworkService,AutofillServerCommunication,AutofillAcrossForms,Autofill --disk-cache-dir=.cache/soterios",
-    "dev": "electronmon . --dev --disable-logging --disable-gpu --disable-gpu-compositing --disable-gpu-shader-disk-cache --disable-software-rasterizer --disable-background-networking --disable-features=NetworkService,AutofillServerCommunication,AutofillAcrossForms,Autofill --disk-cache-dir=.cache/soterios",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder --publish never",
-    "dist:win": "electron-builder --win --publish never",
+    "start": "electron . --disable-logging --disable-gpu --disable-gpu-compositing --disable-gpu-shader-disk-cache --disable-software-rasterizer --disable-background-networking --disable-features=NetworkService,AutofillServerCommunication,AutofillAcrossForms,Autofill --disk-cache-dir=.cache/soterios",
+    "dev": "electron . --dev --disable-logging --disable-gpu --disable-gpu-compositing --disable-gpu-shader-disk-cache --disable-software-rasterizer --disable-background-networking --disable-features=NetworkService,AutofillServerCommunication,AutofillAcrossForms,Autofill --disk-cache-dir=.cache/soterios",
+    "pack": "npm run extension:build && npm run native-host:build && npm run native:process && electron-builder --dir",
+    "dist": "npm run extension:build && npm run native-host:build && npm run native:process && electron-builder --publish never",
+    "dist:win": "npm run extension:build && npm run native-host:build && npm run native:process && electron-builder --win --publish never",
     "dist:mac": "electron-builder --mac --publish never",
     "dist:linux": "electron-builder --linux --publish never",
     "postinstall": "node tools/download-clamav.js",
     "prepack": "node tools/download-clamav.js",
-    "test": "node tests/node-test-runner.js && jest tests/passwordTools.test.js tests/reportExport.test.js",
+    "pretest": "npm run extension:build",
+    "test": "node tests/node-test-runner.js && jest tests/passwordTools.test.js tests/reportExport.test.js tests/splashProgress.test.js",
+    "test:force": "node --test --test-force-exit tests/",
     "sync-wiki": "node tools/sync-wiki.js",
+    "extension:build": "node tools/build-extension.mjs",
+    "extension:package": "node tools/package-extension.mjs",
+    "extension:validate": "node tools/validate-extension.mjs",
+    "extension:install": "npm run extension:build && npm run native-host:build && node tools/install-native-host.js",
+    "native-host:build": "node tools/build-native-host.mjs",
+    "feed:verify": "node tools/verify-threat-feed.mjs",
     "smoke:integration": "node tests/smoke/integration-smoke.js",
-    "capture:screenshots": "node tests/smoke/capture-pr-screenshots.js"
+    "smoke:alerts": "node tests/smoke/network-alerts-smoke.js",
+    "capture:screenshots": "node tests/smoke/capture-pr-screenshots.js",
+    "native:process": "node tools/build-process-helper.js",
+    "native:check": "node tools/check-process-helper.js"
   },
   "dependencies": {
+    "argon2": "^0.45.1",
     "better-sqlite3": "^13.0.2",
     "electron-updater": "^6.8.9",
     "ps-list": "^9.0.0",
@@ -38,10 +51,14 @@
     "axios": "^1.19.0",
     "canvas": "^3.2.3",
     "electron": "^43.2.0",
+    "@types/chrome": "^0.1.2",
     "electron-builder": "^26.15.3",
+    "esbuild": "^0.25.12",
     "electronmon": "^2.0.4",
     "jest": "^30.4.2",
-    "jimp": "^1.6.1"
+    "jimp": "^1.6.1",
+    "postject": "^1.0.0-alpha.6",
+    "typescript": "^5.9.3"
   },
   "build": {
     "appId": "com.soterios.app",
@@ -55,6 +72,8 @@
     "npmRebuild": false,
     "asarUnpack": [
       "assets/clamav/**",
+      "build/native-host/SoteriosNativeHost.exe",
+      "src/scripts/*.ps1",
       "node_modules/better-sqlite3/**"
     ],
     "files": [
@@ -62,9 +81,26 @@
       "preload.js",
       "src/**/*",
       "assets/**/*",
+      "build/native-host/SoteriosNativeHost.exe",
       "package.json"
     ],
-    "extraResources": [],
+    "extraResources": [
+      {
+        "from": "browser-extension/dist/chromium",
+        "to": "browser-extension",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "build/native",
+        "to": "native",
+        "filter": [
+          "soterios-process-inspector.exe",
+          "checksums.json"
+        ]
+      }
+    ],
     "win": {
       "target": [
         {
@@ -77,6 +113,9 @@
       "icon": "assets/icon.ico",
       "artifactName": "${productName}-Setup-${version}.${ext}",
       "signAndEditExecutable": true,
+      "signExts": [
+        ".exe"
+      ],
       "requestedExecutionLevel": "requireAdministrator",
       "signtoolOptions": {
         "publisherName": "Chris Rivera"

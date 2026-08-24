@@ -1,75 +1,48 @@
 #!/usr/bin/env node
 /**
- * Package Soterios Browser Extension
- * Creates a cross-platform zip archive excluding build artifacts
+ * Soterios Browser Extension Setup Guide
+ *
+ * Run: node tools/package-extension.js
+ *
+ * This prints setup instructions. The extension files ship with Soterios.
  */
 
-const fs = require('fs');
 const path = require('path');
-const AdmZip = require('adm-zip');
 
 const extDir = path.resolve(__dirname, '..', 'browser-extension');
-const outputPath = path.resolve(__dirname, '..', 'soterios-extension.zip');
 
-const excludePatterns = [
-  '*.DS_Store',
-  'node_modules',
-  'icons/*.svg',
-  'tools',
-  'package.json',
-  'package-lock.json'
-];
+console.log(`
+====================================
+  Soterios Browser Extension Setup
+====================================
 
-function shouldExclude(filePath) {
-  const relativePath = path.relative(extDir, filePath);
-  
-  for (const pattern of excludePatterns) {
-    if (pattern.includes('*')) {
-      const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
-      if (regex.test(path.basename(relativePath)) || regex.test(relativePath)) {
-        return true;
-      }
-    } else if (relativePath.startsWith(pattern) || relativePath === pattern) {
-      return true;
-    }
-  }
-  
-  return false;
-}
+The browser extension ships with Soterios.
 
-function addDirectoryToZip(zip, dirPath, basePath) {
-  const items = fs.readdirSync(dirPath);
-  
-  for (const item of items) {
-    const fullPath = path.join(dirPath, item);
-    const stat = fs.statSync(fullPath);
-    
-    if (shouldExclude(fullPath)) {
-      continue;
-    }
-    
-    if (stat.isDirectory()) {
-      addDirectoryToZip(zip, fullPath, basePath);
-    } else if (stat.isFile()) {
-      const relativePath = path.relative(basePath, fullPath);
-      zip.addLocalFile(fullPath, path.dirname(relativePath));
-    }
-  }
-}
+QUICK SETUP (recommended):
+  1. Ensure Soterios is installed (default: C:\\Program Files\\Soterios\\Soterios.exe)
+  2. Run: npm run extension:install
+     - Copies the extension to %LOCALAPPDATA%\\Soterios\\browser-extension
+     - Predicts the extension ID from that fixed path and bakes it into
+       the native host manifest (no manual ID copying or JSON editing)
+     - Registers the native messaging host for Chrome, Edge and Brave
+     - Opens chrome://extensions and the extension folder
+  3. Click "Load unpacked" and select the folder shown in the console
 
-function main() {
-  if (!fs.existsSync(extDir)) {
-    console.error('browser-extension directory not found');
-    process.exit(1);
-  }
+  If the ID the browser shows differs from the predicted one:
+  npm run extension:install -- --set-id <id-shown-by-browser>
 
-  console.log('Creating extension package...');
-  
-  const zip = new AdmZip();
-  addDirectoryToZip(zip, extDir, extDir);
-  
-  zip.writeZip(outputPath);
-  console.log(`Extension packaged to: ${outputPath}`);
-}
+MANUAL SETUP (fallback):
+  1. Enable "Developer mode" in chrome://extensions
+  2. Click "Load unpacked" and select: ${extDir}
+  3. Note the extension ID
+  4. Edit native-host-manifest.json and replace __REPLACE_WITH_EXTENSION_ID__
+  5. Run: node tools/install-native-host.js
+  6. Reload the extension
 
-main();
+TROUBLESHOOTING:
+  - If popup shows "Soterios app connected: No"
+    - Ensure the Soterios desktop app is running
+    - Re-run: npm run extension:install
+
+For support: https://github.com/chrisriv10/Soterios/issues
+`);

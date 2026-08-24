@@ -5,7 +5,7 @@ const Api = {
       'black-red': 'crimson',
       'black-green': 'terminal'
     }[theme] || theme;
-    const allowed = ['dark', 'light', 'ocean', 'emerald', 'sunset', 'violet', 'crimson', 'terminal', 'midnight', 'bumblebee', 'monochrome', 'rose', 'aurora'];
+    const allowed = ['dark', 'light', 'ocean', 'emerald', 'sunset', 'violet', 'crimson', 'terminal', 'midnight', 'bumblebee', 'monochrome', 'rose', 'aurora', 'sand', 'cyber', 'mint'];
     const finalTheme = allowed.includes(normalized) ? normalized : 'dark';
     document.documentElement.setAttribute('data-theme', finalTheme);
     document.documentElement.style.setProperty('--theme-name', finalTheme);
@@ -61,18 +61,34 @@ const Api = {
     if (!result.ok) throw new Error(result.error || `Tool "${toolId}" failed`);
     return result.data;
   },
+  async startTool(toolId, args, options) {
+    const result = await window.soterios.tools.start(toolId, args, options);
+    if (!result.ok) throw new Error(result.error || `Tool "${toolId}" could not start`);
+    return result.data;
+  },
+  async cancelTool(runId) {
+    const result = await window.soterios.tools.cancel(runId);
+    if (!result.ok) throw new Error(result.error || 'Tool run could not be canceled');
+    return true;
+  },
+  async getActiveTools() {
+    const result = await window.soterios.tools.getActive();
+    return result.ok ? result.data : [];
+  },
+  async getToolHistory(limit, toolId) {
+    const result = await window.soterios.tools.getHistory(limit || 50, toolId || null);
+    return result.ok ? result.data : [];
+  },
+  onToolRunProgress(callback) { return window.soterios.tools.onRunProgress(callback); },
+  onToolRunComplete(callback) { return window.soterios.tools.onRunComplete(callback); },
   onToolProgress(toolId, callback) { return window.soterios.tools.onProgress(toolId, callback); },
   async pickFolder() { return window.soterios.dialog.pickFolder(); },
   async pickFiles() { return window.soterios.dialog.pickFiles(); },
   async showItemInFolder(filePath) { return window.soterios.shell.showItemInFolder(filePath); },
   async openPath(filePath) { return window.soterios.shell.openPath(filePath); },
+  async openFolder(filePath) { return window.soterios.shell.openFolder(filePath); },
   async getStoreSnapshot() { return {}; },
   async getSettings() {
-    const defaultPath = await window.api.invoke('db:getSetting', 'scanner.defaultPath', '');
-    const maxDepth = await window.api.invoke('db:getSetting', 'scanner.maxDepth', 12);
-    const maxFileSizeMB = await window.api.invoke('db:getSetting', 'scanner.maxFileSizeMB', 512);
-    const includeCleanResults = await window.api.invoke('db:getSetting', 'scanner.includeCleanResults', false);
-    const excludedDirNames = await window.api.invoke('db:getSetting', 'scanner.excludedDirNames', []);
     const realtimeProtection = await window.api.invoke('db:getSetting', 'feature.realtimeProtection', true);
     const autoReports = await window.api.invoke('db:getSetting', 'feature.autoReports', true);
     const scanHistory = await window.api.invoke('db:getSetting', 'feature.scanHistory', true);
@@ -81,6 +97,9 @@ const Api = {
     const networkPerimeterMap = await window.api.invoke('db:getSetting', 'feature.networkPerimeterMap', true);
     const notificationsEnabled = await window.api.invoke('db:getSetting', 'feature.notificationsEnabled', true);
     const scanNotifications = await window.api.invoke('db:getSetting', 'feature.scanNotifications', true);
+    const emergencyLockdown = await window.api.invoke('db:getSetting', 'feature.emergencyLockdown', false);
+    const generateToolRunReports = await window.api.invoke('db:getSetting', 'reports.generateToolRunReports', true);
+    const skipDeleteConfirm = await window.api.invoke('db:getSetting', 'reports.skipDeleteConfirm', false);
     // Cached fallback only -- settings.js queries 'app:getLaunchAtStartup'
     // directly for the real OS-level state and uses this purely as a
     // fallback if that IPC call fails.
@@ -88,6 +107,8 @@ const Api = {
     const folderWatch = await window.api.invoke('db:getSetting', 'feature.folderWatch', true);
     const networkAlerts = await window.api.invoke('db:getSetting', 'feature.networkAlerts', true);
     const networkTrafficHistory = await window.api.invoke('db:getSetting', 'feature.networkTrafficHistory', true);
+    const aiAssistant = await window.api.invoke('db:getSetting', 'feature.aiAssistant', true);
+    const privacyMode = await window.api.invoke('db:getSetting', 'feature.privacyMode', false);
     const dbTheme = await window.api.invoke('db:getSetting', 'ui.theme', 'dark');
     const savedLanguage = await window.api.invoke('db:getSetting', 'ui.language', '');
     let language = savedLanguage;
@@ -117,7 +138,6 @@ const Api = {
       || 'dark';
     if (window.AppState) window.AppState.currentTheme = theme;
     return {
-      scanner: { defaultPath, maxDepth, maxFileSizeMB, includeCleanResults, excludedDirNames },
       features: {
         realtimeProtection,
         autoReports,
@@ -130,20 +150,16 @@ const Api = {
         launchAtStartup,
         folderWatch,
         networkAlerts,
-        networkTrafficHistory
-      },
-      ui: { theme, language }
+        networkTrafficHistory,
+        aiAssistant,
+        emergencyLockdown,
+        privacyMode,
+        generateToolRunReports,
+        skipDeleteConfirm
+      },      ui: { theme, language }
     };
   },
   async updateSettings(patch) {
-    if (patch.scanner) {
-      const s = patch.scanner;
-      await window.api.invoke('db:setSetting', 'scanner.defaultPath', s.defaultPath || '');
-      await window.api.invoke('db:setSetting', 'scanner.maxDepth', s.maxDepth || 12);
-      await window.api.invoke('db:setSetting', 'scanner.maxFileSizeMB', s.maxFileSizeMB || 512);
-      await window.api.invoke('db:setSetting', 'scanner.includeCleanResults', !!s.includeCleanResults);
-      await window.api.invoke('db:setSetting', 'scanner.excludedDirNames', s.excludedDirNames || []);
-    }
     if (patch.features) {
       const f = patch.features;
       if (Object.prototype.hasOwnProperty.call(f, 'realtimeProtection')) {
@@ -174,6 +190,21 @@ const Api = {
         const result = await window.api.invoke('network-traffic-history:toggle', enable);
         await window.api.invoke('db:setSetting', 'feature.networkTrafficHistory', !!(result && result.running));
       }
+      if (Object.prototype.hasOwnProperty.call(f, 'aiAssistant')) {
+        await window.api.invoke('db:setSetting', 'feature.aiAssistant', !!f.aiAssistant);
+      }
+      if (Object.prototype.hasOwnProperty.call(f, 'emergencyLockdown')) {
+        await window.api.invoke('db:setSetting', 'feature.emergencyLockdown', !!f.emergencyLockdown);
+      }
+      if (Object.prototype.hasOwnProperty.call(f, 'privacyMode')) {
+        await window.api.invoke('db:setSetting', 'feature.privacyMode', !!f.privacyMode);
+      }
+      if (Object.prototype.hasOwnProperty.call(f, 'generateToolRunReports')) {
+        await window.api.invoke('db:setSetting', 'reports.generateToolRunReports', !!f.generateToolRunReports);
+      }
+      if (Object.prototype.hasOwnProperty.call(f, 'skipDeleteConfirm')) {
+        await window.api.invoke('db:setSetting', 'reports.skipDeleteConfirm', !!f.skipDeleteConfirm);
+      }
     }
     if (patch.ui) {
       const u = patch.ui;
@@ -189,7 +220,7 @@ const Api = {
     }
   },
   async getHistory(kind, limit) { try { return await window.api.invoke('db:getScanHistory', limit || 10); } catch (e) { return []; } },
-  async getQuarantine() { try { return await window.api.invoke('db:getQuarantineList'); } catch (e) { return []; } },
+  async getQuarantine() { try { return await window.api.invoke('quarantine:list', 'quarantined'); } catch (e) { return []; } },
   async getAppInfo() { return window.soterios.app.info(); }
 };
 

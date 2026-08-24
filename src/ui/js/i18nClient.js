@@ -55,5 +55,10 @@ window.I18n = {
         }
       }
     });
+    document.querySelectorAll('[data-i18n-aria-label]').forEach(el => {
+      const key = el.getAttribute('data-i18n-aria-label');
+      const translated = this.t(key);
+      if (translated !== key) el.setAttribute('aria-label', translated);
+    });
   }
 };

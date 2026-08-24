@@ -1,10 +1,506 @@
 window.Pages = window.Pages || {};
 window.Pages['network'] = {
   REFRESH_INTERVAL_MS: 3000,
+  CHART_REFRESH_INTERVAL_MS: 30000,
   _connectionQuery: '',
+  _historyRangeHours: 1,
+  _historyCache: new Map(),
+  _historyRequestToken: 0,
+  _historyInspectIndex: null,
   _connectionRiskFilter: 'all',
   _connectionStateFilter: 'all',
   _geoCache: {},
+  _groupByProcess: true,
+  _simpleView: true,
+  _expandedGroups: new Set(),
+  _minimized: new Set(),
+  _vpnSelection: '',
+  _vpnPending: null,
+  _vpnError: '',
+  _heatmapZoom: 1,
+  _heatmapPan: { x: 0, y: 0 },
+  _heatmapShowArcs: true,
+  _heatmapPulseRaf: null,
+  _heatmapDrag: null,
+  _heatmapSuppressClick: false,
+  _heatmapWindowMouseMove: null,
+  _heatmapWindowMouseUp: null,
+  _heatmapKeydownHandler: null,
+  _heatmapWidgetEl: null,
+  _heatmapData: null,
+  _heatmapClusters: [],
+  _heatmapTier: null,
+  _heatmapArcSignature: '',
+  _selectedClusterId: null,
+  _selectedClusterIps: null,
+  _selectedClusterLoc: null,
+  _userLocation: null, // User's actual geolocation for heatmap origin
+
+  _startHeatmapPulses(content) {
+    if (this._heatmapPulseRaf) {
+      cancelAnimationFrame(this._heatmapPulseRaf);
+      this._heatmapPulseRaf = null;
+    }
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
+    const dots = content.querySelectorAll('.heatmap-pulse-dot');
+    if (!dots.length) return;
+    const items = Array.from(dots).map((el) => ({
+      el,
+      hx: parseFloat(el.dataset.hx), hy: parseFloat(el.dataset.hy),
+      cx0: parseFloat(el.dataset.cx0), cy0: parseFloat(el.dataset.cy0),
+      tx: parseFloat(el.dataset.tx), ty: parseFloat(el.dataset.ty),
+      travel: parseFloat(el.dataset.travel) || 2.5,
+      dur: parseFloat(el.dataset.dur) || 6,
+      delay: parseFloat(el.dataset.delay) || 0
+    }));
+    const start = performance.now();
+    const tick = (now) => {
+      const elapsed = (now - start) / 1000;
+      for (const it of items) {
+        if (!it.el.isConnected) continue;
+        const cycleTime = (elapsed + it.delay) % it.dur;
+        if (cycleTime > it.travel) {
+          it.el.style.opacity = '0';
+          continue;
+        }
+        const t = cycleTime / it.travel;
+        const mt = 1 - t;
+        const x = mt * mt * it.hx + 2 * mt * t * it.cx0 + t * t * it.tx;
+        const y = mt * mt * it.hy + 2 * mt * t * it.cy0 + t * t * it.ty;
+        it.el.setAttribute('cx', x.toFixed(3));
+        it.el.setAttribute('cy', y.toFixed(3));
+        const fade = Math.min(1, t * 6, (1 - t) * 6);
+        it.el.style.opacity = Math.max(0.0, fade).toFixed(2);
+      }
+      this._heatmapPulseRaf = requestAnimationFrame(tick);
+    };
+    this._heatmapPulseRaf = requestAnimationFrame(tick);
+  },
+
+  _clampHeatmapPan(zoom, pan, viewportW, viewportH) {
+    let panelWidth = 0;
+    if (this._heatmapWidgetEl) {
+      const panel = this._heatmapWidgetEl.querySelector('#heatmapClusterPanel');
+      const isFullscreen = this._heatmapWidgetEl.classList.contains('heatmap-fullscreen');
+      if (panel && !panel.hidden && window.innerWidth >= 900 && !isFullscreen) {
+        panelWidth = panel.offsetWidth || 340;
+      }
+    }
+    const minX = viewportW - panelWidth - viewportW * zoom;
+    const minY = viewportH - viewportH * zoom;
+    return {
+      x: Math.min(0, Math.max(minX, pan.x)),
+      y: Math.min(0, Math.max(minY, pan.y))
+    };
+  },
+
+  _applyHeatmapTransform(content) {
+    const world = content.querySelector('#heatmapWorld');
+    if (world) {
+      world.style.transform = `translate(${this._heatmapPan.x}px, ${this._heatmapPan.y}px) scale(${this._heatmapZoom})`;
+    }
+    const viewport = content.querySelector('#heatmapViewport');
+    if (viewport) {
+      viewport.style.cursor = this._heatmapZoom > 1.001 ? 'grab' : 'default';
+      // Set a single CSS variable for zoom scale to avoid JS lag during panning
+      const zoomScale = Math.max(0.35, 1 / Math.sqrt(this._heatmapZoom));
+      viewport.style.setProperty('--zoom-scale', zoomScale);
+    }
+    const label = content.querySelector('#heatmapZoomLabel');
+    if (label) label.textContent = `${Math.round(this._heatmapZoom * 100)}%`;
+    const resetBtn = content.querySelector('#heatmapZoomReset');
+    if (resetBtn) resetBtn.style.display = this._heatmapZoom > 1.001 ? 'flex' : 'none';
+  },
+
+  _heatmapTierForZoom(zoom) {
+    const value = Math.max(1, Math.min(6, Number(zoom) || 1));
+    if (value >= 3.5) return { id: 'street', lonStep: 3, latStep: 2.5, labelLimit: 30, nextZoom: 6 };
+    if (value >= 1.75) return { id: 'region', lonStep: 8, latStep: 6, labelLimit: 12, nextZoom: 3.5 };
+    return { id: 'world', lonStep: 18, latStep: 12, labelLimit: 0, nextZoom: 1.75 };
+  },
+
+  _projectHeatmapCoordinate(lat, lon) {
+    return {
+      x: Math.max(0, Math.min(100, ((lon + 180) / 360) * 100)),
+      y: Math.max(0, Math.min(100, ((90 - lat) / 180) * 100))
+    };
+  },
+
+  _validHeatmapHome(location = this._userLocation) {
+    if (!location || typeof location.lat !== 'number' || typeof location.lon !== 'number' ||
+        !Number.isFinite(location.lat) || !Number.isFinite(location.lon) ||
+        location.lat < -90 || location.lat > 90 || location.lon < -180 || location.lon > 180) return null;
+    return { lat: location.lat, lon: location.lon, ...this._projectHeatmapCoordinate(location.lat, location.lon) };
+  },
+
+  _buildHeatmapClusters(connections, geoData, zoom) {
+    const tier = this._heatmapTierForZoom(zoom);
+    const groups = new Map();
+    const value = (connection, camel, pascal) => connection?.[camel] ?? connection?.[pascal] ?? '';
+    const riskRank = { SAFE: 0, UNKNOWN: 1, MALICIOUS: 2 };
+    const countValue = (bucket, key) => {
+      const label = String(key || '').trim();
+      if (label) bucket.set(label, (bucket.get(label) || 0) + 1);
+    };
+
+    for (const connection of connections || []) {
+      const ip = String(value(connection, 'remoteAddress', 'RemoteAddress'));
+      const geo = geoData?.[ip];
+      const lat = Number(geo?.lat);
+      const lon = Number(geo?.lon);
+      if (!ip || !Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) continue;
+      const cellLon = Math.floor((lon + 180) / tier.lonStep);
+      const cellLat = Math.floor((lat + 90) / tier.latStep);
+      const id = `${tier.id}:${cellLon}:${cellLat}`;
+      if (!groups.has(id)) {
+        groups.set(id, {
+          id, tier: tier.id, count: 0, latTotal: 0, lonTotal: 0,
+          ips: new Set(), locations: new Set(), connections: [],
+          risks: { SAFE: 0, UNKNOWN: 0, MALICIOUS: 0 }, highestRisk: 'SAFE',
+          processes: new Map(), services: new Map(), states: new Map(), ports: new Map()
+        });
+      }
+      const group = groups.get(id);
+      const risk = ['SAFE', 'UNKNOWN', 'MALICIOUS'].includes(connection.classification) ? connection.classification : 'UNKNOWN';
+      group.count++;
+      group.latTotal += lat;
+      group.lonTotal += lon;
+      group.ips.add(ip);
+      group.connections.push(connection);
+      group.risks[risk]++;
+      if (riskRank[risk] > riskRank[group.highestRisk]) group.highestRisk = risk;
+      if (geo.city || geo.country) group.locations.add([geo.city, geo.country].filter(Boolean).join(', '));
+      countValue(group.processes, connection.processName || (connection.pid ? `PID ${connection.pid}` : ''));
+      countValue(group.services, connection.serviceName || value(connection, 'remotePort', 'RemotePort'));
+      countValue(group.states, value(connection, 'state', 'State'));
+      countValue(group.ports, value(connection, 'remotePort', 'RemotePort'));
+    }
+
+    const clusters = Array.from(groups.values()).map((group) => {
+      const lat = group.latTotal / group.count;
+      const lon = group.lonTotal / group.count;
+      const top = (map) => Array.from(map, ([label, count]) => ({ label, count }))
+        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+      return {
+        ...group,
+        lat, lon,
+        ...this._projectHeatmapCoordinate(lat, lon),
+        ips: Array.from(group.ips).sort(),
+        locations: Array.from(group.locations).sort(),
+        processes: top(group.processes), services: top(group.services),
+        states: top(group.states), ports: top(group.ports)
+      };
+    });
+    clusters.sort((a, b) => riskRank[b.highestRisk] - riskRank[a.highestRisk] || b.count - a.count || a.id.localeCompare(b.id));
+    const labelIds = new Set([...clusters].sort((a, b) => b.count - a.count || a.id.localeCompare(b.id)).slice(0, tier.labelLimit).map((c) => c.id));
+    for (const cluster of clusters) cluster.showLabel = labelIds.has(cluster.id);
+    return { tier, clusters };
+  },
+
+  _focusHeatmapTarget(cluster, viewportW, viewportH) {
+    const tier = this._heatmapTierForZoom(this._heatmapZoom);
+    const zoom = tier.nextZoom;
+    const worldX = (cluster.x / 100) * viewportW;
+    const worldY = (cluster.y / 100) * viewportH;
+    const pan = this._clampHeatmapPan(zoom, {
+      x: viewportW / 2 - worldX * zoom,
+      y: viewportH / 2 - worldY * zoom
+    }, viewportW, viewportH);
+    return { zoom, pan };
+  },
+
+  _resolveHeatmapSelection(clusters, selectedId, selectedIps) {
+    const ips = new Set(selectedIps || []);
+    return clusters.find((cluster) => cluster.id === selectedId) ||
+      (ips.size ? clusters.find((cluster) => cluster.ips.some((ip) => ips.has(ip))) : null) || null;
+  },
+
+  _createHeatmapWidget(t) {
+    const widget = document.createElement('div');
+    widget.className = 'heatmap-widget card';
+    widget.innerHTML = `
+      <div id="heatmapViewport" class="heatmap-viewport">
+        <div id="heatmapWorld" class="heatmap-world">
+          <div class="heatmap-map-skin" aria-hidden="true"></div>
+          <svg id="heatmapArcs" class="heatmap-arcs" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
+          <div id="heatmapMarkers" class="heatmap-markers"></div>
+          <button type="button" id="heatmapHome" class="heatmap-home" aria-label="${escapeHtml(t('network.heatmapHomeLabel'))}"></button>
+          <div class="heatmap-pan-hint">${escapeHtml(t('network.heatmapPanHint'))}</div>
+        </div>
+        <div id="heatmapTooltip" class="heatmap-tooltip" role="tooltip"></div>
+        <div class="heatmap-controls">
+          <div class="heatmap-controls-row">
+            <button type="button" id="heatmapArcsToggle" class="heatmap-zoom-btn heatmap-arcs-toggle"><span aria-hidden="true">&#10022;</span><span>${escapeHtml(t('network.heatmapArcsLabel'))}</span></button>
+            <button type="button" id="heatmapZoomOut" class="heatmap-zoom-btn" title="${escapeHtml(t('network.heatmapZoomOut'))}" aria-label="${escapeHtml(t('network.heatmapZoomOut'))}">&minus;</button>
+            <button type="button" id="heatmapZoomIn" class="heatmap-zoom-btn" title="${escapeHtml(t('network.heatmapZoomIn'))}" aria-label="${escapeHtml(t('network.heatmapZoomIn'))}">+</button>
+          </div>
+          <button type="button" id="heatmapZoomReset" class="heatmap-zoom-btn heatmap-reset" title="${escapeHtml(t('network.heatmapZoomReset'))}"><span id="heatmapZoomLabel">100%</span>&nbsp;&#8635;</button>
+          <button type="button" id="heatmapFullscreen" class="heatmap-zoom-btn heatmap-fullscreen-btn" title="Fullscreen" aria-label="Toggle fullscreen">&#x26F6;</button>
+        </div>
+      </div>
+      <aside id="heatmapClusterPanel" class="heatmap-cluster-panel" hidden></aside>`;
+    return widget;
+  },
+
+  _mountHeatmapWidget(content, data, t) {
+    const mount = content.querySelector('#heatmapWidgetMount');
+    if (!mount) return;
+    if (!this._heatmapWidgetEl) this._heatmapWidgetEl = this._createHeatmapWidget(t);
+    mount.replaceWith(this._heatmapWidgetEl);
+    this._updateHeatmapWidget(data, t);
+    this._applyHeatmapTransform(content);
+  },
+
+  _updateHeatmapWidget(data, t) {
+    const widget = this._heatmapWidgetEl;
+    if (!widget) return;
+    const built = this._buildHeatmapClusters(data.connections, data.geoData, this._heatmapZoom);
+    const tierChanged = this._heatmapTier !== built.tier.id;
+    this._heatmapTier = built.tier.id;
+    this._heatmapClusters = built.clusters;
+    const priorIps = new Set(this._selectedClusterIps || []);
+    const selected = this._resolveHeatmapSelection(built.clusters, this._selectedClusterId, priorIps);
+    if (selected) {
+      this._selectedClusterId = selected.id;
+      this._selectedClusterIps = selected.ips;
+      this._selectedClusterLoc = selected.locations.join(' | ');
+    } else {
+      this._selectedClusterId = null;
+      this._selectedClusterIps = null;
+      this._selectedClusterLoc = null;
+    }
+    this._diffHeatmapMarkers(widget, built.clusters, t, tierChanged);
+    this._diffHeatmapArcs(widget, built.clusters, t);
+    this._renderHeatmapDrawer(widget, selected, t);
+  },
+
+  _diffHeatmapMarkers(widget, clusters, t, tierChanged) {
+    const layer = widget.querySelector('#heatmapMarkers');
+    if (!layer) return;
+    let empty = layer.querySelector('.heatmap-empty');
+    if (!clusters.length && !empty) {
+      empty = document.createElement('div');
+      empty.className = 'heatmap-empty';
+      layer.appendChild(empty);
+    }
+    if (empty) {
+      empty.textContent = t('network.heatmapNoMatches');
+      empty.hidden = clusters.length > 0;
+    }
+    const existing = new Map(Array.from(layer.querySelectorAll('.heatmap-marker'), (node) => [node.dataset.clusterId, node]));
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    for (const cluster of clusters) {
+      let marker = existing.get(cluster.id);
+      const isNew = !marker;
+      if (!marker) {
+        marker = document.createElement('button');
+        marker.type = 'button';
+        marker.className = 'heatmap-marker';
+        marker.innerHTML = '<span class="heatmap-marker-count"></span><span class="heatmap-marker-label"></span>';
+        layer.appendChild(marker);
+      }
+      existing.delete(cluster.id);
+      const location = cluster.locations.join(' | ') || t('common.unverifiedLocation');
+      const classLabel = this._classificationLabel(cluster.highestRisk);
+      const safeStop = (cluster.risks.SAFE / cluster.count) * 100;
+      const unknownStop = safeStop + (cluster.risks.UNKNOWN / cluster.count) * 100;
+      const size = Math.min(36, 12 + Math.log2(cluster.count + 1) * 5);
+      marker.dataset.clusterId = cluster.id;
+      marker.dataset.ips = cluster.ips.join(',');
+      marker.dataset.loc = location;
+      marker.dataset.count = String(cluster.count);
+      marker.dataset.classification = cluster.highestRisk;
+      marker.dataset.classLabel = classLabel;
+      marker.className = `heatmap-marker heatmap-risk-${cluster.highestRisk.toLowerCase()}${this._selectedClusterId === cluster.id ? ' is-selected' : ''}${isNew && !reducedMotion ? ' is-entering' : ''}`;
+      marker.style.left = `${cluster.x}%`;
+      marker.style.top = `${cluster.y}%`;
+      marker.style.setProperty('--cluster-size', `${size}px`);
+      marker.style.setProperty('--safe-stop', `${safeStop}%`);
+      marker.style.setProperty('--unknown-stop', `${unknownStop}%`);
+      marker.setAttribute('aria-label', t('network.heatmapMarkerAria', { location, count: cluster.count, risk: classLabel }));
+      marker.title = t('network.heatmapMarkerTitle', { location, count: cluster.count, ips: cluster.ips.length, risk: classLabel });
+      marker.querySelector('.heatmap-marker-count').textContent = String(cluster.count);
+      const label = marker.querySelector('.heatmap-marker-label');
+      label.textContent = location;
+      // Keep the map readable: location text is shown only for the selected
+      // cluster; the marker remains discoverable through its title/ARIA label.
+      label.hidden = !(cluster.showLabel && this._selectedClusterId === cluster.id);
+      if (tierChanged) marker.classList.add('tier-changing');
+    }
+    for (const marker of existing.values()) {
+      if (reducedMotion) marker.remove();
+      else {
+        marker.classList.add('is-exiting');
+        marker.addEventListener('animationend', () => marker.remove(), { once: true });
+      }
+    }
+  },
+
+  _diffHeatmapArcs(widget, clusters, t) {
+    const svg = widget.querySelector('#heatmapArcs');
+    const homeEl = widget.querySelector('#heatmapHome');
+    const toggle = widget.querySelector('#heatmapArcsToggle');
+    const home = this._validHeatmapHome();
+    const signature = home ? `${home.lat}:${home.lon}|${clusters.map((cluster) => `${cluster.id}:${cluster.x.toFixed(2)}:${cluster.y.toFixed(2)}:${cluster.highestRisk}`).join('|')}` : '';
+    homeEl.hidden = !home;
+    svg.hidden = !home || !this._heatmapShowArcs;
+    widget.classList.toggle('heatmap-paths-hidden', !this._heatmapShowArcs || !home);
+    toggle.disabled = !home;
+    toggle.title = !home ? t('network.heatmapArcsUnavailable') : (this._heatmapShowArcs ? t('network.heatmapArcsOn') : t('network.heatmapArcsOff'));
+    toggle.setAttribute('aria-pressed', this._heatmapShowArcs ? 'true' : 'false');
+    toggle.classList.toggle('is-muted', !this._heatmapShowArcs || !home);
+    if (!home) {
+      svg.replaceChildren();
+      this._heatmapArcSignature = '';
+      if (this._heatmapPulseRaf) cancelAnimationFrame(this._heatmapPulseRaf);
+      this._heatmapPulseRaf = null;
+      return;
+    }
+    homeEl.style.left = `${home.x}%`;
+    homeEl.style.top = `${home.y}%`;
+    homeEl.title = t('network.heatmapHomeLabel');
+    homeEl.dataset.location = [this._userLocation?.city, this._userLocation?.country].filter(Boolean).join(', ');
+    if (signature === this._heatmapArcSignature) return;
+    this._heatmapArcSignature = signature;
+    const namespace = 'http://www.w3.org/2000/svg';
+    const existing = new Map(Array.from(svg.querySelectorAll('[data-cluster-id]'), (node) => [`${node.matches('path') ? 'path' : 'particle'}:${node.dataset.clusterId}`, node]));
+    for (const cluster of clusters) {
+      const midX = (home.x + cluster.x) / 2;
+      const midY = (home.y + cluster.y) / 2;
+      const distance = Math.hypot(cluster.x - home.x, cluster.y - home.y);
+      const controlY = midY - Math.max(2, Math.min(28, distance * 0.28));
+      const pathData = `M ${home.x} ${home.y} Q ${midX} ${controlY} ${cluster.x} ${cluster.y}`;
+      const riskClass = `heatmap-risk-${cluster.highestRisk.toLowerCase()}`;
+      let path = existing.get(`path:${cluster.id}`);
+      if (!path) { path = document.createElementNS(namespace, 'path'); svg.appendChild(path); }
+      path.dataset.clusterId = cluster.id;
+      path.setAttribute('d', pathData);
+      path.setAttribute('class', `heatmap-arc ${riskClass}`);
+      existing.delete(`path:${cluster.id}`);
+      let dot = existing.get(`particle:${cluster.id}`);
+      if (dot && dot.tagName.toLowerCase() !== 'ellipse') {
+        dot.remove();
+        dot = null;
+      }
+      if (!dot) { dot = document.createElementNS(namespace, 'ellipse'); svg.appendChild(dot); }
+      dot.dataset.clusterId = cluster.id;
+      dot.setAttribute('class', `heatmap-pulse-dot ${riskClass}`);
+      const dotRadius = cluster.highestRisk === 'MALICIOUS' ? 1.15 : 0.9;
+      // SVG viewBox is 100x100 but element aspect ratio is 2:1, so we halve rx to make it visually circular
+      dot.setAttribute('rx', String(dotRadius * 0.5));
+      dot.setAttribute('ry', String(dotRadius));
+      dot.dataset.hx = String(home.x); dot.dataset.hy = String(home.y);
+      dot.dataset.cx0 = String(midX); dot.dataset.cy0 = String(controlY);
+      dot.dataset.tx = String(cluster.x); dot.dataset.ty = String(cluster.y);
+      
+      const travel = Math.max(1.8, Math.min(4.0, 1.2 + distance / 28));
+      dot.dataset.travel = String(travel);
+      const hash = Array.from(cluster.id).reduce((total, character) => ((total * 31) + character.charCodeAt(0)) | 0, 0);
+      // Wait between 3 to 10 seconds before firing again
+      const pause = 3 + (Math.abs(hash) % 70) / 10;
+      dot.dataset.dur = String(travel + pause);
+      dot.dataset.delay = String((Math.abs(hash) % 80) / 10);
+      existing.delete(`particle:${cluster.id}`);
+    }
+    for (const node of existing.values()) node.remove();
+    if (this._heatmapShowArcs) {
+      this._startHeatmapPulses(widget);
+    } else if (this._heatmapPulseRaf) {
+      cancelAnimationFrame(this._heatmapPulseRaf);
+      this._heatmapPulseRaf = null;
+    }
+  },
+
+  _selectHeatmapCluster(clusterId, content) {
+    const selected = this._heatmapClusters.find((cluster) => cluster.id === clusterId) || null;
+    this._selectedClusterId = selected?.id || null;
+    this._selectedClusterIps = selected?.ips || null;
+    this._selectedClusterLoc = selected?.locations.join(' | ') || null;
+    this._heatmapWidgetEl?.querySelectorAll('.heatmap-marker').forEach((marker) => marker.classList.toggle('is-selected', marker.dataset.clusterId === this._selectedClusterId));
+    this._renderHeatmapDrawer(this._heatmapWidgetEl, selected, (key, vars) => window.I18n?.t(key, vars) ?? key);
+    if (selected && content) {
+      queueMicrotask(() => this._panToClusterVisibleCenter(selected, content));
+    }
+  },
+
+  _panToClusterVisibleCenter(cluster, content) {
+    const viewport = content.querySelector('#heatmapViewport');
+    const panel = content.querySelector('#heatmapClusterPanel');
+    if (!viewport) return;
+    const rect = viewport.getBoundingClientRect();
+    const widget = this._heatmapWidgetEl;
+    const isFullscreen = widget?.classList.contains('heatmap-fullscreen');
+    // Panel sits on the RIGHT side of the map (or below on narrow screens).
+    // We want the marker centered in the visible map area (left of the panel).
+    const panelWidth = (!panel || panel.hidden) ? 0 :
+      (window.innerWidth < 900 || isFullscreen ? 0 : panel.offsetWidth);
+    const visibleWidth = rect.width - panelWidth;
+    if (visibleWidth < 60) return; // too narrow, skip
+    const worldX = (cluster.x / 100) * rect.width;
+    const worldY = (cluster.y / 100) * rect.height;
+    // Center of the map area (excluding panel) in viewport coordinates
+    const targetCenterX = visibleWidth / 2;
+    const targetCenterY = rect.height / 2;
+    
+    let originalZoom = this._heatmapZoom;
+    let zoom = originalZoom;
+    let pan = { x: targetCenterX - worldX * zoom, y: targetCenterY - worldY * zoom };
+    let clampedPan = this._clampHeatmapPan(zoom, pan, rect.width, rect.height);
+    
+    // If clamp prevented us from centering, and zoom is low, automatically zoom in
+    if ((clampedPan.x !== pan.x || clampedPan.y !== pan.y) && zoom < 1.75) {
+       zoom = 1.75;
+       pan = { x: targetCenterX - worldX * zoom, y: targetCenterY - worldY * zoom };
+       clampedPan = this._clampHeatmapPan(zoom, pan, rect.width, rect.height);
+       this._heatmapZoom = zoom;
+    }
+
+    this._heatmapPan = clampedPan;
+    viewport.classList.add('is-focusing');
+    viewport.addEventListener('transitionend', () => viewport.classList.remove('is-focusing'), { once: true });
+    
+    if (zoom !== originalZoom) {
+       this._refreshHeatmapTier(content);
+    } else {
+       this._applyHeatmapTransform(content);
+    }
+  },
+
+  _renderHeatmapDrawer(widget, cluster, t) {
+    const panel = widget?.querySelector('#heatmapClusterPanel');
+    if (!panel) return;
+    widget.classList.toggle('has-heatmap-panel', !!cluster);
+    if (!cluster) { panel.hidden = true; panel.innerHTML = ''; return; }
+    const location = cluster.locations.join(' | ') || t('common.unverifiedLocation');
+    const list = (items, empty) => items.length ? items.slice(0, 5).map((item) => `<span>${escapeHtml(item.label)} <b>${item.count}</b></span>`).join('') : `<span>${escapeHtml(empty)}</span>`;
+    const endpoints = cluster.connections.map((connection) => {
+      const ip = connection.remoteAddress ?? connection.RemoteAddress ?? '';
+      const port = connection.remotePort ?? connection.RemotePort ?? '';
+      const state = connection.state ?? connection.State ?? '';
+      const processName = connection.processName || (connection.pid ? `PID ${connection.pid}` : t('common.unknown'));
+      const risk = ['SAFE', 'UNKNOWN', 'MALICIOUS'].includes(connection.classification) ? connection.classification : 'UNKNOWN';
+      return `<div class="heatmap-endpoint-row heatmap-risk-${risk.toLowerCase()}"><code>${escapeHtml(ip)}:${escapeHtml(port)}</code><span>${escapeHtml(processName)}</span><small>${escapeHtml(state)}</small></div>`;
+    }).join('');
+    panel.innerHTML = `
+      <div class="heatmap-drawer-header"><div><small>${escapeHtml(t('network.clusterDetails'))}</small><strong>${escapeHtml(location)}</strong></div><button type="button" class="heatmap-infobox-close" aria-label="${escapeHtml(t('network.heatmapCloseDetails'))}">&times;</button></div>
+      <div class="heatmap-drawer-body">
+        <div class="heatmap-kpis"><span><b>${cluster.count}</b>${escapeHtml(t('network.heatmapConnections'))}</span><span><b>${cluster.ips.length}</b>${escapeHtml(t('network.heatmapUniqueIps'))}</span></div>
+        <div class="heatmap-risk-breakdown"><span class="heatmap-risk-safe">${escapeHtml(t('network.heatmapLegendSafe'))} <b>${cluster.risks.SAFE}</b></span><span class="heatmap-risk-unknown">${escapeHtml(t('network.heatmapLegendUnverified'))} <b>${cluster.risks.UNKNOWN}</b></span><span class="heatmap-risk-malicious">${escapeHtml(t('network.heatmapLegendMalicious'))} <b>${cluster.risks.MALICIOUS}</b></span></div>
+        <section><h4>${escapeHtml(t('network.heatmapTopProcesses'))}</h4><div class="heatmap-chip-list">${list(cluster.processes, t('network.heatmapNone'))}</div></section>
+        <section><h4>${escapeHtml(t('network.heatmapTopServices'))}</h4><div class="heatmap-chip-list">${list(cluster.services, t('network.heatmapNone'))}</div></section>
+        <section><h4>${escapeHtml(t('network.heatmapStatesPorts'))}</h4><div class="heatmap-chip-list">${list(cluster.states, t('network.heatmapNone'))}${list(cluster.ports, t('network.heatmapNone'))}</div></section>
+        <section><h4>${escapeHtml(t('network.heatmapEndpoints'))}</h4><div class="heatmap-endpoints">${endpoints}</div></section>
+        <button type="button" id="heatmapFocusCluster" class="btn btn-primary heatmap-focus">${escapeHtml(t('network.heatmapFocusCluster'))}</button>
+      </div>`;
+    panel.hidden = false;
+  },
+
+  _refreshHeatmapTier(content) {
+    const tier = this._heatmapTierForZoom(this._heatmapZoom);
+    if (tier.id === this._heatmapTier || !this._heatmapData) return;
+    this._updateHeatmapWidget(this._heatmapData, (key, vars) => window.I18n?.t(key, vars) ?? key);
+    this._applyHeatmapTransform(content);
+  },
 
   _classificationLabel(classification) {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
@@ -16,6 +512,88 @@ window.Pages['network'] = {
     }
   },
 
+  _stateGlossaryKey(state) {
+    const normalized = String(state || 'UNKNOWN').toUpperCase().replace(/[-\s]/g, '_');
+    const keys = {
+      ESTABLISHED: 'established', LISTEN: 'listen', LISTENING: 'listen', BOUND: 'bound',
+      SYN_SENT: 'syn_sent', SYN_RECEIVED: 'syn_received', FIN_WAIT_1: 'fin_wait_1',
+      FIN_WAIT_2: 'fin_wait_2', CLOSING: 'closing', LAST_ACK: 'last_ack',
+      DELETE_TCB: 'delete_tcb', CLOSED: 'closed', TIME_WAIT: 'time_wait',
+      TIMEWAIT: 'time_wait', CLOSE_WAIT: 'close_wait', CLOSEWAIT: 'close_wait'
+    };
+    return keys[normalized] || 'unknown';
+  },
+
+  _stateGlossary(state) {
+    return window.I18n?.t(`firewall.glossary.${this._stateGlossaryKey(state)}`) || '';
+  },
+
+  _renderConnectionRow(c, t, getState, firstDefined, simpleView) {
+    const proc = c.processName ? ` (${escapeHtml(c.processName)})` : (c.pid ? ` (PID: ${escapeHtml(c.pid)})` : '');
+    const hostname = c.hostname ? ` \u2192 ${escapeHtml(c.hostname)}` : '';
+    const service = c.serviceName ? ` [${escapeHtml(c.serviceName)}]` : '';
+    const state = getState(c);
+
+    const remoteAddress = firstDefined(c.remoteAddress, c.RemoteAddress);
+    const remotePort = firstDefined(c.remotePort, c.RemotePort);
+    const localAddress = firstDefined(c.localAddress, c.LocalAddress);
+    const localPort = firstDefined(c.localPort, c.LocalPort);
+
+    let badgeColor = 'var(--text-dim)';
+    let borderColor = 'var(--accent-primary)';
+    if (c.classification === 'SAFE') {
+      badgeColor = 'var(--ok)';
+      borderColor = 'var(--ok)';
+    } else if (c.classification === 'MALICIOUS') {
+      badgeColor = 'var(--danger)';
+      borderColor = 'var(--danger)';
+    } else if (c.classification === 'UNKNOWN') {
+      badgeColor = 'var(--warn)';
+      borderColor = 'var(--warn)';
+    }
+
+    let stateColor = 'var(--text-dim)';
+    const stateUpper = state.toString().toUpperCase();
+    if (stateUpper === 'ESTABLISHED') {
+      stateColor = 'var(--ok)';
+    } else if (stateUpper === 'LISTEN' || stateUpper === 'LISTENING') {
+      stateColor = 'var(--accent-primary)';
+    } else if (stateUpper === 'TIME_WAIT' || stateUpper === 'TIMEWAIT') {
+      stateColor = 'var(--warn)';
+    } else if (stateUpper === 'CLOSE_WAIT' || stateUpper === 'CLOSEWAIT') {
+      stateColor = 'var(--danger)';
+    }
+    const stateBadge = state
+      ? `<span class="glossary-term network-state-term" title="${escapeHtml(this._stateGlossary(state))}" style="font-size:0.7rem; font-weight:600; color:${stateColor}; background:${stateColor}15; padding:2px 6px; border-radius:4px; margin-right:6px;">${escapeHtml(state)}</span>`
+      : '';
+
+    const searchBlob = [
+      c.processName, c.hostname, c.serviceName, state, c.classification,
+      remoteAddress, remotePort, localAddress, localPort, c.pid
+    ].filter((v) => v !== undefined && v !== null && v !== '').join(' ').toLowerCase();
+
+    const riskDisplay = this._classificationLabel(c.classification);
+
+    if (simpleView) {
+      // Simple view: just show IP, port, and risk
+      return `<div class="list-row connection-row" data-ip="${escapeHtml(remoteAddress)}" data-search="${escapeHtml(searchBlob)}" data-risk="${escapeHtml(c.classification || 'UNKNOWN')}" data-state="${escapeHtml(state)}" style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-left:3px solid ${borderColor}; background:var(--bg-surface); border-radius:4px;">
+        <div style="font-weight:500; font-family:monospace; font-size:0.9rem;">${escapeHtml(remoteAddress)}:${escapeHtml(remotePort)}${hostname}</div>
+        <div style="font-size:0.75rem; font-weight:600; color:${badgeColor}; background:${badgeColor}15; padding:3px 6px; border-radius:4px;">${escapeHtml(riskDisplay)}</div>
+      </div>`;
+    } else {
+      // Technical view: show full details
+      return `<div class="list-row connection-row" data-ip="${escapeHtml(remoteAddress)}" data-search="${escapeHtml(searchBlob)}" data-risk="${escapeHtml(c.classification || 'UNKNOWN')}" data-state="${escapeHtml(state)}" style="display:flex; flex-direction:column; gap:4px; padding:12px 16px; border-left:4px solid ${borderColor}; content-visibility:auto; contain-intrinsic-size:0 70px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-weight:600; font-family:monospace; word-break:break-all;">${stateBadge}${escapeHtml(remoteAddress)}:${escapeHtml(remotePort)}${service}${hostname}</div>
+            <div class="page-subtitle" style="font-size:0.85rem; word-break:break-all;">${escapeHtml(t('network.localConnection', { localIp: localAddress, localPort: localPort, proc: proc }))}</div>
+          </div>
+          <div style="font-size:0.75rem; font-weight:600; color:${badgeColor}; background:${badgeColor}15; padding:4px 8px; border-radius:4px;">${escapeHtml(riskDisplay)}</div>
+        </div>
+      </div>`;
+    }
+  },
+
   render(container) {
     if (this._refreshTimer) {
       clearInterval(this._refreshTimer);
@@ -23,67 +601,276 @@ window.Pages['network'] = {
     }
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
 
+    this._renderAsync(container, t);
+  },
+
+async _renderAsync(container, t) {
     container.innerHTML = `
-      <style>
-        @keyframes heatmapPulseMalicious {
-          0% { transform: translate(-50%, -50%) scale(0.7); opacity: 0.7; }
-          70% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
-          100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
-        }
-        .heatmap-marker {
-          will-change: transform;
-        }
-        .heatmap-marker.heatmap-pulse-malicious::after {
-          content: '';
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          width: 100%;
-          height: 100%;
-          border-radius: 50%;
-          background: var(--danger);
-          transform: translate(-50%, -50%) scale(0.7);
-          opacity: 0.7;
-          animation: heatmapPulseMalicious 2s infinite;
-          will-change: transform, opacity;
-          pointer-events: none;
-        }
-        @keyframes flashHighlight {
-          0% { background-color: rgba(255, 255, 255, 0.2); }
-          100% { background-color: transparent; }
-        }
-        .flash-highlight {
-          animation: flashHighlight 1.5s ease-out;
-        }
-        .heatmap-marker:hover {
-          z-index: 10;
-          transform: translate(-50%, -50%) scale(1.2) !important;
-        }
-      </style>
       <header class="page-header">
         <h1 class="page-title">${escapeHtml(t('network.title'))}</h1>
         <p class="page-subtitle">${escapeHtml(t('network.subtitle'))}</p>
       </header>
       <div id="networkContent">
-        <div class="empty-state"><span class="spinner"></span>&nbsp;${escapeHtml(t('network.loading'))}</div>
+        <div class="analysis-loading">
+          <div class="analysis-loading-status"><span class="spinner"></span><span>${escapeHtml(t('network.loading'))}</span></div>
+        </div>
       </div>
     `;
-    this.load(container, true);
+    await this.load(container, true);
 
     const content = container.querySelector('#networkContent');
     if (content) {
       content.addEventListener('click', (e) => {
+        if (window.Pages['network']._heatmapSuppressClick) {
+          window.Pages['network']._heatmapSuppressClick = false;
+          return;
+        }
+        const historyRange = e.target.closest('[data-history-hours]');
+        if (historyRange) {
+          const page = window.Pages['network'];
+          const hours = Number(historyRange.dataset.historyHours);
+          if (page._historyRangePayload(hours).hours !== page._historyRangeHours) {
+            page._historyRangeHours = hours;
+            page._historyInspectIndex = null;
+            content.querySelectorAll('[data-history-hours]').forEach((button) => {
+              const active = Number(button.dataset.historyHours) === hours;
+              button.classList.toggle('is-active', active);
+              button.setAttribute('aria-pressed', active ? 'true' : 'false');
+            });
+            page.paintHistoryChart(content).catch(() => {});
+          }
+          return;
+        }
+        const zoomIn = e.target.closest('#heatmapZoomIn');
+        const zoomOut = e.target.closest('#heatmapZoomOut');
+        const zoomReset = e.target.closest('#heatmapZoomReset');
+        const fullscreenBtn = e.target.closest('#heatmapFullscreen');
+        const arcsToggle = e.target.closest('#heatmapArcsToggle');
+        if (fullscreenBtn) {
+          const page = window.Pages['network'];
+          const widget = page._heatmapWidgetEl;
+          if (widget) {
+            const isFs = widget.classList.toggle('heatmap-fullscreen');
+            fullscreenBtn.title = isFs ? 'Exit fullscreen' : 'Fullscreen';
+            fullscreenBtn.setAttribute('aria-label', isFs ? 'Exit fullscreen' : 'Toggle fullscreen');
+            fullscreenBtn.innerHTML = isFs ? '&#x2715;' : '&#x26F6;';
+            // Re-clamp pan for new viewport dimensions
+            queueMicrotask(() => {
+              const vp = content.querySelector('#heatmapViewport');
+              if (vp) {
+                const r = vp.getBoundingClientRect();
+                page._heatmapPan = page._clampHeatmapPan(page._heatmapZoom, page._heatmapPan, r.width, r.height);
+                page._applyHeatmapTransform(content);
+              }
+            });
+          }
+          return;
+        }
+        if (zoomIn || zoomOut || zoomReset) {
+          const viewport = content.querySelector('#heatmapViewport');
+          const rect = viewport ? viewport.getBoundingClientRect() : { width: 0, height: 0 };
+          if (zoomReset) {
+            window.Pages['network']._heatmapZoom = 1;
+            window.Pages['network']._heatmapPan = { x: 0, y: 0 };
+          } else {
+            const factor = zoomIn ? 1.5 : 1 / 1.5;
+            const oldZoom = window.Pages['network']._heatmapZoom;
+            const newZoom = Math.max(1, Math.min(6, Math.round(oldZoom * factor * 100) / 100));
+            const cx = rect.width / 2, cy = rect.height / 2;
+            const pan = window.Pages['network']._heatmapPan;
+            const worldX = (cx - pan.x) / oldZoom;
+            const worldY = (cy - pan.y) / oldZoom;
+            let newPan = { x: cx - worldX * newZoom, y: cy - worldY * newZoom };
+            newPan = window.Pages['network']._clampHeatmapPan(newZoom, newPan, rect.width, rect.height);
+            window.Pages['network']._heatmapZoom = newZoom;
+            window.Pages['network']._heatmapPan = newPan;
+          }
+          window.Pages['network']._applyHeatmapTransform(content);
+          window.Pages['network']._refreshHeatmapTier(content);
+          return;
+        }
+        if (arcsToggle) {
+          const page = window.Pages['network'];
+          const widget = arcsToggle.closest('.heatmap-widget') || page._heatmapWidgetEl;
+          page._heatmapShowArcs = !page._heatmapShowArcs;
+          const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+          page._diffHeatmapArcs(widget, page._heatmapClusters, t);
+          const svg = widget?.querySelector('#heatmapArcs');
+          if (svg) svg.hidden = !page._heatmapShowArcs || !page._validHeatmapHome();
+          return;
+        }
+        const focusCluster = e.target.closest('#heatmapFocusCluster');
+        if (focusCluster) {
+          const page = window.Pages['network'];
+          const cluster = page._heatmapClusters.find((item) => item.id === page._selectedClusterId);
+          const viewport = content.querySelector('#heatmapViewport');
+          if (cluster && viewport) {
+            const rect = viewport.getBoundingClientRect();
+            const target = page._focusHeatmapTarget(cluster, rect.width, rect.height);
+            page._heatmapZoom = target.zoom;
+            page._heatmapPan = target.pan;
+            viewport.classList.add('is-focusing');
+            viewport.addEventListener('transitionend', () => viewport.classList.remove('is-focusing'), { once: true });
+            page._refreshHeatmapTier(content);
+            page._applyHeatmapTransform(content);
+          }
+          return;
+        }
         const marker = e.target.closest('.heatmap-marker');
-        if (marker) {
-          const ips = marker.dataset.ips.split(',');
-          window.Pages['network']._selectedClusterIps = ips;
-          window.Pages['network']._selectedClusterLoc = marker.dataset.loc;
-          window.Pages['network'].load(container, false);
+        const home = e.target.closest('#heatmapHome');
+        if (home) {
+          const page = window.Pages['network'];
+          const location = home.dataset.location || t('network.heatmapHomeLabel');
+          const coords = page._validHeatmapHome();
+          const tooltip = content.querySelector('#heatmapTooltip');
+          const viewport = content.querySelector('#heatmapViewport');
+          if (tooltip && viewport && coords) {
+            const vpRect = viewport.getBoundingClientRect();
+            const localX = e.clientX - vpRect.left;
+            const localY = e.clientY - vpRect.top;
+            tooltip.dataset.forIps = '';
+            tooltip.innerHTML = `<div style="font-weight:600; color:var(--text-main); margin-bottom:3px;">${escapeHtml(t('network.heatmapHomeLabel'))}</div><div style="color:var(--text-dim);">${escapeHtml(location)}</div><div style="color:var(--text-dim);">${coords.lat.toFixed(2)}°, ${coords.lon.toFixed(2)}°</div>`;
+            tooltip.style.display = 'block';
+            tooltip.style.left = `${Math.max(4, Math.min(vpRect.width - 190, localX + 14))}px`;
+            tooltip.style.top = `${Math.max(4, Math.min(vpRect.height - 70, localY + 14))}px`;
+          }
+        } else if (marker) {
+          window.Pages['network']._selectHeatmapCluster(marker.dataset.clusterId, content);
         } else if (e.target.closest('.heatmap-infobox-close')) {
-          window.Pages['network']._selectedClusterIps = null;
-          window.Pages['network'].load(container, false);
+          window.Pages['network']._selectHeatmapCluster(null, content);
+        } else if (e.target.closest('#heatmapViewport') && window.Pages['network']._selectedClusterIps) {
+          // click on empty map background closes the open cluster panel
+          window.Pages['network']._selectHeatmapCluster(null);
         }
       });
+
+      content.addEventListener('wheel', (e) => {
+        const viewport = e.target.closest('#heatmapViewport');
+        if (!viewport) return;
+        e.preventDefault();
+        const page = window.Pages['network'];
+        const rect = viewport.getBoundingClientRect();
+        const localX = e.clientX - rect.left;
+        const localY = e.clientY - rect.top;
+        const oldZoom = page._heatmapZoom;
+        const dir = e.deltaY > 0 ? -1 : 1;
+        let newZoom = Math.round((oldZoom + dir * oldZoom * 0.2) * 100) / 100;
+        newZoom = Math.max(1, Math.min(6, newZoom));
+        if (newZoom === oldZoom) return;
+        const worldX = (localX - page._heatmapPan.x) / oldZoom;
+        const worldY = (localY - page._heatmapPan.y) / oldZoom;
+        let newPan = { x: localX - worldX * newZoom, y: localY - worldY * newZoom };
+        newPan = page._clampHeatmapPan(newZoom, newPan, rect.width, rect.height);
+        page._heatmapZoom = newZoom;
+        page._heatmapPan = newPan;
+        page._applyHeatmapTransform(content);
+        page._refreshHeatmapTier(content);
+      }, { passive: false });
+
+      content.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        const viewport = e.target.closest('#heatmapViewport');
+        if (!viewport) return;
+        if (e.target.closest('.heatmap-marker') || e.target.closest('#heatmapHome') || e.target.closest('.heatmap-zoom-btn') || e.target.closest('#heatmapClusterPanel')) return;
+        const page = window.Pages['network'];
+        page._heatmapDrag = {
+          startX: e.clientX,
+          startY: e.clientY,
+          startPan: { x: page._heatmapPan.x, y: page._heatmapPan.y },
+          moved: false,
+          rect: viewport.getBoundingClientRect()
+        };
+        viewport.classList.add('panning');
+      });
+
+      window.removeEventListener('mousemove', this._heatmapWindowMouseMove || (() => {}));
+      window.removeEventListener('mouseup', this._heatmapWindowMouseUp || (() => {}));
+      document.removeEventListener('keydown', this._heatmapKeydownHandler || (() => {}));
+
+      this._heatmapWindowMouseMove = (e) => {
+        const page = window.Pages['network'];
+        if (!page._heatmapDrag || !document.body.contains(container)) return;
+        const st = page._heatmapDrag;
+        const dx = e.clientX - st.startX;
+        const dy = e.clientY - st.startY;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) st.moved = true;
+        if (page._heatmapZoom <= 1.001) return;
+        let newPan = { x: st.startPan.x + dx, y: st.startPan.y + dy };
+        newPan = page._clampHeatmapPan(page._heatmapZoom, newPan, st.rect.width, st.rect.height);
+        page._heatmapPan = newPan;
+        page._applyHeatmapTransform(content);
+      };
+      this._heatmapWindowMouseUp = () => {
+        const page = window.Pages['network'];
+        const viewport = content.querySelector('#heatmapViewport');
+        if (viewport) viewport.classList.remove('panning');
+        if (page._heatmapDrag) {
+          if (page._heatmapDrag.moved) page._heatmapSuppressClick = true;
+          page._heatmapDrag = null;
+        }
+      };
+      this._heatmapKeydownHandler = (e) => {
+        if (e.key !== 'Escape') return;
+        if (!document.body.contains(container)) {
+          document.removeEventListener('keydown', window.Pages['network']._heatmapKeydownHandler);
+          return;
+        }
+        if (window.Pages['network']._selectedClusterIps) {
+          window.Pages['network']._selectHeatmapCluster(null);
+        }
+      };
+      window.addEventListener('mousemove', this._heatmapWindowMouseMove);
+      window.addEventListener('mouseup', this._heatmapWindowMouseUp);
+      document.addEventListener('keydown', this._heatmapKeydownHandler);
+
+      content.addEventListener('mousemove', (e) => {
+        const page = window.Pages['network'];
+        const tooltip = content.querySelector('#heatmapTooltip');
+        const viewport = content.querySelector('#heatmapViewport');
+        if (!tooltip || !viewport) return;
+        const marker = e.target.closest('.heatmap-marker');
+        if (!marker) {
+          if (tooltip.style.display !== 'none') tooltip.style.display = 'none';
+          return;
+        }
+        
+        if (page._tooltipRaf) return;
+        page._tooltipRaf = requestAnimationFrame(() => {
+          page._tooltipRaf = null;
+          // Ensure we didn't mouseout while waiting
+          if (!document.body.contains(marker) || !marker.matches(':hover')) return;
+          const vpRect = viewport.getBoundingClientRect();
+          const localX = e.clientX - vpRect.left;
+          const localY = e.clientY - vpRect.top;
+          if (tooltip.dataset.forIps !== marker.dataset.ips) {
+            tooltip.dataset.forIps = marker.dataset.ips;
+            const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+            let classColor = 'var(--ok)';
+            if (marker.dataset.classification === 'MALICIOUS') classColor = 'var(--danger)';
+            else if (marker.dataset.classification === 'UNKNOWN') classColor = 'var(--warn)';
+            tooltip.innerHTML = `
+              <div style="font-weight:600; color:var(--text-main); margin-bottom:3px;">${escapeHtml(marker.dataset.loc)}</div>
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:14px;">
+                <span style="color:var(--text-dim);">${escapeHtml(t('network.heatmapTooltipConnections', { count: marker.dataset.count }))}</span>
+                <span style="font-weight:600; color:${classColor};">${escapeHtml(marker.dataset.classLabel)}</span>
+              </div>`;
+          }
+          tooltip.style.display = 'block';
+          let left = localX + 14;
+          let top = localY + 14;
+          if (left > vpRect.width - 200) left = localX - 214;
+          if (top > vpRect.height - 70) top = localY - 60;
+          tooltip.style.left = `${Math.max(4, left)}px`;
+          tooltip.style.top = `${Math.max(4, top)}px`;
+        });
+      });
+
+      content.addEventListener('mouseleave', (e) => {
+        if (e.target && e.target.id === 'networkContent') {
+          const tooltip = content.querySelector('#heatmapTooltip');
+          if (tooltip) tooltip.style.display = 'none';
+        }
+      }, true);
 
       content.addEventListener('input', (e) => {
         if (e.target && e.target.id === 'connectionSearch') {
@@ -98,6 +885,67 @@ window.Pages['network'] = {
         } else if (e.target && e.target.id === 'connectionStateFilter') {
           window.Pages['network']._connectionStateFilter = e.target.value;
           window.Pages['network'].applyConnectionFilter(container);
+        } else if (e.target && e.target.id === 'vpnSelect') {
+          window.Pages['network']._vpnSelection = e.target.value;
+          window.Pages['network'].load(container, false);
+        }
+      });
+      content.addEventListener('change', (e) => {
+        if (e.target && e.target.id === 'viewToggle') {
+          window.Pages['network']._simpleView = e.target.value === 'simple';
+          window.Pages['network'].load(container, false);
+        } else if (e.target && e.target.id === 'groupToggle') {
+          window.Pages['network']._groupByProcess = e.target.value === 'grouped';
+          if (window.Pages['network']._groupByProcess) {
+            window.Pages['network']._expandedGroups = new Set();
+          }
+          window.Pages['network'].load(container, false);
+        }
+      });
+      content.addEventListener('click', (e) => {
+        const minimizeBtn = e.target.closest('.card-minimize-btn');
+        if (minimizeBtn) {
+          const cardId = minimizeBtn.dataset.cardId;
+          const synced = ['bandwidth', 'connStates', 'secFlags'];
+          const ids = synced.includes(cardId) ? synced : [cardId];
+          const willMinimize = !window.Pages['network']._minimized.has(cardId);
+          for (const id of ids) {
+            if (willMinimize) {
+              window.Pages['network']._minimized.add(id);
+            } else {
+              window.Pages['network']._minimized.delete(id);
+            }
+          }
+          window.Pages['network'].load(container, false);
+          return;
+        }
+        if (e.target.closest('.process-group-header')) {
+          const header = e.target.closest('.process-group-header');
+          const processName = header.dataset.process;
+          if (window.Pages['network']._expandedGroups.has(processName)) {
+            window.Pages['network']._expandedGroups.delete(processName);
+          } else {
+            window.Pages['network']._expandedGroups.add(processName);
+          }
+          window.Pages['network'].load(container, false);
+        } else if (e.target.closest('#vpnToggleBtn')) {
+          const btn = e.target.closest('#vpnToggleBtn');
+          window.Pages['network'].toggleVpn(container, btn.dataset.vpnName, btn.dataset.vpnAction);
+        } else if (e.target.closest('#vpnRemoveBtn')) {
+          const btn = e.target.closest('#vpnRemoveBtn');
+          window.Pages['network'].removeVpn(container, btn.dataset.vpnName);
+        } else if (e.target.closest('#vpnAddBtn')) {
+          console.log('[Network] Add VPN button clicked');
+          if (window.VpnAddModal) {
+            console.log('[Network] VpnAddModal found, opening...');
+            window.VpnAddModal.open({
+              onSuccess: () => {
+                window.Pages['network'].load(container, false);
+              }
+            });
+          } else {
+            console.error('[Network] VpnAddModal NOT found on window');
+          }
         }
       });
     }
@@ -110,8 +958,20 @@ window.Pages['network'] = {
       }
       this.load(container, false);
     }, this.REFRESH_INTERVAL_MS);
+
+    // Separate timer for traffic history chart (data updates every ~30s)
+    this._chartRefreshTimer = setInterval(() => {
+      if (!document.body.contains(container)) {
+        clearInterval(this._chartRefreshTimer);
+        this._chartRefreshTimer = null;
+        return;
+      }
+      const content = container.querySelector('#networkContent');
+if (content) this.paintHistoryChart(content).catch(() => {});
+    }, this.CHART_REFRESH_INTERVAL_MS);
   },
-  async load(container, isInitial) {
+
+  async load(container, isInitial = false) {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const content = container.querySelector('#networkContent');
     if (!content) return;
@@ -122,10 +982,11 @@ window.Pages['network'] = {
     const searchSelectionStart = prevSearchEl ? prevSearchEl.selectionStart : null;
     const searchSelectionEnd = prevSearchEl ? prevSearchEl.selectionEnd : null;
     try {
-      const [statsResult, connectionsResult, settingsResult] = await Promise.allSettled([
+      const [statsResult, connectionsResult, settingsResult, vpnResult] = await Promise.allSettled([
         window.api.invoke('network:stats'),
         window.api.invoke('network:connections'),
-        window.api.invoke('db:getSetting', 'feature.networkTrafficHistory', true)
+        window.api.invoke('db:getSetting', 'feature.networkTrafficHistory', true),
+        window.api.invoke('network:vpn:list')
       ]);
 
       if (!document.body.contains(container)) {
@@ -135,6 +996,27 @@ window.Pages['network'] = {
       const stats = statsResult.status === 'fulfilled' ? statsResult.value : null;
       const connections = connectionsResult.status === 'fulfilled' ? connectionsResult.value : null;
       const networkTrafficHistoryEnabled = settingsResult.status === 'fulfilled' ? settingsResult.value : true;
+      const vpn = vpnResult.status === 'fulfilled' ? vpnResult.value : null;
+      const vpns = (vpn && Array.isArray(vpn.vpns)) ? vpn.vpns : [];
+
+      // Fetch user location on initial load (safely with fallback)
+      if (isInitial && !this._userLocation) {
+        try {
+          this._userLocation = await window.api.invoke('network:getUserLocation');
+          // Safety: validate the returned location data
+          if (this._userLocation) {
+            if (typeof this._userLocation.lat !== 'number' || typeof this._userLocation.lon !== 'number' ||
+                this._userLocation.lat < -90 || this._userLocation.lat > 90 ||
+                this._userLocation.lon < -180 || this._userLocation.lon > 180) {
+              console.warn('Invalid user location data received, using fallback');
+              this._userLocation = null;
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to fetch user location, using fallback:', e.message || e);
+          this._userLocation = null;
+        }
+      }
 
       let html = '';
 
@@ -217,87 +1099,187 @@ window.Pages['network'] = {
         </div>`;
       }
 
+      const vpnMin = this._minimized.has('vpn');
+      html += `<div class="card" style="padding:${vpnMin ? '8px 16px' : '14px 16px'}; margin-bottom:18px;">`;
+      html += `<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">`;
+      html += `<div>
+        <h3 style="margin:0; font-size:1rem; display:flex; align-items:center; gap:8px;">
+          ${escapeHtml(t('network.vpnTitle'))}
+          <button class="card-minimize-btn" data-card-id="vpn" title="${vpnMin ? 'Restore' : 'Minimize'}" style="background:none; border:none; cursor:pointer; color:var(--text-dim); font-size:1rem; padding:0 4px; line-height:1; transition:transform 0.2s;" aria-label="${vpnMin ? 'Restore' : 'Minimize'}">${vpnMin ? '&#9660;' : '&#9650;'}</button>
+        </h3>`;
+      if (!vpnMin) {
+        html += `<div class="page-subtitle" style="font-size:0.8rem;">${escapeHtml(t('network.vpnSubtitle'))}</div>`;
+      }
+      html += `</div>`;
+      if (!vpnMin) {
+        if (vpns.length === 0) {
+        html += `<div style="font-size:0.8rem; color:var(--text-dim); flex:1 1 100%; display:flex; align-items:center; gap:8px;">
+          ${escapeHtml(t('network.vpnNoProfiles'))}
+          <button id="vpnAddBtn" class="btn btn-sm btn-secondary" data-i18n="network.vpn.addBtn">Add VPN</button>
+        </div>`;
+      } else {
+        // Try to get last VPN profile from settings for pre-selection
+        let lastProfile = '';
+        try {
+          const lastProfileResult = await window.api.invoke('db:getSetting', 'vpn.lastProfile');
+          if (lastProfileResult && typeof lastProfileResult === 'string') {
+            lastProfile = lastProfileResult;
+          }
+        } catch (_) {}
+
+        const selectedName = vpns.some((v) => v.name === this._vpnSelection)
+          ? this._vpnSelection
+          : (lastProfile && vpns.some(v => v.name === lastProfile)
+              ? lastProfile
+              : (vpns.find((v) => v.connected) || vpns[0]).name);
+        const selVpn = vpns.find((v) => v.name === selectedName) || vpns[0];
+        const busy = !!this._vpnPending;
+        const connected = !!selVpn.connected && !busy;
+
+        html += '<div class="vpn-controls">';
+        html += `<select id="vpnSelect" ${busy ? 'disabled' : ''} style="padding:6px 10px; border-radius:8px; border:1px solid var(--glass-border); background:var(--bg-surface); color:inherit; font-size:0.85rem; max-width:280px;">`;
+        for (const v of vpns) {
+          html += `<option value="${escapeHtml(v.name)}" ${v.name === selectedName ? 'selected' : ''}>${escapeHtml(v.name)}${v.connected ? ' \u2713' : ''}</option>`;
+        }
+        html += '</select>';
+        const btnClass = connected ? 'btn btn-sm btn-danger' : 'btn btn-sm btn-primary';
+        const btnLabel = busy ? t('network.vpnWorking') : (connected ? t('network.vpnDisconnect') : t('network.vpnConnect'));
+        html += `<button id="vpnToggleBtn" class="${btnClass}" data-vpn-action="${connected ? 'disconnect' : 'connect'}" data-vpn-name="${escapeHtml(selVpn.name)}" ${busy ? 'disabled' : ''}>${escapeHtml(btnLabel)}</button>`;
+
+        let statusText = '';
+        let statusColor = 'var(--text-dim)';
+        if (this._vpnError) {
+          statusText = this._vpnError;
+          statusColor = 'var(--danger)';
+        } else if (this._vpnPending) {
+          const action = this._vpnPending.action;
+          statusText = action === 'disconnect'
+            ? t('network.vpnDisconnecting', { name: this._vpnPending.name })
+            : action === 'remove'
+              ? t('network.vpnRemoving', { name: this._vpnPending.name })
+              : t('network.vpnConnecting', { name: this._vpnPending.name });
+        } else if (connected) {
+          statusText = t('network.vpnConnected', { name: selVpn.name });
+          statusColor = 'var(--ok)';
+        } else {
+          statusText = t('network.vpnDisconnected');
+        }
+        html += `<span id="vpnStatusText" style="font-size:0.8rem; color:${statusColor};">${escapeHtml(statusText)}</span>`;
+        // Add VPN button
+        html += `<button id="vpnAddBtn" class="btn btn-sm btn-secondary" style="margin-left:8px;" data-i18n="network.vpn.addBtn">Add VPN</button>`;
+        if (selVpn.managed) {
+          html += `<button id="vpnRemoveBtn" class="btn btn-sm btn-danger vpn-remove-btn" data-vpn-name="${escapeHtml(selVpn.name)}" ${busy ? 'disabled' : ''}>${escapeHtml(t('common.delete'))}</button>`;
+        }
+        html += '</div>';
+      }
+      }
+      html += '</div></div>';
+
       html += '<div style="display:flex; gap:16px; margin-bottom:18px; flex-wrap:wrap; align-items:stretch;">';
 
       html += '<div style="flex:1 1 0; min-width:260px; display:flex; flex-direction:column;">';
       html += '<div class="card" style="padding:14px 16px; flex:1;">';
-      html += `<h3 style="margin-bottom:10px; font-size:1rem;">${escapeHtml(t('network.bandwidth'))}</h3>`;
-      if (stats && stats.interfaces && stats.interfaces.length > 0) {
-        html += '<div style="display:flex; flex-direction:column; gap:8px;">';
-        for (const iface of stats.interfaces) {
-          html += `<div class="stat-tile">
-            <div class="stat-label">${escapeHtml(iface.iface)}</div>
-            <div class="stat-value" style="font-size:0.85rem;">
-              \u25B2 ${iface.txSec} KB/s &nbsp; \u25BC ${iface.rxSec} KB/s
-            </div>
-            <div style="font-size:0.7rem; color:var(--text-dim);">
-              ${escapeHtml(t('network.totalStats', { txTotal: iface.txTotal, rxTotal: iface.rxTotal }))}
-            </div>
-          </div>`;
+      const bwMin = this._minimized.has('bandwidth');
+      html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:${bwMin ? '0' : '10px'};"><h3 style="margin:0; font-size:1rem;">${escapeHtml(t('network.bandwidth'))}</h3><button class="card-minimize-btn" data-card-id="bandwidth" title="${bwMin ? 'Restore' : 'Minimize'}" style="background:none; border:none; cursor:pointer; color:var(--text-dim); font-size:1rem; padding:0 4px; line-height:1; transition:transform 0.2s;" aria-label="${bwMin ? 'Restore' : 'Minimize'}">${bwMin ? '&#9660;' : '&#9650;'}</button></div>`;
+      if (!bwMin) {
+        if (stats && stats.interfaces && stats.interfaces.length > 0) {
+          html += '<div style="display:flex; flex-direction:column; gap:8px;">';
+          for (const iface of stats.interfaces) {
+            html += `<div class="stat-tile">
+              <div class="stat-label">${escapeHtml(iface.iface)}</div>
+              <div class="stat-value" style="font-size:0.85rem;">
+                \u25B2 ${iface.txSec} KB/s &nbsp; \u25BC ${iface.rxSec} KB/s
+              </div>
+              <div style="font-size:0.7rem; color:var(--text-dim);">
+                ${escapeHtml(t('network.totalStats', { txTotal: iface.txTotal, rxTotal: iface.rxTotal }))}
+              </div>
+            </div>`;
+          }
+          html += '</div>';
+        } else {
+          html += `<div class="empty-state" style="font-size:0.85rem;">${escapeHtml(t('network.noInterfaceData'))}</div>`;
         }
-        html += '</div>';
-      } else {
-        html += `<div class="empty-state" style="font-size:0.85rem;">${escapeHtml(t('network.noInterfaceData'))}</div>`;
       }
       html += '</div></div>';
 
       html += '<div style="flex:1 1 0; min-width:260px; display:flex; flex-direction:column;">';
       html += '<div class="card" style="padding:14px 16px; flex:1;">';
-      html += `<h3 style="margin-bottom:10px; font-size:1rem;">${escapeHtml(t('network.connectionStates'))}</h3>`;
-      if (stateTotal === 0) {
-        html += `<div class="empty-state" style="font-size:0.85rem;">${escapeHtml(t('network.noConnectionData'))}</div>`;
-      } else {
-        let cumulative = 0;
-        const gradientStops = stateEntries.map(([name, count]) => {
-          const color = stateColorFor(name);
-          const start = (cumulative / stateTotal) * 360;
-          cumulative += count;
-          const end = (cumulative / stateTotal) * 360;
-          return `${color} ${start}deg ${end}deg`;
-        }).join(', ');
+      const csMin = this._minimized.has('connStates');
+      html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:${csMin ? '0' : '10px'};"><h3 style="margin:0; font-size:1rem;">${escapeHtml(t('network.connectionStates'))}</h3><button class="card-minimize-btn" data-card-id="connStates" title="${csMin ? 'Restore' : 'Minimize'}" style="background:none; border:none; cursor:pointer; color:var(--text-dim); font-size:1rem; padding:0 4px; line-height:1; transition:transform 0.2s;" aria-label="${csMin ? 'Restore' : 'Minimize'}">${csMin ? '&#9660;' : '&#9650;'}</button></div>`;
+      if (!csMin) {
+        if (stateTotal === 0) {
+          html += `<div class="empty-state" style="font-size:0.85rem;">${escapeHtml(t('network.noConnectionData'))}</div>`;
+        } else {
+          let cumulative = 0;
+          const gradientStops = stateEntries.map(([name, count]) => {
+            const color = stateColorFor(name);
+            const start = (cumulative / stateTotal) * 360;
+            cumulative += count;
+            const end = (cumulative / stateTotal) * 360;
+            return `${color} ${start}deg ${end}deg`;
+          }).join(', ');
 
-        html += '<div style="display:flex; align-items:center; gap:16px;">';
-        html += `<div style="flex-shrink:0; width:96px; height:96px; border-radius:50%; background: conic-gradient(${gradientStops});"></div>`;
-        html += '<div style="display:flex; flex-direction:column; gap:6px; font-size:0.78rem;">';
-        paletteIdx = 0;
-        for (const [name, count] of stateEntries) {
-          const color = STATE_COLORS[name] || fallbackPalette[paletteIdx++ % fallbackPalette.length];
-          const pct = Math.round((count / stateTotal) * 100);
-          html += `<div style="display:flex; align-items:center; gap:6px;">
-            <span style="width:9px; height:9px; border-radius:50%; background:${color}; display:inline-block;"></span>
-            <span>${escapeHtml(name)}: ${count} (${pct}%)</span>
-          </div>`;
+          html += '<div style="display:flex; align-items:center; gap:16px;">';
+          html += `<div style="flex-shrink:0; width:96px; height:96px; border-radius:50%; background: conic-gradient(${gradientStops});"></div>`;
+          html += '<div style="display:flex; flex-direction:column; gap:6px; font-size:0.78rem;">';
+          paletteIdx = 0;
+          for (const [name, count] of stateEntries) {
+            const color = STATE_COLORS[name] || fallbackPalette[paletteIdx++ % fallbackPalette.length];
+            const pct = Math.round((count / stateTotal) * 100);
+            const glossary = this._stateGlossary(name);
+            html += `<div style="display:flex; align-items:center; gap:6px;">
+              <span style="width:9px; height:9px; border-radius:50%; background:${color}; display:inline-block;"></span>
+              <span class="glossary-term network-state-term" title="${escapeHtml(glossary)}">${escapeHtml(name)}: ${count} (${pct}%)</span>
+            </div>`;
+          }
+          html += '</div></div>';
         }
-        html += '</div></div>';
       }
       html += '</div></div>';
 
       html += '<div style="flex:1 1 0; min-width:260px; display:flex; flex-direction:column;">';
       html += '<div class="card" style="padding:14px 16px; flex:1;">';
-      html += `<h3 style="margin-bottom:10px; font-size:1rem;">${escapeHtml(t('network.securityFlags'))}</h3>`;
-      html += `<div style="display:flex; flex-direction:column; gap:8px; font-size:0.85rem;">
-        <div style="display:flex; align-items:center; justify-content:space-between;">
-          <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:50%; background:var(--ok); display:inline-block;"></span>${escapeHtml(t('network.flagSafe'))}</span>
-          <span style="font-weight:600; color:var(--ok);">${safeCount}</span>
-        </div>
-        <div style="display:flex; align-items:center; justify-content:space-between;">
-          <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:50%; background:var(--warn); display:inline-block;"></span>${escapeHtml(t('network.flagUnverified'))}</span>
-          <span style="font-weight:600; color:var(--warn);">${unknownCount}</span>
-        </div>
-        <div style="display:flex; align-items:center; justify-content:space-between;">
-          <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:50%; background:var(--danger); display:inline-block;"></span>${escapeHtml(t('network.flagMalicious'))}</span>
-          <span style="font-weight:600; color:var(--danger);">${maliciousCount}</span>
-        </div>
-      </div>`;
+      const sfMin = this._minimized.has('secFlags');
+      html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:${sfMin ? '0' : '10px'};"><h3 style="margin:0; font-size:1rem;">${escapeHtml(t('network.securityFlags'))}</h3><button class="card-minimize-btn" data-card-id="secFlags" title="${sfMin ? 'Restore' : 'Minimize'}" style="background:none; border:none; cursor:pointer; color:var(--text-dim); font-size:1rem; padding:0 4px; line-height:1; transition:transform 0.2s;" aria-label="${sfMin ? 'Restore' : 'Minimize'}">${sfMin ? '&#9660;' : '&#9650;'}</button></div>`;
+      if (!sfMin) {
+        html += `<div style="display:flex; flex-direction:column; gap:8px; font-size:0.85rem;">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:50%; background:var(--ok); display:inline-block;"></span>${escapeHtml(t('network.flagSafe'))}</span>
+            <span style="font-weight:600; color:var(--ok);">${safeCount}</span>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:50%; background:var(--warn); display:inline-block;"></span>${escapeHtml(t('network.flagUnverified'))}</span>
+            <span style="font-weight:600; color:var(--warn);">${unknownCount}</span>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:50%; background:var(--danger); display:inline-block;"></span>${escapeHtml(t('network.flagMalicious'))}</span>
+            <span style="font-weight:600; color:var(--danger);">${maliciousCount}</span>
+          </div>
+        </div>`;
+      }
       html += '</div></div>';
 
       html += '</div>';
 
       if (networkTrafficHistoryEnabled) {
-        html += '<div class="card" style="padding:14px 16px; margin-bottom:18px;">';
-        html += `<h3 style="margin-bottom:10px; font-size:1rem;">${escapeHtml(t('network.historyTitle'))}</h3>`;
-        html += '<canvas id="networkHistoryChart" width="900" height="180" style="width:100%; max-height:180px;"></canvas>';
-        html += `<div id="networkHistoryEmpty" class="empty-state" style="font-size:0.85rem; display:none;">${escapeHtml(t('network.historyEmpty'))}</div>`;
+        const histMin = this._minimized.has('history');
+        const historyMinimizeLabel = histMin ? t('network.historyRestore') : t('common.minimize');
+        const historyRanges = [1, 6, 24, 168].map((hours) => {
+          const key = hours === 168 ? '7d' : `${hours}h`;
+          const active = hours === this._historyRangeHours;
+          return `<button type="button" class="history-range-btn${active ? ' is-active' : ''}" data-history-hours="${hours}" aria-pressed="${active ? 'true' : 'false'}">${escapeHtml(t(`network.historyRange${key}`))}</button>`;
+        }).join('');
+        html += '<div class="card history-card">';
+        html += `<div class="history-heading"><div><h3>${escapeHtml(t('network.historyHeading'))}</h3>${histMin ? '' : `<div class="history-range-selector" role="group" aria-label="${escapeHtml(t('network.historyRangeAria'))}">${historyRanges}</div>`}</div><button class="card-minimize-btn" data-card-id="history" title="${escapeHtml(historyMinimizeLabel)}" aria-label="${escapeHtml(historyMinimizeLabel)}">${histMin ? '&#9660;' : '&#9650;'}</button></div>`;
+        if (!histMin) {
+          html += '<div id="networkHistoryLegend" class="history-legend"></div>';
+          html += '<div id="networkHistoryChartWrap" class="history-chart-wrap">';
+          html += `<canvas id="networkHistoryChart" tabindex="0" role="img" aria-describedby="networkHistoryKeyboardHelp"></canvas>`;
+          html += '<div id="networkHistoryTooltip" class="history-tooltip" hidden></div>';
+          html += '</div>';
+          html += `<div id="networkHistoryKeyboardHelp" class="history-keyboard-help">${escapeHtml(t('network.historyKeyboardHelp'))}</div>`;
+          html += `<div id="networkHistoryEmpty" class="empty-state history-empty" hidden>${escapeHtml(t('network.historyEmpty'))}</div>`;
+        }
         html += '</div>';
       }
 
@@ -332,135 +1314,36 @@ window.Pages['network'] = {
       }).length;
 
       if (Object.keys(geoData).length > 0) {
-        html += '<div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px; flex-wrap:wrap; gap:8px;">';
-        html += `<div>
-          <h3 style="margin:0; font-size:1rem;">${escapeHtml(t('network.heatmapTitle'))}</h3>
-          <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">${escapeHtml(t('network.heatmapCounts', { total: totalConnectionsCount, filtered: filteredConnectionsCount, mapped: mappedCount }))}</div>
+        const hmMin = this._minimized.has('heatmap');
+        const riskCounts = filteredConnections.reduce((counts, connection) => {
+          const risk = ['SAFE', 'UNKNOWN', 'MALICIOUS'].includes(connection.classification) ? connection.classification : 'UNKNOWN';
+          counts[risk]++;
+          return counts;
+        }, { SAFE: 0, UNKNOWN: 0, MALICIOUS: 0 });
+        const minimizeLabel = hmMin ? t('network.heatmapRestore') : t('common.minimize');
+        html += `<div class="heatmap-heading">
+          <div><h3>${escapeHtml(t('network.heatmapTitle'))}<button class="card-minimize-btn" data-card-id="heatmap" title="${escapeHtml(minimizeLabel)}" aria-label="${escapeHtml(minimizeLabel)}">${hmMin ? '&#9660;' : '&#9650;'}</button></h3>
+          <p>${escapeHtml(t('network.heatmapCounts', { total: totalConnectionsCount, filtered: filteredConnectionsCount, mapped: mappedCount }))}</p></div>
+          ${hmMin ? '' : `<div class="heatmap-legend"><span class="heatmap-risk-safe">${riskCounts.SAFE} ${escapeHtml(t('network.heatmapLegendSafe'))}</span><span class="heatmap-risk-unknown">${riskCounts.UNKNOWN} ${escapeHtml(t('network.heatmapLegendUnverified'))}</span><span class="heatmap-risk-malicious">${riskCounts.MALICIOUS} ${escapeHtml(t('network.heatmapLegendMalicious'))}</span></div>`}
         </div>`;
-        html += `<div style="display:flex; gap:12px; font-size:0.75rem; font-weight:600;">
-          <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--ok);"></span> ${escapeHtml(t('network.heatmapLegendSafe'))}</span>
-          <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--warn);"></span> ${escapeHtml(t('network.heatmapLegendUnverified'))}</span>
-          <span style="display:flex; align-items:center; gap:4px;"><span style="width:8px; height:8px; border-radius:50%; background:var(--danger);"></span> ${escapeHtml(t('network.heatmapLegendMalicious'))}</span>
-        </div>`;
-        html += '</div>';
-
-        html += `<div class="card" style="padding:0; margin-bottom:18px; position:relative; background-color:var(--bg-panel); overflow:hidden; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
-          <div id="heatmapMapBgMount"></div>
-          <div style="position:absolute; top:0; left:0; bottom:0; right:0; pointer-events:none; z-index:2;">`;
-
-        if (mappedCount === 0) {
-          html += `<div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; font-size:0.85rem; color:var(--text-dim); white-space:nowrap;">${escapeHtml(t('network.heatmapNoMatches'))}</div>`;
-        }
-
-        const clusters = {};
-        for (const c of filteredConnections) {
-          const ip = firstDefined(c.remoteAddress, c.RemoteAddress);
-          const geo = geoData[ip];
-          if (!geo || geo.lat === undefined || geo.lon === undefined) continue;
-
-          const clusterX = Math.round(geo.lon / 2.5) * 2.5;
-          const clusterY = Math.round(geo.lat / 2.5) * 2.5;
-          const key = `${clusterX},${clusterY}`;
-
-          if (!clusters[key]) {
-            clusters[key] = {
-              lat: clusterY, lon: clusterX,
-              count: 0,
-              ips: new Set(),
-              classification: 'SAFE',
-              locations: new Set()
-            };
-          }
-
-          clusters[key].count++;
-          clusters[key].ips.add(ip);
-          if (geo.city && geo.country) clusters[key].locations.add(`${geo.city}, ${geo.country}`);
-
-          if (c.classification === 'MALICIOUS') {
-            clusters[key].classification = 'MALICIOUS';
-          } else if (c.classification === 'UNKNOWN' && clusters[key].classification === 'SAFE') {
-            clusters[key].classification = 'UNKNOWN';
-          }
-        }
-
-        for (const key in clusters) {
-          const c = clusters[key];
-          const x = ((c.lon + 180) / 360) * 100;
-          const y = ((90 - c.lat) / 180) * 100;
-
-          let color = 'var(--ok)';
-          let glow = 'var(--ok)';
-          let pulseClass = '';
-
-          if (c.classification === 'MALICIOUS') {
-            color = 'var(--danger)';
-            glow = 'var(--danger)';
-            pulseClass = 'heatmap-pulse-malicious';
-          } else if (c.classification === 'UNKNOWN') {
-            color = 'var(--warn)';
-            glow = 'var(--warn)';
-          }
-
-          const size = Math.max(8, 6 + Math.log(c.count) * 4);
-          const ipList = Array.from(c.ips).join(',');
-          const locList = Array.from(c.locations).join(' | ') || t('common.unverifiedLocation');
-          const classificationDisplay = this._classificationLabel(c.classification);
-
-          html += `<div class="heatmap-marker ${pulseClass}" data-ips="${ipList}" data-loc="${escapeHtml(locList)}"
-            title="${escapeHtml(locList)}\\nIPs: ${ipList}\\nConnections: ${c.count}\\nClassification: ${escapeHtml(classificationDisplay)}"
-            style="position:absolute; left:${x}%; top:${y}%; width:${size}px; height:${size}px;
-            background-color:${color}; border-radius:50%; transform:translate(-50%, -50%);
-            box-shadow:0 0 10px ${glow}; cursor:pointer; pointer-events:auto; display:flex;
-            align-items:center; justify-content:center; color:#fff; font-size:9px; font-weight:bold; transition: transform 0.15s ease-out;">
-            ${c.count > 1 ? c.count : ''}
-          </div>`;
-        }
-
-        if (window.Pages['network']._selectedClusterIps) {
-          const selectedIps = window.Pages['network']._selectedClusterIps;
-          const loc = window.Pages['network']._selectedClusterLoc;
-          const matchingConns = filteredConnections.filter(c => {
-             const ip = firstDefined(c.remoteAddress, c.RemoteAddress);
-             return selectedIps.includes(ip);
-          });
-
-          html += `<div style="position:absolute; top:10px; right:10px; width:320px; max-height:calc(100% - 20px); background:rgba(20, 26, 33, 0.95); border:1px solid rgba(255,255,255,0.1); border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,0.5); z-index:20; display:flex; flex-direction:column; backdrop-filter:blur(4px); pointer-events:auto;">
-            <div style="padding:10px 14px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;">
-              <div style="font-weight:600; font-size:0.9rem;">${escapeHtml(loc || t('network.clusterDetails'))}</div>
-              <div class="heatmap-infobox-close" style="cursor:pointer; opacity:0.7; font-size:1.4rem; line-height:1;">&times;</div>
-            </div>
-            <div style="padding:10px 14px; overflow-y:auto; font-size:0.8rem; display:flex; flex-direction:column; gap:12px;">`;
-
-          for (const c of matchingConns) {
-            const proc = c.processName ? `(${escapeHtml(c.processName)})` : (c.pid ? `(PID: ${escapeHtml(c.pid)})` : '');
-            const ip = firstDefined(c.remoteAddress, c.RemoteAddress);
-            const port = firstDefined(c.remotePort, c.RemotePort);
-            const state = getState(c);
-            let stateColor = 'var(--text-dim)';
-            if (state === 'ESTABLISHED') stateColor = 'var(--ok)';
-            else if (state === 'LISTEN' || state === 'LISTENING') stateColor = 'var(--accent-primary)';
-            else if (state === 'TIME_WAIT') stateColor = 'var(--warn)';
-            else if (state === 'CLOSE_WAIT') stateColor = 'var(--danger)';
-
-            html += `<div>
-              <div style="font-family:monospace; color:var(--text-primary); font-size:0.85rem;">${escapeHtml(ip)}:${escapeHtml(port)}</div>
-              <div style="color:var(--text-dim); display:flex; justify-content:space-between; margin-top:4px;">
-                <span>${proc}</span>
-                <span style="color:${stateColor}; font-weight:600; font-size:0.7rem; background:${stateColor}15; padding:2px 4px; border-radius:4px;">${escapeHtml(state)}</span>
-              </div>
-            </div>`;
-          }
-
-          html += `</div></div>`;
-        }
-
-        html += `</div></div>`;
+        if (!hmMin) html += '<div id="heatmapWidgetMount"></div>';
+        this._heatmapData = { connections: filteredConnections, geoData };
+      } else {
+        this._heatmapData = null;
       }
 
       html += `<div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px; flex-wrap:wrap;">
         <h3 style="margin:0; font-size:1rem;">${escapeHtml(t('network.activeConnections'))}</h3>
         <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
           <span id="connectionCount" class="page-subtitle" style="font-size:0.8rem; white-space:nowrap;"></span>
+          <select id="viewToggle" style="padding:6px 10px; border-radius:8px; border:1px solid var(--glass-border); background:var(--bg-surface); color:inherit; font-size:0.85rem;">
+            <option value="simple" ${this._simpleView ? 'selected' : ''}>${escapeHtml(t('network.simpleView'))}</option>
+            <option value="technical" ${!this._simpleView ? 'selected' : ''}>${escapeHtml(t('network.technicalView'))}</option>
+          </select>
+          <select id="groupToggle" style="padding:6px 10px; border-radius:8px; border:1px solid var(--glass-border); background:var(--bg-surface); color:inherit; font-size:0.85rem;">
+            <option value="flat" ${!this._groupByProcess ? 'selected' : ''}>Flat View</option>
+            <option value="grouped" ${this._groupByProcess ? 'selected' : ''}>${escapeHtml(t('network.groupByProcess'))}</option>
+          </select>
           <select id="connectionStateFilter" style="padding:6px 10px; border-radius:8px; border:1px solid var(--glass-border); background:var(--bg-surface); color:inherit; font-size:0.85rem;">
             <option value="all" ${this._connectionStateFilter === 'all' ? 'selected' : ''}>${escapeHtml(t('network.stateFilterAll'))}</option>
             <option value="ESTABLISHED" ${this._connectionStateFilter === 'ESTABLISHED' ? 'selected' : ''}>${escapeHtml(t('network.stateFilterEstablished'))}</option>
@@ -494,79 +1377,73 @@ window.Pages['network'] = {
         });
 
         html += '<div id="activeConnectionsList" style="display:flex; flex-direction:column; gap:8px; max-height:400px; overflow-y:auto;">';
-        for (const c of sortedConnections) {
-          const proc = c.processName ? ` (${escapeHtml(c.processName)})` : (c.pid ? ` (PID: ${escapeHtml(c.pid)})` : '');
-          const hostname = c.hostname ? ` \u2192 ${escapeHtml(c.hostname)}` : '';
-          const service = c.serviceName ? ` [${escapeHtml(c.serviceName)}]` : '';
-          const state = getState(c);
 
-          const remoteAddress = firstDefined(c.remoteAddress, c.RemoteAddress);
-          const remotePort = firstDefined(c.remotePort, c.RemotePort);
-          const localAddress = firstDefined(c.localAddress, c.LocalAddress);
-          const localPort = firstDefined(c.localPort, c.LocalPort);
-
-          let badgeColor = 'var(--text-dim)';
-          let borderColor = 'var(--accent-primary)';
-          if (c.classification === 'SAFE') {
-            badgeColor = 'var(--ok)';
-            borderColor = 'var(--ok)';
-          } else if (c.classification === 'MALICIOUS') {
-            badgeColor = 'var(--danger)';
-            borderColor = 'var(--danger)';
-          } else if (c.classification === 'UNKNOWN') {
-            badgeColor = 'var(--warn)';
-            borderColor = 'var(--warn)';
+        if (this._groupByProcess) {
+          // Group connections by process
+          const groups = new Map();
+          for (const c of sortedConnections) {
+            const processKey = c.processName || (c.pid ? `PID:${c.pid}` : t('network.unknownProcess'));
+            if (!groups.has(processKey)) {
+              groups.set(processKey, []);
+            }
+            groups.get(processKey).push(c);
           }
 
-          let stateColor = 'var(--text-dim)';
-          const stateUpper = state.toString().toUpperCase();
-          if (stateUpper === 'ESTABLISHED') {
-            stateColor = 'var(--ok)';
-          } else if (stateUpper === 'LISTEN' || stateUpper === 'LISTENING') {
-            stateColor = 'var(--accent-primary)';
-          } else if (stateUpper === 'TIME_WAIT' || stateUpper === 'TIMEWAIT') {
-            stateColor = 'var(--warn)';
-          } else if (stateUpper === 'CLOSE_WAIT' || stateUpper === 'CLOSEWAIT') {
-            stateColor = 'var(--danger)';
+          // Auto-expand groups only if none are expanded (first time grouping)
+          if (this._expandedGroups.size === 0) {
+            // Don't auto-expand by default - let users choose which to expand
           }
-          const stateBadge = state
-            ? `<span style="font-size:0.7rem; font-weight:600; color:${stateColor}; background:${stateColor}15; padding:2px 6px; border-radius:4px; margin-right:6px;">${escapeHtml(state)}</span>`
-            : '';
 
-          const searchBlob = [
-            c.processName, c.hostname, c.serviceName, state, c.classification,
-            remoteAddress, remotePort, localAddress, localPort, c.pid
-          ].filter((v) => v !== undefined && v !== null && v !== '').join(' ').toLowerCase();
+          for (const [processName, groupConnections] of groups) {
+            const safeCount = groupConnections.filter(c => c.classification === 'SAFE').length;
+            const unknownCount = groupConnections.filter(c => c.classification === 'UNKNOWN').length;
+            const maliciousCount = groupConnections.filter(c => c.classification === 'MALICIOUS').length;
+            
+            let groupBorderColor = '#58A6FF';
+            if (maliciousCount > 0) {
+              groupBorderColor = '#F85149';
+            } else if (unknownCount > 0) {
+              groupBorderColor = '#D29922';
+            } else {
+              groupBorderColor = '#3FB950';
+            }
 
-          const riskDisplay = this._classificationLabel(c.classification);
+            const isExpanded = this._expandedGroups.has(processName);
 
-          html += `<div class="list-row connection-row" data-ip="${escapeHtml(remoteAddress)}" data-search="${escapeHtml(searchBlob)}" data-risk="${escapeHtml(c.classification || 'UNKNOWN')}" data-state="${escapeHtml(state)}" style="display:flex; flex-direction:column; gap:4px; padding:12px 16px; border-left:4px solid ${borderColor}; content-visibility:auto; contain-intrinsic-size:0 70px;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <div>
-                <div style="font-weight:600; font-family:monospace; word-break:break-all;">${stateBadge}${escapeHtml(remoteAddress)}:${escapeHtml(remotePort)}${service}${hostname}</div>
-                <div class="page-subtitle" style="font-size:0.85rem; word-break:break-all;">${escapeHtml(t('network.localConnection', { localIp: localAddress, localPort: localPort, proc: proc }))}</div>
+            html += `<div class="process-group" style="border-left:4px solid ${groupBorderColor}; background:#1e2329; border-radius:8px; margin-bottom:12px; display:block;">
+              <div class="process-group-header" data-process="${escapeHtml(processName)}" style="padding:12px 16px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:#252b32;">
+                <div>
+                  <div style="font-weight:600; font-size:0.95rem; color:#fff;">${escapeHtml(t('network.processGroup', { process: processName, count: groupConnections.length }))}</div>
+                  <div style="font-size:0.8rem; color:#888; margin-top:2px;">${escapeHtml(t('network.riskSummary', { safe: safeCount, unknown: unknownCount, malicious: maliciousCount }))}</div>
+                </div>
+                <div style="font-size:1.2rem; color:#888; transition:transform 0.2s;">${isExpanded ? '▼' : '▶'}</div>
               </div>
-              <div style="font-size:0.75rem; font-weight:600; color:${badgeColor}; background:${badgeColor}15; padding:4px 8px; border-radius:4px;">${escapeHtml(riskDisplay)}</div>
-            </div>
-          </div>`;
+              <div class="process-group-connections" style="display:${isExpanded ? 'block' : 'none'}; padding:8px 0;">`;
+
+            for (const c of groupConnections) {
+              html += this._renderConnectionRow(c, t, getState, firstDefined, this._simpleView);
+            }
+
+            html += '</div></div>';
+          }
+        } else {
+          // Flat list view (original behavior)
+          for (const c of sortedConnections) {
+            html += this._renderConnectionRow(c, t, getState, firstDefined, this._simpleView);
+          }
         }
+
         html += '</div>';
         html += `<div id="connectionNoResults" class="empty-state" style="display:none; margin-top:8px;">${escapeHtml(t('network.noResults'))}</div>`;
       }
 
       content.innerHTML = html;
-      this.paintHistoryChart(content).catch(() => {});
-
-      const mapBgMount = content.querySelector('#heatmapMapBgMount');
-      if (mapBgMount) {
-        if (!this._worldMapBgEl) {
-          this._worldMapBgEl = document.createElement('div');
-          this._worldMapBgEl.innerHTML = `
-            <div style="position:absolute; top:0; left:0; right:0; bottom:0; background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px); background-size: 20px 20px; pointer-events:none; z-index:1;"></div>
-            <img src="../img/world-map.svg" alt="World Map" style="width:100%; height:auto; opacity:0.6; display:block; pointer-events:none; user-select:none;" />
-          `;
-        }
-        mapBgMount.replaceWith(this._worldMapBgEl);
+      if (this._heatmapData && !this._minimized.has('heatmap')) {
+        this._mountHeatmapWidget(content, this._heatmapData, t);
+      } else if (this._minimized.has('heatmap') && this._heatmapPulseRaf) {
+        cancelAnimationFrame(this._heatmapPulseRaf);
+        this._heatmapPulseRaf = null;
+        this._heatmapArcSignature = '';
       }
 
       const alertsPanelMount = content.querySelector('#networkAlertsPanel');
@@ -575,14 +1452,24 @@ window.Pages['network'] = {
           this._alertsPanelEl = document.createElement('div');
           this._alertsPanelEl.id = 'networkAlertsPanel';
           this._alertsPanelEl.className = 'card';
-          this._alertsPanelEl.style.cssText = 'padding:10px 12px; margin-bottom:18px;';
+          this._alertsPanelEl.style.cssText = 'padding:10px 12px; margin-bottom:18px; display:none;';
           this._alertsPanelEl.innerHTML = `
             <h3 style="margin-bottom:6px; font-size:0.9rem;">${escapeHtml(t('network.alertsTitle'))}</h3>
             <div id="networkAlertsList" class="empty-state" style="font-size:0.8rem;">${escapeHtml(t('network.alertsLoading'))}</div>
           `;
         }
         alertsPanelMount.replaceWith(this._alertsPanelEl);
-        this.renderAlertHits(content).catch(() => {});
+        this.renderAlertHits(content).catch((err) => {
+          console.error('Failed to render network alert hits:', err);
+          if (this._alertsPanelEl) {
+            this._alertsPanelEl.style.display = 'block';
+            const listEl = this._alertsPanelEl.querySelector('#networkAlertsList');
+            if (listEl) {
+              listEl.className = 'empty-state';
+              listEl.textContent = t('network.alertsLoadFailed');
+            }
+          }
+        });
       }
 
       if (prevScrollTop) {
@@ -591,6 +1478,11 @@ window.Pages['network'] = {
       }
 
       this.applyConnectionFilter(container);
+
+      // Paint traffic history chart after rendering (if enabled)
+      if (networkTrafficHistoryEnabled && !this._minimized.has('history')) {
+        this.paintHistoryChart(content).catch(() => {});
+      }
 
       if (searchWasFocused) {
         const newSearchEl = content.querySelector('#connectionSearch');
@@ -620,88 +1512,463 @@ window.Pages['network'] = {
     const query = (this._connectionQuery || '').trim().toLowerCase();
     const riskFilter = this._connectionRiskFilter || 'all';
     const stateFilter = this._connectionStateFilter || 'all';
-    const rows = listEl.querySelectorAll('.connection-row');
-    let visible = 0;
+    
+    // Handle grouped view
+    if (this._groupByProcess) {
+      const groups = listEl.querySelectorAll('.process-group');
+      let visibleGroups = 0;
+      let totalConnections = 0;
 
-    rows.forEach((row) => {
-      const searchMatches = !query || (row.dataset.search || '').includes(query);
-      const riskMatches = riskFilter === 'all' || row.dataset.risk === riskFilter;
-      const stateMatches = stateFilter === 'all' || row.dataset.state === stateFilter;
-      const matches = searchMatches && riskMatches && stateMatches;
-      row.style.display = matches ? '' : 'none';
-      if (matches) visible += 1;
+      groups.forEach((group) => {
+        const rows = group.querySelectorAll('.connection-row');
+        let visibleInGroup = 0;
+
+        rows.forEach((row) => {
+          const searchMatches = !query || (row.dataset.search || '').includes(query);
+          const riskMatches = riskFilter === 'all' || row.dataset.risk === riskFilter;
+          const stateMatches = stateFilter === 'all' || row.dataset.state === stateFilter;
+          const matches = searchMatches && riskMatches && stateMatches;
+          row.style.display = matches ? '' : 'none';
+          if (matches) visibleInGroup += 1;
+        });
+
+        // Show/hide group based on visible connections
+        group.style.display = visibleInGroup > 0 ? 'block' : 'none';
+        if (visibleInGroup > 0) visibleGroups += 1;
+        totalConnections += rows.length;
+      });
+      
+      if (countEl) {
+        countEl.textContent = query
+          ? t('network.connectionCountFiltered', { visible: visibleGroups, total: groups.length })
+          : t('network.connectionCount', { count: groups.length });
+      }
+      if (noResultsEl) {
+        noResultsEl.style.display = (groups.length > 0 && visibleGroups === 0) ? '' : 'none';
+      }
+    } else {
+      // Flat list view
+      const rows = listEl.querySelectorAll('.connection-row');
+      let visible = 0;
+
+      rows.forEach((row) => {
+        const searchMatches = !query || (row.dataset.search || '').includes(query);
+        const riskMatches = riskFilter === 'all' || row.dataset.risk === riskFilter;
+        const stateMatches = stateFilter === 'all' || row.dataset.state === stateFilter;
+        const matches = searchMatches && riskMatches && stateMatches;
+        row.style.display = matches ? '' : 'none';
+        if (matches) visible += 1;
+      });
+
+      if (countEl) {
+        countEl.textContent = query
+          ? t('network.connectionCountFiltered', { visible, total: rows.length })
+          : t('network.connectionCount', { count: rows.length });
+      }
+      if (noResultsEl) {
+        noResultsEl.style.display = (rows.length > 0 && visible === 0) ? '' : 'none';
+      }
+    }
+  },
+
+  _niceAxisMax(value) {
+    if (!(value > 0)) return 1;
+    const exp = Math.floor(Math.log10(value));
+    const base = Math.pow(10, exp);
+    const norm = value / base;
+    let niceNorm;
+    if (norm <= 1) niceNorm = 1;
+    else if (norm <= 2) niceNorm = 2;
+    else if (norm <= 5) niceNorm = 5;
+    else niceNorm = 10;
+    return niceNorm * base;
+  },
+
+  _historyRangePayload(hours = this._historyRangeHours) {
+    const value = Number(hours);
+    return { hours: [1, 6, 24, 168].includes(value) ? value : 24 };
+  },
+
+  _beginHistoryRequest(hours = this._historyRangeHours) {
+    const payload = this._historyRangePayload(hours);
+    return { token: ++this._historyRequestToken, hours: payload.hours, payload };
+  },
+
+  _resolveHistoryRequest(request, rows, failed = false) {
+    if (!request || request.token !== this._historyRequestToken) return { stale: true, rows: [] };
+    if (failed) return { stale: false, rows: this._historyCache.get(request.hours) || [], fromCache: true };
+    const safeRows = Array.isArray(rows) ? rows : [];
+    this._historyCache.set(request.hours, safeRows);
+    return { stale: false, rows: safeRows, fromCache: false };
+  },
+
+  _normalizeHistoryRows(rows) {
+    const buckets = new Map();
+    for (const row of rows || []) {
+      const rawTime = row?.recorded_at ?? row?.t;
+      const ms = rawTime instanceof Date ? rawTime.getTime() : Date.parse(rawTime);
+      if (!Number.isFinite(ms)) continue;
+      const point = buckets.get(ms) || { t: new Date(ms).toISOString(), ms, rx: 0, tx: 0 };
+      point.rx += Math.max(0, Number(row.rx_sec ?? row.rx) || 0);
+      point.tx += Math.max(0, Number(row.tx_sec ?? row.tx) || 0);
+      buckets.set(ms, point);
+    }
+    return Array.from(buckets.values()).sort((a, b) => a.ms - b.ms);
+  },
+
+  _historyMetrics(series) {
+    if (!series.length) return null;
+    let rxTotal = 0, txTotal = 0;
+    let rxPeak = { value: -1, index: 0, point: series[0] };
+    let txPeak = { value: -1, index: 0, point: series[0] };
+    series.forEach((point, index) => {
+      rxTotal += point.rx;
+      txTotal += point.tx;
+      if (point.rx > rxPeak.value) rxPeak = { value: point.rx, index, point };
+      if (point.tx > txPeak.value) txPeak = { value: point.tx, index, point };
     });
+    return {
+      current: series[series.length - 1],
+      average: { rx: rxTotal / series.length, tx: txTotal / series.length },
+      peak: { rx: rxPeak, tx: txPeak }
+    };
+  },
 
-    if (countEl) {
-      countEl.textContent = query
-        ? t('network.connectionCountFiltered', { visible, total: rows.length })
-        : t('network.connectionCount', { count: rows.length });
+  _downsampleHistory(series, maxBuckets) {
+    const limit = Math.max(1, Math.floor(Number(maxBuckets) || 1));
+    if (series.length <= limit) {
+      return series.map((point, index) => ({
+        ...point, rawStart: index, rawEnd: index,
+        rxPeak: { value: point.rx, index, point },
+        txPeak: { value: point.tx, index, point }
+      }));
     }
-    if (noResultsEl) {
-      noResultsEl.style.display = (rows.length > 0 && visible === 0) ? '' : 'none';
+    const result = [];
+    for (let bucketIndex = 0; bucketIndex < limit; bucketIndex++) {
+      const start = Math.floor((bucketIndex / limit) * series.length);
+      const endExclusive = Math.floor(((bucketIndex + 1) / limit) * series.length);
+      const end = Math.max(start, endExclusive - 1);
+      const slice = series.slice(start, end + 1);
+      if (!slice.length) continue;
+      let rx = 0, tx = 0, ms = 0;
+      let rxPeak = { value: -1, index: start, point: slice[0] };
+      let txPeak = { value: -1, index: start, point: slice[0] };
+      slice.forEach((point, offset) => {
+        const rawIndex = start + offset;
+        rx += point.rx;
+        tx += point.tx;
+        ms += point.ms;
+        if (point.rx > rxPeak.value) rxPeak = { value: point.rx, index: rawIndex, point };
+        if (point.tx > txPeak.value) txPeak = { value: point.tx, index: rawIndex, point };
+      });
+      const averageMs = ms / slice.length;
+      result.push({
+        t: new Date(averageMs).toISOString(), ms: averageMs,
+        rx: rx / slice.length, tx: tx / slice.length,
+        rawStart: start, rawEnd: end, rxPeak, txPeak
+      });
     }
+    return result;
+  },
+
+  _historyLabelMode(hours = this._historyRangeHours) {
+    return Number(hours) === 168 ? 'date' : 'time';
+  },
+
+  _formatHistoryTimestamp(value, hours = this._historyRangeHours, detailed = false) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (!Number.isFinite(date.getTime())) return '';
+    if (this._historyLabelMode(hours) === 'date') {
+      return date.toLocaleString([], detailed
+        ? { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }
+        : { month: 'short', day: 'numeric' });
+    }
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   },
 
   async paintHistoryChart(content) {
+    return this._paintHistoryCanvas(content);
+  },
+  async _paintHistoryCanvas(content) {
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const canvas = content.querySelector('#networkHistoryChart');
     const empty = content.querySelector('#networkHistoryEmpty');
+    const legend = content.querySelector('#networkHistoryLegend');
+    const tooltip = content.querySelector('#networkHistoryTooltip');
     if (!canvas) return;
-    const networkTrafficHistoryEnabled = await window.api.invoke('db:getSetting', 'feature.networkTrafficHistory', true);
-    if (!networkTrafficHistoryEnabled) return;
+    const enabled = await window.api.invoke('db:getSetting', 'feature.networkTrafficHistory', true);
+    if (!enabled || !canvas.isConnected) return;
+
+    const hours = this._historyRangePayload().hours;
+    const request = this._beginHistoryRequest(hours);
     let rows = [];
+    let failed = false;
     try {
-      rows = await window.api.invoke('network:history', { hours: 24 }) || [];
+      rows = await window.api.invoke('network:history', request.payload) || [];
     } catch (_) {
-      rows = [];
+      failed = true;
     }
-    if (!rows.length) {
-      if (empty) empty.style.display = '';
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-      }
+    const resolved = this._resolveHistoryRequest(request, rows, failed);
+    if (resolved.stale || !canvas.isConnected) return;
+    const series = this._normalizeHistoryRows(resolved.rows);
+    if (!series.length) {
+      if (empty) empty.hidden = false;
+      canvas.hidden = true;
+      if (legend) legend.innerHTML = '';
+      if (tooltip) tooltip.hidden = true;
       return;
     }
-    if (empty) empty.style.display = 'none';
+    if (empty) empty.hidden = true;
+    canvas.hidden = false;
 
-    const buckets = new Map();
-    for (const row of rows) {
-      const key = row.recorded_at;
-      const cur = buckets.get(key) || { t: key, rx: 0, tx: 0 };
-      cur.rx += Number(row.rx_sec) || 0;
-      cur.tx += Number(row.tx_sec) || 0;
-      buckets.set(key, cur);
+    const metrics = this._historyMetrics(series);
+    const rangeKey = hours === 168 ? '7d' : `${hours}h`;
+    const rate = (value) => `${formatBytes(value)}/s`;
+    if (legend) {
+      const legendRow = (directionClass, label, current, average, peak) => `
+        <div class="history-legend-series ${directionClass}">
+          <span class="history-legend-name"><i></i>${escapeHtml(label)}</span>
+          <span>${escapeHtml(t('network.historyCurrent', { value: rate(current) }))}</span>
+          <span>${escapeHtml(t('network.historyAverage', { value: rate(average) }))}</span>
+          <span>${escapeHtml(t('network.historyPeak', { value: rate(peak) }))}</span>
+        </div>`;
+      legend.innerHTML =
+        legendRow('history-download', t('network.historyDownload'), metrics.current.rx, metrics.average.rx, metrics.peak.rx.value) +
+        legendRow('history-upload', t('network.historyUpload'), metrics.current.tx, metrics.average.tx, metrics.peak.tx.value);
     }
-    const series = [...buckets.values()].sort((a, b) => a.t.localeCompare(b.t));
-    const maxY = Math.max(1, ...series.map((p) => Math.max(p.rx, p.tx)));
-    const ctx = canvas.getContext('2d');
-    const w = canvas.width;
-    const h = canvas.height;
-    const pad = 12;
-    ctx.clearRect(0, 0, w, h);
-    ctx.strokeStyle = 'rgba(127,127,127,0.25)';
-    ctx.beginPath();
-    ctx.moveTo(pad, h - pad);
-    ctx.lineTo(w - pad, h - pad);
-    ctx.stroke();
 
-    const plot = (key, color) => {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      series.forEach((p, i) => {
-        const x = pad + (i / Math.max(1, series.length - 1)) * (w - pad * 2);
-        const y = (h - pad) - (p[key] / maxY) * (h - pad * 2);
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.stroke();
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const cssW = Math.max(1, Math.round(rect.width) || canvas.parentElement.clientWidth || 600);
+    const cssH = Math.max(1, Math.round(rect.height) || 220);
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const padL = 64, padR = 12, padT = 38, padB = 23;
+    const plotW = Math.max(1, cssW - padL - padR);
+    const plotH = Math.max(1, cssH - padT - padB);
+    const rendered = this._downsampleHistory(series, Math.max(1, Math.round(plotW)));
+    const startMs = series[0].ms;
+    const endMs = series[series.length - 1].ms;
+    const timeSpan = endMs - startMs;
+    const xAtMs = (ms) => timeSpan > 0 ? padL + ((ms - startMs) / timeSpan) * plotW : padL + plotW / 2;
+    const axisMax = this._niceAxisMax(Math.max(metrics.peak.rx.value, metrics.peak.tx.value));
+    const yAt = (value) => padT + plotH - (Math.max(0, value) / axisMax) * plotH;
+
+    const rootStyle = getComputedStyle(canvas);
+    const cssVar = (name, fallbackName) => {
+      const value = rootStyle.getPropertyValue(name).trim();
+      if (value && !value.includes('var(')) return value;
+      return fallbackName ? rootStyle.getPropertyValue(fallbackName).trim() : '';
     };
-    plot('rx', '#58A6FF');
-    plot('tx', '#3FB950');
+    const colorRx = cssVar('--accent-primary', '--text-main');
+    const colorTx = cssVar('--ok', '--accent-primary');
+    const textDim = cssVar('--text-dim', '--text-muted');
+    const textMain = cssVar('--text-main', '--text-primary');
+    const gridColor = cssVar('--glass-border', '--text-dim');
+    const surfaceColor = cssVar('--bg-surface', '--bg-base');
+    const fontFamily = rootStyle.fontFamily || 'sans-serif';
+
+    const pathThrough = (points) => {
+      const path = new Path2D();
+      if (!points.length) return path;
+      path.moveTo(points[0].x, points[0].y);
+      for (let index = 1; index < points.length - 1; index++) {
+        const midpointX = (points[index].x + points[index + 1].x) / 2;
+        const midpointY = (points[index].y + points[index + 1].y) / 2;
+        path.quadraticCurveTo(points[index].x, points[index].y, midpointX, midpointY);
+      }
+      if (points.length > 1) {
+        const beforeLast = points[points.length - 2];
+        const last = points[points.length - 1];
+        path.quadraticCurveTo(beforeLast.x, beforeLast.y, last.x, last.y);
+      }
+      return path;
+    };
+
+    const rxPoints = rendered.map((point) => ({ x: xAtMs(point.ms), y: yAt(point.rx) }));
+    const txPoints = rendered.map((point) => ({ x: xAtMs(point.ms), y: yAt(point.tx) }));
+    const drawArea = (points, color) => {
+      if (!points.length) return;
+      const path = new Path2D(pathThrough(points));
+      path.lineTo(points[points.length - 1].x, padT + plotH);
+      path.lineTo(points[0].x, padT + plotH);
+      path.closePath();
+      ctx.save();
+      ctx.globalAlpha = .12;
+      ctx.fillStyle = color;
+      ctx.fill(path);
+      ctx.restore();
+    };
+    const drawLine = (points, color) => {
+      if (!points.length) return;
+      ctx.save();
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 7;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.2;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.stroke(pathThrough(points));
+      ctx.restore();
+    };
+    const drawPoint = (x, y, color, radius = 3) => {
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    };
+    const drawCallout = (x, y, label, color) => {
+      ctx.save();
+      ctx.font = `10px ${fontFamily}`;
+      const width = Math.min(plotW, ctx.measureText(label).width + 14);
+      const left = Math.max(padL, Math.min(padL + plotW - width, x - width / 2));
+      const top = Math.max(3, y - 27);
+      ctx.fillStyle = surfaceColor;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(left, top, width, 18, 5);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = textMain;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, left + width / 2, top + 9, width - 8);
+      ctx.restore();
+    };
+    const renderedBucketIndex = (rawIndex) => rendered.findIndex((bucket) => rawIndex >= bucket.rawStart && rawIndex <= bucket.rawEnd);
+
+    const draw = (inspectIndex = null) => {
+      ctx.clearRect(0, 0, cssW, cssH);
+      ctx.font = `11px ${fontFamily}`;
+      ctx.textBaseline = 'middle';
+      [0, .5, 1].forEach((fraction) => {
+        const y = yAt(axisMax * fraction);
+        ctx.strokeStyle = gridColor;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padL, Math.round(y) + .5);
+        ctx.lineTo(padL + plotW, Math.round(y) + .5);
+        ctx.stroke();
+        ctx.fillStyle = textDim;
+        ctx.textAlign = 'right';
+        ctx.fillText(rate(axisMax * fraction), padL - 8, y);
+      });
+
+      const tickCount = Math.min(5, series.length);
+      ctx.fillStyle = textDim;
+      ctx.textBaseline = 'alphabetic';
+      for (let tick = 0; tick < tickCount; tick++) {
+        const index = tickCount > 1 ? Math.round((tick / (tickCount - 1)) * (series.length - 1)) : 0;
+        ctx.textAlign = tick === 0 ? 'left' : (tick === tickCount - 1 ? 'right' : 'center');
+        ctx.fillText(this._formatHistoryTimestamp(series[index].t, hours), xAtMs(series[index].ms), cssH - 5);
+      }
+      ctx.textBaseline = 'middle';
+
+      drawArea(txPoints, colorTx);
+      drawArea(rxPoints, colorRx);
+      drawLine(txPoints, colorTx);
+      drawLine(rxPoints, colorRx);
+      drawPoint(xAtMs(metrics.current.ms), yAt(metrics.current.tx), colorTx, 3.2);
+      drawPoint(xAtMs(metrics.current.ms), yAt(metrics.current.rx), colorRx, 3.2);
+
+      const rxBucket = renderedBucketIndex(metrics.peak.rx.index);
+      const txBucket = renderedBucketIndex(metrics.peak.tx.index);
+      if (rxBucket === txBucket) {
+        const peakX = (xAtMs(metrics.peak.rx.point.ms) + xAtMs(metrics.peak.tx.point.ms)) / 2;
+        const peakY = Math.min(yAt(metrics.peak.rx.value), yAt(metrics.peak.tx.value));
+        drawPoint(xAtMs(metrics.peak.rx.point.ms), yAt(metrics.peak.rx.value), colorRx, 4);
+        drawPoint(xAtMs(metrics.peak.tx.point.ms), yAt(metrics.peak.tx.value), colorTx, 4);
+        drawCallout(peakX, peakY, t('network.historyPeakBoth', { time: this._formatHistoryTimestamp(rendered[rxBucket].t, hours, true) }), colorRx);
+      } else {
+        const peaks = [
+          { metric: metrics.peak.rx, color: colorRx, label: t('network.historyDownload') },
+          { metric: metrics.peak.tx, color: colorTx, label: t('network.historyUpload') }
+        ];
+        peaks.forEach(({ metric, color, label }) => {
+          const x = xAtMs(metric.point.ms), y = yAt(metric.value);
+          drawPoint(x, y, color, 4);
+          drawCallout(x, y, t('network.historyPeakCallout', { label, time: this._formatHistoryTimestamp(metric.point.t, hours, true) }), color);
+        });
+      }
+
+      if (inspectIndex != null && series[inspectIndex]) {
+        const point = series[inspectIndex];
+        const x = xAtMs(point.ms);
+        ctx.save();
+        ctx.strokeStyle = textDim;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(x, padT);
+        ctx.lineTo(x, padT + plotH);
+        ctx.stroke();
+        ctx.restore();
+        drawPoint(x, yAt(point.rx), colorRx, 4);
+        drawPoint(x, yAt(point.tx), colorTx, 4);
+      }
+    };
+
+    const showInspection = (index) => {
+      const safeIndex = Math.max(0, Math.min(series.length - 1, index));
+      this._historyInspectIndex = safeIndex;
+      draw(safeIndex);
+      if (!tooltip) return;
+      const point = series[safeIndex];
+      tooltip.innerHTML = `
+        <div class="history-tooltip-time">${escapeHtml(this._formatHistoryTimestamp(point.t, hours, true))}</div>
+        <div class="history-download"><i></i>${escapeHtml(t('network.historyDownload'))} <strong>${escapeHtml(rate(point.rx))}</strong></div>
+        <div class="history-upload"><i></i>${escapeHtml(t('network.historyUpload'))} <strong>${escapeHtml(rate(point.tx))}</strong></div>`;
+      tooltip.style.left = `${Math.max(55, Math.min(cssW - 55, xAtMs(point.ms)))}px`;
+      tooltip.style.top = `${Math.max(48, Math.min(yAt(point.rx), yAt(point.tx)))}px`;
+      tooltip.hidden = false;
+    };
+
+    draw(this._historyInspectIndex);
+    const summary = t('network.historySummary', {
+      range: t(`network.historyRange${rangeKey}`),
+      downloadCurrent: rate(metrics.current.rx), uploadCurrent: rate(metrics.current.tx),
+      downloadAverage: rate(metrics.average.rx), uploadAverage: rate(metrics.average.tx),
+      downloadPeak: rate(metrics.peak.rx.value), uploadPeak: rate(metrics.peak.tx.value)
+    });
+    canvas.setAttribute('aria-label', summary);
+
+    let framePending = false;
+    canvas.onmousemove = (event) => {
+      if (framePending) return;
+      framePending = true;
+      requestAnimationFrame(() => {
+        framePending = false;
+        const bounds = canvas.getBoundingClientRect();
+        const ratio = Math.max(0, Math.min(1, (event.clientX - bounds.left - padL) / plotW));
+        showInspection(Math.round(ratio * (series.length - 1)));
+      });
+    };
+    canvas.onmouseleave = () => {
+      this._historyInspectIndex = null;
+      draw(null);
+      if (tooltip) tooltip.hidden = true;
+    };
+    canvas.onkeydown = (event) => {
+      const current = this._historyInspectIndex == null ? series.length - 1 : this._historyInspectIndex;
+      let next = current;
+      if (event.key === 'ArrowLeft') next--;
+      else if (event.key === 'ArrowRight') next++;
+      else if (event.key === 'Home') next = 0;
+      else if (event.key === 'End') next = series.length - 1;
+      else return;
+      event.preventDefault();
+      showInspection(next);
+    };
   },
 
-  async renderAlertHits(content) {
+async renderAlertHits(content) {
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const list = content.querySelector('#networkAlertsList');
     if (!list) return;
     let status = { recentHits: [] };
@@ -717,12 +1984,11 @@ window.Pages['network'] = {
     this._lastAlertHitsKey = hitsKey;
 
     if (!hits.length) {
-      list.className = 'empty-state';
-      list.style.fontSize = '0.8rem';
-      list.textContent = t('network.alertsNone');
+      this._alertsPanelEl.style.display = 'none';
       return;
     }
 
+    this._alertsPanelEl.style.display = 'block';
     list.className = '';
     list.style.fontSize = '';
 
@@ -730,18 +1996,31 @@ window.Pages['network'] = {
     const displayHits = showAll ? hits.slice(0, 8) : hits.slice(0, 1);
     const hasMore = hits.length > 1;
 
-    list.innerHTML = displayHits.map((h) => `
-      <div class="list-row" style="display:flex; justify-content:space-between; gap:8px; align-items:center; padding:6px 0; border-bottom:1px solid var(--glass-border);">
-        <div style="font-size:0.8rem;">
-          <div style="font-weight:600; font-family:monospace;">${escapeHtml(h.remoteAddress || '')}${h.remotePort ? ':' + escapeHtml(h.remotePort) : ''}</div>
-          <div class="page-subtitle" style="font-size:0.75rem;">${escapeHtml(t('network.alertPidState', { pid: h.pid || 'n/a', state: h.state || '' }))}</div>
+    list.innerHTML = displayHits.map((h) => {
+      const alertType = h.classification === 'MALICIOUS' ? 'blockedIp' : 'suspiciousActivity';
+      const alertTitle = t(`network.alert.${alertType}`);
+      const alertDesc = t(`network.alert.${alertType}Desc`);
+      
+      return `
+      <div class="list-row" style="display:flex; flex-direction:column; gap:8px; padding:12px; border-bottom:1px solid var(--glass-border); background:var(--bg-surface); border-radius:6px; border-left:3px solid var(--danger);">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+          <div style="flex:1;">
+            <div style="font-weight:600; font-size:0.85rem; color:var(--danger); margin-bottom:4px;">${escapeHtml(alertTitle)}</div>
+            <div style="font-family:monospace; font-size:0.9rem; margin-bottom:4px;">${escapeHtml(h.remoteAddress || '')}${h.remotePort ? ':' + escapeHtml(h.remotePort) : ''}</div>
+            <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:6px;">${escapeHtml(alertDesc)}</div>
+            <div class="page-subtitle" style="font-size:0.75rem;">${escapeHtml(t('network.alertPidState', { pid: h.pid || 'n/a', state: h.state || '' }))}</div>
+          </div>
         </div>
-        <div style="display:flex; gap:6px;">
-          <button class="btn btn-sm" style="font-size:0.75rem; padding:4px 8px;" data-alert-ignore="${escapeHtml(h.key)}">${escapeHtml(t('network.alertIgnore'))}</button>
-          <button class="btn btn-sm" style="font-size:0.75rem; padding:4px 8px; color:var(--accent-danger);" data-alert-kill="${escapeHtml(h.pid || '')}" ${h.pid ? '' : 'disabled'}>${escapeHtml(t('network.alertKill'))}</button>
+        <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
+          <div style="font-size:0.75rem; font-weight:600; color:var(--text-dim);">${escapeHtml(t('network.alert.recommendation'))}</div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-sm btn-primary" style="font-size:0.75rem; padding:4px 10px;" data-alert-block="${escapeHtml(h.remoteAddress || '')}">${escapeHtml(t('network.alert.blockIp'))}</button>
+            <button class="btn btn-sm" style="font-size:0.75rem; padding:4px 10px; color:var(--accent-danger);" data-alert-kill="${escapeHtml(h.pid || '')}" ${h.pid ? '' : 'disabled'}>${escapeHtml(t('network.alert.terminateConnection'))}</button>
+            <button class="btn btn-sm" style="font-size:0.75rem; padding:4px 10px;" data-alert-ignore="${escapeHtml(h.key)}">${escapeHtml(t('network.alertIgnore'))}</button>
+          </div>
         </div>
       </div>
-    `).join('');
+    `}).join('');
 
     if (hasMore) {
       const expandBtn = document.createElement('button');
@@ -759,6 +2038,7 @@ window.Pages['network'] = {
   },
 
   bindAlertActions(content) {
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     content.querySelectorAll('[data-alert-ignore]').forEach((btn) => {
       btn.onclick = async () => {
         try {
@@ -780,6 +2060,77 @@ window.Pages['network'] = {
         }
       };
     });
+    content.querySelectorAll('[data-alert-block]').forEach((btn) => {
+      btn.onclick = async () => {
+        try {
+          const ip = btn.getAttribute('data-alert-block');
+          await window.api.invoke('firewall:createRule', { name: `Block IP ${ip} (Out)`, direction: 'Outbound', action: 'Block', remoteAddress: ip });
+          await window.api.invoke('firewall:createRule', { name: `Block IP ${ip} (In)`, direction: 'Inbound', action: 'Block', remoteAddress: ip });
+          btn.textContent = 'Blocked';
+          btn.disabled = true;
+        } catch (e) {
+          alert(e.message || String(e));
+        }
+      };
+    });
+  },
+
+  async toggleVpn(container, name, action) {
+    if (this._vpnPending || !name) return;
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+    this._vpnPending = { name, action: action === 'disconnect' ? 'disconnect' : 'connect' };
+    this._vpnError = '';
+
+    const btn = container.querySelector('#vpnToggleBtn');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = t('network.vpnWorking');
+    }
+    const status = container.querySelector('#vpnStatusText');
+    if (status) {
+      status.style.color = 'var(--text-dim)';
+      status.textContent = action === 'disconnect'
+        ? t('network.vpnDisconnecting', { name })
+        : t('network.vpnConnecting', { name });
+    }
+
+    try {
+      const res = await window.api.invoke(action === 'disconnect' ? 'network:vpn:disconnect' : 'network:vpn:connect', name);
+      if (!res || !res.ok) {
+        this._vpnError = (res && res.error) || 'VPN action failed';
+        if (status) {
+          status.style.color = 'var(--danger)';
+          status.textContent = this._vpnError;
+        }
+      }
+    } catch (err) {
+      this._vpnError = err.message || String(err);
+      if (status) {
+        status.style.color = 'var(--danger)';
+        status.textContent = this._vpnError;
+      }
+    } finally {
+      this._vpnPending = null;
+      this.load(container, false);
+    }
+  },
+
+  async removeVpn(container, name) {
+    if (this._vpnPending || !name) return;
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+    if (!window.confirm(t('network.vpnRemoveConfirm', { name }))) return;
+    this._vpnPending = { name, action: 'remove' };
+    this._vpnError = '';
+    try {
+      const res = await window.api.invoke('network:vpn:remove', name);
+      if (!res || !res.ok) this._vpnError = (res && res.error) || 'VPN action failed';
+      else if (this._vpnSelection === name) this._vpnSelection = '';
+    } catch (err) {
+      this._vpnError = err.message || String(err);
+    } finally {
+      this._vpnPending = null;
+      this.load(container, false);
+    }
   },
 
   destroy() {
@@ -787,15 +2138,44 @@ window.Pages['network'] = {
       clearInterval(this._refreshTimer);
       this._refreshTimer = null;
     }
+    if (this._chartRefreshTimer) {
+      clearInterval(this._chartRefreshTimer);
+      this._chartRefreshTimer = null;
+    }
+    if (this._heatmapPulseRaf) {
+      cancelAnimationFrame(this._heatmapPulseRaf);
+      this._heatmapPulseRaf = null;
+    }
+    if (this._heatmapWindowMouseMove) window.removeEventListener('mousemove', this._heatmapWindowMouseMove);
+    if (this._heatmapWindowMouseUp) window.removeEventListener('mouseup', this._heatmapWindowMouseUp);
+    if (this._heatmapKeydownHandler) document.removeEventListener('keydown', this._heatmapKeydownHandler);
+    this._heatmapWindowMouseMove = null;
+    this._heatmapWindowMouseUp = null;
+    this._heatmapKeydownHandler = null;
+    this._heatmapDrag = null;
+    this._heatmapSuppressClick = false;
+    this._heatmapZoom = 1;
+    this._heatmapPan = { x: 0, y: 0 };
     this._connectionQuery = '';
     this._connectionRiskFilter = 'all';
     this._connectionStateFilter = 'all';
     this._geoCache = {};
     this._selectedClusterIps = null;
     this._selectedClusterLoc = null;
-    this._worldMapBgEl = null;
+    this._selectedClusterId = null;
+    this._heatmapClusters = [];
+    this._heatmapTier = null;
+    this._heatmapData = null;
+    this._heatmapArcSignature = '';
+    this._heatmapWidgetEl = null;
+    this._historyRequestToken++;
+    this._historyRangeHours = 1;
+    this._historyCache.clear();
+    this._historyInspectIndex = null;
     this._alertsPanelEl = null;
     this._alertsExpanded = false;
     this._lastAlertHitsKey = null;
+    this._vpnPending = null;
+    this._vpnError = '';
   }
 };

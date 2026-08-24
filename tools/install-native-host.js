@@ -1,71 +1,20 @@
 #!/usr/bin/env node
-/**
- * Install Soterios Native Messaging Host
- * Run as Administrator on Windows
- */
-
-const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { spawn } = require('child_process');
+const installer = require('../src/extension/installer');
 
-const EXTENSION_ID = process.env.EXTENSION_ID;
-const IS_WIN = process.platform === 'win32';
+const repoRoot = path.resolve(__dirname, '..');
+const sourceDir = path.join(repoRoot, 'browser-extension', 'dist', 'chromium');
+const nativeHostBinary = path.join(repoRoot, 'build', 'native-host', 'SoteriosNativeHost.exe');
+const requestedBrowser = process.argv.slice(2).find((value) => ['chrome', 'edge', 'brave'].includes(value));
+const browsers = requestedBrowser ? [installer.getBrowser(requestedBrowser)] : installer.detectInstalledBrowsers().map(({ id }) => installer.getBrowser(id));
 
-function main() {
-  // Validate extension ID
-  if (!EXTENSION_ID || EXTENSION_ID === 'YOUR_EXTENSION_ID_HERE' || !/^[a-z]{32}$/.test(EXTENSION_ID)) {
-    console.error('Error: Invalid extension ID. Set EXTENSION_ID environment variable to a valid 32-character Chrome extension ID.');
-    console.error('Example: EXTENSION_ID=abcdefghijklmnopqrstuvwxyz123456 node tools/install-native-host.js');
-    process.exit(1);
-  }
-
-  const extDir = path.resolve(__dirname, '..', 'browser-extension');
-  const manifestPath = path.join(extDir, 'native-host-manifest.json');
-  const batPath = path.join(extDir, 'native-host.bat');
-  const jsPath = path.join(extDir, 'native-host.js');
-
-  if (!fs.existsSync(manifestPath) || !fs.existsSync(batPath) || !fs.existsSync(jsPath)) {
-    console.error('Extension files not found. Run from project root.');
-    process.exit(1);
-  }
-
-  let manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-  manifest.allowed_origins = [manifest.allowed_origins[0].replace('<EXTENSION_ID>', EXTENSION_ID)];
-  
-  // Write updated manifest back to disk so registry points to correct file
-  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
-
-  if (IS_WIN) {
-    const regPath = `HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${manifest.name}`;
-    const regCmd = `reg add "${regPath}" /ve /t REG_SZ /d "${manifestPath.replace(/\\/g, '\\\\')}" /f`;
-    try {
-      execSync(regCmd, { stdio: 'inherit' });
-      console.log('Registered native host for Chrome (Current User)');
-    } catch (e) {
-      console.error('Failed to register (run as Administrator):', e.message);
-      process.exit(1);
-    }
-
-    const regPathEdge = `HKCU\\Software\\Microsoft\\Edge\\NativeMessagingHosts\\${manifest.name}`;
-    const regCmdEdge = `reg add "${regPathEdge}" /ve /t REG_SZ /d "${manifestPath.replace(/\\/g, '\\\\')}" /f`;
-    try {
-      execSync(regCmdEdge, { stdio: 'inherit' });
-      console.log('Registered native host for Edge (Current User)');
-    } catch (e) {
-      console.warn('Edge registration failed:', e.message);
-    }
-  } else {
-    const dir = process.platform === 'darwin'
-      ? path.join(process.env.HOME, 'Library', 'Application Support', 'Google', 'Chrome', 'NativeMessagingHosts')
-      : path.join(process.env.HOME, '.config', 'google-chrome', 'NativeMessagingHosts');
-
-    fs.mkdirSync(dir, { recursive: true });
-    const target = path.join(dir, `${manifest.name}.json`);
-    fs.writeFileSync(target, JSON.stringify(manifest, null, 2));
-    console.log('Installed manifest to:', target);
-  }
-
-  console.log('\nDone! Reload the extension in chrome://extensions');
+if (!browsers.length) { console.error('[Soterios] Chrome, Edge, or Brave was not detected.'); process.exit(1); }
+for (const browser of browsers) {
+  const result = installer.install(browser.id, { srcDir: sourceDir, nativeHostBinary, appPath: installer.findAppPath() });
+  if (!result.ok) { console.error(`[Soterios] ${browser.name}: ${result.error}`); process.exitCode = 1; continue; }
+  console.log(`[Soterios] ${browser.name}: extension ${result.installedVersion} staged atomically at ${result.extDir}`);
+  console.log(`[Soterios] Native host: ${result.nativeHostOk ? 'registered' : 'registration failed'}`);
+  try { spawn('explorer.exe', [result.extDir], { detached: true, stdio: 'ignore' }).unref(); } catch (_) {}
+  console.log(`Enable Developer mode, choose “Load unpacked,” and select:\n${result.extDir}\nExpected extension ID: ${result.extensionId}`);
 }
-
-main();

@@ -10,6 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="../css/visualizations.css" />
 </head>
 
 <body>
@@ -17,7 +18,7 @@
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-logo" style="background:transparent; box-shadow:none;">
-          <img src="../../../assets/icon.png" alt="Soterios" style="width:100px;height:100px;object-fit:contain;" />
+          <img src="../../../assets/icon.png" alt="Soterios" style="width:100px;height:100px;object-fit:contain;" class="theme-icon" />
         </div>
         <img src="../../../assets/soteriosTextLogo.png" alt="Soterios" class="brand-wordmark"
           style="height: 80px; object-fit:contain; margin-left:-15px;" />
@@ -25,6 +26,7 @@
 
       <nav class="nav">
       <div id="scanIndicator" class="scan-indicator" style="display:none;">
+        <div id="scanIndicatorOpen" class="scan-indicator-open" role="button" tabindex="0" aria-controls="scanStatusCard" data-i18n-aria-label="scanIndicator.openDetails">
         <div class="scan-indicator-header">
           <span class="scan-indicator-dot"></span>
           <span class="scan-indicator-label" data-i18n="nav.scanning">Scanning…</span>
@@ -34,6 +36,8 @@
           <div class="scan-indicator-fill" id="scanIndicatorFill" style="width:0%"></div>
         </div>
         <div class="scan-indicator-msg" id="scanIndicatorMsg"></div>
+        </div>
+        <button class="btn btn-sm scan-indicator-cancel" id="btnScanIndicatorCancel" style="display:none;" data-i18n="scanner.cancelScan">Cancel Scan</button>
       </div>
         <div class="nav-group-label" data-i18n="nav.protection"></div>
         <div class="nav-item active" data-page="dashboard">
@@ -103,7 +107,7 @@
         </div>
 
         <div class="nav-group-label" data-i18n="nav.utilities"></div>
-        <div class="nav-item" data-page="lockdown">
+        <div class="nav-item" data-page="lockdown" id="lockdownNav" style="display:none;">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             <path d="M12 7v4"/>
@@ -125,6 +129,13 @@
           </svg>
           <span data-i18n="nav.tools"></span>
         </div>
+<div class="nav-item" data-page="optimization">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
+          </svg>
+          <span data-i18n="nav.optimization">Device Optimization</span>
+        </div>
         <div class="nav-item" data-page="reports">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -132,6 +143,15 @@
             <path d="M8 13h8M8 17h8M8 9h2" />
           </svg>
           <span data-i18n="nav.reports"></span>
+        </div>
+        <div class="nav-item" data-page="ai" id="aiNav">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a7 7 0 0 1 7 7c0 2.1-.9 3.9-2.3 5.2-.8.7-1.2 1.7-1.2 2.8h-7c0-1.1-.4-2.1-1.2-2.8A7 7 0 0 1 5 9a7 7 0 0 1 7-7z" />
+            <path d="M9 21h6" />
+            <path d="M10 17h4" />
+          </svg>
+          <span data-i18n="nav.ai"></span>
         </div>
 
         <div class="nav-group-label" data-i18n="nav.app"></div>
@@ -164,10 +184,14 @@
   <script src="../js/pages/lockdown.js"></script>
   <script src="../js/pages/passwords.js"></script>
   <script src="../js/pages/tools.js"></script>
+  <script src="../js/pages/optimization.js"></script>
   <script src="../js/pages/reports.js"></script>
+  <script src="../js/pages/ai.js"></script>
   <script src="../js/pages/settings.js"></script>
-  <script src="../js/scanIndicator.js"></script>
-  <script src="../js/router.js"></script>
+  <script src="../js/pages/setup.js"></script>
+  <script defer src="../js/components/vpnAddModal.js"></script>
+  <script defer src="../js/scanIndicator.js"></script>
+  <script defer src="../js/router.js"></script>
 </body>
 
 </html>

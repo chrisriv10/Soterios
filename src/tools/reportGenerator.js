@@ -35,8 +35,8 @@ ${issues.map((i) => `<tr><td class="${esc(i.level)}">${esc(i.level)}</td><td>${e
 }
 
 module.exports = {
-  id: 'generate-security-report', name: 'Generate Security Report',
-  description: 'Export a local HTML and JSON security report with score, issues, and system info.',
+  id: 'generate-security-report', name: 'Generate System Report',
+  description: 'Export a local HTML and JSON system report with score, issues, and system info.',
   category: 'Reports', icon: 'list-checks',
   run: async (args, ctx) => {
     if (!ctx || !ctx.toolRegistry) throw new Error('toolRegistry is required in ctx');
@@ -46,12 +46,12 @@ module.exports = {
     const quarantine = ctx.db && typeof ctx.db.getQuarantineList === 'function' ? ctx.db.getQuarantineList() : [];
 
     const generatedAt = new Date();
-    const friendlyTitle = `Security Report · ${generatedAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} at ${generatedAt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
+    const friendlyTitle = `System Report · ${generatedAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} at ${generatedAt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
 
     const report = {
       title: friendlyTitle,
       generatedAt: generatedAt.toISOString(),
-      app: { name: 'Soterios', version: args.version || '1.2.1' },
+      app: { name: 'Soterios', version: args.version || '1.3.0' },
       overview: overviewResult.data,
       system: systemResult.data,
       recentScans: scanReports,

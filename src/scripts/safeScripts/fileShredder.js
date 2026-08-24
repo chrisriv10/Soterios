@@ -1,312 +1,163 @@
 'use strict';
 
-const crypto = require('crypto');
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
+const crypto = require('crypto');
+const { execFile } = require('child_process');
+const { assessMutation } = require('../../core/pathSafety');
 
-/**
- * File Shredder using DoD 5220.22-M Standard
- * Securely deletes files by overwriting with multiple patterns.
- * DoD 5220.22-M requires:
- * 1. Overwrite with zeros
- * 2. Overwrite with ones (0xFF)
- * 3. Overwrite with random pattern
- * 4. Verify overwrite
- */
+const CHUNK = 1024 * 1024;
+const METHODS = {
+  simple: { id: 'simple', name: 'One overwrite pass', passes: [{ type: 'random' }] },
+  dod: { id: 'dod', name: 'Three overwrite passes', passes: [{ type: 'zeros' }, { type: 'ones' }, { type: 'random' }] },
+  schneier: { id: 'schneier', name: 'Seven overwrite passes', passes: [{ type: 'ones' }, { type: 'zeros' }, ...Array.from({ length: 5 }, () => ({ type: 'random' }))] }
+};
 
-const USER_OWNED_ROOTS = [
-  os.homedir(),
-  process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs') : null
-].filter(Boolean);
-
-const PROTECTED_PATHS = [
-  process.env.ProgramData,
-  process.env.WINDIR,
-  path.join(process.env.USERPROFILE || '', 'AppData')
-];
-
-function isPathInsideDir(filePath, rootDir) {
-  if (!filePath || !rootDir) return false;
-  const resolved = path.resolve(filePath);
-  const root = path.resolve(rootDir);
-  const relative = path.relative(root, resolved);
-  if (relative === '') return true;
-  return relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+function storageInfo(target) {
+  if (process.platform !== 'win32') return Promise.resolve({ type: 'unknown', name: 'Unknown storage device' });
+  const drive = path.parse(path.resolve(target)).root.replace(/[\\:]/g, '');
+  return new Promise((resolve) => {
+    const script = `
+$partition = Get-Partition -DriveLetter '${drive}' -ErrorAction SilentlyContinue
+$disk = $partition | Get-Disk -ErrorAction SilentlyContinue
+$physical = Get-PhysicalDisk -ErrorAction SilentlyContinue | Where-Object { [string]$_.DeviceId -eq [string]$disk.Number } | Select-Object -First 1
+[PSCustomObject]@{ MediaType=[string]$physical.MediaType; FriendlyName=[string]$physical.FriendlyName; BusType=[string]$disk.BusType } | ConvertTo-Json -Compress
+`;
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 10000 }, (_error, stdout) => {
+      try {
+        const data = JSON.parse(String(stdout || '').trim());
+        const media = String(data.MediaType || '').toLowerCase();
+        resolve({
+          type: media.includes('ssd') ? 'ssd' : (media.includes('hdd') ? 'hdd' : 'unknown'),
+          name: data.FriendlyName || 'Storage device',
+          busType: data.BusType || ''
+        });
+      } catch (_) { resolve({ type: 'unknown', name: 'Unknown storage device' }); }
+    });
+  });
 }
 
-function isSafePath(filePath) {
-  const normalized = path.resolve(filePath);
-  
-  // Check if under protected paths
-  for (const protectedPath of PROTECTED_PATHS) {
-    if (protectedPath && isPathInsideDir(normalized, protectedPath)) {
-      return false;
-    }
+function listFilesRecursive(targetPath, out = [], errors = []) {
+  const stat = fs.lstatSync(targetPath);
+  if (stat.isSymbolicLink()) {
+    errors.push({ path: targetPath, error: 'Symbolic links and reparse points cannot be shredded.' });
+    return out;
   }
-  
-  // Check if under explicit user-owned roots
-  for (const root of USER_OWNED_ROOTS) {
-    if (isPathInsideDir(normalized, root)) {
-      return true;
-    }
+  if (stat.isFile()) { out.push(targetPath); return out; }
+  if (!stat.isDirectory()) return out;
+  for (const name of fs.readdirSync(targetPath)) {
+    try { listFilesRecursive(path.join(targetPath, name), out, errors); }
+    catch (error) { errors.push({ path: path.join(targetPath, name), error: error.message }); }
   }
-  
-  return false;
+  return out;
 }
 
-// On POSIX, O_NOFOLLOW causes open() to fail with ELOOP if the final path
-// component is a symlink, closing the TOCTOU gap between the lstat safety
-// check and the actual overwrite. Windows has no equivalent flag, so the
-// upfront lstat check in shredFile() is the primary guard there.
-const NOFOLLOW_FLAGS = (fs.constants && fs.constants.O_NOFOLLOW && process.platform !== 'win32')
-  ? fs.constants.O_NOFOLLOW
-  : 0;
-
-function openNoFollow(filePath, mode) {
-  const base = mode === 'r' ? fs.constants.O_RDONLY : (fs.constants.O_RDWR);
-  return fs.openSync(filePath, base | NOFOLLOW_FLAGS);
+function passBuffer(pass, length) {
+  if (pass.type === 'zeros') return Buffer.alloc(length, 0);
+  if (pass.type === 'ones') return Buffer.alloc(length, 0xff);
+  return crypto.randomBytes(length);
 }
 
-function overwriteWithPattern(filePath, pattern) {
-  const stats = fs.lstatSync(filePath);
-  if (stats.isSymbolicLink()) {
-    throw new Error('Refusing to write through a symbolic link');
-  }
-  const fileSize = stats.size;
-  const chunkSize = 64 * 1024; // 64KB chunks
-  
-  const fd = openNoFollow(filePath, 'r+');
-  
+async function overwriteFile(filePath, method, report) {
+  const stat = await fs.promises.stat(filePath);
+  const fd = await fs.promises.open(filePath, 'r+');
   try {
-    let offset = 0;
-    while (offset < fileSize) {
-      const remaining = fileSize - offset;
-      const writeSize = Math.min(chunkSize, remaining);
-      
-      const buffer = Buffer.alloc(writeSize);
-      if (pattern === 'zeros') {
-        buffer.fill(0x00);
-      } else if (pattern === 'ones') {
-        buffer.fill(0xFF);
-      } else if (pattern === 'random') {
-        crypto.randomFillSync(buffer);
+    for (let passIndex = 0; passIndex < method.passes.length; passIndex += 1) {
+      let written = 0;
+      while (written < stat.size) {
+        const length = Math.min(CHUNK, stat.size - written);
+        await fd.write(passBuffer(method.passes[passIndex], length), 0, length, written);
+        written += length;
+        report?.({ pass: passIndex + 1, totalPasses: method.passes.length, bytesWritten: written, fileBytes: stat.size });
       }
-      
-      fs.writeSync(fd, buffer, 0, writeSize, offset);
-      offset += writeSize;
-    }
-    
-    // Sync to ensure data is written to disk
-    fs.fsyncSync(fd);
-  } finally {
-    fs.closeSync(fd);
-  }
-}
-
-function verifyOverwrite(filePath, expectedPattern) {
-  const stats = fs.lstatSync(filePath);
-  if (stats.isSymbolicLink()) {
-    throw new Error('Refusing to read through a symbolic link');
-  }
-  const fileSize = stats.size;
-  const chunkSize = 64 * 1024;
-  
-  const fd = openNoFollow(filePath, 'r');
-  
-  try {
-    let offset = 0;
-    while (offset < fileSize) {
-      const remaining = fileSize - offset;
-      const readSize = Math.min(chunkSize, remaining);
-      
-      const buffer = Buffer.alloc(readSize);
-      fs.readSync(fd, buffer, 0, readSize, offset);
-      
-      // Verify pattern
-      for (let i = 0; i < buffer.length; i++) {
-        if (expectedPattern === 'zeros' && buffer[i] !== 0x00) {
-          return false;
-        }
-        if (expectedPattern === 'ones' && buffer[i] !== 0xFF) {
-          return false;
-        }
-        // Random pattern can't be verified, so skip
-      }
-      
-      offset += readSize;
+      await fd.sync();
     }
   } finally {
-    fs.closeSync(fd);
+    await fd.close();
   }
-  
-  return true;
+  await fs.promises.unlink(filePath);
 }
 
-function generateAndVerifyRandom(filePath, fileSize) {
-  const chunkSize = 64 * 1024;
-  const lst = fs.lstatSync(filePath);
-  if (lst.isSymbolicLink()) {
-    throw new Error('Refusing to write through a symbolic link');
-  }
-  const fd = openNoFollow(filePath, 'r+');
-  
-  try {
-    let offset = 0;
-    while (offset < fileSize) {
-      const remaining = fileSize - offset;
-      const writeSize = Math.min(chunkSize, remaining);
-      
-      // Generate random buffer
-      const buffer = Buffer.alloc(writeSize);
-      crypto.randomFillSync(buffer);
-      
-      // Write the random data
-      fs.writeSync(fd, buffer, 0, writeSize, offset);
-      
-      // Verify by reading back
-      const verifyBuffer = Buffer.alloc(writeSize);
-      fs.readSync(fd, verifyBuffer, 0, writeSize, offset);
-      
-      // Compare byte by byte
-      for (let i = 0; i < writeSize; i++) {
-        if (buffer[i] !== verifyBuffer[i]) {
-          return false;
-        }
-      }
-      
-      offset += writeSize;
-    }
-    
-    // Sync to ensure data is written to disk
-    fs.fsyncSync(fd);
-    return true;
-  } finally {
-    fs.closeSync(fd);
-  }
-}
+async function shredTargets(args = {}, onProgress) {
+  const targets = args.targets || args.paths || (args.path ? [args.path] : []);
+  const method = METHODS[args.method || 'simple'];
+  const preview = args.mode === 'preview' || args.dryRun === true;
+  if (!Array.isArray(targets) || !targets.length) return { success: false, error: 'Select at least one file or folder.' };
+  if (!method) return { success: false, error: 'Unknown overwrite method.' };
+  if (!preview && args.confirmation !== 'SHRED') return { success: false, error: 'Type SHRED to confirm this irreversible action.' };
 
-async function shredFile(filePath, passes = 3) {
-  if (!isSafePath(filePath)) {
-    return { success: false, error: 'Path is not safe for shredding' };
+  const files = [];
+  const errors = [];
+  const directories = [];
+  const devices = new Map();
+  for (const target of [...new Set(targets.map((entry) => path.resolve(entry)))]) {
+    const safety = assessMutation(target, { allowedRoots: [path.parse(target).root] });
+    if (!safety.ok) { errors.push({ path: target, error: safety.reason }); continue; }
+    try {
+      const stat = fs.lstatSync(target);
+      if (stat.isDirectory()) directories.push(target);
+      listFilesRecursive(target, files, errors);
+      const root = path.parse(target).root.toLowerCase();
+      if (!devices.has(root)) devices.set(root, await storageInfo(target));
+    } catch (error) { errors.push({ path: target, error: error.message }); }
   }
-  
-  if (!fs.existsSync(filePath)) {
-    return { success: false, error: 'File does not exist' };
-  }
-  
-  const stats = fs.lstatSync(filePath);
-  if (stats.isSymbolicLink()) {
-    return { success: false, error: 'Refusing to shred a symbolic link' };
-  }
-  if (!stats.isFile()) {
-    return { success: false, error: 'Path is not a file' };
-  }
-
-  // Re-validate against the fully resolved path so a symlinked parent
-  // directory can't redirect an otherwise "safe" path outside the
-  // allowed roots / into a protected path.
-  let realPath;
-  try {
-    realPath = fs.realpathSync(filePath);
-  } catch (err) {
-    return { success: false, error: 'Unable to resolve real path' };
-  }
-  if (!isSafePath(realPath)) {
-    return { success: false, error: 'Resolved path is not safe for shredding' };
-  }
-  
-  const fileSize = stats.size;
-  
-  try {
-    // DoD 5220.22-M standard passes
-    const patterns = ['zeros', 'ones', 'random'];
-    
-    for (let i = 0; i < passes; i++) {
-      const pattern = patterns[i % patterns.length];
-      
-      // For random pattern, generate and verify the random data
-      if (pattern === 'random') {
-        const randomBuffer = await generateAndVerifyRandom(filePath, fileSize);
-        if (!randomBuffer) {
-          return { success: false, error: `Verification failed on pass ${i + 1} (random)` };
-        }
-      } else {
-        overwriteWithPattern(filePath, pattern);
-        
-        // Verify for deterministic patterns
-        const verified = verifyOverwrite(filePath, pattern);
-        if (!verified) {
-          return { success: false, error: `Verification failed on pass ${i + 1}` };
-        }
-      }
-    }
-    
-    // Rename file to random name before deletion (prevents recovery by filename)
-    const dir = path.dirname(filePath);
-    const randomName = crypto.randomBytes(16).toString('hex');
-    const randomPath = path.join(dir, randomName);
-    fs.renameSync(filePath, randomPath);
-    
-    // Delete the file
-    fs.unlinkSync(randomPath);
-    
-    return {
-      success: true,
-      originalPath: filePath,
-      sizeBytes: fileSize,
-      passes: passes
-    };
-  } catch (err) {
+  const uniqueFiles = [...new Set(files)];
+  const storageDevices = [...devices.entries()].map(([root, info]) => ({ root, ...info }));
+  const hasNonHdd = storageDevices.some((device) => device.type !== 'hdd');
+  if (method.passes.length > 1 && hasNonHdd) {
     return {
       success: false,
-      error: err.message,
-      originalPath: filePath
+      error: 'Multi-pass overwrite modes are available only when every selected file is on a detected HDD.',
+      storageDevices
     };
   }
-}
-
-async function shredFiles(filePaths, passes = 3) {
-  const results = [];
-  
-  for (const filePath of filePaths) {
-    const result = await shredFile(filePath, passes);
-    results.push(result);
+  const totalFileBytes = uniqueFiles.reduce((sum, file) => {
+    try { return sum + fs.statSync(file).size; } catch (_) { return sum; }
+  }, 0);
+  const warning = storageDevices.some((device) => device.type === 'ssd')
+    ? 'SSD wear-leveling means software overwrites cannot guarantee every physical copy was erased. Use device encryption and manufacturer secure erase for stronger assurance.'
+    : 'Overwrite-based deletion is irreversible. Backups and shadow copies are not affected.';
+  if (preview) {
+    return {
+      success: true, mode: 'preview', dryRun: true, method: method.id, methodName: method.name,
+      fileCount: uniqueFiles.length, files: uniqueFiles, directories, totalFileBytes,
+      estimatedOverwriteBytes: totalFileBytes * method.passes.length,
+      storageDevices, multiPassAvailable: !hasNonHdd, warning, errors
+    };
   }
-  
-  const successful = results.filter(r => r.success);
-  const failed = results.filter(r => !r.success);
-  
+
+  const shredded = [];
+  let completedBytes = 0;
+  for (const filePath of uniqueFiles) {
+    const fileSize = (() => { try { return fs.statSync(filePath).size; } catch (_) { return 0; } })();
+    try {
+      await overwriteFile(filePath, method, ({ pass, totalPasses, bytesWritten, fileBytes }) => {
+        const withinFile = ((pass - 1) * fileBytes + bytesWritten) / totalPasses;
+        const pct = totalFileBytes ? Math.round(((completedBytes + withinFile) / totalFileBytes) * 100) : 100;
+        onProgress?.({
+          phase: 'shredding', label: `Overwriting pass ${pass} of ${totalPasses}`, pct,
+          currentActivity: filePath, cancelable: true
+        });
+      });
+      completedBytes += fileSize;
+      shredded.push(filePath);
+    } catch (error) { errors.push({ path: filePath, error: error.message }); }
+  }
+  directories.sort((a, b) => b.length - a.length);
+  for (const directory of directories) {
+    try { if (fs.existsSync(directory) && fs.readdirSync(directory).length === 0) fs.rmdirSync(directory); }
+    catch (error) { errors.push({ path: directory, error: `Directory retained: ${error.message}` }); }
+  }
   return {
-    total: results.length,
-    successful: successful.length,
-    failed: failed.length,
-    results,
-    totalBytesShredded: successful.reduce((sum, r) => sum + (r.sizeBytes || 0), 0)
+    success: errors.length === 0,
+    mode: 'shred', dryRun: false, method: method.id, methodName: method.name,
+    shredded, fileCount: shredded.length,
+    estimatedOverwriteBytes: totalFileBytes * method.passes.length,
+    storageDevices, warning, errors
   };
 }
 
-module.exports = async function fileShredder(args = {}) {
-  const { filePaths, passes = 3 } = args;
-  
-  // Validate passes parameter - must be exactly 3 (DoD 5220.22-M standard)
-  if (!Number.isInteger(passes) || passes !== 3) {
-    return {
-      success: false,
-      error: 'passes must be exactly 3'
-    };
-  }
-  
-  if (!filePaths || !Array.isArray(filePaths) || filePaths.length === 0) {
-    return {
-      success: false,
-      error: 'No file paths provided for shredding'
-    };
-  }
-  
-  if (filePaths.length === 1) {
-    return await shredFile(filePaths[0], passes);
-  }
-  
-  return await shredFiles(filePaths, passes);
-};
+module.exports = (args = {}, onProgress) => shredTargets(args, onProgress);
+module.exports.METHODS = METHODS;
+module.exports.shredTargets = shredTargets;
+module.exports.storageInfo = storageInfo;

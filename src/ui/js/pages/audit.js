@@ -1,5 +1,10 @@
 window.Pages = window.Pages || {};
 window.Pages['audit'] = {
+  _cachedResults: null,
+  _cacheTimestamp: null,
+  _loadRequestId: 0,
+  _isLoading: false,
+  CACHE_TTL_MS: 5 * 60 * 1000, // 5 minutes
   t(key, vars) {
     return window.I18n?.t(key, vars) ?? key;
   },
@@ -8,12 +13,21 @@ window.Pages['audit'] = {
   auditTranslations: {
     'Windows Defender Antivirus': 'audit.check.defender.name',
     'Real-Time Protection': 'audit.check.rtp.name',
+    'Tamper Protection': 'audit.check.tamper.name',
+    'Cloud-delivered Protection': 'audit.check.cloudProtection.name',
+    'Network Protection': 'audit.check.networkProtection.name',
     'User Account Control (UAC)': 'audit.check.uac.name',
     'Windows Updates': 'audit.check.updates.name',
     'BitLocker Drive Encryption': 'audit.check.bitlocker.name',
     'BitLocker': 'audit.check.bitlocker.shortName',
     'PowerShell Execution Policy': 'audit.check.execPolicy.name',
     'Secure Boot': 'audit.check.secureBoot.name',
+    'SMBv1': 'audit.check.smb1.name',
+    'Automatic Logon': 'audit.check.autoLogon.name',
+    'Remote Desktop': 'audit.check.remoteDesktop.name',
+    'LSA Protection': 'audit.check.lsaProtection.name',
+    'Password Policy': 'audit.check.passwordPolicy.name',
+    'Guest Account': 'audit.check.guest.name',
     'Defender antivirus is enabled and running.': 'audit.check.defender.enabled.msg',
     'Defender antivirus is disabled!': 'audit.check.defender.disabled.msg',
     'Antivirus protection is turned off.': 'audit.check.defender.disabled.detail',
@@ -21,6 +35,28 @@ window.Pages['audit'] = {
     'Real-time protection is off!': 'audit.check.rtp.off.msg',
     'Threats are blocked as they appear.': 'audit.check.rtp.active.detail',
     'Your system is vulnerable to active threats.': 'audit.check.rtp.off.detail',
+    'Tamper protection is enabled.': 'audit.check.tamper.enabled.msg',
+    'Tamper protection is off!': 'audit.check.tamper.disabled.msg',
+    'Malware cannot disable Defender protections.': 'audit.check.tamper.enabled.detail',
+    'Malware can disable Defender protections without warning.': 'audit.check.tamper.disabled.detail',
+    'Tamper protection status could not be determined.': 'audit.check.tamper.unknown.msg',
+    'This check may not be supported on this system.': 'audit.check.tamper.unknown.detail',
+    'Enable tamper protection in Windows Security > Virus & threat protection > Manage settings.': 'audit.check.tamper.rec',
+    'Cloud-delivered protection is active.': 'audit.check.cloudProtection.active.msg',
+    'Cloud-delivered protection is off!': 'audit.check.cloudProtection.off.msg',
+    'New threats are blocked using up-to-the-minute cloud intelligence.': 'audit.check.cloudProtection.active.detail',
+    'Protection relies only on locally installed signatures.': 'audit.check.cloudProtection.off.detail',
+    'Turn on cloud-delivered protection in Windows Security > Virus & threat protection > Manage settings.': 'audit.check.cloudProtection.rec',
+    'Network protection is on.': 'audit.check.networkProtection.on.msg',
+    'Network protection is off!': 'audit.check.networkProtection.off.msg',
+    'Malicious connections and phishing sites are blocked.': 'audit.check.networkProtection.on.detail',
+    'Malicious network connections are not blocked.': 'audit.check.networkProtection.off.detail',
+    'Network protection status could not be determined.': 'audit.check.networkProtection.unknown.msg',
+    'This setting is not available on this system.': 'audit.check.networkProtection.unknown.detail',
+    'Enable network protection in Windows Security > App & browser control.': 'audit.check.networkProtection.rec',
+    'Enable network protection block mode with PowerShell or Group Policy.': 'audit.check.networkProtection.recPowerShell',
+    'Could not query Defender hardening settings.': 'audit.check.hardening.queryError.msg',
+    'The Get-MpPreference cmdlet may not be available on this system.': 'audit.check.hardening.queryError.detail',
     'UAC is enabled.': 'audit.check.uac.enabled.msg',
     'UAC is disabled! This is a severe security risk.': 'audit.check.uac.disabled.msg',
     'UAC prompts before making system-level changes.': 'audit.check.uac.enabled.detail',
@@ -46,6 +82,53 @@ window.Pages['audit'] = {
     'Secure Boot is disabled!': 'audit.check.secureBoot.disabled.msg',
     'Only trusted bootloaders can run during system startup.': 'audit.check.secureBoot.enabled.detail',
     'System is vulnerable to bootkit attacks.': 'audit.check.secureBoot.disabled.detail',
+    'SMBv1 is disabled.': 'audit.check.smb1.disabled.msg',
+    'SMBv1 is enabled!': 'audit.check.smb1.enabled.msg',
+    'The legacy SMBv1 protocol with known wormable vulnerabilities is off.': 'audit.check.smb1.disabled.detail',
+    'SMBv1 has known wormable vulnerabilities (WannaCry, SMBGhost).': 'audit.check.smb1.enabled.detail',
+    'SMBv1 may be enabled.': 'audit.check.smb1.unknown.msg',
+    'SMBv1 status could not be determined.': 'audit.check.smb1.queryError.msg',
+    'Could not confirm SMBv1 is disabled — it may be enabled by default.': 'audit.check.smb1.unknown.detail',
+    'Disable SMBv1: Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -NoRestart': 'audit.check.smb1.rec',
+    'Check SMBv1 status: Get-SmbServerConfiguration | Select SMB1Protocol': 'audit.check.smb1.rec2',
+    'Automatic logon is disabled.': 'audit.check.autoLogon.off.msg',
+    'Automatic logon is enabled.': 'audit.check.autoLogon.on.msg',
+    'Automatic logon stores a plaintext password!': 'audit.check.autoLogon.password.msg',
+    'Automatic logon status could not be determined.': 'audit.check.autoLogon.unknown.msg',
+    'Users must sign in manually at startup.': 'audit.check.autoLogon.off.detail',
+    'Windows signs in automatically at startup without a prompt.': 'audit.check.autoLogon.on.detail',
+    'Login credentials are stored in plaintext in the registry — anyone with access can read them.': 'audit.check.autoLogon.password.detail',
+    'Consider disabling automatic logon in User Accounts (netplwiz) settings.': 'audit.check.autoLogon.rec',
+    'Disable automatic logon: Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon" -Name AutoAdminLogon -Value 0': 'audit.check.autoLogon.rec2',
+    'Remote Desktop is disabled.': 'audit.check.remoteDesktop.off.msg',
+    'Remote Desktop is enabled (NLA on).': 'audit.check.remoteDesktop.nla.msg',
+    'Remote Desktop is enabled WITHOUT Network Level Authentication!': 'audit.check.remoteDesktop.noNla.msg',
+    'Remote Desktop status could not be determined.': 'audit.check.remoteDesktop.unknown.msg',
+    'No remote desktop attack surface is exposed.': 'audit.check.remoteDesktop.off.detail',
+    'Remote connections require network-level authentication.': 'audit.check.remoteDesktop.nla.detail',
+    'Attackers can attempt password brute force over the network.': 'audit.check.remoteDesktop.noNla.detail',
+    'Turn off Remote Desktop when not needed: Settings > System > Remote Desktop.': 'audit.check.remoteDesktop.rec',
+    'Enable NLA: Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp" -Name UserAuthentication -Value 1': 'audit.check.remoteDesktop.rec2',
+    'LSA protection is enabled.': 'audit.check.lsaProtection.on.msg',
+    'LSA protection is off!': 'audit.check.lsaProtection.off.msg',
+    'LSA protection status could not be determined.': 'audit.check.lsaProtection.unknown.msg',
+    'Credential-dumping tools cannot read Local Security Authority memory.': 'audit.check.lsaProtection.on.detail',
+    'Credential-theft tools can read LSA memory and steal password hashes.': 'audit.check.lsaProtection.off.detail',
+    'Enable LSA protection: Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa" -Name RunAsPPL -Value 1': 'audit.check.lsaProtection.rec',
+    'Password policy meets recommendations.': 'audit.check.passwordPolicy.pass.msg',
+    'Password policy could be stronger.': 'audit.check.passwordPolicy.warn.msg',
+    'Password policy is weak.': 'audit.check.passwordPolicy.fail.msg',
+    'Password policy could not be determined.': 'audit.check.passwordPolicy.queryError.msg',
+    'Require longer passwords and a lockout threshold: net accounts /minpwlen:12 /lockoutthreshold:5': 'audit.check.passwordPolicy.rec',
+    'Consider requiring longer passwords: net accounts /minpwlen:12': 'audit.check.passwordPolicy.rec2',
+    'Check the policy: net accounts': 'audit.check.passwordPolicy.rec3',
+    'Guest account is disabled.': 'audit.check.guest.disabled.msg',
+    'Guest account is enabled!': 'audit.check.guest.enabled.msg',
+    'Guest account status could not be determined.': 'audit.check.guest.unknown.msg',
+    'No anonymous local access to this PC.': 'audit.check.guest.disabled.detail',
+    'Anonymous users can log on locally.': 'audit.check.guest.enabled.detail',
+    'Could not query the local Guest account.': 'audit.check.guest.unknown.detail',
+    'Disable the Guest account: net user Guest /active:no': 'audit.check.guest.rec',
     'Could not parse Defender status.': 'audit.check.defender.parseError.msg',
     'Failed to query Defender status.': 'audit.check.defender.queryError.msg',
     'The Get-MpComputerStatus cmdlet may not be available on this system.': 'audit.check.defender.queryError.detail',
@@ -60,7 +143,6 @@ window.Pages['audit'] = {
     'Unable to query execution policy.': 'audit.check.execPolicy.error.detail',
     'Secure Boot status could not be determined.': 'audit.check.secureBoot.unknown.msg',
     'This check may not be supported on virtual machines or older hardware.': 'audit.check.secureBoot.unknown.detail',
-    'Keep Windows Update enabled for automatic definition updates.': 'audit.check.defender.rec',
     'Enable real-time protection in Windows Security settings.': 'audit.check.rtp.rec',
     'Enable UAC via Control Panel > User Accounts > Change User Account Control settings.': 'audit.check.uac.rec',
     'Open Settings > Windows Update and install pending updates.': 'audit.check.updates.rec',
@@ -71,40 +153,154 @@ window.Pages['audit'] = {
     'Check BitLocker status in Windows settings.': 'audit.check.bitlocker.rec2'
   },
 
+  // Section keys emitted by the backend, mapped to translatable labels.
+  sectionMap: {
+    antivirus: 'audit.section.antivirus',
+    system: 'audit.section.system',
+    accounts: 'audit.section.accounts',
+    updates: 'audit.section.updates'
+  },
+  SECTION_ORDER: ['antivirus', 'system', 'accounts', 'updates'],
+
+  manageLabelKey(result) {
+    if (result.manageAction === 'open-powershell') return 'audit.action.inspectPowerShell';
+    if (result.manageContext === 'uac') return 'audit.action.openUac';
+    if (result.manageContext === 'windows-features') return 'audit.action.openWindowsFeatures';
+    const uri = result.actionUri || '';
+    if (/^windowsdefender:/i.test(uri) || uri === 'ms-settings:windowsdefender') return 'audit.action.openDefender';
+    if (uri === 'ms-settings:windowsupdate') return 'audit.action.openWindowsUpdate';
+    if (uri === 'ms-settings:recovery') return 'audit.action.openRecovery';
+    if (uri === 'ms-settings:remotedesktop') return 'audit.action.openRemoteDesktop';
+    if (uri === 'ms-settings:deviceencryption') return 'audit.action.openDeviceEncryption';
+    if (uri === 'control /name Microsoft.BitLockerDriveEncryption') return 'audit.action.openBitLocker';
+    if (uri === 'control userpasswords2') return 'audit.action.openUserAccounts';
+    return 'audit.manage';
+  },
+
+  async invokeManageAction(action, context, uri) {
+    let result;
+    if (action === 'open-powershell') {
+      result = await window.soterios.shell.openPowerShell(context);
+    } else if (action === 'open-windows-utility') {
+      result = await window.soterios.shell.openWindowsUtility(context);
+    } else if (uri) {
+      result = /^control(\s|$)/i.test(uri)
+        ? await window.soterios.shell.openControlPanel(uri)
+        : await window.soterios.shell.openExternal(uri);
+    } else {
+      throw new Error(this.t('audit.unsupportedAction'));
+    }
+    if (!result || result.success !== true) {
+      throw new Error(result?.error || this.t('audit.openSettingsError'));
+    }
+    return result;
+  },
+
+  // Shared handler for settings, allowlisted Windows utilities and read-only
+  // PowerShell inspection actions exposed by backend audit results.
+  bindManageButtons(scope) {
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+    scope.querySelectorAll('.audit-open-settings').forEach((btn) => btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      btn.setAttribute('aria-busy', 'true');
+      try {
+        await this.invokeManageAction(btn.dataset.action, btn.dataset.context, btn.dataset.uri);
+      } catch (err) {
+        alert(err.message || t('audit.openSettingsError'));
+      } finally {
+        btn.disabled = false;
+        btn.removeAttribute('aria-busy');
+      }
+    }));
+  },
+
+  resultCounts(results) {
+    const counts = { pass: 0, fail: 0, warn: 0, error: 0, info: 0 };
+    for (const result of results || []) {
+      if (Object.prototype.hasOwnProperty.call(counts, result.status)) counts[result.status]++;
+    }
+    return counts;
+  },
+
+  buildSummaryHtml(results) {
+    const counts = this.resultCounts(results);
+    const tile = (status, label, color) => `<div class="stat-tile"><div class="stat-label">${escapeHtml(label)}</div><div class="stat-value" data-audit-stat="${status}" style="color:${color};">${counts[status]}</div></div>`;
+    return `<div id="auditSummary" class="grid" style="grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); margin-bottom:18px;">
+      ${tile('pass', this.t('audit.passed'), 'var(--ok)')}
+      ${tile('fail', this.t('audit.failed'), 'var(--danger)')}
+      ${tile('warn', this.t('audit.warnings'), 'var(--warn)')}
+      ${tile('error', this.t('audit.errors'), 'var(--danger)')}
+      ${tile('info', this.t('audit.info'), 'var(--text-dim)')}
+    </div>`;
+  },
+
+  updateSummary(container, results) {
+    const counts = this.resultCounts(results);
+    for (const [status, count] of Object.entries(counts)) {
+      const value = container.querySelector(`[data-audit-stat="${status}"]`);
+      if (value) value.textContent = String(count);
+    }
+  },
+
+  setAuditLoading(container, active) {
+    const refreshBtn = container.querySelector('#auditRefreshBtn');
+    const content = container.querySelector('#auditContent');
+    if (refreshBtn) {
+      refreshBtn.disabled = active;
+      refreshBtn.setAttribute('aria-busy', active ? 'true' : 'false');
+    }
+    if (content) content.setAttribute('aria-busy', active ? 'true' : 'false');
+  },
+
+  loadingHtml() {
+    return `<div class="analysis-loading">
+      <div class="analysis-loading-status"><span class="spinner"></span><span id="auditProgressLabel">${escapeHtml(this.t('audit.running'))}</span></div>
+      <div class="loading-progress"><div class="loading-progress-bar"></div></div>
+    </div>`;
+  },
+
   render(container) {
     container.innerHTML = `
       <header class="page-header">
-        <h1 class="page-title">${escapeHtml(this.t('audit.title'))}</h1>
-        <p class="page-subtitle">${escapeHtml(this.t('audit.subtitle'))}</p>
-      </header>
-      <div id="auditContent">
-        <div class="empty-state">${escapeHtml(this.t('audit.running'))}</div>
-        <div class="loading-progress" style="margin-top:8px;">
-          <div class="loading-progress-bar"></div>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+          <div>
+            <h1 class="page-title">${escapeHtml(this.t('audit.title'))}</h1>
+            <p class="page-subtitle">${escapeHtml(this.t('audit.subtitle'))}</p>
+          </div>
+          <button type="button" id="auditRefreshBtn" class="btn btn-secondary" style="font-size:0.85rem; padding:6px 12px;" title="${escapeHtml(this.t('audit.refreshTooltip'))}">
+            ${escapeHtml(this.t('audit.refresh'))}
+          </button>
         </div>
-        <div id="auditProgressLabel" class="page-subtitle" style="margin-top:6px; font-size:0.8rem; opacity:0.85;"></div>
-      </div>
+      </header>
+      <div id="auditContent">${this.loadingHtml()}</div>
     `;
-    this.load(container);
+    container.querySelector('#auditRefreshBtn')?.addEventListener('click', () => {
+      if (!this._isLoading) this.load(container, true);
+    });
+    this.load(container, false);
   },
-  async load(container) {
+
+  async load(container, forceRefresh = false) {
+    const self = this;
+    const requestId = ++self._loadRequestId;
     const content = container.querySelector('#auditContent');
-    const progressBar = content?.querySelector('.loading-progress-bar');
+    let progressBar = null;
     let creepTimer = null;
     let currentPct = 0;
     let ceilingPct = 4;
     let unsubscribeProgress = null;
+    let lastProgress = null;
+    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
 
+    const isCurrent = () => requestId === self._loadRequestId && container.isConnected;
     const stopCreeping = () => {
-      if (creepTimer) {
-        clearInterval(creepTimer);
-        creepTimer = null;
-      }
+      if (creepTimer) clearInterval(creepTimer);
+      creepTimer = null;
     };
-
     const startCreeping = () => {
       stopCreeping();
       creepTimer = setInterval(() => {
+        if (!isCurrent()) return;
         if (currentPct < ceilingPct) {
           currentPct = Math.min(ceilingPct, currentPct + 1);
           if (progressBar) progressBar.style.width = `${currentPct}%`;
@@ -112,142 +308,204 @@ window.Pages['audit'] = {
       }, 200);
     };
 
-    const setLoadingState = (active) => {
-      if (active) {
-        startCreeping();
-        if (progressBar) progressBar.style.opacity = '1';
-      } else {
-        stopCreeping();
-        if (progressBar) progressBar.style.opacity = '0';
-      }
-    };
-
-    setLoadingState(true);
-    unsubscribeProgress = window.api.on('audit:progress', (event) => {
-      const labelEl = container.querySelector('#auditProgressLabel');
-      if (!event) return;
-      const { type, label, completed, total } = event;
-      if (labelEl) {
-        const translatedLabel = this.translateAuditLabel(label);
-        labelEl.textContent = type === 'complete'
-          ? this.t('audit.completed', { label: translatedLabel, completed, total })
-          : this.t('audit.checking', { label: translatedLabel });
-      }
-      if (typeof completed === 'number' && typeof total === 'number' && total > 0) {
-        if (type === 'complete') {
-          currentPct = Math.max(4, Math.round((completed / total) * 100));
-          if (progressBar) progressBar.style.width = `${currentPct}%`;
-        }
-        const nextMilestone = Math.min(total, completed + 1);
-        ceilingPct = nextMilestone >= total ? 100 : Math.max(currentPct + 1, Math.round((nextMilestone / total) * 100) - 3);
-      }
-    });
-    
-    const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
-
+    self._isLoading = true;
+    self.setAuditLoading(container, true);
     try {
-      const [results, ignored, maintenanceHistoryResponse] = await Promise.all([
-        window.api.invoke('audit:run'),
-        window.api.invoke('warnings:listIgnored'),
-        window.api.invoke('maintenance:getHistory').catch(() => ({ ok: false, data: [] }))
-      ]);
-      const ignoredIds = new Set((ignored || []).map((w) => w.id));
-      if (!results || results.length === 0) {
-        content.innerHTML = `<div class="empty-state">${escapeHtml(this.t('audit.noResults'))}</div>`;
+      const now = Date.now();
+      const cacheFresh = self._cachedResults && self._cacheTimestamp && (now - self._cacheTimestamp) < self.CACHE_TTL_MS;
+      if (!forceRefresh && cacheFresh) {
+        const ignored = await window.api.invoke('warnings:listIgnored');
+        if (!isCurrent()) return;
+        self.renderPageResults(container, self._cachedResults, ignored || []);
         return;
       }
 
-      // Translate audit results from backend
-      const translatedResults = results.map(r => this.translateAuditResult(r));
+content.innerHTML = self.loadingHtml();
+      progressBar = content.querySelector('.loading-progress-bar');
+      if (progressBar) progressBar.style.opacity = '1';
+      startCreeping();
+      unsubscribeProgress = window.api.on('audit:progress', (event) => {
+        if (!event || !isCurrent()) return;
+        lastProgress = event;
+        const labelEl = container.querySelector('#auditProgressLabel');
+        const { type, label, completed, total } = event;
+        if (labelEl) {
+          const translatedLabel = self.translateAuditLabel(label);
+          labelEl.textContent = type === 'complete'
+            ? self.t('audit.completed', { label: translatedLabel, completed, total })
+            : self.t('audit.checking', { label: translatedLabel });
+        }
+        if (typeof completed === 'number' && typeof total === 'number' && total > 0) {
+          if (type === 'complete') {
+            currentPct = Math.max(4, Math.round((completed / total) * 100));
+            ceilingPct = currentPct;
+            if (progressBar) progressBar.style.width = `${currentPct}%`;
+          }
+          const nextMilestone = Math.min(total, completed + 1);
+          if (nextMilestone < total) {
+            ceilingPct = Math.max(currentPct + 1, Math.round((nextMilestone / total) * 100) - 1);
+          }
+        }
+      });
 
-      let pass = 0, fail = 0, warn = 0, err = 0;
-      const visibleResults = translatedResults.filter((r) => !ignoredIds.has(this.warningId(r)));
-      visibleResults.forEach(r => { if (r.status === 'pass') pass++; else if (r.status === 'fail') fail++; else if (r.status === 'warn') warn++; else if (r.status === 'error') err++; });
-      let html = `<div class="grid grid-4" style="margin-bottom:18px;">
-        <div class="stat-tile"><div class="stat-label">${escapeHtml(this.t('audit.passed'))}</div><div class="stat-value" style="color:var(--ok);">${pass}</div></div>
-        <div class="stat-tile"><div class="stat-label">${escapeHtml(this.t('audit.failed'))}</div><div class="stat-value" style="color:var(--danger);">${fail}</div></div>
-        <div class="stat-tile"><div class="stat-label">${escapeHtml(this.t('audit.warnings'))}</div><div class="stat-value" style="color:var(--warn);">${warn}</div></div>
-        <div class="stat-tile"><div class="stat-label">${escapeHtml(this.t('audit.errors'))}</div><div class="stat-value" style="color:var(--text-dim);">${err}</div></div>
-      </div>`;
-      html += '<div id="auditResultsContainer" style="max-height:calc(100vh - 260px); overflow-y:auto; padding-right:8px; display:flex; flex-direction:column; gap:12px;">';
-      html += '<div class="dashboard-grid">';
-      for (const res of visibleResults) {
-        let iconClass = 'info';
-        let iconSvg = '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>';
-        let statusLabel = this.t('common.info');
-        if (res.status === 'pass') { iconClass = 'safe'; iconSvg = '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>'; statusLabel = this.t('audit.statusPassed'); }
-        else if (res.status === 'fail') { iconClass = 'danger'; iconSvg = '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>'; statusLabel = this.t('audit.statusFailed'); }
-        else if (res.status === 'warn') { iconClass = 'warning'; iconSvg = '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="13"/><circle cx="12" cy="16.5" r="1" fill="currentColor" stroke="none"/>'; statusLabel = this.t('audit.statusWarning'); }
-        else if (res.status === 'error') { iconClass = 'danger'; iconSvg = '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>'; statusLabel = this.t('audit.statusError'); }
-        html += `<div class="card" style="display:flex; flex-direction:column; gap:12px;">
-          <div style="display:flex; align-items:center; gap:16px;">
-            <div class="status-icon ${iconClass}" style="width:40px;height:40px;">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">${iconSvg}</svg>
-            </div>
-            <div style="flex:1;">
-              <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div style="font-weight:600; font-size:1.1rem;">${escapeHtml(res.name)}</div>
-                <span style="font-size:0.8rem; font-weight:600; text-transform:uppercase; color:${iconClass === 'safe' ? 'var(--ok)' : iconClass === 'danger' ? 'var(--danger)' : 'var(--warn)'};">${statusLabel}</span>
-              </div>
-              <div class="page-subtitle" style="font-size:0.9rem; margin-top:4px;">${escapeHtml(res.message)}</div>
-            </div>
-          </div>
-          ${res.detail ? `<div style="font-size:0.85rem; color:var(--text-dim); padding:8px; background:var(--bg-surface); border-radius:6px; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; white-space:pre-wrap; word-break:break-word;">${escapeHtml(res.detail)}</div>` : ''}
-          ${res.recommendation ? this.renderRecommendation(res.recommendation) : ''}
-          ${res.status === 'warn' || res.status === 'fail' ? `<button class="btn btn-sm audit-ignore" data-id="${escapeHtml(this.warningId(res))}" data-title="${escapeHtml(res.name)}" data-detail="${escapeHtml(res.message || res.detail || '')}">${escapeHtml(this.t('audit.ignoreWarning'))}</button>` : ''}
-        </div>`;
+      const [results, ignored] = await Promise.all([
+        window.api.invoke('audit:run'),
+        window.api.invoke('warnings:listIgnored')
+      ]);
+      if (!isCurrent()) return;
+      if (!results || results.length === 0) {
+        content.innerHTML = `<div class="empty-state">${escapeHtml(self.t('audit.noResults'))}</div>`;
+        return;
       }
-      html += '</div></div>';
-      if ((ignored || []).some((w) => String(w.id || '').startsWith('audit:'))) {
-        html += `<div class="panel" style="margin-top:18px;"><div class="panel-title">${escapeHtml(this.t('audit.ignoredWarnings'))}</div>
-          <div class="history-list">${ignored.filter((w) => String(w.id || '').startsWith('audit:')).map((w) => `
-            <div class="history-item"><div><div class="history-title">${escapeHtml(w.title)}</div><div class="history-meta">${escapeHtml(w.detail || '')}</div></div>
-            <button class="btn btn-sm audit-restore" data-id="${escapeHtml(w.id)}">${escapeHtml(this.t('audit.restore'))}</button></div>`).join('')}</div></div>`;
+
+      const translatedResults = results.map((result) => self.translateAuditResult(result));
+      self._cachedResults = translatedResults;
+      self._cacheTimestamp = Date.now();
+
+      const labelEl = content.querySelector('#auditProgressLabel');
+      if (lastProgress?.type === 'complete'
+        && typeof lastProgress.completed === 'number' && typeof lastProgress.total === 'number'
+        && lastProgress.total > 0 && lastProgress.completed >= lastProgress.total) {
+        stopCreeping();
+        if (progressBar) {
+          progressBar.style.width = '100%';
+          progressBar.style.opacity = '1';
+        }
+        if (labelEl) {
+          labelEl.textContent = self.t('audit.completed', {
+            label: self.translateAuditLabel(lastProgress.label),
+            completed: lastProgress.completed,
+            total: lastProgress.total
+          });
+        }
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        if (!isCurrent()) return;
       }
-      html += this.renderMaintenanceHistory(maintenanceHistoryResponse?.data || []);
-      content.innerHTML = html;
-      content.querySelectorAll('.copy-command-btn').forEach((btn) => btn.addEventListener('click', async () => {
-        const codeEl = content.querySelector(`#${btn.dataset.target}`);
-        if (!codeEl) return;
-        try {
-          await navigator.clipboard.writeText(codeEl.textContent);
-          const original = btn.textContent;
-          btn.textContent = t('audit.copied');
-          setTimeout(() => { btn.textContent = original; }, 1500);
-        } catch (err) {
-          alert(t('audit.copyError'));
-        }
-      }));
-      content.querySelectorAll('.audit-ignore').forEach((btn) => btn.addEventListener('click', async () => {
-        const card = btn.closest('.card');
-        btn.disabled = true;
-        try {
-          await window.api.invoke('warnings:ignore', { id: btn.dataset.id, title: btn.dataset.title, detail: btn.dataset.detail });
-          if (card) card.remove();
-          await this.load(container);
-        } catch (err) {
-          btn.disabled = false;
-          alert(err.message || t('audit.ignoreError'));
-        }
-      }));
-      content.querySelectorAll('.audit-restore').forEach((btn) => btn.addEventListener('click', async () => {
-        const item = btn.closest('.history-item');
-        btn.disabled = true;
-        try {
-          await window.api.invoke('warnings:unignore', btn.dataset.id);
-          if (item) item.remove();
-          await this.load(container);
-        } catch (err) {
-          btn.disabled = false;
-          alert(err.message || t('audit.restoreError'));
-        }
-      }));
-    } catch (e) {
-      content.innerHTML = `<div class="empty-state">${escapeHtml(t('audit.error', { error: e.message }))}</div>`;
+
+      self.renderPageResults(container, translatedResults, ignored || []);
+    } catch (error) {
+      if (isCurrent()) content.innerHTML = `<div class="empty-state">${escapeHtml(t('audit.error', { error: error.message }))}</div>`;
     } finally {
       if (typeof unsubscribeProgress === 'function') unsubscribeProgress();
-      setLoadingState(false);
+      stopCreeping();
+      if (requestId === self._loadRequestId) {
+        self._isLoading = false;
+        self.setAuditLoading(container, false);
+      }
     }
+  },
+
+  renderPageResults(container, translatedResults, ignored) {
+    const content = container.querySelector('#auditContent');
+    if (!content) return;
+    this._currentTranslatedResults = translatedResults;
+    const ignoredIds = new Set((ignored || []).map((warning) => warning.id));
+    const visibleResults = translatedResults.filter((result) => !ignoredIds.has(this.warningId(result)));
+    content.innerHTML = `${this.buildSummaryHtml(visibleResults)}
+      <div id="auditResultsContainer" style="max-height:calc(100vh - 260px); overflow-y:auto; padding-right:8px; display:flex; flex-direction:column; gap:12px;">
+        <div class="dashboard-grid">${this.buildResultsGrid(visibleResults)}</div>
+      </div>`;
+    this.bindResultActions(content, container);
+    this.updateIgnoredWarningsSection(container, ignored || []).catch((err) => {
+      alert(err.message || this.t('audit.restoreError'));
+    });
+  },
+
+  renderCachedResults(container, translatedResults, ignoredIds) {
+    const ignored = [...(ignoredIds || [])].map((id) => ({ id }));
+    this.renderPageResults(container, translatedResults, ignored);
+  },
+
+  bindCopyButtons(scope) {
+    scope.querySelectorAll('.copy-command-btn').forEach((btn) => btn.addEventListener('click', async () => {
+      const codeEl = scope.closest?.('#auditContent')?.querySelector(`#${btn.dataset.target}`)
+        || scope.querySelector(`#${btn.dataset.target}`);
+      if (!codeEl) return;
+      try {
+        await navigator.clipboard.writeText(codeEl.textContent);
+        const original = btn.textContent;
+        btn.textContent = this.t('audit.copied');
+        setTimeout(() => { btn.textContent = original; }, 1500);
+      } catch (_) {
+        alert(this.t('audit.copyError'));
+      }
+    }));
+  },
+
+  bindIgnoreButtons(scope, container) {
+    scope.querySelectorAll('.audit-ignore').forEach((btn) => btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        await window.api.invoke('warnings:ignore', {
+          id: btn.dataset.id,
+          title: btn.dataset.title,
+          detail: btn.dataset.detail
+        });
+        await this.refreshVisibleResults(container);
+      } catch (err) {
+        btn.disabled = false;
+        alert(err.message || this.t('audit.ignoreError'));
+      }
+    }));
+  },
+
+  bindResultActions(scope, container) {
+    this.bindManageButtons(scope);
+    this.bindCopyButtons(scope);
+    this.bindIgnoreButtons(scope, container);
+  },
+
+  async refreshVisibleResults(container) {
+    const ignored = await window.api.invoke('warnings:listIgnored');
+    const ignoredIds = new Set((ignored || []).map((warning) => warning.id));
+    const visibleResults = (this._currentTranslatedResults || [])
+      .filter((result) => !ignoredIds.has(this.warningId(result)));
+    this.renderResults(container, visibleResults);
+    await this.updateIgnoredWarningsSection(container, ignored || []);
+  },
+
+  renderResults(container, visibleResults) {
+    const resultsContainer = container.querySelector('#auditResultsContainer .dashboard-grid');
+    if (!resultsContainer) return;
+    resultsContainer.innerHTML = this.buildResultsGrid(visibleResults);
+    this.updateSummary(container, visibleResults);
+    this.bindResultActions(resultsContainer, container);
+  },
+
+  async updateIgnoredWarningsSection(container, ignoredRows) {
+    const content = container.querySelector('#auditContent');
+    if (!content) return;
+    const ignored = ignoredRows || await window.api.invoke('warnings:listIgnored');
+    const auditIgnored = (ignored || []).filter((warning) => String(warning.id || '').startsWith('audit:'));
+    let ignoredSection = content.querySelector('#auditIgnoredWarnings');
+
+    if (!auditIgnored.length) {
+      ignoredSection?.remove();
+      return;
+    }
+    if (!ignoredSection) {
+      ignoredSection = document.createElement('div');
+      ignoredSection.id = 'auditIgnoredWarnings';
+      ignoredSection.className = 'panel';
+      ignoredSection.style.marginTop = '18px';
+      content.appendChild(ignoredSection);
+    }
+    ignoredSection.innerHTML = `
+      <div class="panel-title">${escapeHtml(this.t('audit.ignoredWarnings'))}</div>
+      <div class="history-list">${auditIgnored.map((warning) => `
+        <div class="history-item"><div><div class="history-title">${escapeHtml(warning.title)}</div><div class="history-meta">${escapeHtml(warning.detail || '')}</div></div>
+        <button type="button" class="btn btn-sm audit-restore" data-id="${escapeHtml(warning.id)}">${escapeHtml(this.t('audit.restore'))}</button></div>`).join('')}</div>`;
+
+    ignoredSection.querySelectorAll('.audit-restore').forEach((btn) => btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        await window.api.invoke('warnings:unignore', btn.dataset.id);
+        await this.refreshVisibleResults(container);
+      } catch (err) {
+        btn.disabled = false;
+        alert(err.message || this.t('audit.restoreError'));
+      }
+    }));
   },
 
   warningId(result) {
@@ -290,16 +548,77 @@ window.Pages['audit'] = {
   translateAuditLabel(label) {
     const labelMap = {
       'Windows Defender': 'audit.check.defender.name',
+      'Defender hardening': 'audit.check.defenderHardening.name',
       'User Account Control (UAC)': 'audit.check.uac.name',
       'Windows Update': 'audit.check.updates.name',
       'BitLocker': 'audit.check.bitlocker.shortName',
       'PowerShell execution policy': 'audit.check.execPolicy.name',
-      'Secure Boot': 'audit.check.secureBoot.name'
+      'Secure Boot': 'audit.check.secureBoot.name',
+      'SMBv1': 'audit.check.smb1.name',
+      'Automatic Logon': 'audit.check.autoLogon.name',
+      'Remote Desktop': 'audit.check.remoteDesktop.name',
+      'LSA protection': 'audit.check.lsaProtection.name',
+      'Local accounts': 'audit.check.accounts.name'
     };
     if (labelMap[label]) {
       return this.t(labelMap[label]);
     }
     return label;
+  },
+
+  // Single result card. Shared by buildResultsGrid so the loaded, cached and
+  // incremental render paths all produce identical markup.
+  buildResultCard(res) {
+    let iconClass = 'info';
+    let iconSvg = '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>';
+    let statusLabel = this.t('common.info');
+    if (res.status === 'pass') { iconClass = 'safe'; iconSvg = '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>'; statusLabel = this.t('audit.statusPassed'); }
+    else if (res.status === 'fail') { iconClass = 'danger'; iconSvg = '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>'; statusLabel = this.t('audit.statusFailed'); }
+    else if (res.status === 'warn') { iconClass = 'warning'; iconSvg = '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="13"/><circle cx="12" cy="16.5" r="1" fill="currentColor" stroke="none"/>'; statusLabel = this.t('audit.statusWarning'); }
+    else if (res.status === 'error') { iconClass = 'danger'; iconSvg = '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>'; statusLabel = this.t('audit.statusError'); }
+    const statusColor = iconClass === 'safe' ? 'var(--ok)'
+      : iconClass === 'danger' ? 'var(--danger)'
+        : iconClass === 'warning' ? 'var(--warn)' : 'var(--text-dim)';
+    const manageLabel = this.t(this.manageLabelKey(res));
+    const manageAriaLabel = this.t('audit.action.forCheck', { action: manageLabel, check: res.name });
+    return `<div class="card" style="display:flex; flex-direction:column; gap:12px;">
+      <div style="display:flex; align-items:center; gap:16px;">
+        <div class="status-icon ${iconClass}" style="width:40px;height:40px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">${iconSvg}</svg>
+        </div>
+        <div style="flex:1;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-weight:600; font-size:1.1rem;">${escapeHtml(res.name)}</div>
+            <span style="font-size:0.8rem; font-weight:600; text-transform:uppercase; color:${statusColor};">${statusLabel}</span>
+          </div>
+          <div class="page-subtitle" style="font-size:0.9rem; margin-top:4px;">${escapeHtml(res.message)}</div>
+        </div>
+      </div>
+      ${res.detail ? `<div style="font-size:0.85rem; color:var(--text-dim); padding:8px; background:var(--bg-surface); border-radius:6px; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; white-space:pre-wrap; word-break:break-word;">${escapeHtml(res.detail)}</div>` : ''}
+      ${res.recommendation ? this.renderRecommendation(res.recommendation) : ''}
+      ${(res.actionUri || res.manageAction) ? `<button type="button" class="btn btn-sm audit-open-settings" data-uri="${escapeHtml(res.actionUri || '')}" data-action="${escapeHtml(res.manageAction || '')}" data-context="${escapeHtml(res.manageContext || '')}" aria-label="${escapeHtml(manageAriaLabel)}">${escapeHtml(manageLabel)}</button>` : ''}
+      ${res.status === 'warn' || res.status === 'fail' ? `<button type="button" class="btn btn-sm audit-ignore" data-id="${escapeHtml(this.warningId(res))}" data-title="${escapeHtml(res.name)}" data-detail="${escapeHtml(res.message || res.detail || '')}">${escapeHtml(this.t('audit.ignoreWarning'))}</button>` : ''}
+    </div>`;
+  },
+
+  // Build the whole results grid, grouped under section headers. Results are
+  // grouped by their backend `section` key in a fixed order so the layout is
+  // stable across locales, cache hits and ignore/restore re-renders.
+  buildResultsGrid(results) {
+    const groups = {};
+    const seen = [];
+    for (const res of results) {
+      const key = res.section || 'system';
+      if (!groups[key]) { groups[key] = []; seen.push(key); }
+      groups[key].push(res);
+    }
+    const ordered = [...this.SECTION_ORDER.filter((k) => groups[k]), ...seen.filter((k) => !this.SECTION_ORDER.includes(k))];
+    let html = '';
+    for (const key of ordered) {
+      html += `<div class="audit-section-title">${escapeHtml(this.t(this.sectionMap[key] || 'audit.section.system'))}</div>`;
+      html += groups[key].map((res) => this.buildResultCard(res)).join('');
+    }
+    return html;
   },
 
   // Some recommendations are "<plain-English explanation>: <PowerShell command>"
@@ -309,7 +628,7 @@ window.Pages['audit'] = {
   // splits any recommendation ending in a recognizable cmdlet into readable
   // prose plus its own copyable code block.
   renderRecommendation(rec) {
-    const match = String(rec).match(/^(.*?):\s*((?:Set|Get|Enable|Disable|Add|Remove|New|Start|Stop|Restart|Install|Uninstall)-[A-Za-z]+\b[\s\S]*)$/);
+    const match = String(rec).match(/^(.*?):\s*((?:(?:Set|Get|Enable|Disable|Add|Remove|New|Start|Stop|Restart|Install|Uninstall)-[A-Za-z]+|net(?:\.exe)?\s+accounts)\b[\s\S]*)$/i);
     if (!match) {
       return `<div style="font-size:0.85rem;"><strong>${escapeHtml(this.t('audit.recommendation', { rec }))}</strong></div>`;
     }

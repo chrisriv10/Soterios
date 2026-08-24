@@ -10,37 +10,164 @@ const DEFAULT_SCHEDULE = {
   lastRun: null,
 };
 
-function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputationEngine }) {
+function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputationEngine, folderWatchAbortWaitMs }) {
+  const definitionState = {
+    isScanning: false,
+    currentScan: null,
+    progress: 0,
+    phase: 'idle',
+    message: '',
+    lastResult: null,
+  };
+
+  function newestResult(first, second) {
+    if (!first) return second || null;
+    if (!second) return first;
+    return new Date(first.completedAt || 0).getTime() >= new Date(second.completedAt || 0).getTime()
+      ? first
+      : second;
+  }
+
+  function definitionSnapshot() {
+    const current = definitionState.currentScan;
+    return {
+      isScanning: definitionState.isScanning,
+      isFolderWatchScanning: false,
+      currentScan: current,
+      progress: definitionState.progress,
+      filesScanned: 0,
+      threatsFound: 0,
+      phase: definitionState.phase,
+      message: definitionState.message,
+      currentTarget: null,
+      targetIndex: 0,
+      targetCount: 0,
+      completedTargets: [],
+      progressEstimated: false,
+      startedAt: current ? current.startedAt : null,
+      lastResult: definitionState.lastResult,
+    };
+  }
+
   // -- Scanning Engine --
   ipcMain.handle('scan:status', () => {
     const scanStatus = scanEngine.getStatus();
-    if (scanStatus.currentScan && scanStatus.currentScan.scanType === 'folderwatch') {
-      return {
-        engine: clamEngine.getStatus(),
-        scan: { isScanning: false, currentScan: null },
-      };
-    }
+    const scan = definitionState.isScanning
+      ? definitionSnapshot()
+      : {
+          ...scanStatus,
+          lastResult: newestResult(scanStatus.lastResult, definitionState.lastResult),
+        };
     return {
       engine: clamEngine.getStatus(),
-      scan: scanStatus,
+      scan,
     };
   });
 
   ipcMain.handle('scan:updateDefinitions', async () => {
-    const result = await clamEngine.updateDefinitions((progress) => {
-      eventBus.emit('scan:progress', { scanType: 'definitions', pct: 10, message: 'Updating ClamAV definitions...' });
-      if (progress && progress.text) {
-        const match = progress.text.match(/(\d+)%/);
-        if (match) {
-          eventBus.emit('scan:progress', { scanType: 'definitions', pct: Math.min(95, Number(match[1])), message: 'Updating ClamAV definitions...' });
-        }
+    const engineScanStatus = scanEngine.getStatus();
+    if (engineScanStatus && engineScanStatus.isScanning) {
+      const locale = db.getSetting('ui.language', 'en');
+      return { success: false, error: i18n.t('scanner.defsBlockedDuringScan', locale) };
+    }
+
+    // Folder-watch scans are background work, not a user-requested scan. Stop
+    // one before updating the shared ClamAV database so a download triggered by
+    // a recent file event cannot make every manual update look "stuck".
+if (engineScanStatus && engineScanStatus.isFolderWatchScanning) {
+      if (typeof scanEngine.abortScan === 'function') scanEngine.abortScan();
+      const deadline = Date.now() + (folderWatchAbortWaitMs || 10000);
+      while (scanEngine.getStatus().isFolderWatchScanning && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
       }
-    });
-    eventBus.emit('scan:complete', {
+      if (scanEngine.getStatus().isFolderWatchScanning) {
+        const locale = db.getSetting('ui.language', 'en');
+        return { success: false, error: i18n.t('scanner.defsBlockedDuringScan', locale) };
+      }
+    }
+
+if (definitionState.isScanning) {
+      const locale = db.getSetting('ui.language', 'en');
+      return { success: false, error: i18n.t('scanner.defsBlockedDuringScan', locale) };
+    }
+    const startedAt = new Date().toISOString();
+    const startTime = Date.now();
+    definitionState.isScanning = true;
+    definitionState.currentScan = { scanType: 'definitions', startedAt, paths: [], targetPaths: [] };
+    definitionState.progress = 10;
+    definitionState.phase = 'updating-definitions';
+    definitionState.message = 'Updating ClamAV definitions...';
+    definitionState.lastResult = null;
+    if (typeof scanEngine.clearLastResult === 'function') scanEngine.clearLastResult();
+
+    const emitProgress = (pct) => {
+      definitionState.progress = Math.max(definitionState.progress, Math.min(95, Number(pct) || 0));
+      eventBus.emit('scan:progress', {
+        scanType: 'definitions',
+        pct: definitionState.progress,
+        message: definitionState.message,
+        phase: definitionState.phase,
+        startedAt,
+        currentTarget: null,
+        targetPaths: [],
+        targetIndex: 0,
+        targetCount: 0,
+        completedTargets: [],
+        filesScanned: 0,
+        threatsFound: 0,
+        progressEstimated: false,
+      });
+    };
+
+    emitProgress(10);
+    let result;
+    try {
+      result = await clamEngine.updateDefinitions((progress) => {
+        if (progress && progress.text) {
+          const match = progress.text.match(/(\d+)%/);
+          if (match) {
+            emitProgress(Number(match[1]));
+          }
+        }
+      });
+    } catch (error) {
+      result = { success: false, error: error && error.message ? error.message : String(error) };
+    }
+    const status = result.success ? 'completed' : 'failed';
+    const completedAt = new Date().toISOString();
+    const durationMs = Date.now() - startTime;
+    definitionState.isScanning = false;
+    definitionState.currentScan = null;
+    definitionState.progress = 100;
+    definitionState.phase = status;
+    definitionState.message = result.success ? 'Definitions updated' : 'Definition update failed';
+    definitionState.lastResult = {
       scanType: 'definitions',
-      status: result.success ? 'completed' : 'failed',
+      status,
+      startedAt,
+      completedAt,
+      targetPaths: [],
+      completedTargets: [],
       filesScanned: 0,
       threatsFound: 0,
+      threats: [],
+      progress: 100,
+      durationMs,
+      errors: result.success ? [] : [result.error || 'Definition update failed'],
+      note: result.error,
+    };
+    eventBus.emit('scan:complete', {
+      scanType: 'definitions',
+      status,
+      filesScanned: 0,
+      threatsFound: 0,
+      pct: 100,
+      startedAt,
+      completedAt,
+      durationMs,
+      phase: status,
+      completedTargets: [],
+      progressEstimated: false,
       errors: result.success ? [] : [result.error || 'Definition update failed'],
       error: result.error,
     });
@@ -48,23 +175,28 @@ function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputation
   });
 
   ipcMain.handle('scan:quick', async () => {
+    definitionState.lastResult = null;
     return scanEngine.runQuickScan();
   });
 
   ipcMain.handle('scan:full', async () => {
+    definitionState.lastResult = null;
     return scanEngine.runFullScan();
   });
 
   ipcMain.handle('scan:custom', async (_event, targetPaths) => {
+    definitionState.lastResult = null;
     return scanEngine.runCustomScan(targetPaths);
   });
 
   ipcMain.handle('scan:abort', () => {
-    const status = scanEngine.getStatus();
-    if (status.currentScan && status.currentScan.scanType === 'folderwatch') {
-      return { success: false, canceled: false, error: 'No user scan in progress' };
-    }
     return scanEngine.abortScan();
+  });
+
+  ipcMain.handle('scan:dismissResult', () => {
+    definitionState.lastResult = null;
+    if (typeof scanEngine.clearLastResult === 'function') scanEngine.clearLastResult();
+    return { success: true };
   });
 
   // -- Reputation --
@@ -121,6 +253,7 @@ function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputation
     if (Date.now() - lastRunMs < intervalMs) return;
 
     scheduledScanRunning = true;
+    definitionState.lastResult = null;
     saveScheduleConfig({ lastRun: new Date().toISOString() });
     try {
       if (config.scanType === 'full') {
@@ -139,8 +272,12 @@ function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputation
 
   // Check once a minute whether a scan is due, plus a check shortly after
   // startup in case one was missed while the app was closed.
-  setInterval(() => { runScheduledScanIfDue(); }, 60 * 1000);
-  setTimeout(() => { runScheduledScanIfDue(); }, 15 * 1000);
+  const scheduledScanTimer = setInterval(() => { runScheduledScanIfDue(); }, 60 * 1000);
+  const startupScanTimer = setTimeout(() => { runScheduledScanIfDue(); }, 15 * 1000);
+  // These checks must not keep the process alive during shutdown or tests.
+  // The main process/window remains the lifecycle owner while it is running.
+  if (typeof scheduledScanTimer.unref === 'function') scheduledScanTimer.unref();
+  if (typeof startupScanTimer.unref === 'function') startupScanTimer.unref();
 }
 
 module.exports = { register };

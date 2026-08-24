@@ -12,28 +12,26 @@ window.Pages['lockdown'] = {
         <div class="page-subtitle">${escapeHtml(t('lockdown.description'))}</div>
       </div>
 
-      <div class="grid grid-2">
-        <div class="panel">
-          <div class="panel-title">${escapeHtml(t('lockdown.title'))}</div>
-          <div class="lockdown-status" id="lockdownStatus">
-            <div class="status-indicator" id="lockdownIndicator">
-              <div class="status-icon" id="lockdownIcon"></div>
-              <div class="status-text">
-                <div class="status-label" id="lockdownLabel">${escapeHtml(t('lockdown.checking'))}</div>
-                <div class="status-detail" id="lockdownDetail"></div>
-              </div>
+      <div class="grid grid-2" style="margin-top:16px;">
+        <div class="card">
+          <div class="status-card">
+            <div class="status-icon" id="lockdownIcon"></div>
+            <div class="status-info">
+              <h3>${escapeHtml(t('lockdown.title'))}</h3>
+              <div class="value" id="lockdownLabel">${escapeHtml(t('lockdown.checking'))}</div>
+              <div id="lockdownDetail" style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;"></div>
             </div>
           </div>
-          <div class="lockdown-actions">
-            <button class="btn btn-danger" id="lockdownBtn" disabled style="width:100%;margin-top:12px;">
-              <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px;">
+            <button class="btn btn-danger" id="lockdownBtn" disabled style="width:100%;">
+              <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
               ${escapeHtml(t('lockdown.activate'))}
             </button>
-            <button class="btn btn-success" id="restoreBtn" disabled style="width:100%;margin-top:8px;">
-              <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <button class="btn btn-primary" id="restoreBtn" disabled style="width:100%;">
+              <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
                 <path d="M3 3v5h5" />
                 <path d="M21 12a9 9 0 1 1-9 9 9.75 9.75 0 0 1 6.74-2.74L21 16" />
@@ -75,11 +73,6 @@ window.Pages['lockdown'] = {
       </div>
 
       <div class="panel" style="margin-top:16px;">
-        <div class="panel-title" style="color:var(--warning);font-size:16px;text-transform:uppercase;">${escapeHtml(t('lockdown.warning'))}</div>
-      </div>
-
-      <!-- Allowlist Panel -->
-      <div class="panel" style="margin-top:16px;">
         <div class="panel-title">${escapeHtml(t('lockdown.allowlist.title'))}</div>
         <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">${escapeHtml(t('lockdown.allowlist.description'))}</div>
         
@@ -88,7 +81,7 @@ window.Pages['lockdown'] = {
           <div class="panel" style="margin:0;">
             <div class="panel-title" style="font-size:13px;">${escapeHtml(t('lockdown.allowlist.interfaces'))}</div>
             <div style="display:flex;gap:8px;margin-bottom:8px;">
-              <input type="text" id="allowlistInterfaceInput" placeholder="${escapeHtml(t('lockdown.allowlist.addPlaceholder'))}" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);color:var(--text);font-size:13px;">
+              <input type="text" id="allowlistInterfaceInput" list="interfacesDatalist" placeholder="${escapeHtml(t('lockdown.allowlist.addPlaceholder'))}" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);color:var(--text);font-size:13px;">
               <button class="btn btn-primary" id="addAllowlistInterfaceBtn" style="padding:6px 12px;font-size:12px;">${escapeHtml(t('lockdown.allowlist.add'))}</button>
             </div>
             <div class="lockdown-list" id="allowlistInterfacesList" style="max-height:150px;overflow-y:auto;"></div>
@@ -98,7 +91,7 @@ window.Pages['lockdown'] = {
           <div class="panel" style="margin:0;">
             <div class="panel-title" style="font-size:13px;">${escapeHtml(t('lockdown.allowlist.services'))}</div>
             <div style="display:flex;gap:8px;margin-bottom:8px;">
-              <input type="text" id="allowlistServiceInput" placeholder="${escapeHtml(t('lockdown.allowlist.addPlaceholder'))}" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);color:var(--text);font-size:13px;">
+              <input type="text" id="allowlistServiceInput" list="servicesDatalist" placeholder="${escapeHtml(t('lockdown.allowlist.addPlaceholder'))}" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);color:var(--text);font-size:13px;">
               <button class="btn btn-primary" id="addAllowlistServiceBtn" style="padding:6px 12px;font-size:12px;">${escapeHtml(t('lockdown.allowlist.add'))}</button>
             </div>
             <div class="lockdown-list" id="allowlistServicesList" style="max-height:150px;overflow-y:auto;"></div>
@@ -108,12 +101,16 @@ window.Pages['lockdown'] = {
           <div class="panel" style="margin:0;">
             <div class="panel-title" style="font-size:13px;">${escapeHtml(t('lockdown.allowlist.ips'))}</div>
             <div style="display:flex;gap:8px;margin-bottom:8px;">
-              <input type="text" id="allowlistIpInput" placeholder="${escapeHtml(t('lockdown.allowlist.ipPlaceholder'))}" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);color:var(--text);font-size:13px;">
+              <input type="text" id="allowlistIpInput" list="ipsDatalist" placeholder="${escapeHtml(t('lockdown.allowlist.ipPlaceholder'))}" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:4px;background:var(--input-bg);color:var(--text);font-size:13px;">
               <button class="btn btn-primary" id="addAllowlistIpBtn" style="padding:6px 12px;font-size:12px;">${escapeHtml(t('lockdown.allowlist.add'))}</button>
             </div>
             <div class="lockdown-list" id="allowlistIpsList" style="max-height:150px;overflow-y:auto;"></div>
           </div>
         </div>
+
+        <datalist id="interfacesDatalist"></datalist>
+        <datalist id="servicesDatalist"></datalist>
+        <datalist id="ipsDatalist"></datalist>
       </div>
     `;
 
@@ -123,7 +120,6 @@ window.Pages['lockdown'] = {
   _initLockdownPage() {
     const lockdownBtn = document.getElementById('lockdownBtn');
     const restoreBtn = document.getElementById('restoreBtn');
-    const lockdownIndicator = document.getElementById('lockdownIndicator');
     const lockdownIcon = document.getElementById('lockdownIcon');
     const lockdownLabel = document.getElementById('lockdownLabel');
     const lockdownDetail = document.getElementById('lockdownDetail');
@@ -148,6 +144,7 @@ window.Pages['lockdown'] = {
     // Load initial status
     this._updateLockdownStatus();
     this._loadAllowlist();
+    this._loadSuggestions();
 
     // Allowlist event listeners
     addAllowlistInterfaceBtn.addEventListener('click', () => this._addToAllowlist('interfaces', allowlistInterfaceInput.value.trim()));
@@ -222,6 +219,49 @@ window.Pages['lockdown'] = {
     }
   },
 
+  async _loadSuggestions() {
+    const [ifacesRes, svcsRes, ipsRes] = await Promise.allSettled([
+      window.soterios.lockdown.getInterfaces(),
+      window.soterios.lockdown.getServices(),
+      window.soterios.lockdown.getLocalIPs()
+    ]);
+
+    const interfacesList = document.getElementById('interfacesDatalist');
+    if (interfacesList && ifacesRes.status === 'fulfilled' && ifacesRes.value.ok) {
+      const interfaces = ifacesRes.value.data || [];
+      interfacesList.innerHTML = interfaces.map(iface =>
+        `<option value="${escapeHtml(iface.name)}"></option>`
+      ).join('');
+    }
+
+    const servicesList = document.getElementById('servicesDatalist');
+    if (servicesList && svcsRes.status === 'fulfilled' && svcsRes.value.ok) {
+      const services = svcsRes.value.data || [];
+      servicesList.innerHTML = services.map(svc =>
+        `<option value="${escapeHtml(svc.name)}">${escapeHtml(svc.displayName || '')}</option>`
+      ).join('');
+    }
+
+    const ipsList = document.getElementById('ipsDatalist');
+    if (ipsList && ipsRes.status === 'fulfilled' && ipsRes.value.ok) {
+      const ips = ipsRes.value.data || [];
+      ipsList.innerHTML = ips.map(entry =>
+        `<option value="${escapeHtml(entry.ip)}"></option>`
+      ).join('');
+    }
+  },
+
+  _isValidIp(value) {
+    const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(\/\d{1,2})?$/;
+    if (ipv4.test(value)) {
+      return value.split('/')[0].split('.').every(octet => {
+        const n = Number(octet);
+        return n >= 0 && n <= 255;
+      });
+    }
+    return /^[0-9a-fA-F:]+$/.test(value) && value.includes(':');
+  },
+
   _renderAllowlist(allowlist) {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     
@@ -274,6 +314,10 @@ window.Pages['lockdown'] = {
 
   async _addToAllowlist(type, value) {
     if (!value) return;
+    if (type === 'ips' && !this._isValidIp(value)) {
+      alert(`Invalid IP address: ${value}`);
+      return;
+    }
     const inputMap = {
       interfaces: document.getElementById('allowlistInterfaceInput'),
       services: document.getElementById('allowlistServiceInput'),
@@ -306,7 +350,6 @@ window.Pages['lockdown'] = {
   },
 
   async _updateLockdownStatus() {
-    const lockdownIndicator = document.getElementById('lockdownIndicator');
     const lockdownIcon = document.getElementById('lockdownIcon');
     const lockdownLabel = document.getElementById('lockdownLabel');
     const lockdownDetail = document.getElementById('lockdownDetail');
@@ -318,15 +361,15 @@ window.Pages['lockdown'] = {
       if (result.ok) {
         const status = result.data;
         if (status.isLockedDown) {
-          lockdownIndicator.className = 'status-indicator status-danger';
-          lockdownIcon.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><path d="M12 17v2"/><path d="M12 11v2"/></svg>';
+          lockdownIcon.className = 'status-icon danger';
+          lockdownIcon.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><path d="M12 17v2"/><path d="M12 11v2"/></svg>';
           lockdownLabel.textContent = window.I18n.t('lockdown.active');
           lockdownDetail.textContent = window.I18n.t('lockdown.activeDetail');
           lockdownBtn.disabled = true;
           restoreBtn.disabled = false;
         } else {
-          lockdownIndicator.className = 'status-indicator status-success';
-          lockdownIcon.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+          lockdownIcon.className = 'status-icon safe';
+          lockdownIcon.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
           lockdownLabel.textContent = window.I18n.t('lockdown.normal');
           lockdownDetail.textContent = window.I18n.t('lockdown.normalDetail');
           lockdownBtn.disabled = false;
@@ -334,8 +377,8 @@ window.Pages['lockdown'] = {
         }
       } else {
         // Handle unsuccessful status response
-        lockdownIndicator.className = 'status-indicator status-warning';
-        lockdownIcon.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+        lockdownIcon.className = 'status-icon warning';
+        lockdownIcon.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
         lockdownLabel.textContent = window.I18n.t('lockdown.error');
         lockdownDetail.textContent = result.error || 'Failed to get lockdown status';
         // Keep unsafe controls disabled
@@ -343,8 +386,8 @@ window.Pages['lockdown'] = {
         restoreBtn.disabled = true;
       }
     } catch (err) {
-      lockdownIndicator.className = 'status-indicator status-warning';
-      lockdownIcon.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+      lockdownIcon.className = 'status-icon warning';
+      lockdownIcon.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
       lockdownLabel.textContent = window.I18n.t('lockdown.error');
       lockdownDetail.textContent = err.message;
       // Keep unsafe controls disabled

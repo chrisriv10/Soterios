@@ -7,6 +7,15 @@ const os = require('os');
 const path = require('path');
 const { EventEmitter } = require('events');
 
+async function waitFor(condition, timeoutMs = 2000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (condition()) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error('Timed out waiting for condition');
+}
+
 describe('ScanEngine', () => {
   let tmp;
   let mockDb;
@@ -186,26 +195,47 @@ describe('ScanEngine', () => {
     assert.equal(result.error, 'Scan already in progress');
   });
 
-  it('runScan allows folderwatch scan during user scan', async () => {
+  it('runScan lets a user scan preempt a running folderwatch scan', async () => {
+    // Folder watch must never block the user: starting a user scan cancels
+    // the background scan and proceeds normally.
+    const pending = [];
+    const clam = {
+      isReady: true,
+      abortCurrentScan: () => true,
+      scanFile: async () => {
+        return new Promise((resolve) => pending.push(resolve));
+      }
+    };
     const engine = new ScanEngine(
       mockDb,
       mockEventBus,
-      mockClamEngine,
+      clam,
       mockHeuristicEngine,
       mockReputationEngine,
       mockQuarantineManager
     );
-    
-    // Start folderwatch scan without a user scan active
+
     const folderwatchPromise = engine.runScan('folderwatch', [tmp], 'Starting...');
-    assert.equal(engine.isFolderWatchScanning, true);
-    
-    // A user scan must still be rejected while folderwatch is active
-    const blocked = await engine.runScan('quick', [tmp], 'Starting...');
-    assert.equal(blocked.error, 'Scan already in progress');
-    
+    await waitFor(() => engine.isFolderWatchScanning);
+    assert.equal(pending.length, 1);
+
+    // User scan must not be rejected while folderwatch is active.
+    const userPromise = engine.runScan('quick', [tmp], 'Starting...');
+    // Let the preempt arm, then release the folder-watch scan as canceled.
+    await new Promise((r) => setTimeout(r, 50));
+    pending.shift()({ success: false, canceled: true, error: 'Scan canceled', threatsFound: 0, filesScanned: 0, output: '' });
+
+    // Release the user scan's own clamscan once it has taken over.
+    await waitFor(() => pending.length === 1);
+    pending.shift()({ success: true, threatsFound: 0, filesScanned: 1, threats: [], output: '' });
+
+    const result = await userPromise;
+    assert.equal(result.success, true);
+    assert.equal(result.status, 'completed');
+
     await folderwatchPromise;
     assert.equal(engine.isFolderWatchScanning, false);
+    assert.equal(engine.isScanning, false);
   });
 
   it('runScan completes successfully with no threats', async () => {
@@ -250,6 +280,43 @@ describe('ScanEngine', () => {
     assert.equal(result.success, true);
     assert.equal(result.threatsFound, 1);
     assert.equal(result.threats.length, 1);
+    assert.equal(engine.getStatus().lastResult.threats.length, 1);
+    assert.equal(engine.getStatus().lastResult.threats[0].name, 'Eicar-Test-Signature');
+  });
+
+  it('runScan skips quarantining files whose hash is trusted', async () => {
+    const testFile = path.join(tmp, 'falsepositive.bin');
+    fs.writeFileSync(testFile, 'benign-ish content');
+    let quarantineCalls = 0;
+
+    mockDb.isHashTrusted = () => true;
+    mockQuarantineManager.quarantine = async () => {
+      quarantineCalls += 1;
+      return { success: true };
+    };
+    mockClamEngine.scanFile = async () => ({
+      success: true,
+      threatsFound: 1,
+      filesScanned: 1,
+      threats: [{ path: testFile, name: 'Some-Signature' }],
+      output: ''
+    });
+
+    const engine = new ScanEngine(
+      mockDb,
+      mockEventBus,
+      mockClamEngine,
+      mockHeuristicEngine,
+      mockReputationEngine,
+      mockQuarantineManager
+    );
+
+    const result = await engine.runScan('quick', [tmp], 'Starting...');
+    assert.equal(result.success, true);
+    assert.equal(quarantineCalls, 0);
+    assert.equal(result.threats.length, 1);
+    assert.equal(result.threats[0].trusted, true);
+    assert.equal(fs.existsSync(testFile), true);
   });
 
   it('runScan handles scan errors', async () => {
@@ -307,10 +374,10 @@ describe('ScanEngine', () => {
     
     const result = engine.abortScan();
     assert.equal(result.success, false);
-    assert.equal(result.error, 'No user scan in progress');
+    assert.equal(result.error, 'No scan in progress');
   });
 
-  it('abortScan returns error when only folderwatch scan is active', () => {
+  it('abortScan cancels a running folderwatch scan', () => {
     const engine = new ScanEngine(
       mockDb,
       mockEventBus,
@@ -322,10 +389,11 @@ describe('ScanEngine', () => {
     
     engine.folderWatchScan.isScanning = true;
     engine.folderWatchScan.currentScan = { scanType: 'folderwatch', paths: [tmp] };
+    engine.folderWatchScan.abortController = { abort: () => {} };
     
     const result = engine.abortScan();
-    assert.equal(result.success, false);
-    assert.equal(result.error, 'No user scan in progress');
+    assert.equal(result.success, true);
+    assert.equal(result.canceled, true);
   });
 
   it('abortScan calls clamEngine.abortCurrentScan', () => {
@@ -499,5 +567,83 @@ describe('ScanEngine', () => {
     assert.equal(result.success, false);
     assert.equal(result.status, 'failed');
     assert.ok(result.errors.some(e => e.includes('Failed to quarantine')));
+  });
+
+  it('publishes structured progress and retains the final result', async () => {
+    const progressEvents = [];
+    mockEventBus.emit = (event, data) => {
+      if (event === 'scan:progress') progressEvents.push(data);
+    };
+    mockClamEngine.scanFile = async (target, onProgress) => {
+      onProgress({ fileCount: 3 });
+      return { success: true, threatsFound: 0, filesScanned: 3, threats: [], output: '' };
+    };
+    const engine = new ScanEngine(
+      mockDb,
+      mockEventBus,
+      mockClamEngine,
+      mockHeuristicEngine,
+      mockReputationEngine,
+      mockQuarantineManager
+    );
+
+    await engine.runScan('custom', [tmp], 'Starting...');
+
+    const scanningEvent = progressEvents.find((event) => event.phase === 'scanning' && event.filesScanned === 3);
+    assert.ok(scanningEvent, 'expected a structured scanning event');
+    assert.equal(scanningEvent.currentTarget, tmp);
+    assert.equal(scanningEvent.targetIndex, 1);
+    assert.equal(scanningEvent.targetCount, 1);
+    assert.equal(scanningEvent.progressEstimated, false);
+    assert.ok(scanningEvent.startedAt);
+    const targetCompleteEvent = progressEvents.find((event) => event.completedTargets?.includes(tmp));
+    assert.ok(targetCompleteEvent, 'expected progress after the target finished scanning');
+
+    const status = engine.getStatus();
+    assert.equal(status.isScanning, false);
+    assert.equal(status.lastResult.status, 'completed');
+    assert.equal(status.lastResult.filesScanned, 3);
+    assert.equal(status.lastResult.progress, 100);
+    assert.deepEqual(status.lastResult.completedTargets, [tmp]);
+  });
+
+  it('clears the retained result when the next scan starts', async () => {
+    const engine = new ScanEngine(
+      mockDb,
+      mockEventBus,
+      mockClamEngine,
+      mockHeuristicEngine,
+      mockReputationEngine,
+      mockQuarantineManager
+    );
+    await engine.runScan('quick', [tmp], 'First scan');
+    assert.ok(engine.getStatus().lastResult);
+
+    let releaseScan;
+    mockClamEngine.scanFile = () => new Promise((resolve) => { releaseScan = resolve; });
+    const pending = engine.runScan('full', [tmp], 'Second scan');
+    await waitFor(() => typeof releaseScan === 'function');
+
+    const active = engine.getStatus();
+    assert.equal(active.lastResult, null);
+    assert.equal(active.currentScan.scanType, 'full');
+    assert.equal(active.progressEstimated, true);
+
+    releaseScan({ success: true, threatsFound: 0, filesScanned: 1, threats: [], output: '' });
+    await pending;
+  });
+
+  it('does not retain folder-watch results as user-facing history', async () => {
+    const engine = new ScanEngine(
+      mockDb,
+      mockEventBus,
+      mockClamEngine,
+      mockHeuristicEngine,
+      mockReputationEngine,
+      mockQuarantineManager
+    );
+
+    await engine.runScan('folderwatch', [tmp], 'Watching...');
+    assert.equal(engine.getStatus().lastResult, null);
   });
 });

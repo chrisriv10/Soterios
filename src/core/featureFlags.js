@@ -17,6 +17,8 @@ const DEFAULT_FLAGS = Object.freeze({
   networkAlerts: true,
   networkTrafficHistory: true,
   autoUpdates: true,
+  vpnAutoConnect: false,
+  privacyMode: false,
 });
 
 const FLAG_KEYS = Object.freeze(Object.keys(DEFAULT_FLAGS));

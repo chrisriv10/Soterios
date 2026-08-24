@@ -67,6 +67,17 @@ class DatabaseService {
       this.db.exec('ALTER TABLE quarantine ADD COLUMN quarantine_path TEXT');
     }
 
+    // Trusted (false-positive whitelist) hashes — restored by the user and
+    // skipped by future scans so they are not re-quarantined.
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS trusted_hashes (
+        hash TEXT PRIMARY KEY,
+        original_path TEXT,
+        threat_name TEXT,
+        added_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Alerts Table
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS alerts (
@@ -96,6 +107,16 @@ class DatabaseService {
     `);
 
     this.db.exec(`
+      CREATE TABLE IF NOT EXISTS audit_warnings (
+        id TEXT PRIMARY KEY,
+        title TEXT,
+        detail TEXT,
+        level TEXT,
+        scanned_at TEXT
+      )
+    `);
+
+    this.db.exec(`
       CREATE TABLE IF NOT EXISTS maintenance_runs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -103,8 +124,60 @@ class DatabaseService {
         ok_count INTEGER DEFAULT 0,
         total_count INTEGER DEFAULT 0,
         dry_run INTEGER DEFAULT 0,
+        source TEXT DEFAULT 'scheduled',
         results_json TEXT
       )
+    `);
+
+    // Migration: add source column to maintenance_runs if missing
+    try {
+      const maintenanceColumns = this.db.prepare("PRAGMA table_info(maintenance_runs)").all();
+      const hasSource = maintenanceColumns.some((col) => col.name === 'source');
+      if (!hasSource) {
+        this.db.exec("ALTER TABLE maintenance_runs ADD COLUMN source TEXT DEFAULT 'scheduled'");
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    // Unified history for interactive and scheduled maintenance tools.
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS tool_runs (
+        run_id TEXT PRIMARY KEY,
+        tool_id TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'manual',
+        status TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        duration_ms INTEGER,
+        summary_json TEXT,
+        warnings_json TEXT,
+        errors_json TEXT
+      )
+    `);
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_tool_runs_started_at
+      ON tool_runs(started_at DESC)
+    `);
+
+    // Seven-day reversible storage used by user-selected maintenance actions.
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS maintenance_vault (
+        id TEXT PRIMARY KEY,
+        original_path TEXT NOT NULL,
+        vault_path TEXT NOT NULL,
+        item_type TEXT NOT NULL,
+        operation TEXT NOT NULL,
+        size_bytes INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        status TEXT NOT NULL,
+        metadata_json TEXT
+      )
+    `);
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_maintenance_vault_expiry
+      ON maintenance_vault(status, expires_at)
     `);
 
     // Reputation Cache (VirusTotal)
@@ -242,6 +315,39 @@ class DatabaseService {
     return row;
   }
 
+  deleteAllScanReports() {
+    const rows = this.db.prepare('SELECT * FROM scan_reports').all();
+    if (!rows.length) return { deleted: 0 };
+    this.db.prepare('DELETE FROM scan_reports').run();
+    return { deleted: rows.length };
+  }
+
+  deleteAllSecurityReports() {
+    const fs = require('fs');
+    const path = require('path');
+    const os = require('os');
+    const dir = path.join(os.homedir(), '.soterios', 'reports');
+    let deleted = 0;
+    if (fs.existsSync(dir)) {
+      const files = fs.readdirSync(dir);
+      for (const file of files) {
+        try {
+          fs.unlinkSync(path.join(dir, file));
+          deleted++;
+        } catch (_) {}
+      }
+    }
+    return { deleted };
+  }
+
+  deleteAllManualHistory() {
+    return this.db.prepare('DELETE FROM tool_runs WHERE source = ?').run('manual');
+  }
+
+  deleteAllScheduledHistory() {
+    return this.db.prepare('DELETE FROM maintenance_runs').run();
+  }
+
   // --- Quarantine API ---
   addQuarantineRecord(record) {
     const stmt = this.db.prepare(`
@@ -255,9 +361,57 @@ class DatabaseService {
     return this.db.prepare("SELECT * FROM quarantine WHERE status = 'quarantined' ORDER BY date_quarantined DESC").all();
   }
 
+  getQuarantineHistory(status = null) {
+    if (status) {
+      return this.db.prepare('SELECT * FROM quarantine WHERE status = ? ORDER BY date_quarantined DESC').all(status);
+    }
+    return this.db.prepare('SELECT * FROM quarantine ORDER BY date_quarantined DESC').all();
+  }
+
   updateQuarantineStatus(id, status) {
     const stmt = this.db.prepare('UPDATE quarantine SET status = ? WHERE id = ?');
     return stmt.run(status, id);
+  }
+
+  getQuarantineRecord(id) {
+    return this.db.prepare('SELECT * FROM quarantine WHERE id = ?').get(id);
+  }
+
+  clearQuarantineHistory() {
+    return this.db.prepare("DELETE FROM quarantine WHERE status != 'quarantined'").run();
+  }
+
+  deleteQuarantineHistory(ids) {
+    if (!Array.isArray(ids) || !ids.length) return { changes: 0 };
+    const placeholders = ids.map(() => '?').join(',');
+    const stmt = this.db.prepare(
+      `DELETE FROM quarantine WHERE id IN (${placeholders}) AND status != 'quarantined'`
+    );
+    return stmt.run(...ids);
+  }
+
+  // --- Trusted hash (false-positive whitelist) API ---
+  addTrustedHash(hash, originalPath, threatName) {
+    if (!hash) return { changes: 0 };
+    const stmt = this.db.prepare(`
+      INSERT OR IGNORE INTO trusted_hashes (hash, original_path, threat_name, added_at)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    `);
+    return stmt.run(hash, originalPath || null, threatName || null);
+  }
+
+  removeTrustedHash(hash) {
+    if (!hash) return { changes: 0 };
+    return this.db.prepare('DELETE FROM trusted_hashes WHERE hash = ?').run(hash);
+  }
+
+  isHashTrusted(hash) {
+    if (!hash) return false;
+    return !!this.db.prepare('SELECT hash FROM trusted_hashes WHERE hash = ?').get(hash);
+  }
+
+  getTrustedHashes() {
+    return this.db.prepare('SELECT * FROM trusted_hashes ORDER BY added_at DESC').all();
   }
 
   // --- Alerts API ---
@@ -275,17 +429,18 @@ class DatabaseService {
     return stmt.run(id);
   }
 
-  addMaintenanceRun({ startedAt, results, dryRunCleanup = false }) {
+  addMaintenanceRun({ startedAt, results, dryRunCleanup = false, source = 'scheduled' }) {
     const okCount = (results || []).filter((r) => r.ok).length;
     const stmt = this.db.prepare(`
-      INSERT INTO maintenance_runs (started_at, ok_count, total_count, dry_run, results_json)
-      VALUES (@startedAt, @okCount, @totalCount, @dryRun, @resultsJson)
+      INSERT INTO maintenance_runs (started_at, ok_count, total_count, dry_run, source, results_json)
+      VALUES (@startedAt, @okCount, @totalCount, @dryRun, @source, @resultsJson)
     `);
     return stmt.run({
       startedAt: startedAt || new Date().toISOString(),
       okCount,
       totalCount: (results || []).length,
       dryRun: dryRunCleanup ? 1 : 0,
+      source: source || 'scheduled',
       resultsJson: JSON.stringify(results || [])
     });
   }
@@ -307,6 +462,39 @@ class DatabaseService {
     }));
   }
 
+  deleteMaintenanceRun(id) {
+    return this.db.prepare('DELETE FROM maintenance_runs WHERE id = ?').run(id);
+  }
+
+  getScheduledMaintenanceHistory(limit = 25) {
+    const bounded = Math.max(1, Math.min(Number(limit) || 25, 250));
+    return this.db.prepare(`
+      SELECT id, timestamp, started_at, ok_count, total_count, dry_run, source, results_json
+      FROM maintenance_runs
+      WHERE source IN ('scheduled', 'manual-scheduled')
+      ORDER BY timestamp DESC, id DESC LIMIT ?
+    `).all(bounded).map((row) => ({
+      id: row.id,
+      timestamp: row.timestamp,
+      started_at: row.started_at,
+      ok_count: row.ok_count,
+      total_count: row.total_count,
+      dry_run: !!row.dry_run,
+      source: row.source || 'scheduled',
+      results: (() => {
+        try { return JSON.parse(row.results_json || '[]'); } catch (_) { return []; }
+      })()
+    }));
+  }
+
+  deleteToolRun(runId) {
+    return this.db.prepare('DELETE FROM tool_runs WHERE run_id = ?').run(runId);
+  }
+
+  deleteToolHistory(toolId) {
+    return this.db.prepare('DELETE FROM tool_runs WHERE tool_id = ?').run(toolId);
+  }
+
   pruneMaintenanceRuns(keepCount = 100) {
     const count = this.db.prepare('SELECT COUNT(*) AS total FROM maintenance_runs').get().total;
     if (count <= keepCount) return { changes: 0 };
@@ -317,6 +505,113 @@ class DatabaseService {
         SELECT id FROM maintenance_runs ORDER BY timestamp ASC, id ASC LIMIT ?
       )
     `).run(deleteCount);
+  }
+
+  // --- Unified tool run history ---
+  startToolRun({ runId, toolId, source = 'manual', startedAt }) {
+    return this.db.prepare(`
+      INSERT INTO tool_runs (run_id, tool_id, source, status, started_at)
+      VALUES (@runId, @toolId, @source, 'running', @startedAt)
+    `).run({ runId, toolId, source, startedAt });
+  }
+
+  finishToolRun({ runId, status, completedAt, durationMs, summary, warnings, errors }) {
+    return this.db.prepare(`
+      UPDATE tool_runs SET
+        status = @status,
+        completed_at = @completedAt,
+        duration_ms = @durationMs,
+        summary_json = @summaryJson,
+        warnings_json = @warningsJson,
+        errors_json = @errorsJson
+      WHERE run_id = @runId
+    `).run({
+      runId,
+      status,
+      completedAt,
+      durationMs,
+      summaryJson: JSON.stringify(summary || {}),
+      warningsJson: JSON.stringify(warnings || []),
+      errorsJson: JSON.stringify(errors || [])
+    });
+  }
+
+  getToolHistory(limit = 50, toolId = null) {
+    const bounded = Math.max(1, Math.min(Number(limit) || 50, 250));
+    const rows = toolId
+      ? this.db.prepare('SELECT * FROM tool_runs WHERE tool_id = ? ORDER BY started_at DESC LIMIT ?').all(toolId, bounded)
+      : this.db.prepare('SELECT * FROM tool_runs ORDER BY started_at DESC LIMIT ?').all(bounded);
+    return rows.map((row) => ({
+      runId: row.run_id,
+      toolId: row.tool_id,
+      source: row.source,
+      status: row.status,
+      startedAt: row.started_at,
+      completedAt: row.completed_at,
+      durationMs: row.duration_ms,
+      summary: this._parseJson(row.summary_json, {}),
+      warnings: this._parseJson(row.warnings_json, []),
+      errors: this._parseJson(row.errors_json, [])
+    }));
+  }
+
+  addVaultItem(item) {
+    return this.db.prepare(`
+      INSERT INTO maintenance_vault (
+        id, original_path, vault_path, item_type, operation, size_bytes,
+        created_at, expires_at, status, metadata_json
+      ) VALUES (
+        @id, @originalPath, @vaultPath, @itemType, @operation, @sizeBytes,
+        @createdAt, @expiresAt, @status, @metadataJson
+      )
+    `).run({
+      ...item,
+      metadataJson: JSON.stringify(item.metadata || {})
+    });
+  }
+
+  updateVaultItem(id, status, metadata = null) {
+    if (metadata === null) {
+      return this.db.prepare('UPDATE maintenance_vault SET status = ? WHERE id = ?').run(status, id);
+    }
+    return this.db.prepare('UPDATE maintenance_vault SET status = ?, metadata_json = ? WHERE id = ?')
+      .run(status, JSON.stringify(metadata), id);
+  }
+
+  getVaultItem(id) {
+    const row = this.db.prepare('SELECT * FROM maintenance_vault WHERE id = ?').get(id);
+    return row ? this._mapVaultRow(row) : null;
+  }
+
+  getVaultItems({ status = null, expiredBefore = null } = {}) {
+    let rows;
+    if (status && expiredBefore) {
+      rows = this.db.prepare('SELECT * FROM maintenance_vault WHERE status = ? AND expires_at <= ? ORDER BY created_at DESC').all(status, expiredBefore);
+    } else if (status) {
+      rows = this.db.prepare('SELECT * FROM maintenance_vault WHERE status = ? ORDER BY created_at DESC').all(status);
+    } else {
+      rows = this.db.prepare('SELECT * FROM maintenance_vault ORDER BY created_at DESC').all();
+    }
+    return rows.map((row) => this._mapVaultRow(row));
+  }
+
+  _mapVaultRow(row) {
+    return {
+      id: row.id,
+      originalPath: row.original_path,
+      vaultPath: row.vault_path,
+      itemType: row.item_type,
+      operation: row.operation,
+      sizeBytes: row.size_bytes,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+      status: row.status,
+      metadata: this._parseJson(row.metadata_json, {})
+    };
+  }
+
+  _parseJson(value, fallback) {
+    try { return value ? JSON.parse(value) : fallback; } catch (_) { return fallback; }
   }
 
   ignoreWarning(warning) {
@@ -334,6 +629,17 @@ class DatabaseService {
 
   isWarningIgnored(id) {
     return !!this.db.prepare('SELECT id FROM ignored_warnings WHERE id = ?').get(id);
+  }
+
+  replaceAuditWarnings(rows) {
+    this.db.prepare('DELETE FROM audit_warnings').run();
+    const stmt = this.db.prepare('INSERT INTO audit_warnings (id, title, detail, level, scanned_at) VALUES (@id, @title, @detail, @level, @scannedAt)');
+    for (const row of rows) stmt.run(row);
+    return rows.length;
+  }
+
+  getAuditWarnings() {
+    return this.db.prepare('SELECT * FROM audit_warnings ORDER BY scanned_at DESC').all();
   }
 
   // --- Settings API ---
@@ -378,6 +684,33 @@ class DatabaseService {
         fetched_at = CURRENT_TIMESTAMP
     `);
     return stmt.run({ ip, rawData });
+  }
+
+  getProcessReputationCache(hash) {
+    if (!hash) return null;
+    return this.db.prepare(`
+      SELECT hash, malicious, suspicious, undetected, last_checked
+      FROM reputation_cache
+      WHERE hash = ?
+    `).get(hash) || null;
+  }
+
+  setProcessReputationCache(hash, counts) {
+    if (!hash) return { changes: 0 };
+    return this.db.prepare(`
+      INSERT INTO reputation_cache (hash, malicious, suspicious, undetected, last_checked)
+      VALUES (@hash, @malicious, @suspicious, @undetected, CURRENT_TIMESTAMP)
+      ON CONFLICT(hash) DO UPDATE SET
+        malicious = excluded.malicious,
+        suspicious = excluded.suspicious,
+        undetected = excluded.undetected,
+        last_checked = CURRENT_TIMESTAMP
+    `).run({
+      hash,
+      malicious: Number(counts?.malicious) || 0,
+      suspicious: Number(counts?.suspicious) || 0,
+      undetected: Number(counts?.undetected) || 0,
+    });
   }
 
   getReputationHash(hash) {

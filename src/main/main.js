@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, nativeImage, screen, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, nativeImage, screen, powerMonitor, safeStorage } = require('electron');
 const { execFileSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -53,9 +53,14 @@ const eventBus = require('../core/eventBus');
 const { registerIpcHandlers } = require('./ipcHandlers');
 const serviceRegistry = require('./serviceRegistry');
 const { MaintenanceScheduler } = require('./maintenanceScheduler');
+const ToolRunManager = require('./toolRunManager');
+const { MaintenanceSafetyVault } = require('./maintenanceSafetyVault');
+const { PersistenceMonitor } = require('./persistenceMonitor');
+const { ProcessReputationService } = require('./processReputationService');
 const { initTrayDashboard } = require('./trayDashboard');
 const updater = require('./updater');
 const { getTrayHealthSummary } = require('./healthSummary');
+const { ExtensionBridge } = require('./extensionBridge');
 
 // Legacy utilities
 const { loadPlugins } = require('../core/pluginLoader');
@@ -64,6 +69,9 @@ const featureFlags = require('../core/featureFlags');
 let mainWindow;
 let splashWindow;
 let splashTimeoutId;
+let splashCloseSafetyId;
+let splashProgressBuffer = [];
+let splashProgressReady = false;
 let dbRef; // set once the database is created in app.whenReady() below, so
 // showNotification (defined before that point) can check settings
 let currentUiTheme = 'dark';
@@ -72,6 +80,10 @@ let startupLocale = 'en'; // set from peekUiLanguage() before the DB is ready,
 let isQuitting = false;
 const lifecycleRefs = {
   maintenanceScheduler: null,
+  maintenanceSafetyVault: null,
+  persistenceMonitor: null,
+  extensionBridge: null,
+  processService: null,
   trayController: null,
   networkStatsTimer: null,
   pruneTimer: null
@@ -193,12 +205,13 @@ function escToastHtml(v) {
   return String(v ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 }
 
-function toastHtml(title, body, level, themeName, iconOverride = null) {
+function toastHtml(title, body, level, themeName, iconOverride = null, openText = 'Open', action = null) {
   const theme = TOAST_THEMES[themeName] || TOAST_THEMES.dark;
   const accent = theme.accents[level] || theme.accents.info;
   const iconPaths = iconOverride || TOAST_ICONS[level] || TOAST_ICONS.info;
   const markDataUri = getToastMarkDataUri();
   const wordmarkDataUri = getToastWordmarkDataUri();
+  const hasAction = action === 'scanner' || action === 'tools';
   return `<!doctype html>
 <html><head><meta charset="utf-8"><style>
   html, body { margin:0; padding:0; background:transparent; overflow:hidden; user-select:none; }
@@ -214,7 +227,7 @@ function toastHtml(title, body, level, themeName, iconOverride = null) {
     box-shadow: 0 8px 28px rgba(0,0,0,0.45);
     font-family: 'Segoe UI', -apple-system, sans-serif;
     color: ${theme.textMain};
-    cursor: pointer;
+    ${hasAction ? 'cursor: pointer;' : ''}
     animation: toastIn 220ms ease-out;
     overflow: hidden;
   }
@@ -226,8 +239,11 @@ function toastHtml(title, body, level, themeName, iconOverride = null) {
   .wordmark { height:56px; width:auto; display:block; opacity:0.97; margin-left:49px; }
   .wordmark-fallback { font-size:17px; font-weight:600; color:${theme.textMain}; letter-spacing:-0.02em; margin-left:12px; }
   .header .spacer { flex:1; }
-  .close { flex-shrink:0; color:${theme.closeBtn}; font-size:16px; line-height:1; padding:2px 4px; align-self:flex-start; margin-top:4px; }
+  .header-actions { flex-shrink:0; display:flex; gap:4px; align-self:flex-start; margin-top:4px; }
+  .close { color:${theme.closeBtn}; font-size:16px; line-height:1; padding:2px 4px; cursor:pointer; }
   .close:hover { color:${theme.closeHover}; }
+  .open-btn { color:${theme.textMuted}; font-size:14px; line-height:1; padding:2px 6px; cursor:pointer; border:1px solid ${theme.border}; border-radius:4px; background:rgba(255,255,255,0.05); }
+  .open-btn:hover { color:${theme.textMain}; border-color:${accent}; background:rgba(255,255,255,0.1); }
   .body-row { flex-shrink:0; display:flex; gap:14px; align-items:flex-start; padding:14px 16px 16px 14px; }
   .status-circle {
     flex-shrink:0; width:48px; height:48px; border-radius:50%;
@@ -246,7 +262,10 @@ function toastHtml(title, body, level, themeName, iconOverride = null) {
       ${markDataUri ? `<img class="mark" src="${markDataUri}" alt="" />` : ''}
       ${wordmarkDataUri ? `<img class="wordmark" src="${wordmarkDataUri}" alt="" />` : '<span class="wordmark-fallback">Soterios</span>'}
       <div class="spacer"></div>
-      <div class="close" id="closeBtn">&times;</div>
+      <div class="header-actions">
+        ${hasAction ? `<div class="open-btn" id="openBtn">${escToastHtml(openText)}</div>` : ''}
+        <div class="close" id="closeBtn">&times;</div>
+      </div>
     </div>
     <div class="body-row">
       <div class="status-circle">
@@ -260,14 +279,20 @@ function toastHtml(title, body, level, themeName, iconOverride = null) {
   </div>
   <script>
     const toast = document.getElementById('toast');
+    const toastAction = ${JSON.stringify(hasAction ? action : null)};
     function dismiss() {
       toast.classList.add('closing');
       setTimeout(() => { window.close(); }, 200);
     }
-    document.getElementById('closeBtn').addEventListener('click', (e) => { e.stopPropagation(); dismiss(); });
-    toast.addEventListener('click', () => {
-      window.location.href = 'soterios://navigate-scanner';
+    function openApp() {
+      if (toastAction) window.location.href = 'soterios://navigate-' + toastAction;
       dismiss();
+    }
+    document.getElementById('closeBtn').addEventListener('click', (e) => { e.stopPropagation(); dismiss(); });
+    const openBtn = document.getElementById('openBtn');
+    if (openBtn) openBtn.addEventListener('click', (e) => { e.stopPropagation(); openApp(); });
+    toast.addEventListener('click', () => {
+      openApp();
     });
     setTimeout(dismiss, ${TOAST_LIFETIME_MS});
   </script>
@@ -290,7 +315,7 @@ function repositionToasts() {
   }
 }
 
-function showNotification(title, body, level = 'info', iconOverride = null) {
+function showNotification(title, body, level = 'info', iconOverride = null, action = null) {
   if (dbRef && !featureFlags.getFlag(dbRef, 'notificationsEnabled', true)) return;
   try {
     const themeName = dbRef ? dbRef.getSetting('ui.theme', 'dark') : 'dark';
@@ -322,8 +347,9 @@ function showNotification(title, body, level = 'info', iconOverride = null) {
     // Translate title and body before rendering
     const translatedTitle = t(title);
     const translatedBody = t(body);
+    const translatedOpenText = t('toast.open');
     toastWindow.setAlwaysOnTop(true, 'screen-saver');
-    toastWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(toastHtml(translatedTitle, translatedBody, level, themeName, iconOverride)));
+    toastWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(toastHtml(translatedTitle, translatedBody, level, themeName, iconOverride, translatedOpenText, action)));
     toastWindow.once('ready-to-show', () => toastWindow.show());
     toastWindow.on('closed', () => {
       const idx = activeToasts.indexOf(toastWindow);
@@ -331,14 +357,13 @@ function showNotification(title, body, level = 'info', iconOverride = null) {
       repositionToasts();
     });
 
-    // Handle toast click to navigate to scanner
+    // Handle toast click to navigate to a page
     toastWindow.webContents.on('will-navigate', (event, url) => {
-      if (url === 'soterios://navigate-scanner') {
+      const match = url.match(/^soterios:\/\/navigate-([a-z0-9-]+)$/i);
+      if (match && mainWindow && !mainWindow.isDestroyed()) {
         event.preventDefault();
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.focus();
-          mainWindow.webContents.send('navigate-to-scanner');
-        }
+        mainWindow.focus();
+        mainWindow.webContents.send(`navigate-to-${match[1].toLowerCase()}`);
       }
     });
 
@@ -379,8 +404,26 @@ function createSplashWindow(themeName = 'dark') {
 }
 
 function sendSplashProgress(pct, label) {
-  if (splashWindow && !splashWindow.isDestroyed()) {
-    splashWindow.webContents.send('splash:progress', { pct, label });
+  const msg = { pct, label };
+  // If the splash renderer is ready, send immediately. Otherwise buffer
+  // the message and flush later when the splash page finishes loading.
+  if (splashProgressReady && splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.webContents.send('splash:progress', msg);
+  } else {
+    splashProgressBuffer.push(msg);
+    // Keep buffer bounded to avoid unbounded growth in pathological cases
+    if (splashProgressBuffer.length > 200) splashProgressBuffer.shift();
+  }
+}
+
+function flushSplashProgressBuffer() {
+  if (!splashWindow || splashWindow.isDestroyed()) {
+    splashProgressBuffer = [];
+    return;
+  }
+  while (splashProgressBuffer.length) {
+    const m = splashProgressBuffer.shift();
+    try { splashWindow.webContents.send('splash:progress', m); } catch (_) { /* ignore */ }
   }
 }
 
@@ -474,6 +517,10 @@ function scheduleScreenshotCapture(win, config) {
 // so a slow/failed load never leaves the user stuck looking at the splash
 // screen forever.
 function dismissSplash() {
+  if (splashCloseSafetyId) {
+    clearTimeout(splashCloseSafetyId);
+    splashCloseSafetyId = undefined;
+  }
   if (splashTimeoutId) {
     clearTimeout(splashTimeoutId);
     splashTimeoutId = undefined;
@@ -524,8 +571,10 @@ function createWindow() {
   // (see the 'app:ready' handler below), so the splash screen covers the
   // whole load instead of just the initial blank-page flash. A fallback
   // timeout guarantees the window still appears even if that signal is
-  // delayed or never arrives (e.g. an unexpected renderer error).
-  splashTimeoutId = setTimeout(dismissSplash, 8000);
+  // delayed or never arrives (e.g. an unexpected renderer error). Progress
+  // messages continue to stream during the wait, so a slow initial read
+  // never looks frozen.
+  splashTimeoutId = setTimeout(dismissSplash, 30000);
 
   if ((process.argv.includes('--dev') || process.env.NODE_ENV === 'development') && !isScreenshotCaptureMode()) {
     mainWindow.webContents.once('did-finish-load', () => {
@@ -589,15 +638,96 @@ app.on('second-instance', (_event, commandLine) => {
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.focus();
     const url = commandLine.find(arg => arg.startsWith('soterios://'));
-    if (url) mainWindow.webContents.send('protocol-url', url);
+    if (url) {
+      mainWindow.webContents.send('protocol-url', url);
+      handleCredentialLeakDeepLink(url);
+      handleThreatDetectedDeepLink(url);
+    }
   }
 });
+
+function handleThreatDetectedDeepLink(url) {
+  if (!url || !url.startsWith('soterios://threat-detected')) return;
+  if (!dbRef) {
+    logLine('warn', 'Deep link received before database ready', { url });
+    return;
+  }
+  try {
+    const parsed = new URL(url.replace('soterios:', 'soterios://'));
+    const domain = parsed.searchParams.get('domain') || '';
+    const threatType = parsed.searchParams.get('threatType') || '';
+    dbRef.addAlert({
+      level: 'warning',
+      source: 'Browser Extension',
+      title: 'Suspected Malicious Site',
+      message: `A site visited in the browser was flagged by Google Safe Browsing${domain ? `: ${domain}` : ''}`,
+      detail: `Threat type: ${threatType}${domain ? ` | Domain: ${domain}` : ''}`,
+      timestamp: new Date().toISOString(),
+      metadata: { source: 'browser-extension-safebrowsing', ...(domain ? { domain } : {}), ...(threatType ? { threatType } : {}) }
+    });
+    if (eventBus) eventBus.emit('alert:new', { level: 'warning', source: 'Browser Extension' });
+  } catch (e) {
+    logLine('warn', 'Failed to parse deep link URL:', { url, error: e.message });
+  }
+}
+
+function handleCredentialLeakDeepLink(url) {
+  if (!url || !url.startsWith('soterios://credential-leak')) return;
+  if (!dbRef) {
+    logLine('warn', 'Deep link received before database ready', { url });
+    return;
+  }
+  try {
+    const parsed = new URL(url.replace('soterios:', 'soterios://'));
+    const count = parseInt(parsed.searchParams.get('count') || '1', 10);
+    const domain = parsed.searchParams.get('domain') || '';
+    const domainSuffix = domain ? ` on ${domain}` : '';
+    dbRef.addAlert({
+      level: 'danger',
+      source: 'Browser Extension',
+      title: 'Credential Leak Detected',
+      message: `Password found in ${count} breach${count > 1 ? 'es' : ''}${domainSuffix} via browser extension`,
+      detail: `Breaches: ${count}${domain ? ` | Domain: ${domain}` : ''}`,
+      timestamp: new Date().toISOString(),
+      metadata: { source: 'browser-extension', count, ...(domain ? { domain } : {}) }
+    });
+    if (eventBus) eventBus.emit('alert:new', { level: 'danger', source: 'Browser Extension' });
+  } catch (e) {
+    logLine('warn', 'Failed to parse deep link URL:', { url, error: e.message });
+  }
+}
 
 app.whenReady().then(async () => {
   // Register custom protocol for browser extension communication
   if (process.platform === 'win32') {
     app.setAsDefaultProtocolClient('soterios');
   }
+
+  // Register splash:progress handler early so it's ready when splash window sends progress
+  ipcMain.handle('splash:progress', (_event, data) => {
+    if (splashWindow && !splashWindow.isDestroyed()) {
+      splashWindow.webContents.send('splash:progress', data);
+    }
+  });
+
+  // Register app:ready handler early so renderer can dismiss splash
+  // The main window is shown right away, but the splash stays up until the
+  // splash renderer confirms it actually displayed the Ready label
+  // (splash:ready-shown), so a fast startup never cuts the Ready state off.
+  // A safety timer guarantees the splash still closes if that signal is
+  // delayed or never arrives (e.g. a renderer error).
+  ipcMain.handle('app:ready', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+    }
+    if (!splashCloseSafetyId) {
+      splashCloseSafetyId = setTimeout(dismissSplash, 5000);
+    }
+  });
+
+  ipcMain.handle('splash:ready-shown', () => {
+    dismissSplash();
+  });
 
   const dbPath = path.join(app.getPath('userData'), 'soterios.db');
   // File logging is opt-in via SOTERIOS_LOG_FILE (path or "1" for the default log file).
@@ -619,6 +749,20 @@ app.whenReady().then(async () => {
     createSplashWindow(currentUiTheme);
   }
 
+  // When the splash window finishes loading, mark it ready and flush any
+  // progress messages that were buffered while the renderer initialized.
+  if (splashWindow) {
+    splashWindow.webContents.once('did-finish-load', () => {
+      splashProgressReady = true;
+      try { flushSplashProgressBuffer(); } catch (_) {}
+    });
+    // Also ensure we mark ready on ready-to-show as a fallback
+    splashWindow.once('ready-to-show', () => {
+      splashProgressReady = true;
+      try { flushSplashProgressBuffer(); } catch (_) {}
+    });
+  }
+
   logLine('info', 'App starting', { theme: currentUiTheme });
   sendSplashProgress(0, t('splash.starting'));
 
@@ -636,17 +780,35 @@ app.whenReady().then(async () => {
     db.setSetting('feature.systemMonitoring', null);
   }
 
+  // Check for soterios:// deep link on first launch
+  const deepLinkArg = process.argv.find((arg) => typeof arg === 'string' && arg.startsWith('soterios://'));
+  if (deepLinkArg) {
+    handleCredentialLeakDeepLink(deepLinkArg);
+    handleThreatDetectedDeepLink(deepLinkArg);
+  }
+
   // 2. Security Engines (Dependency Injection)
   const services = serviceRegistry.create(db, eventBus, {
     userDataPath: app.getPath('userData'),
+    resourcesPath: process.resourcesPath,
+    requireProcessCollectorIntegrity: app.isPackaged,
     locale: getLocale(),
     notify: (title, body, level) => showNotification(t(title), t(body), level),
+  });
+  lifecycleRefs.processService = services.processService;
+  services.processReputation = new ProcessReputationService({
+    db,
+    processService: services.processService,
+    safeStorage,
   });
 
   // Network stats timer control (for feature toggle)
   services.startNetworkStatsTimer = () => {
     if (lifecycleRefs.networkStatsTimer) return { running: true };
+    let sampling = false;
     const sampleNetworkStats = async () => {
+      if (sampling) return;
+      sampling = true;
       try {
         const stats = await networkMonitor.getStats();
         const recordedAt = new Date().toISOString();
@@ -655,6 +817,8 @@ app.whenReady().then(async () => {
         }
       } catch (err) {
         logLine('warn', 'Network stats sample failed', { message: err.message });
+      } finally {
+        sampling = false;
       }
     };
     const networkStatsTimer = setInterval(sampleNetworkStats, 30_000);
@@ -674,13 +838,45 @@ app.whenReady().then(async () => {
   const featureFlags = require('../core/featureFlags');
   const { getFlag: getFeatureFlag } = featureFlags;
 
+  const toolRunManager = new ToolRunManager({
+    db: services.db,
+    toolRegistry: services.toolRegistry,
+    contextFactory: () => ({
+      processService: services.processService,
+      log: (level, message, meta) => logLine(level, message, meta)
+    })
+  });
+  services.toolRunManager = toolRunManager;
+
+  const maintenanceSafetyVault = new MaintenanceSafetyVault({
+    db: services.db,
+    rootPath: path.join(app.getPath('userData'), 'MaintenanceVault'),
+    applicationDataPath: app.getPath('userData'),
+    log: (level, message, meta) => logLine(level, message, meta)
+  });
+  maintenanceSafetyVault.start();
+  services.maintenanceSafetyVault = maintenanceSafetyVault;
+  lifecycleRefs.maintenanceSafetyVault = maintenanceSafetyVault;
+
+  const persistenceMonitor = new PersistenceMonitor({
+    db: services.db,
+    toolRegistry: services.toolRegistry,
+    notify: (title, body, level) => showNotification(title, body, level),
+    log: (level, message, meta) => logLine(level, message, meta)
+  });
+  persistenceMonitor.start();
+  services.persistenceMonitor = persistenceMonitor;
+  lifecycleRefs.persistenceMonitor = persistenceMonitor;
+
   const maintenanceScheduler = new MaintenanceScheduler({
     db: services.db,
     toolRegistry: services.toolRegistry,
+    toolRunManager,
+    isScanActive: () => !!services.scanEngine?.isScanning,
     getIdleTimeSeconds: () => {
       try { return powerMonitor.getSystemIdleTime(); } catch (_) { return 0; }
     },
-    notify: (title, body, level) => showNotification(t(title), t(body), level),
+    notify: (title, body, level) => showNotification(t(title), t(body), level, null, 'tools'),
     log: (level, message, meta) => logLine(level, message, meta)
   });
   maintenanceScheduler.start();
@@ -717,6 +913,23 @@ app.whenReady().then(async () => {
   createWindow();
   sendSplashProgress(9, t('splash.buildingInterface'));
 
+  const extensionBridge = new ExtensionBridge({
+    db,
+    eventBus,
+    getTheme: () => db.getSetting('ui.theme', 'system'),
+    openApp: () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    },
+    log: (level, message, meta) => logLine(level, message, meta)
+  });
+  extensionBridge.start();
+  services.extensionBridge = extensionBridge;
+  lifecycleRefs.extensionBridge = extensionBridge;
+
   // Register IPC handlers only once mainWindow actually exists. Previously
   // this ran before createWindow(), so the mainWindow parameter passed in
   // was always undefined (a plain variable copied by value at call time) --
@@ -726,10 +939,16 @@ app.whenReady().then(async () => {
   sendSplashProgress(12, t('splash.registeringServices'));
 
   try {
+    // Initialize VPN manager with database for last profile persistence
+    services.vpnManager.setDb(db);
+
     lifecycleRefs.trayController = initTrayDashboard({
       app,
       mainWindow,
-      getSummary: () => getTrayHealthSummary(db, toolRegistry)
+      getSummary: () => getTrayHealthSummary(db, toolRegistry),
+      vpnManager: services.vpnManager,
+      db,
+      i18n
     });
     services.trayController = lifecycleRefs.trayController;
 
@@ -741,6 +960,20 @@ app.whenReady().then(async () => {
     });
   } catch (err) {
     logLine('warn', 'Tray dashboard unavailable', { error: err.message });
+  }
+
+  // Auto-connect VPN on startup if enabled
+  if (featureFlags.getFlag(db, 'vpnAutoConnect', false)) {
+    const lastProfile = db.getSetting('vpn.lastProfile');
+    if (lastProfile) {
+      logLine('info', 'Auto-connecting VPN', { profile: lastProfile });
+      try {
+        await services.vpnManager.connect(lastProfile);
+        logLine('info', 'VPN auto-connect successful');
+      } catch (err) {
+        logLine('warn', 'VPN auto-connect failed', { error: err.message });
+      }
+    }
   }
 
   setTimeout(() => {
@@ -774,7 +1007,12 @@ app.whenReady().then(async () => {
       if (milestone !== undefined) {
         announcedProgress.add(milestone);
         const files = data.filesScanned || 0;
-        showNotification(t('toast.scanProgressTitle'), t('scan.progress', { files, pct: data.pct }), 'info');
+        // Use "Preparing scan" message for initial milestone when no files have been scanned yet
+        if (files === 0 && data.message && data.message.includes('Preparing')) {
+          showNotification(t('toast.scanProgressTitle'), t('scan.preparing'), 'info', null, 'scanner');
+        } else {
+          showNotification(t('toast.scanProgressTitle'), t('scan.progress', { files, pct: data.pct }), 'info', null, 'scanner');
+        }
       }
     });
 
@@ -809,7 +1047,9 @@ app.whenReady().then(async () => {
         // Only show notification if not canceled
         if (data.status === 'canceled') {
           label = t('toast.scanCanceled');
-          body = t('toast.scanCanceledDetail', { count: data.filesScanned || 0 });
+          const autoReportsEnabled = featureFlags.getFlag(db, 'autoReports', true);
+          const willGenerateReport = autoReportsEnabled && (scanType === 'quick' || scanType === 'full');
+          body = willGenerateReport ? t('toast.scanCanceledWithReport') : t('toast.scanCanceledDetail');
           level = 'warn';
         } else {
           label = data.status === 'completed' ? t('toast.scanCompleted') : t('toast.scanFinishedWithIssues');
@@ -818,13 +1058,13 @@ app.whenReady().then(async () => {
         }
       }
       const iconOverride = (data.threatsFound && data.threatsFound > 0) ? TOAST_ICONS.threat : null;
-      showNotification(label, body, level, iconOverride);
+      showNotification(label, body, level, iconOverride, 'scanner');
       // Auto-generate a scan report
       (async () => {
         try {
           if (!featureFlags.getFlag(db, 'autoReports', true)) return;
-          const isCanceled = data.status === 'canceled' || data.report?.status === 'canceled';
-          if (isCanceled || (scanType !== 'quick' && scanType !== 'full')) return;
+          // Only generate reports for quick and full scans
+          if (scanType !== 'quick' && scanType !== 'full') return;
           logLine('info', 'Generating scan report...');
 
           const result = await toolRegistry.run('generate-security-report', { version: app.getVersion() }, { toolRegistry, db, log: logLine });
@@ -840,85 +1080,26 @@ app.whenReady().then(async () => {
   registerScanProgressListeners();
 
   // 4. Expose legacy utilities
-  // Expose legacy utility running mechanism
-  ipcMain.handle('tools:list', () => toolRegistry.list());
-  ipcMain.handle('tools:run', async (event, toolId, args) => {
-    // Note: appStore is removed, so we mock it for utilities if needed
-    // or just let them use basic features.
-    return toolRegistry.run(toolId, args, {
-      toolRegistry,
-      db,
-      log: logLine,
-      sendProgress: (payload) => {
-        event.sender.send(`tools:progress:${toolId}`, payload);
-      }
-    });
-  });
-
-  ipcMain.handle('app:ready', () => {
-    dismissSplash();
-  });
+  // Note: tools:list and tools:run are now registered in system.js
+  // Note: splash:progress and app:ready are registered early before splash window creation
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 
-  // Forward progress events from the dashboard (renderer) to the splash
-  ipcMain.handle('splash:progress', (_event, data) => {
-    if (splashWindow && !splashWindow.isDestroyed()) {
-      splashWindow.webContents.send('splash:progress', data);
-    }
-  });
-
   sendSplashProgress(15, t('splash.loadingDashboard'));
 
-  // Extract icons from executable paths for the startup items tool
-  const _startupIconCache = {};
-  ipcMain.handle('startup:getIcons', async (_event, exePaths) => {
-    const unique = [...new Set((exePaths || []).filter(Boolean))];
-    const result = {};
-    for (const exePath of unique) {
-      if (exePath in _startupIconCache) {
-        result[exePath] = _startupIconCache[exePath];
-        continue;
-      }
-      try {
-        // Expand environment variables like %SystemRoot%
-        const expandedPath = process.env.SystemRoot && exePath.includes('%SystemRoot%')
-          ? exePath.replace(/%SystemRoot%/gi, process.env.SystemRoot)
-          : exePath;
-        // Only attempt if file exists
-        if (!fs.existsSync(expandedPath)) {
-          _startupIconCache[exePath] = null;
-          result[exePath] = null;
-          continue;
-        }
-        const nativeImg = await app.getFileIcon(expandedPath);
-        const dataUrl = nativeImg.toDataURL();
-        // Validate data URL is substantial (not empty image)
-        if (dataUrl && dataUrl.length > 100) {
-          _startupIconCache[exePath] = dataUrl;
-          result[exePath] = dataUrl;
-        } else {
-          _startupIconCache[exePath] = null;
-          result[exePath] = null;
-        }
-      } catch (_) {
-        _startupIconCache[exePath] = null;
-        result[exePath] = null;
-      }
-    }
-    return result;
-  });
-
   // Extract icons from executable paths for the processes page
-  const _processIconCache = {};
+  const _processIconCache = new Map();
   ipcMain.handle('process:getIcons', async (_event, exePaths) => {
-    const unique = [...new Set((exePaths || []).filter(Boolean))];
+    const unique = [...new Set((Array.isArray(exePaths) ? exePaths : [])
+      .filter((value) => typeof value === 'string' && value.length <= 32767)
+      .filter((value) => path.isAbsolute(value) && !value.startsWith('\\\\'))
+      .slice(0, 64))];
     const result = {};
     for (const exePath of unique) {
-      if (exePath in _processIconCache) {
-        result[exePath] = _processIconCache[exePath];
+      if (_processIconCache.has(exePath)) {
+        result[exePath] = _processIconCache.get(exePath);
         continue;
       }
       try {
@@ -926,64 +1107,26 @@ app.whenReady().then(async () => {
           ? exePath.replace(/%SystemRoot%/gi, process.env.SystemRoot)
           : exePath;
         if (!fs.existsSync(expandedPath)) {
-          _processIconCache[exePath] = null;
+          _processIconCache.set(exePath, null);
           result[exePath] = null;
           continue;
         }
         const nativeImg = await app.getFileIcon(expandedPath);
         const dataUrl = nativeImg.toDataURL();
         if (dataUrl && dataUrl.length > 100) {
-          _processIconCache[exePath] = dataUrl;
+          _processIconCache.set(exePath, dataUrl);
           result[exePath] = dataUrl;
         } else {
-          _processIconCache[exePath] = null;
+          _processIconCache.set(exePath, null);
           result[exePath] = null;
         }
       } catch (_) {
-        _processIconCache[exePath] = null;
+        _processIconCache.set(exePath, null);
         result[exePath] = null;
       }
+      while (_processIconCache.size > 512) _processIconCache.delete(_processIconCache.keys().next().value);
     }
     return result;
-  });
-
-  // Enable/disable a startup item
-  ipcMain.handle('startup:toggle', async (_event, item, enable) => {
-    try {
-      if (item.source === 'registry') {
-        const hive = item.scope === 'HKLM' ? 'HKLM' : 'HKCU';
-        const key = `${hive}\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`;
-        if (enable) {
-          execFileSync('reg', ['add', key, '/v', item.name, '/t', 'REG_SZ', '/d', item.command, '/f'], { timeout: 10000 });
-        } else {
-          execFileSync('reg', ['delete', key, '/v', item.name, '/f'], { timeout: 10000 });
-        }
-        return { ok: true };
-      } else if (item.source === 'startup-folder') {
-        const appData = process.env.APPDATA || '';
-        const programData = process.env.ProgramData || '';
-        const userStartup = path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
-        const allStartup = path.join(programData, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
-        const startupDir = item.scope === 'user' ? userStartup : allStartup;
-        if (enable) {
-          const backup = path.join(startupDir, '.disabled', item.name);
-          if (fs.existsSync(backup)) {
-            fs.renameSync(backup, item.path);
-            return { ok: true };
-          }
-          return { ok: false, error: 'No backup found to restore' };
-        } else {
-          const disabledDir = path.join(startupDir, '.disabled');
-          fs.mkdirSync(disabledDir, { recursive: true });
-          const dest = path.join(disabledDir, item.name);
-          fs.renameSync(item.path, dest);
-          return { ok: true };
-        }
-      }
-      return { ok: false, error: 'Toggle not supported for this item type' };
-    } catch (err) {
-      return { ok: false, error: err.message };
-    }
   });
 
   // Slow engine initialization (ClamAV definitions, real-time protection)
@@ -1062,6 +1205,10 @@ process.on('unhandledRejection', (err) => {
 app.on('before-quit', () => {
   isQuitting = true;
   lifecycleRefs.maintenanceScheduler?.stop();
+  lifecycleRefs.maintenanceSafetyVault?.stop();
+  lifecycleRefs.persistenceMonitor?.stop();
+  lifecycleRefs.extensionBridge?.stop();
+  lifecycleRefs.processService?.stop().catch(() => {});
   lifecycleRefs.trayController?.dispose();
   if (lifecycleRefs.networkStatsTimer) clearInterval(lifecycleRefs.networkStatsTimer);
   if (lifecycleRefs.pruneTimer) clearInterval(lifecycleRefs.pruneTimer);

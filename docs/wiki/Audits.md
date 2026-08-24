@@ -4,15 +4,43 @@ The **Windows Security Audit** page runs local checks against important Windows 
 
 ## Checks performed
 
+Results are grouped into four sections.
+
+### Antivirus & Protection
+
 | Check | What it verifies |
 |-------|------------------|
 | **Windows Defender Antivirus** | Antivirus service enabled; reports engine and signature versions |
 | **Real-Time Protection** | Defender RTP is active |
+| **Tamper Protection** | Defender protections cannot be disabled by malware |
+| **Cloud-delivered Protection** | Cloud-delivered/automatic sample submission is on |
+| **Network Protection** | Malicious connections and phishing sites are blocked |
+
+### System Security
+
+| Check | What it verifies |
+|-------|------------------|
 | **User Account Control (UAC)** | `EnableLUA` registry value is set |
-| **Windows Updates** | Pending updates (0 pending = pass; any pending = warning) |
 | **BitLocker** | Volume encryption status (informational on Home editions) |
-| **PowerShell Execution Policy** | LocalMachine policy is Restricted, RemoteSigned, or AllSigned |
 | **Secure Boot** | UEFI Secure Boot is enabled |
+| **LSA Protection** | Credential-dumping tools cannot read LSA memory (`RunAsPPL`) |
+| **SMBv1** | Legacy SMBv1 protocol with known wormable vulnerabilities is disabled |
+| **Remote Desktop** | RDP is off, or on with Network Level Authentication |
+
+### Accounts & Access
+
+| Check | What it verifies |
+|-------|------------------|
+| **Automatic Logon** | No stored plaintext credentials; no unattended sign-in |
+| **Password Policy** | Minimum length, lockout threshold, and complexity requirements |
+| **Guest Account** | Local Guest account is disabled |
+
+### Updates & Policies
+
+| Check | What it verifies |
+|-------|------------------|
+| **Windows Updates** | Pending updates (0 pending = pass; any pending = warning) |
+| **PowerShell Execution Policy** | LocalMachine policy is Restricted, RemoteSigned, or AllSigned |
 
 Checks run concurrently. Progress events update the UI as each completes.
 

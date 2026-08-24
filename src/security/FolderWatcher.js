@@ -144,7 +144,15 @@ class FolderWatcher {
           const result = typeof this.scanEngine.runScan === 'function'
             ? await this.scanEngine.runScan('folderwatch', [filePath], 'Folder watch scan starting...')
             : await this.scanEngine.runCustomScan([filePath]);
-          if (result && (result.error || result.canceled)) continue;
+          if (result && (result.error || result.canceled)) {
+            if (result.canceled) {
+              // The background scan was canceled (e.g. via scan:abort); drop
+              // the remaining queue so it can't immediately restart.
+              this._queue = [];
+              break;
+            }
+            continue;
+          }
           const threats = (result && result.threatsFound) || 0;
           if (threats > 0) {
             const msg = `Folder watch found ${threats} threat(s) in ${filePath}`;

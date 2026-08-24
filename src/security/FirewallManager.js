@@ -37,12 +37,21 @@ function friendlyFirewallError(e, fallback) {
 }
 
 class FirewallManager {
+  constructor() {
+    // The Windows firewall CIM provider is prone to timing out when several
+    // queries hit it at once (dashboard, AI context, and firewall page).
+    this._powerShellQueue = Promise.resolve();
+  }
+
   async runPowerShell(command) {
-    const { stdout } = await execFilePromise('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], {
-      timeout: 15000,
-      windowsHide: true
-    });
-    return stdout;
+    const run = () => execFilePromise('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command], {
+      timeout: 30000,
+      windowsHide: true,
+      maxBuffer: 16 * 1024 * 1024
+    }).then(({ stdout }) => stdout);
+    const pending = this._powerShellQueue.then(run, run);
+    this._powerShellQueue = pending.catch(() => {});
+    return pending;
   }
 
   async getStatus() {
@@ -110,9 +119,11 @@ class FirewallManager {
     try {
       const command = [
         '$rules = Get-NetFirewallRule -PolicyStore ActiveStore;',
-        '$appFilters = @{}; Get-NetFirewallApplicationFilter -PolicyStore ActiveStore | ForEach-Object { $appFilters[$_.InstanceID] = $_ };',
-        '$portFilters = @{}; Get-NetFirewallPortFilter -PolicyStore ActiveStore | ForEach-Object { $portFilters[$_.InstanceID] = $_ };',
-        '$addrFilters = @{}; Get-NetFirewallAddressFilter -PolicyStore ActiveStore | ForEach-Object { $addrFilters[$_.InstanceID] = $_ };',
+        // Filter enumeration can be access-denied for a standard user even
+        // though basic rule enumeration is allowed. Preserve the basic list.
+        '$appFilters = @{}; try { Get-NetFirewallApplicationFilter -PolicyStore ActiveStore -ErrorAction Stop | ForEach-Object { $appFilters[$_.InstanceID] = $_ } } catch {};',
+        '$portFilters = @{}; try { Get-NetFirewallPortFilter -PolicyStore ActiveStore -ErrorAction Stop | ForEach-Object { $portFilters[$_.InstanceID] = $_ } } catch {};',
+        '$addrFilters = @{}; try { Get-NetFirewallAddressFilter -PolicyStore ActiveStore -ErrorAction Stop | ForEach-Object { $addrFilters[$_.InstanceID] = $_ } } catch {};',
         '$out = foreach ($r in $rules) {',
         '  $app = $appFilters[$r.InstanceID]; $port = $portFilters[$r.InstanceID]; $addr = $addrFilters[$r.InstanceID];',
         '  [PSCustomObject]@{',
@@ -212,6 +223,52 @@ class FirewallManager {
     return { success: true };
   }
 
+  // Batch variants for the multi-select bulk bar. Each name goes through the
+  // same per-rule guards and friendly error mapping; failures are collected
+  // per rule so one bad entry never aborts the rest (same pattern as
+  // enableAllProfiles / importRules).
+  async deleteRules(names) {
+    const list = Array.isArray(names) ? names : [];
+    if (!Array.isArray(names)) {
+      throw new Error('Expected an array of rule names.');
+    }
+    if (list.length > 500) {
+      throw new Error('Too many rules in one batch (limit 500).');
+    }
+    const deleted = [];
+    const failed = [];
+    for (const name of list) {
+      try {
+        await this.deleteRule(name);
+        deleted.push(name);
+      } catch (e) {
+        failed.push({ name, error: e.message || String(e) });
+      }
+    }
+    return { success: failed.length === 0, deleted, failed };
+  }
+
+  async setRulesEnabled(names, enabled) {
+    const list = Array.isArray(names) ? names : [];
+    if (!Array.isArray(names)) {
+      throw new Error('Expected an array of rule names.');
+    }
+    if (list.length > 500) {
+      throw new Error('Too many rules in one batch (limit 500).');
+    }
+    const updated = [];
+    const failed = [];
+    for (const name of list) {
+      try {
+        await this.setRuleEnabled(name, enabled);
+        updated.push(name);
+      } catch (e) {
+        failed.push({ name, error: e.message || String(e) });
+      }
+    }
+    return { success: failed.length === 0, updated, failed };
+  }
+
   // Turns Windows Firewall on/off for a given profile (Domain/Private/Public).
   // The IPC layer already validates `profile` against the same whitelist
   // before this is ever called, but we check again here since this class
@@ -227,6 +284,24 @@ class FirewallManager {
       throw friendlyFirewallError(e, `Could not ${enabled ? 'turn on' : 'turn off'} the ${profile} firewall profile.`);
     }
     return { success: true };
+  }
+
+  // Best-effort enable of every Windows Firewall profile. Unlike
+  // setProfileEnabled, one failing profile does not abort the rest; failures
+  // are collected so the caller can surface partial state (same pattern as
+  // importRules).
+  async enableAllProfiles() {
+    const enabled = [];
+    const errors = [];
+    for (const profile of ['Domain', 'Private', 'Public']) {
+      try {
+        await this.setProfileEnabled(profile, true);
+        enabled.push(profile);
+      } catch (e) {
+        errors.push({ profile, error: e.message || String(e) });
+      }
+    }
+    return { success: errors.length === 0, enabled, errors };
   }
 
   // Snapshot of Soterios-managed rules for backup / migrate across machines.

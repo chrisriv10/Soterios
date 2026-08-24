@@ -90,10 +90,10 @@ describe('Scan cancellation cleanup', () => {
     );
 
     const result = scanEngine.abortScan();
-    assert.deepEqual(result, { success: false, canceled: false, error: 'No user scan in progress' });
+    assert.deepEqual(result, { success: false, canceled: false, error: 'No scan in progress' });
   });
 
-  it('does not abort background folderwatch scans via abortScan guard pattern', async () => {
+  it('abortScan cancels a running background folderwatch scan', async () => {
     let aborted = false;
     const fakeClam = {
       scanFile: async () => {
@@ -116,20 +116,17 @@ describe('Scan cancellation cleanup', () => {
     );
 
     const pending = scanEngine.runScan('folderwatch', [path.join(os.tmpdir(), 'watched.bin')], 'Folder watch');
-    // Give the manager one tick to register the folderwatch state; do not
-    // block on isScanning because waitFor's poll interval interacts badly
-    // with the test harness timeout on this machine.
     await new Promise((resolve) => setTimeout(resolve, 5));
     const blocked = scanEngine.abortScan();
-    assert.deepEqual(blocked, { success: false, canceled: false, error: 'No user scan in progress' });
-    assert.equal(aborted, false);
+    assert.deepEqual(blocked, { success: true, canceled: true });
+    assert.equal(aborted, true);
     await Promise.race([
       pending,
       new Promise((_, reject) => setTimeout(() => reject(new Error('Scan did not complete within guard window')), 250)),
     ]);
   });
 
-  it('does not persist reports for canceled or folderwatch scans', async () => {
+  it('persists reports for canceled custom scans but not folderwatch scans', async () => {
     let savedReports = 0;
     let loggedScans = 0;
     const db = {
@@ -180,8 +177,8 @@ describe('Scan cancellation cleanup', () => {
       output: ''
     });
     await pending;
-    assert.equal(savedReports, 0);
-    assert.equal(loggedScans, 0);
+    assert.equal(savedReports, 1);
+    assert.equal(loggedScans, 1);
   });
 });
 

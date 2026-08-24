@@ -30,6 +30,10 @@ class FakeDatabase {
     return this.data.networkHistory || [];
   }
 
+  getNetworkStatsHistory(hours, iface) {
+    return this.data.networkHistory || [];
+  }
+
   setNetworkHistory(history) {
     this.data.networkHistory = history;
   }
@@ -154,14 +158,14 @@ describe('getTrayHealthSummary', () => {
   describe('Network history', () => {
     it('should include network stats when history is available', async () => {
       const history = [
-        { rx_bytes: 1024, tx_bytes: 2048 },
-        { rx_bytes: 2048, tx_bytes: 4096 }
+        { rx_sec: 2, tx_sec: 4 },
+        { rx_sec: 4, tx_sec: 8 }
       ];
       db.setNetworkHistory(history);
 
       const summary = await getTrayHealthSummary(db, toolRegistry);
-      assert.strictEqual(summary.network.rxKBs, 2);
-      assert.strictEqual(summary.network.txKBs, 4);
+      assert.strictEqual(summary.network.rxKBs, 4);
+      assert.strictEqual(summary.network.txKBs, 8);
       assert.strictEqual(summary.network.history.length, 2);
     });
 
@@ -185,8 +189,8 @@ describe('getTrayHealthSummary', () => {
 
     it('should limit sparkline to last 60 samples', async () => {
       const history = Array.from({ length: 100 }, (_, i) => ({
-        rx_bytes: i * 1024,
-        tx_bytes: i * 2048
+        rx_sec: i,
+        tx_sec: i * 2
       }));
       db.setNetworkHistory(history);
 
@@ -218,8 +222,8 @@ describe('getTrayHealthSummary', () => {
       db.setSetting('feature.lastPasswordScore', '75');
 
       const history = [
-        { rx_bytes: 1024000, tx_bytes: 2048000 },
-        { rx_bytes: 2048000, tx_bytes: 4096000 }
+        { rx_sec: 2000, tx_sec: 4000 },
+        { rx_sec: 4000, tx_sec: 8000 }
       ];
       db.setNetworkHistory(history);
 
@@ -228,8 +232,8 @@ describe('getTrayHealthSummary', () => {
       assert.strictEqual(summary.rtp.enabled, true);
       assert.strictEqual(summary.lastScan.filesScanned, 5000);
       assert.strictEqual(summary.lastScan.threatsFound, 2);
-      assert.strictEqual(summary.network.rxKBs, 2000);
-      assert.strictEqual(summary.network.txKBs, 4000);
+      assert.strictEqual(summary.network.rxKBs, 4000);
+      assert.strictEqual(summary.network.txKBs, 8000);
     });
 
     it('should handle all errors gracefully and return partial data', async () => {

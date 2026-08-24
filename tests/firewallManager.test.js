@@ -180,3 +180,144 @@ describe('FirewallManager import/export validation', () => {
     assert.equal(exported.rules[0].name, 'Soterios - Block IP 1.2.3.4 (Out)');
   });
 });
+
+describe('FirewallManager enableAllProfiles', () => {
+  class FakePowerShellFirewallManager extends FakeFirewallManager {
+    constructor(opts = {}) {
+      super();
+      this.opts = opts;
+      this.powerShellCalls = [];
+    }
+
+    async runPowerShell(command) {
+      this.powerShellCalls.push(command);
+      const failFor = this.opts.failFor;
+      if (failFor && command.includes(`-Name ${failFor} `)) {
+        throw new Error(`${failFor} went boom`);
+      }
+    }
+  }
+
+  it('enables all three profiles', async () => {
+    const mgr = new FakePowerShellFirewallManager();
+    const result = await mgr.enableAllProfiles();
+    assert.equal(result.success, true);
+    assert.deepEqual(result.enabled, ['Domain', 'Private', 'Public']);
+    assert.deepEqual(result.errors, []);
+    assert.equal(mgr.powerShellCalls.length, 3);
+    assert.match(mgr.powerShellCalls.join('\n'), /-Name Domain .*-Enabled True/);
+    assert.match(mgr.powerShellCalls.join('\n'), /-Name Public .*-Enabled True/);
+  });
+
+  it('reports partial failure without swallowing the other profiles', async () => {
+    const mgr = new FakePowerShellFirewallManager({ failFor: 'Public' });
+    const result = await mgr.enableAllProfiles();
+    assert.equal(result.success, false);
+    assert.deepEqual(result.enabled, ['Domain', 'Private']);
+    assert.equal(result.errors.length, 1);
+    assert.equal(result.errors[0].profile, 'Public');
+    assert.equal(typeof result.errors[0].error, 'string');
+    assert.equal(mgr.powerShellCalls.length, 3, 'all profiles are attempted even when one fails');
+  });
+});
+
+describe('FirewallManager batch rule operations', () => {
+  it('deleteRules deletes multiple rules and reports success', async () => {
+    const mgr = new FakeFirewallManager([
+      { name: 'Soterios - Block IP 1.2.3.4 (Out)', direction: 'Outbound', action: 'Block', enabled: true, managedByApp: true },
+      { name: 'Soterios - Block IP 1.2.3.4 (In)', direction: 'Inbound', action: 'Block', enabled: true, managedByApp: true },
+      { name: 'Soterios - Block IP 5.6.7.8 (Out)', direction: 'Outbound', action: 'Block', enabled: true, managedByApp: true }
+    ]);
+    const res = await mgr.deleteRules([
+      'Soterios - Block IP 1.2.3.4 (Out)',
+      'Soterios - Block IP 1.2.3.4 (In)',
+      'Soterios - Block IP 5.6.7.8 (Out)'
+    ]);
+    assert.equal(res.success, true);
+    assert.equal(res.deleted.length, 3);
+    assert.equal(res.failed.length, 0);
+    assert.deepEqual(mgr.deleted, [
+      'Soterios - Block IP 1.2.3.4 (Out)',
+      'Soterios - Block IP 1.2.3.4 (In)',
+      'Soterios - Block IP 5.6.7.8 (Out)'
+    ]);
+  });
+
+  it('deleteRules aggregates per-rule failures without aborting the rest', async () => {
+    const mgr = new FakeFirewallManager([
+      { name: 'Soterios - Block IP 1.2.3.4 (Out)', direction: 'Outbound', action: 'Block', enabled: true, managedByApp: true },
+      { name: 'Soterios - Block IP 9.9.9.9 (Out)', direction: 'Outbound', action: 'Block', enabled: true, managedByApp: true }
+    ]);
+    mgr.deleteRule = async (name) => {
+      if (name.includes('9.9.9.9')) throw new Error('access is denied');
+      mgr.deleted.push(name);
+      mgr._existing = mgr._existing.filter((r) => r.name !== name);
+      return { success: true };
+    };
+    const res = await mgr.deleteRules([
+      'Soterios - Block IP 1.2.3.4 (Out)',
+      'Soterios - Block IP 9.9.9.9 (Out)'
+    ]);
+    assert.equal(res.success, false);
+    assert.deepEqual(res.deleted, ['Soterios - Block IP 1.2.3.4 (Out)']);
+    assert.equal(res.failed.length, 1);
+    assert.equal(res.failed[0].name, 'Soterios - Block IP 9.9.9.9 (Out)');
+    assert.equal(typeof res.failed[0].error, 'string');
+  });
+
+  it('deleteRules rejects non-array input', async () => {
+    const mgr = new FakeFirewallManager();
+    await assert.rejects(() => mgr.deleteRules('nope'), /array/i);
+  });
+
+  it('deleteRules isolates foreign (non-app) rules as failures via the per-rule guard', async () => {
+    const mgr = new FakeFirewallManager([]);
+    mgr.deleteRule = async (name) => {
+      if (!name || !name.startsWith('Soterios - ')) {
+        throw new Error('Only rules created in this app can be deleted here.');
+      }
+      return { success: true };
+    };
+    const res = await mgr.deleteRules(['Windows Defender Firewall']);
+    assert.equal(res.success, false);
+    assert.equal(res.deleted.length, 0);
+    assert.equal(res.failed.length, 1);
+    assert.match(res.failed[0].error, /Only rules created in this app/);
+  });
+
+  it('setRulesEnabled updates multiple rules and reports success', async () => {
+    const mgr = new FakeFirewallManager([
+      { name: 'Soterios - Block IP 1.2.3.4 (Out)', direction: 'Outbound', action: 'Block', enabled: true, managedByApp: true },
+      { name: 'Soterios - Block IP 1.2.3.4 (In)', direction: 'Inbound', action: 'Block', enabled: true, managedByApp: true }
+    ]);
+    const calls = [];
+    mgr.setRuleEnabled = async (name, enabled) => { calls.push({ name, enabled }); return { success: true }; };
+    const res = await mgr.setRulesEnabled([
+      'Soterios - Block IP 1.2.3.4 (Out)',
+      'Soterios - Block IP 1.2.3.4 (In)'
+    ], false);
+    assert.equal(res.success, true);
+    assert.equal(res.updated.length, 2);
+    assert.equal(res.failed.length, 0);
+    assert.deepEqual(calls, [
+      { name: 'Soterios - Block IP 1.2.3.4 (Out)', enabled: false },
+      { name: 'Soterios - Block IP 1.2.3.4 (In)', enabled: false }
+    ]);
+  });
+
+  it('setRulesEnabled aggregates per-rule failures', async () => {
+    const mgr = new FakeFirewallManager([]);
+    mgr.setRuleEnabled = async (name) => {
+      if (name.includes('(In)')) throw new Error('boom');
+      return { success: true };
+    };
+    const res = await mgr.setRulesEnabled([
+      'Soterios - Block IP 1.2.3.4 (Out)',
+      'Soterios - Block IP 1.2.3.4 (In)'
+    ], false);
+    assert.equal(res.success, false);
+    assert.equal(res.updated.length, 1);
+    assert.equal(res.failed.length, 1);
+    assert.equal(res.failed[0].name, 'Soterios - Block IP 1.2.3.4 (In)');
+  });
+});

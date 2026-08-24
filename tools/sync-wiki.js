@@ -32,7 +32,8 @@ function ensureWikiRepo() {
   if (!fs.existsSync(WIKI_REPO_DIR)) {
     console.log('Cloning wiki repository...');
     try {
-      execSync(`git clone ${WIKI_REPO_URL} ${WIKI_REPO_DIR}`, { stdio: 'inherit' });
+      // Use array form to avoid shell injection
+      execSync('git', ['clone', WIKI_REPO_URL, WIKI_REPO_DIR], { stdio: 'inherit' });
     } catch (error) {
       console.error('Failed to clone wiki repository:', error.message);
       process.exit(1);

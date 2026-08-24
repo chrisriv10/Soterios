@@ -28,6 +28,17 @@ describe('SystemAudit', () => {
       mockExecResults.push({ command, options });
 
       // Return mock results based on command
+      if (command.includes('Get-MpPreference')) {
+        return {
+          stdout: JSON.stringify({
+            tamperProtected: true,
+            cloudProtectionLevel: 2,
+            networkProtectionMode: 'block'
+          }),
+          stderr: ''
+        };
+      }
+
       if (command.includes('Get-MpComputerStatus')) {
         return {
           stdout: JSON.stringify({
@@ -38,6 +49,35 @@ describe('SystemAudit', () => {
             AntivirusSignatureVersion: '1.371.1234.0',
             AntivirusSignatureAge: 1
           }),
+          stderr: ''
+        };
+      }
+
+      if (command.includes('LanmanServer')) {
+        return { stdout: '0', stderr: '' };
+      }
+
+      if (command.includes('Winlogon')) {
+        return {
+          stdout: JSON.stringify({ autoAdminLogon: '', hasDefaultPassword: false }),
+          stderr: ''
+        };
+      }
+
+      if (command.includes('Terminal Server')) {
+        return {
+          stdout: JSON.stringify({ rdpEnabled: false, nlaEnabled: false }),
+          stderr: ''
+        };
+      }
+
+      if (command.includes('RunAsPPL')) {
+        return { stdout: '1', stderr: '' };
+      }
+
+      if (command.includes('WinNT://')) {
+        return {
+          stdout: JSON.stringify({ minLength: 12, lockout: 5, complexity: true, guestDisabled: true }),
           stderr: ''
         };
       }
@@ -125,6 +165,22 @@ describe('SystemAudit', () => {
     assert.ok(results[0].message.includes('enabled'));
   });
 
+  it('checkDefender results carry Windows Security manage URI', async () => {
+    const audit = new SystemAudit();
+    const results = await audit.checkDefender();
+    assert.ok(results.every((r) => r.actionUri === 'windowsdefender://threatsettings/'));
+  });
+
+  it('checkDefender error branches carry Windows Security manage URI', async () => {
+    currentExecHandler = async () => {
+      throw new Error('Query failed');
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkDefender();
+    assert.equal(results[0].status, 'error');
+    assert.equal(results[0].actionUri, 'ms-settings:windowsdefender');
+  });
+
   it('checkDefender returns fail when Defender is disabled', async () => {
     currentExecHandler = async () => {
       return {
@@ -175,6 +231,13 @@ describe('SystemAudit', () => {
     assert.ok(results[0].message.includes('enabled'));
   });
 
+  it('checkUac results carry the UAC utility manage action', async () => {
+    const audit = new SystemAudit();
+    const results = await audit.checkUac();
+    assert.equal(results[0].manageAction, 'open-windows-utility');
+    assert.equal(results[0].manageContext, 'uac');
+  });
+
   it('checkUac returns fail when UAC is disabled', async () => {
     currentExecHandler = async () => {
       return { stdout: '0', stderr: '' };
@@ -212,7 +275,15 @@ describe('SystemAudit', () => {
     const audit = new SystemAudit();
     const results = await audit.checkWindowsUpdate();
     assert.equal(results[0].status, 'warn');
-    assert.ok(results[0].message.includes('5 update'));
+    assert.ok(results[0].message.includes('5 mandatory update'));
+    assert.equal(results[0].actionUri, 'ms-settings:windowsupdate');
+  });
+
+  it('checkWindowsUpdate pass branch carries manage URI', async () => {
+    const audit = new SystemAudit();
+    const results = await audit.checkWindowsUpdate();
+    assert.equal(results[0].status, 'pass');
+    assert.equal(results[0].actionUri, 'ms-settings:windowsupdate');
   });
 
   it('checkWindowsUpdate handles parse errors', async () => {
@@ -244,6 +315,12 @@ describe('SystemAudit', () => {
     assert.ok(results[0].message.includes('encrypted'));
   });
 
+  it('checkBitLocker results carry BitLocker manage URI', async () => {
+    const audit = new SystemAudit();
+    const results = await audit.checkBitLocker();
+    assert.equal(results[0].actionUri, 'control /name Microsoft.BitLockerDriveEncryption');
+  });
+
   it('checkBitLocker returns warn when drive not encrypted', async () => {
     currentExecHandler = async () => {
       return {
@@ -267,6 +344,7 @@ describe('SystemAudit', () => {
     const results = await audit.checkBitLocker();
     assert.equal(results[0].status, 'info');
     assert.ok(results[0].message.includes('not available'));
+    assert.equal(results[0].actionUri, 'ms-settings:deviceencryption');
   });
 
   it('checkExecutionPolicy returns pass for secure policies', async () => {
@@ -274,6 +352,24 @@ describe('SystemAudit', () => {
     const results = await audit.checkExecutionPolicy();
     assert.equal(results[0].status, 'pass');
     assert.ok(results[0].message.includes('RemoteSigned'));
+  });
+
+  it('checkExecutionPolicy results carry open-powershell manage action', async () => {
+    const audit = new SystemAudit();
+    const results = await audit.checkExecutionPolicy();
+    assert.equal(results[0].manageAction, 'open-powershell');
+    assert.equal(results[0].manageContext, 'execution-policy');
+  });
+
+  it('checkExecutionPolicy error branch carries open-powershell manage action', async () => {
+    currentExecHandler = async () => {
+      throw new Error('Query failed');
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkExecutionPolicy();
+    assert.equal(results[0].status, 'warn');
+    assert.equal(results[0].manageAction, 'open-powershell');
+    assert.equal(results[0].manageContext, 'execution-policy');
   });
 
   it('checkExecutionPolicy returns warn for insecure policies', async () => {
@@ -305,6 +401,12 @@ describe('SystemAudit', () => {
     assert.ok(results[0].message.includes('enabled'));
   });
 
+  it('checkSecureBoot results carry recovery settings manage URI', async () => {
+    const audit = new SystemAudit();
+    const results = await audit.checkSecureBoot();
+    assert.equal(results[0].actionUri, 'ms-settings:recovery');
+  });
+
   it('checkSecureBoot returns fail when disabled', async () => {
     currentExecHandler = async () => {
       return { stdout: 'False', stderr: '' };
@@ -327,6 +429,303 @@ describe('SystemAudit', () => {
     assert.ok(results[0].message.includes('could not be determined'));
   });
 
+  it('checkDefenderHardening returns pass rows when protections are on', async () => {
+    const audit = new SystemAudit();
+    const results = await audit.checkDefenderHardening();
+    assert.equal(results.length, 3);
+    assert.equal(results[0].name, 'Tamper Protection');
+    assert.equal(results[1].name, 'Cloud-delivered Protection');
+    assert.equal(results[2].name, 'Network Protection');
+    assert.ok(results.every((r) => r.status === 'pass'));
+    assert.ok(results.every((r) => r.section === 'antivirus'));
+    assert.ok(results.slice(0, 2).every((r) => r.actionUri === 'windowsdefender://threatsettings/'));
+    assert.equal(results[2].manageAction, 'open-powershell');
+    assert.equal(results[2].manageContext, 'network-protection');
+  });
+
+  it('checkDefenderHardening flags tamper protection off', async () => {
+    currentExecHandler = async () => {
+      return {
+        stdout: JSON.stringify({ tamperProtected: false, cloudProtectionLevel: 2, networkProtectionMode: 'block' }),
+        stderr: ''
+      };
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkDefenderHardening();
+    assert.equal(results[0].status, 'fail');
+    assert.ok(results[0].message.includes('Tamper protection is off'));
+    assert.ok(results[0].recommendation.length > 0);
+  });
+
+  it('checkDefenderHardening flags cloud protection off', async () => {
+    currentExecHandler = async () => {
+      return {
+        stdout: JSON.stringify({ tamperProtected: true, cloudProtectionLevel: 0, networkProtectionMode: 'block' }),
+        stderr: ''
+      };
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkDefenderHardening();
+    assert.equal(results[1].status, 'fail');
+    assert.ok(results[1].message.includes('off'));
+  });
+
+  it('checkDefenderHardening flags network protection off', async () => {
+    currentExecHandler = async () => {
+      return {
+        stdout: JSON.stringify({ tamperProtected: true, cloudProtectionLevel: 2, networkProtectionMode: 'off' }),
+        stderr: ''
+      };
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkDefenderHardening();
+    assert.equal(results[2].status, 'fail');
+    assert.ok(results[2].message.includes('off'));
+  });
+
+  it('checkDefenderHardening reports audit mode as info, not pass', async () => {
+    currentExecHandler = async () => {
+      return {
+        stdout: JSON.stringify({ tamperProtected: true, cloudProtectionLevel: 2, networkProtectionMode: 'audit' }),
+        stderr: ''
+      };
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkDefenderHardening();
+    assert.equal(results[2].status, 'info');
+    assert.ok(results[2].message.includes('audit mode'));
+  });
+
+  it('checkDefenderHardening reports unknown network protection as info, not fail', async () => {
+    currentExecHandler = async () => {
+      return {
+        stdout: JSON.stringify({ tamperProtected: true, cloudProtectionLevel: 2, networkProtectionMode: 'unknown' }),
+        stderr: ''
+      };
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkDefenderHardening();
+    assert.equal(results[2].status, 'info');
+    assert.ok(results[2].message.includes('could not be determined'));
+  });
+
+  it('checkDefenderHardening reports unreported cloud protection as info, not fail', async () => {
+    currentExecHandler = async () => {
+      return {
+        stdout: JSON.stringify({ tamperProtected: true, cloudProtectionLevel: null, networkProtectionMode: 'block' }),
+        stderr: ''
+      };
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkDefenderHardening();
+    assert.equal(results[1].status, 'info');
+    assert.ok(results[1].message.includes('could not be determined'));
+  });
+
+  it('checkDefenderHardening handles query failures with manage URI', async () => {
+    currentExecHandler = async () => {
+      throw new Error('Query failed');
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkDefenderHardening();
+    assert.equal(results.length, 3);
+    assert.ok(results.every((r) => r.status === 'error'));
+    assert.ok(results.slice(0, 2).every((r) => r.actionUri === 'windowsdefender://threatsettings/'));
+    assert.equal(results[2].manageAction, 'open-powershell');
+    assert.equal(results[2].manageContext, 'network-protection');
+  });
+
+  it('checkSmb1 returns pass when SMBv1 is disabled', async () => {
+    const audit = new SystemAudit();
+    const results = await audit.checkSmb1();
+    assert.equal(results[0].status, 'pass');
+    assert.equal(results[0].name, 'SMBv1');
+    assert.equal(results[0].section, 'system');
+    assert.equal(results[0].manageAction, 'open-windows-utility');
+    assert.equal(results[0].manageContext, 'windows-features');
+  });
+
+  it('checkSmb1 returns fail when SMBv1 is enabled', async () => {
+    currentExecHandler = async () => {
+      return { stdout: '1', stderr: '' };
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkSmb1();
+    assert.equal(results[0].status, 'fail');
+    assert.ok(results[0].message.includes('enabled'));
+  });
+
+  it('checkSmb1 warns when status cannot be confirmed', async () => {
+    currentExecHandler = async () => {
+      return { stdout: '', stderr: '' };
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkSmb1();
+    assert.equal(results[0].status, 'warn');
+  });
+
+  it('checkAutoLogon returns pass when disabled', async () => {
+    const audit = new SystemAudit();
+    const results = await audit.checkAutoLogon();
+    assert.equal(results[0].status, 'pass');
+    assert.equal(results[0].name, 'Automatic Logon');
+    assert.equal(results[0].section, 'accounts');
+    assert.equal(results[0].actionUri, 'control userpasswords2');
+  });
+
+  it('checkAutoLogon warns when enabled without stored password', async () => {
+    currentExecHandler = async () => {
+      return {
+        stdout: JSON.stringify({ autoAdminLogon: '1', hasDefaultPassword: false }),
+        stderr: ''
+      };
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkAutoLogon();
+    assert.equal(results[0].status, 'warn');
+  });
+
+  it('checkAutoLogon fails when a plaintext password is stored', async () => {
+    currentExecHandler = async () => {
+      return {
+        stdout: JSON.stringify({ autoAdminLogon: '1', hasDefaultPassword: true }),
+        stderr: ''
+      };
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkAutoLogon();
+    assert.equal(results[0].status, 'fail');
+    assert.ok(results[0].message.includes('plaintext'));
+  });
+
+  it('checkRemoteDesktop returns pass when disabled', async () => {
+    const audit = new SystemAudit();
+    const results = await audit.checkRemoteDesktop();
+    assert.equal(results[0].status, 'pass');
+    assert.equal(results[0].name, 'Remote Desktop');
+    assert.equal(results[0].section, 'system');
+    assert.equal(results[0].actionUri, 'ms-settings:remotedesktop');
+  });
+
+  it('checkRemoteDesktop warns when enabled with NLA', async () => {
+    currentExecHandler = async () => {
+      return {
+        stdout: JSON.stringify({ rdpEnabled: true, nlaEnabled: true }),
+        stderr: ''
+      };
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkRemoteDesktop();
+    assert.equal(results[0].status, 'warn');
+  });
+
+  it('checkRemoteDesktop fails when enabled without NLA', async () => {
+    currentExecHandler = async () => {
+      return {
+        stdout: JSON.stringify({ rdpEnabled: true, nlaEnabled: false }),
+        stderr: ''
+      };
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkRemoteDesktop();
+    assert.equal(results[0].status, 'fail');
+    assert.ok(results[0].message.includes('WITHOUT Network Level Authentication'));
+    assert.ok(results[0].recommendation.length > 0);
+  });
+
+  it('checkLsaProtection returns pass when RunAsPPL is set', async () => {
+    const audit = new SystemAudit();
+    const results = await audit.checkLsaProtection();
+    assert.equal(results[0].status, 'pass');
+    assert.equal(results[0].name, 'LSA Protection');
+    assert.equal(results[0].manageAction, 'open-powershell');
+    assert.equal(results[0].manageContext, 'lsa-protection');
+  });
+
+  it('checkLsaProtection fails when RunAsPPL is off', async () => {
+    currentExecHandler = async () => {
+      return { stdout: '0', stderr: '' };
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkLsaProtection();
+    assert.equal(results[0].status, 'fail');
+    assert.ok(results[0].message.includes('off'));
+  });
+
+  it('checkLsaProtection reports info when value is not set', async () => {
+    currentExecHandler = async () => {
+      return { stdout: '', stderr: '' };
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkLsaProtection();
+    assert.equal(results[0].status, 'info');
+  });
+
+  it('checkAccounts returns pass for strong policy and disabled guest', async () => {
+    const audit = new SystemAudit();
+    const results = await audit.checkAccounts();
+    assert.equal(results.length, 2);
+    assert.equal(results[0].name, 'Password Policy');
+    assert.equal(results[1].name, 'Guest Account');
+    assert.ok(results.every((r) => r.section === 'accounts'));
+    assert.ok(results.every((r) => r.manageAction === 'open-powershell'));
+    assert.equal(results[0].manageContext, 'password-policy');
+    assert.equal(results[1].manageContext, 'guest-account');
+    assert.ok(results.every((r) => r.status === 'pass'));
+  });
+
+  it('checkAccounts fails when guest account is enabled', async () => {
+    currentExecHandler = async () => {
+      return {
+        stdout: JSON.stringify({ minLength: 12, lockout: 5, complexity: true, guestDisabled: false }),
+        stderr: ''
+      };
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkAccounts();
+    assert.equal(results[1].status, 'fail');
+    assert.ok(results[1].message.includes('enabled'));
+  });
+
+  it('checkAccounts fails when password policy is weak', async () => {
+    currentExecHandler = async () => {
+      return {
+        stdout: JSON.stringify({ minLength: 0, lockout: 0, complexity: false, guestDisabled: true }),
+        stderr: ''
+      };
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkAccounts();
+    assert.equal(results[0].status, 'fail');
+    assert.ok(results[0].recommendation.length > 0);
+  });
+
+  it('checkAccounts warns for moderate policy', async () => {
+    currentExecHandler = async () => {
+      return {
+        stdout: JSON.stringify({ minLength: 10, lockout: 5, complexity: false, guestDisabled: true }),
+        stderr: ''
+      };
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkAccounts();
+    assert.equal(results[0].status, 'warn');
+  });
+
+  it('checkAccounts warns when policy cannot be determined', async () => {
+    currentExecHandler = async () => {
+      return {
+        stdout: JSON.stringify({ minLength: null, lockout: null, complexity: null, guestDisabled: false }),
+        stderr: ''
+      };
+    };
+    const audit = new SystemAudit();
+    const results = await audit.checkAccounts();
+    assert.equal(results[0].status, 'warn');
+    assert.ok(results[0].message.includes('could not be determined'));
+    assert.equal(results[1].status, 'fail');
+  });
+
   it('runAudit executes all checks concurrently', async () => {
     const progressCalls = [];
     const audit = new SystemAudit();
@@ -335,8 +734,8 @@ describe('SystemAudit', () => {
       progressCalls.push(progress);
     });
     
-    // Should return results from all 6 checks
-    assert.ok(results.length >= 6);
+    // Should return results from all 12 checks (16 result rows)
+    assert.ok(results.length >= 12);
     
     // Should have called progress callback
     assert.ok(progressCalls.length > 0);
@@ -358,12 +757,31 @@ describe('SystemAudit', () => {
     assert.ok(resultNames.includes('BitLocker Drive Encryption'));
     assert.ok(resultNames.includes('PowerShell Execution Policy'));
     assert.ok(resultNames.includes('Secure Boot'));
+    assert.ok(resultNames.includes('Tamper Protection'));
+    assert.ok(resultNames.includes('Cloud-delivered Protection'));
+    assert.ok(resultNames.includes('Network Protection'));
+    assert.ok(resultNames.includes('SMBv1'));
+    assert.ok(resultNames.includes('Automatic Logon'));
+    assert.ok(resultNames.includes('Remote Desktop'));
+    assert.ok(resultNames.includes('LSA Protection'));
+    assert.ok(resultNames.includes('Password Policy'));
+    assert.ok(resultNames.includes('Guest Account'));
+  });
+
+  it('runAudit results carry section keys for grouping', async () => {
+    const audit = new SystemAudit();
+    const results = await audit.runAudit();
+    const sections = new Set(results.map((r) => r.section));
+    assert.ok(sections.has('antivirus'));
+    assert.ok(sections.has('system'));
+    assert.ok(sections.has('accounts'));
+    assert.ok(sections.has('updates'));
   });
 
   it('runAudit works without progress callback', async () => {
     const audit = new SystemAudit();
     const results = await audit.runAudit();
-    assert.ok(results.length >= 6);
+    assert.ok(results.length >= 12);
   });
 
   it('runAudit handles individual check failures gracefully', async () => {
@@ -381,7 +799,7 @@ describe('SystemAudit', () => {
     const results = await audit.runAudit();
     
     // Should still return results for all checks
-    assert.ok(results.length >= 6);
+    assert.ok(results.length >= 12);
     
     // At least one should have error status
     assert.ok(results.some(r => r.status === 'error' || r.status === 'warn'));

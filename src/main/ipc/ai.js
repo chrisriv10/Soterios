@@ -1,0 +1,174 @@
+'use strict';
+
+const { ipcMain } = require('electron');
+const {
+  DEFAULT_HOST,
+  normalizeHost,
+  isValidHost,
+  validateMessages,
+  fetchModelTags,
+  streamChat,
+} = require('./ollamaClient');
+const { buildSystemPrompt } = require('../aiGuidelines');
+const { buildContextSnapshot } = require('../aiContext');
+const { ActionMarkerStream, executeAction, extractActionMarkers } = require('../aiActions');
+
+const HOST_SETTING_KEY = 'ai.ollama.host';
+const MODEL_SETTING_KEY = 'ai.ollama.model';
+const REQUEST_TIMEOUT_MS = 120000;
+
+const activeRequests = new Map();
+
+function sendChunk(event, payload) {
+  if (!event.sender.isDestroyed()) {
+    event.sender.send('ai:chat:chunk', payload);
+  }
+}
+
+function cancelRequest(requestId) {
+  const entry = activeRequests.get(requestId);
+  if (!entry) return false;
+  clearTimeout(entry.timer);
+  try {
+    entry.controller.abort();
+  } catch (_) {}
+  activeRequests.delete(requestId);
+  return true;
+}
+
+function getConfig(db) {
+  return {
+    host: normalizeHost(db.getSetting(HOST_SETTING_KEY, DEFAULT_HOST)),
+    model: String(db.getSetting(MODEL_SETTING_KEY, '') || '')
+  };
+}
+
+function register(mainWindow, { db, toolRegistry, firewallManager, processInspector, scanEngine }) {
+  ipcMain.handle('ai:status', async () => {
+    const { host } = getConfig(db);
+    if (!isValidHost(host)) {
+      return { ok: false, running: false, error: `Invalid Ollama host: ${host}` };
+    }
+    const tags = await fetchModelTags(host, { timeoutMs: 4000 });
+    return {
+      ok: tags.ok,
+      running: tags.ok,
+      error: tags.ok ? '' : tags.error,
+      version: tags.version || '',
+      models: tags.models || [],
+      host
+    };
+  });
+
+  ipcMain.handle('ai:chat', async (event, request) => {
+    const messages = request && request.messages;
+    const model = request && request.model;
+    validateMessages(messages);
+
+    const { host } = getConfig(db);
+    if (!isValidHost(host)) {
+      throw new Error(`Invalid Ollama host: ${host}`);
+    }
+    if (typeof model !== 'string' || model.trim() === '') {
+      throw new Error('No model selected');
+    }
+
+    const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      try {
+        controller.abort(new Error('Ollama request timed out'));
+      } catch (_) {}
+    }, REQUEST_TIMEOUT_MS);
+    activeRequests.set(requestId, { controller, timer });
+
+    sendChunk(event, { requestId, type: 'start' });
+
+    const snapshot = await buildContextSnapshot({ db, toolRegistry, firewallManager, processInspector });
+    const systemPrompt = buildSystemPrompt(snapshot);
+
+    const markerStream = new ActionMarkerStream();
+    let fullText = '';
+    const actionsCtx = {
+      db,
+      toolRegistry,
+      scanEngine,
+      onUpdate: (_actionCtx, payload) => {
+        sendChunk(event, { requestId, type: 'action-update', action: { ...payload } });
+      },
+    };
+
+    streamChat(host, messages, model, {
+      systemPrompt,
+      onDelta: (delta) => {
+        fullText += delta;
+        const { text } = markerStream.push(delta);
+        if (text) sendChunk(event, { requestId, type: 'delta', delta: text });
+      },
+      onDone: async () => {
+        const tail = markerStream.flush();
+        if (tail) sendChunk(event, { requestId, type: 'delta', delta: tail });
+        clearTimeout(timer);
+        activeRequests.delete(requestId);
+        const markers = extractActionMarkers(fullText).markers;
+        for (const marker of markers) {
+          const id = (marker.match(/^\[\[action:([a-z0-9-]+)/) || [])[1];
+          if (!id) continue;
+          const result = await executeAction(id, actionsCtx);
+          sendChunk(event, {
+            requestId,
+            type: 'action',
+            action: {
+              id,
+              label: result.label || id,
+              ok: !!result.ok,
+              error: result.error || '',
+              summary: result.summary || '',
+              started: !!result.started,
+            },
+          });
+        }
+        sendChunk(event, { requestId, type: 'done' });
+      },
+      signal: controller.signal
+    }).catch((err) => {
+      clearTimeout(timer);
+      activeRequests.delete(requestId);
+      const cancelled = !!(err && err.message === 'cancelled');
+      sendChunk(event, { requestId, type: 'error', error: cancelled ? 'cancelled' : (err && err.message ? err.message : 'Unknown Ollama error') });
+    });
+
+    return { requestId };
+  });
+
+  ipcMain.handle('ai:chat:cancel', (_event, requestId) => {
+    return { cancelled: cancelRequest(String(requestId || '')) };
+  });
+
+  ipcMain.handle('ai:config:get', () => getConfig(db));
+
+  ipcMain.handle('ai:config:set', (_event, config) => {
+    const next = config || {};
+    const host = normalizeHost(next.host || DEFAULT_HOST);
+    if (!isValidHost(host)) {
+      throw new Error(`Invalid Ollama host: ${host} (only localhost is allowed)`);
+    }
+    db.setSetting(HOST_SETTING_KEY, host);
+    if (typeof next.model === 'string') {
+      db.setSetting(MODEL_SETTING_KEY, next.model.trim());
+    }
+    return getConfig(db);
+  });
+
+  // Clean up any in-flight requests when the window closes.
+  const onWindowClosed = () => {
+    for (const requestId of Array.from(activeRequests.keys())) {
+      cancelRequest(requestId);
+    }
+  };
+  if (mainWindow) {
+    mainWindow.once('closed', onWindowClosed);
+  }
+}
+
+module.exports = { register };

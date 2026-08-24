@@ -4,6 +4,7 @@ const { register: registerProcess } = require('./ipc/process');
 const { register: registerFirewall } = require('./ipc/firewall');
 const { register: registerNetwork } = require('./ipc/network');
 const { register: registerSystem } = require('./ipc/system');
+const { register: registerAi } = require('./ipc/ai');
 
 function registerIpcHandlers(mainWindow, services) {
   const servicesForScan = {
@@ -16,10 +17,14 @@ function registerIpcHandlers(mainWindow, services) {
 
   const servicesForQuarantine = {
     quarantineManager: services.quarantineManager,
+    db: services.db,
   };
 
   const servicesForProcess = {
     processInspector: services.processInspector,
+    processService: services.processService,
+    processReputation: services.processReputation,
+    db: services.db,
   };
 
   const servicesForFirewall = {
@@ -34,6 +39,7 @@ function registerIpcHandlers(mainWindow, services) {
     networkEnricher: services.networkEnricher,
     networkAlertMonitor: services.networkAlertMonitor,
     geoLocationService: services.geoLocationService,
+    vpnManager: services.vpnManager,
     startNetworkStatsTimer: services.startNetworkStatsTimer,
     stopNetworkStatsTimer: services.stopNetworkStatsTimer,
   };
@@ -42,6 +48,11 @@ function registerIpcHandlers(mainWindow, services) {
     db: services.db,
     eventBus: services.eventBus,
     toolRegistry: services.toolRegistry,
+    toolRunManager: services.toolRunManager,
+    maintenanceSafetyVault: services.maintenanceSafetyVault,
+    persistenceMonitor: services.persistenceMonitor,
+    extensionBridge: services.extensionBridge,
+    processService: services.processService,
     maintenanceScheduler: services.maintenanceScheduler,
     firewallManager: services.firewallManager,
     networkMonitor: services.networkMonitor,
@@ -52,6 +63,15 @@ function registerIpcHandlers(mainWindow, services) {
     startNetworkStatsTimer: services.startNetworkStatsTimer,
     stopNetworkStatsTimer: services.stopNetworkStatsTimer,
     emergencyLockdown: services.emergencyLockdown,
+    vpnManager: services.vpnManager,
+  };
+
+  const servicesForAi = {
+    db: services.db,
+    toolRegistry: services.toolRegistry,
+    firewallManager: services.firewallManager,
+    processInspector: services.processInspector,
+    scanEngine: services.scanEngine,
   };
 
   registerScan(mainWindow, servicesForScan);
@@ -60,6 +80,7 @@ function registerIpcHandlers(mainWindow, services) {
   registerFirewall(mainWindow, servicesForFirewall);
   registerNetwork(mainWindow, servicesForNetwork);
   registerSystem(mainWindow, servicesForSystem);
+  registerAi(mainWindow, servicesForAi);
 }
 
 module.exports = { registerIpcHandlers };

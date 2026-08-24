@@ -1,59 +1,198 @@
 window.Pages = window.Pages || {};
 
+// Module-level cache so the expensive dashboard reads (security-overview
+// tool call + health score) survive navigating away and back. Entries are
+// invalidated on any mutation (ignore/restore/action, scan completion,
+// RTP toggle) or expire after the TTL.
+const dashboardCache = {
+  overview: { ts: 0, data: null },
+  health: { ts: 0, data: null }
+};
+const dashboardCacheTtl = 60_000; // 60 seconds
+
+function invalidateDashboardCache() {
+  dashboardCache.overview = { ts: 0, data: null };
+  dashboardCache.health = { ts: 0, data: null };
+}
+
+// Shared invalidation hook for other pages whose mutations feed the
+// dashboard's cached reads (e.g. the firewall profile toggle changes the
+// firewall status the health score is computed from).
+window.DashboardCache = { invalidate: invalidateDashboardCache };
+
 window.Pages['dashboard'] = {
+  cleanups: [],
+  destroy() {
+    this.cleanups.forEach(fn => fn());
+    this.cleanups = [];
+  },
   async render(container) {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
+    let alive = true;
+    this.cleanups.push(() => { alive = false; });
 
-    // Warning title/detail translation map for security-overview tool
-    const warningTranslations = {
-      'Real-time protection is disabled': { title: 'dashboard.warn.rtpDisabled.title', detail: 'dashboard.warn.rtpDisabled.detail' },
-      'Folder watch is disabled': { title: 'dashboard.warn.folderWatchDisabled.title', detail: 'dashboard.warn.folderWatchDisabled.detail' },
-      'Suspicious network alerts are disabled': { title: 'dashboard.warn.networkAlertsDisabled.title', detail: 'dashboard.warn.networkAlertsDisabled.detail' },
-      'Network traffic history is disabled': { title: 'dashboard.warn.networkTrafficHistoryDisabled.title', detail: 'dashboard.warn.networkTrafficHistoryDisabled.detail' },
-      'Auto-generate reports is disabled': { title: 'dashboard.warn.autoReportsDisabled.title', detail: 'dashboard.warn.autoReportsDisabled.detail' },
-      'Scan history is disabled': { title: 'dashboard.warn.scanHistoryDisabled.title', detail: 'dashboard.warn.scanHistoryDisabled.detail' },
-      'External lookups are disabled': { title: 'dashboard.warn.externalLookupsDisabled.title', detail: 'dashboard.warn.externalLookupsDisabled.detail' },
-      'Geolocation heat map is disabled': { title: 'dashboard.warn.geoLookupDisabled.title', detail: 'dashboard.warn.geoLookupDisabled.detail' },
-      'Network perimeter map is disabled': { title: 'dashboard.warn.perimeterMapDisabled.title', detail: 'dashboard.warn.perimeterMapDisabled.detail' },
-      'ClamAV definitions are outdated': { title: 'dashboard.warn.definitionsOutdated.title', detail: 'dashboard.warn.definitionsOutdated.detail' },
-      'Windows Firewall is disabled': { title: 'dashboard.warn.firewallDisabled.title', detail: 'dashboard.warn.firewallDisabled.detail' },
-      'High memory usage detected': { title: 'dashboard.warn.highMemory.title', detail: 'dashboard.warn.highMemory.detail' },
-      'High CPU usage detected': { title: 'dashboard.warn.highCpu.title', detail: 'dashboard.warn.highCpu.detail' },
-      'Low disk space': { title: 'dashboard.warn.lowDisk.title', detail: 'dashboard.warn.lowDisk.detail' },
+    function hasView() {
+      return alive && document.body.contains(container);
+    }
+
+    // Warning metadata for security-overview tool. Single source of truth:
+    // each entry is keyed by the raw warning title and carries both the i18n
+    // keys used to translate it and the action button used to resolve it.
+    const warningActions = {
+      'Real-time protection is disabled': {
+        title: 'dashboard.warn.rtpDisabled.title',
+        detail: 'dashboard.warn.rtpDisabled.detail',
+        label: 'dashboard.action.enableRtp',
+        handler: async () => {
+          await window.api.invoke('rtp:toggle', true);
+          await window.api.invoke('db:setSetting', 'feature.realtimeProtection', true);
+        }
+      },
+      'Folder watch is disabled': {
+        title: 'dashboard.warn.folderWatchDisabled.title',
+        detail: 'dashboard.warn.folderWatchDisabled.detail',
+        label: 'dashboard.action.enableFolderWatch',
+        handler: async () => {
+          await window.api.invoke('db:setSetting', 'feature.folderWatch', true);
+        }
+      },
+      'Suspicious network alerts are disabled': {
+        title: 'dashboard.warn.networkAlertsDisabled.title',
+        detail: 'dashboard.warn.networkAlertsDisabled.detail',
+        label: 'dashboard.action.enableNetworkAlerts',
+        handler: async () => {
+          await window.api.invoke('db:setSetting', 'feature.networkAlerts', true);
+        }
+      },
+      'Network traffic history is disabled': {
+        title: 'dashboard.warn.networkTrafficHistoryDisabled.title',
+        detail: 'dashboard.warn.networkTrafficHistoryDisabled.detail',
+        label: 'dashboard.action.enableHistory',
+        handler: async () => {
+          await window.api.invoke('db:setSetting', 'feature.networkTrafficHistory', true);
+        }
+      },
+      'Auto-generate reports is disabled': {
+        title: 'dashboard.warn.autoReportsDisabled.title',
+        detail: 'dashboard.warn.autoReportsDisabled.detail',
+        label: 'dashboard.action.enableReports',
+        handler: async () => {
+          await window.api.invoke('db:setSetting', 'feature.autoReports', true);
+        }
+      },
+      'Scan history is disabled': {
+        title: 'dashboard.warn.scanHistoryDisabled.title',
+        detail: 'dashboard.warn.scanHistoryDisabled.detail',
+        label: 'dashboard.action.enableHistory',
+        handler: async () => {
+          await window.api.invoke('db:setSetting', 'feature.scanHistory', true);
+        }
+      },
+      'External lookups are disabled': {
+        title: 'dashboard.warn.externalLookupsDisabled.title',
+        detail: 'dashboard.warn.externalLookupsDisabled.detail',
+        label: 'dashboard.action.enableLookups',
+        handler: async () => {
+          await window.api.invoke('db:setSetting', 'feature.externalLookups', true);
+        }
+      },
+      'Geolocation heat map is disabled': {
+        title: 'dashboard.warn.geoLookupDisabled.title',
+        detail: 'dashboard.warn.geoLookupDisabled.detail',
+        label: 'dashboard.action.enableGeo',
+        handler: async () => {
+          await window.api.invoke('db:setSetting', 'feature.geoLookup', true);
+        }
+      },
+      'Network perimeter map is disabled': {
+        title: 'dashboard.warn.perimeterMapDisabled.title',
+        detail: 'dashboard.warn.perimeterMapDisabled.detail',
+        label: 'dashboard.action.enableMap',
+        handler: async () => {
+          await window.api.invoke('db:setSetting', 'feature.networkPerimeterMap', true);
+        }
+      },
+      'ClamAV definitions are outdated': {
+        title: 'dashboard.warn.definitionsOutdated.title',
+        detail: 'dashboard.warn.definitionsOutdated.detail',
+        label: 'dashboard.action.updateDefinitions',
+        handler: async () => {
+          const res = await window.api.invoke('scan:updateDefinitions');
+          if (res && !res.success) throw new Error(res.error || t('scanner.defsUpdateFailed'));
+        }
+      },
+      'Windows Firewall is disabled': {
+        title: 'dashboard.warn.firewallDisabled.title',
+        detail: 'dashboard.warn.firewallDisabled.detail',
+        label: 'dashboard.action.enableFirewall',
+        handler: async () => {
+          const res = await window.api.invoke('firewall:enableAll');
+          if (res && !res.success) {
+            throw new Error((res.errors || []).map((e) => e.profile).join(', ') || t('common.failed'));
+          }
+        }
+      },
+      'High memory usage detected': {
+        title: 'dashboard.warn.highMemory.title',
+        detail: 'dashboard.warn.highMemory.detail',
+        label: 'dashboard.action.runCleanup',
+        handler: async () => {
+          await Api.runTool('run-script', { scriptId: 'clear-temp-files' });
+        }
+      },
+      'High CPU usage detected': {
+        title: 'dashboard.warn.highCpu.title',
+        detail: 'dashboard.warn.highCpu.detail',
+        label: 'dashboard.action.runCleanup',
+        handler: async () => {
+          await Api.runTool('run-script', { scriptId: 'clear-temp-files' });
+        }
+      },
+      'Low disk space': {
+        title: 'dashboard.warn.lowDisk.title',
+        detail: 'dashboard.warn.lowDisk.detail',
+        label: 'dashboard.action.diskCleanup',
+        handler: async () => {
+          await Api.runTool('run-script', { scriptId: 'large-files-report' });
+        }
+      }
     };
 
     function translateWarning(w) {
-      const trans = warningTranslations[w.title];
-      if (trans) return { ...w, title: t(trans.title), detail: t(trans.detail) };
+      const meta = warningActions[w.title];
+      if (meta) return { ...w, title: t(meta.title), detail: t(meta.detail) };
       return w;
     }
 
     container.innerHTML = `
       <header class="page-header">
-        <h1 class="page-title">${escapeHtml(t('dashboard.title'))}</h1>
-        <p class="page-subtitle">${escapeHtml(t('dashboard.subtitle'))}</p>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+          <div>
+            <h1 class="page-title">${escapeHtml(t('dashboard.title'))}</h1>
+            <p class="page-subtitle">${escapeHtml(t('dashboard.subtitle'))}</p>
+          </div>
+          <button id="btnRefreshDashboard" class="btn btn-secondary" style="font-size:0.85rem; padding:6px 12px;" title="${escapeHtml(t('dashboard.refreshTooltip'))}">
+            ${escapeHtml(t('dashboard.refresh'))}
+          </button>
+        </div>
       </header>
       <div id="dashboardContent" style="overflow-y:auto; margin-right:8px; padding-right:8px;">
-        <div class="dashboard-grid">
-          <div class="card" id="healthCard" style="cursor:pointer;" title="${escapeHtml(t('dashboard.healthClickDetails'))}">
+<div class="dashboard-grid">
+          <!-- Last Scan -->
+          <div class="card">
             <div class="status-card">
-              <div class="status-icon info" id="healthIcon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
- stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-
-  <rect x="3" y="4" width="18" height="13" rx="2"/>
-  <path d="M8 21h8"/>
-  <path d="M12 17v4"/>
-  <path d="m8 11 2 2 5-5"/>
-</svg>
+              <div class="status-icon info">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               </div>
               <div class="status-info">
-                <h3>${escapeHtml(t('dashboard.healthScore'))}</h3>
-                <div class="value" id="healthScore">Loading...</div>
+                <h3>${escapeHtml(t('dashboard.lastScan'))}</h3>
+                <div class="value" id="lastScanTime">${escapeHtml(t('dashboard.lastScanLoading'))}</div>
               </div>
             </div>
-            <div id="healthDetail" class="page-subtitle" style="margin-top:12px; font-size:0.85rem;">${escapeHtml(t('dashboard.healthCalculating'))}</div>
-            <div class="page-subtitle" style="margin-top:8px; font-size:0.75rem; color:var(--accent-primary);">${escapeHtml(t('dashboard.healthClickDetails'))}</div>
+            <div style="margin-top: 16px; display: flex; gap: 12px;">
+              <button class="btn btn-primary" id="btnQuickScan">${escapeHtml(t('dashboard.quickScan'))}</button>
+              <button class="btn" id="btnFullScan">${escapeHtml(t('dashboard.fullScan'))}</button>
+            </div>
           </div>
 
           <!-- Protection Status -->
@@ -72,96 +211,13 @@ window.Pages['dashboard'] = {
             </div>
           </div>
 
-          <!-- Firewall Status -->
-          <div class="card">
-            <div class="status-card">
-              <div class="status-icon info" id="fwIcon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
- stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-
-  <rect x="3" y="6" width="18" height="12" rx="1" />
-  <line x1="3" y1="10" x2="21" y2="10" />
-  <line x1="3" y1="14" x2="21" y2="14" />
-  <line x1="9" y1="6" x2="9" y2="10" />
-  <line x1="15" y1="10" x2="15" y2="14" />
-  <line x1="9" y1="14" x2="9" y2="18" />
-
-</svg>
-              </div>
-              <div class="status-info">
-                <h3>${escapeHtml(t('nav.firewall'))}</h3>
-                <div class="value" id="fwStatusText">${escapeHtml(t('common.loading'))}</div>
-              </div>
-            </div>
-            <div style="margin-top: 16px;">
-              <button class="btn" id="btnManageFirewall">${escapeHtml(t('dashboard.firewallManage'))}</button>
-            </div>
-          </div>
-
-          <!-- Last Scan -->
-          <div class="card">
-            <div class="status-card">
-              <div class="status-icon info">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              </div>
-              <div class="status-info">
-                <h3>${escapeHtml(t('dashboard.lastScan'))}</h3>
-                <div class="value" id="lastScanTime">${escapeHtml(t('dashboard.lastScanLoading'))}</div>
-              </div>
-            </div>
-            <div style="margin-top: 16px; display: flex; gap: 12px;">
-              <button class="btn btn-primary" id="btnQuickScan">${escapeHtml(t('dashboard.quickScan'))}</button>
-              <button class="btn" id="btnFullScan">${escapeHtml(t('dashboard.fullScan'))}</button>
-            </div>
-          </div>
-
-          <!-- Database Age -->
-          <div class="card">
-            <div class="status-card">
-              <div class="status-icon warning">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
- stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-
-  <!-- bug body -->
-  <ellipse cx="10" cy="12" rx="4" ry="6"/>
-
-  <!-- bug head -->
-  <circle cx="10" cy="6" r="2"/>
-
-  <!-- antenna -->
-  <path d="M8.5 4.5 7 3"/>
-  <path d="M11.5 4.5 13 3"/>
-
-  <!-- bug legs -->
-  <path d="M6 10H3"/>
-  <path d="M6 13H2.5"/>
-  <path d="M6 16H3"/>
-  <path d="M14 10h2"/>
-  <path d="M14 13h2"/>
-  <path d="M14 16h2"/>
-
-  <!-- magnifying glass -->
-  <circle cx="16.5" cy="16.5" r="4"/>
-  <path d="m19.5 19.5 3 3"/>
-</svg>
-              </div>
-              <div class="status-info">
-                <h3>${escapeHtml(t('dashboard.dbDefinitions'))}</h3>
-                <div class="value" id="dbAge">${escapeHtml(t('dashboard.dbUpToDate'))}</div>
-              </div>
-            </div>
-            <div style="margin-top: 16px;">
-              <button class="btn" id="btnUpdateDb">${escapeHtml(t('dashboard.dbUpdate'))}</button>
-            </div>
-          </div>
-
-          <!-- Threats Blocked -->
+<!-- Threats Blocked -->
           <div class="card">
             <div class="status-card">
               <div class="status-icon danger">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-     stroke="currentColor" stroke-width="2"
-     stroke-linecap="round" stroke-linejoin="round">
+ stroke="currentColor" stroke-width="2"
+ stroke-linecap="round" stroke-linejoin="round">
 
   <!-- virus body -->
   <circle cx="12" cy="12" r="5"/>
@@ -194,6 +250,75 @@ window.Pages['dashboard'] = {
               <button class="btn" id="btnViewQuarantine">${escapeHtml(t('dashboard.viewQuarantine'))}</button>
             </div>
           </div>
+
+          <div class="card" id="healthCard" style="cursor:pointer;" title="${escapeHtml(t('dashboard.healthClickDetails'))}">
+            <div class="status-card">
+              <div class="status-icon info" id="healthIcon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+  <rect x="3" y="4" width="18" height="13" rx="2"/>
+  <path d="M8 21h8"/>
+  <path d="M12 17v4"/>
+  <path d="m8 11 2 2 5-5"/>
+</svg>
+              </div>
+              <div class="status-info">
+                <h3>${escapeHtml(t('dashboard.healthScore'))}</h3>
+                <div class="value" id="healthScore">Loading...</div>
+              </div>
+            </div>
+            <div id="healthDetail" class="page-subtitle" style="margin-top:12px; font-size:0.85rem;">${escapeHtml(t('dashboard.healthCalculating'))}</div>
+            <div class="page-subtitle" style="margin-top:8px; font-size:0.75rem; color:var(--accent-primary);">${escapeHtml(t('dashboard.healthClickDetails'))}</div>
+          </div>
+
+<!-- Device Cleanup -->
+          <div class="card dashboard-device-cleanup">
+            <div class="status-card">
+              <div class="status-icon info">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M9 2V1M15 2v1"/>
+    <path d="M10 12v8M14 12v8M10 16h4"/>
+  </svg>
+              </div>
+              <div class="status-info">
+                <h3>${escapeHtml(t('dashboard.deviceCleanup'))}</h3>
+                <div class="value" id="lastCleanup">${escapeHtml(t('common.loading'))}</div>
+                <div class="device-cleanup-summary" id="cleanupSummary"></div>
+              </div>
+            </div>
+            <div style="margin-top: 16px; display: flex; gap: 12px; flex-wrap: wrap;">
+              <button class="btn btn-primary" id="btnRunCleanup">${escapeHtml(t('dashboard.runCleanup'))}</button>
+              <button class="btn" id="btnViewCleanupHistory">${escapeHtml(t('dashboard.viewHistory'))}</button>
+            </div>
+          </div>
+
+          <!-- Network & Firewall -->
+          <div class="card">
+            <div class="status-card">
+              <div class="status-icon info" id="fwIcon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M12 2 20 5v6c0 5.5-3.5 9-8 11-4.5-2-8-5.5-8-11V5z"/>
+  <circle cx="8" cy="10.5" r="1.2"/>
+  <circle cx="16" cy="10.5" r="1.2"/>
+  <circle cx="12" cy="15.5" r="1.2"/>
+  <line x1="9.2" y1="10.9" x2="10.8" y2="14.6"/>
+  <line x1="14.8" y1="10.9" x2="13.2" y2="14.6"/>
+  <line x1="9.2" y1="10.5" x2="14.8" y2="10.5"/>
+</svg>
+              </div>
+              <div class="status-info">
+                <h3>${escapeHtml(t('dashboard.networkFirewallTitle'))}</h3>
+                <div class="value" id="fwStatusText">${escapeHtml(t('common.loading'))}</div>
+              </div>
+            </div>
+            <div class="dashboard-network-actions" style="margin-top: 16px;">
+              <button class="btn" id="btnManageFirewall">${escapeHtml(t('dashboard.firewallManage'))}</button>
+              <button class="btn" id="btnOpenNetwork">${escapeHtml(t('nav.network'))}</button>
+            </div>
+          </div>
         </div>
         <div class="card" style="margin-top:24px;">
           <div class="flex-between">
@@ -204,8 +329,10 @@ window.Pages['dashboard'] = {
             <button class="btn btn-sm" id="btnRefreshWarnings">${escapeHtml(t('dashboard.refreshWarnings'))}</button>
           </div>
           <div id="warningList" class="history-list" style="margin-top:12px;"><div class="empty-state">${escapeHtml(t('common.loading'))}</div></div>
-          <div class="panel-title" style="margin-top:16px;">${escapeHtml(t('dashboard.ignoredWarnings'))}</div>
-          <div id="ignoredWarningList" class="history-list" style="max-height:300px; overflow-y:auto;"><div class="empty-state">${escapeHtml(t('common.loading'))}</div></div>
+          <div style="display:flex; justify-content:flex-end; margin-top:16px;">
+            <button class="btn btn-sm btn-ghost" id="ignoredWarningsToggle" aria-expanded="false" aria-controls="ignoredWarningList">${escapeHtml(t('dashboard.ignoredWarningsExpand'))}</button>
+          </div>
+          <div id="ignoredWarningList" class="history-list" style="max-height:300px; overflow-y:auto;" hidden></div>
         </div>
       </div>
     `;
@@ -367,6 +494,14 @@ window.Pages['dashboard'] = {
       return new Date(value);
     }
 
+    function formatBytes(value) {
+      const bytes = Number(value) || 0;
+      if (bytes < 1024) return `${Math.round(bytes)} B`;
+      if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
+      if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+      return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+    }
+
     async function loadLastScan() {
       const el = container.querySelector('#lastScanTime');
       if (!el) return;
@@ -376,59 +511,94 @@ window.Pages['dashboard'] = {
         : t('dashboard.lastScanNever');
     }
 
-    function translateWarning(w) {
-      const trans = warningTranslations[w.title];
-      if (trans) {
-        return {
-          ...w,
-          title: t(trans.title),
-          detail: t(trans.detail)
-        };
+    async function loadCleanupHistory() {
+      const last = container.querySelector('#lastCleanup');
+      const summary = container.querySelector('#cleanupSummary');
+      if (!last || !summary) return;
+      try {
+        const response = await window.api.invoke('maintenance:get');
+        const config = response?.ok ? response.data : null;
+        const result = config?.lastResult;
+        if (!result?.startedAt) {
+          last.textContent = t('dashboard.noCleanupYet');
+          summary.textContent = '';
+          return;
+        }
+        last.textContent = t('dashboard.cleanupSummary', {
+          freed: formatBytes(Number(result.reclaimedBytes) || 0),
+          count: result.results?.reduce((n, item) => n + Number(item.summary?.deletedCount || 0), 0) || 0
+        });
+        summary.textContent = t('dashboard.lastCleanup', { time: new Date(result.startedAt).toLocaleString() });
+      } catch (_) {
+        last.textContent = t('common.notAvailable');
       }
-      return w;
     }
 
-    async function loadWarnings() {
-      const warningList = document.getElementById('warningList');
-      const ignoredList = document.getElementById('ignoredWarningList');
-      if (!warningList || !ignoredList) return;
-      try {
-        const data = await Api.runTool('security-overview', {});
-        const warnings = (data.recommendations || []).filter((i) => i.level === 'warn' || i.level === 'danger');
-        const translatedWarnings = warnings.map(translateWarning);
-        warningList.innerHTML = translatedWarnings.length ? translatedWarnings.map((w) => `
-          <div class="history-item">
-            <div>
-              <div class="history-title">${escapeHtml(w.title)} <span class="log-tag ${w.level === 'danger' ? 'match' : 'warn'}">${escapeHtml(w.level)}</span></div>
-              <div class="history-meta">${escapeHtml(w.detail)}</div>
-            </div>
-            <div style="display:flex; gap:6px;">
-              <button class="btn btn-sm" data-open-warning="${escapeHtml(w.actionPage || 'dashboard')}">${escapeHtml(t('dashboard.warningOpen'))}</button>
-              <button class="btn btn-sm" data-ignore-warning="${escapeHtml(w.id || w.title)}" data-title="${escapeHtml(w.title)}" data-detail="${escapeHtml(w.detail)}">${escapeHtml(t('dashboard.warningIgnore'))}</button>
-            </div>
-          </div>`).join('') : `<div class="empty-state">${escapeHtml(t('dashboard.noWarnings'))}</div>`;
-        warningList.querySelectorAll('[data-open-warning]').forEach((btn) => btn.addEventListener('click', () => window.AppRouter.navigate(btn.dataset.openWarning)));
-        warningList.querySelectorAll('[data-ignore-warning]').forEach((btn) => btn.addEventListener('click', async () => {
-          const item = btn.closest('.history-item');
-          btn.disabled = true;
-          try {
-            await window.api.invoke('warnings:ignore', { id: btn.dataset.ignoreWarning, title: btn.dataset.title, detail: btn.dataset.detail });
-            if (item) item.remove();
-            await loadWarnings();
-          } catch (err) {
-            btn.disabled = false;
-            alert(err.message || t('common.failed'));
-          }
-        }));
+function configControlsFor(item, browserOptions) {
+      if (item.id === 'clear-temp-files') {
+        return `<span class="cleanup-picker-config"><label class="cleanup-age-field">${escapeHtml(t('dashboard.cleanupMinAge'))} <span><input id="cleanupTempAge" type="number" min="1" max="365" value="7" aria-label="${escapeHtml(t('dashboard.cleanupMinAge'))}"> ${escapeHtml(t('dashboard.cleanupDays'))}</span></label></span>`;
+      }
+      if (item.id === 'browser-cache-report') {
+        const installed = (browserOptions || []).filter((browser) => browser.exists);
+        return `<span class="cleanup-picker-config"><span class="cleanup-browser-group"><span class="cleanup-browser-label">${escapeHtml(t('dashboard.cleanupBrowsers'))}</span>${installed.map((browser) => `<label><input type="checkbox" class="cleanup-browser-check" value="${escapeHtml(browser.id)}" checked> ${escapeHtml(browser.name)}</label>`).join('')}</span></span>`;
+      }
+      return '';
+    }
 
-        const ignored = await window.api.invoke('warnings:listIgnored');
-        // Also translate ignored warnings if they match our known warnings
-        const translatedIgnored = ignored.map(w => {
-          const trans = warningTranslations[w.title];
-          if (trans) return { ...w, title: t(trans.title), detail: t(trans.detail) };
-          return w;
+    function showCleanupPicker(scripts, selected, browserOptions) {
+      return new Promise((resolve) => {
+        const dialog = document.createElement('div');
+        dialog.className = 'pi-modal-backdrop';
+        const options = scripts.map((item) => `<label class="cleanup-picker-option"><input type="checkbox" class="cleanup-tool-check" value="${escapeHtml(item.id)}" ${selected.includes(item.id) ? 'checked' : ''}><span><strong>${escapeHtml(item.name || item.id)}</strong><small>${escapeHtml(item.description || '')}</small>${configControlsFor(item, browserOptions)}</span></label>`).join('');
+        dialog.innerHTML = `<form class="pi-modal" aria-labelledby="cleanupPickerTitle"><h2 id="cleanupPickerTitle">${escapeHtml(t('dashboard.runCleanup'))}</h2><p>${escapeHtml(t('dashboard.cleanupPickerIntro'))}</p><div class="cleanup-picker-options">${options}</div><p class="cleanup-picker-error" hidden></p><div class="pi-modal-actions"><button type="button" class="btn btn-sm btn-ghost" data-open-maintenance>${escapeHtml(t('nav.tools'))}</button><span class="pi-modal-actions-spacer"></span><button type="button" class="btn btn-sm" data-cancel>${escapeHtml(t('common.cancel'))}</button><button type="submit" class="btn btn-sm primary">${escapeHtml(t('dashboard.runCleanup'))}</button></div></form>`;
+        document.body.appendChild(dialog);
+        const errorEl = dialog.querySelector('.cleanup-picker-error');
+        const showError = (message) => { errorEl.textContent = message; errorEl.hidden = false; };
+        const finish = (value) => { dialog.remove(); resolve(value); };
+        dialog.querySelector('[data-cancel]').addEventListener('click', () => finish(null));
+        dialog.querySelector('[data-open-maintenance]').addEventListener('click', () => {
+          finish(null);
+          if (window.AppRouter) window.AppRouter.navigate('tools');
         });
-        ignoredList.innerHTML = translatedIgnored.length ? translatedIgnored.map((w) => `
+        dialog.addEventListener('click', (event) => { if (event.target === dialog) finish(null); });
+        dialog.querySelector('form').addEventListener('submit', (event) => {
+          event.preventDefault();
+          const selection = [];
+          for (const tool of scripts) {
+            const check = dialog.querySelector(`.cleanup-tool-check[value="${tool.id}"]`);
+            if (!check || !check.checked) continue;
+            const args = {};
+            if (tool.id === 'clear-temp-files') {
+              const age = parseInt(dialog.querySelector('#cleanupTempAge')?.value, 10);
+              if (!Number.isFinite(age) || age < 1 || age > 365) { showError(t('dashboard.cleanupAgeInvalid')); return; }
+              args.minimumAgeDays = age;
+            }
+            if (tool.id === 'browser-cache-report') {
+              const chosen = [...dialog.querySelectorAll('.cleanup-browser-check:checked')].map((input) => input.value);
+              if (!chosen.length) { showError(t('dashboard.cleanupSelectBrowser')); return; }
+              args.browsers = chosen;
+            }
+            selection.push({ id: tool.id, mode: 'auto-clean', args });
+          }
+          if (!selection.length) { showError(t('dashboard.cleanupSelectTool')); return; }
+          finish(selection);
+        });
+      });
+    }
+
+async function renderIgnoredList() {
+      const ignoredList = document.getElementById('ignoredWarningList');
+      if (!ignoredList || ignoredList.hidden) return;
+      const ignored = await window.api.invoke('warnings:listIgnored');
+      const auditTranslations = window.Pages?.audit?.auditTranslations || {};
+      // Also translate ignored warnings if they match our known warnings
+      const translatedIgnored = ignored.map(w => {
+        const meta = warningActions[w.title];
+        if (meta) return { ...w, title: t(meta.title), detail: t(meta.detail) };
+        if (auditTranslations[w.title]) return { ...w, title: t(auditTranslations[w.title]), detail: w.detail && auditTranslations[w.detail] ? t(auditTranslations[w.detail]) : w.detail };
+        return w;
+      });
+      ignoredList.innerHTML = translatedIgnored.length ? translatedIgnored.map((w) => `
           <div class="history-item">
             <div>
               <div class="history-title">${escapeHtml(w.title)}</div>
@@ -436,12 +606,104 @@ window.Pages['dashboard'] = {
             </div>
             <button class="btn btn-sm" data-unignore-warning="${escapeHtml(w.id)}">${escapeHtml(t('dashboard.warningRestore'))}</button>
           </div>`).join('') : `<div class="empty-state">${escapeHtml(t('dashboard.noIgnoredWarnings'))}</div>`;
-        ignoredList.querySelectorAll('[data-unignore-warning]').forEach((btn) => btn.addEventListener('click', async () => {
+      ignoredList.querySelectorAll('[data-unignore-warning]').forEach((btn) => btn.addEventListener('click', async () => {
+        const item = btn.closest('.history-item');
+        btn.disabled = true;
+        try {
+          await window.api.invoke('warnings:unignore', btn.dataset.unignoreWarning);
+          if (item) item.remove();
+          invalidateDashboardCache();
+          await loadWarnings();
+        } catch (err) {
+          btn.disabled = false;
+          alert(err.message || t('common.failed'));
+        }
+      }));
+    }
+
+async function loadWarnings() {
+      const warningList = document.getElementById('warningList');
+      const ignoredList = document.getElementById('ignoredWarningList');
+      if (!warningList || !ignoredList) return;
+      try {
+        // Only the slow security-overview tool call is cached; the ignored
+        // list always comes fresh from the DB so Restore/Ignore take effect
+        // immediately instead of rendering from stale cached recommendations.
+        const now = Date.now();
+        let data = dashboardCache.overview.data;
+        if (data === null || now - dashboardCache.overview.ts >= dashboardCacheTtl) {
+          data = await Api.runTool('security-overview', {});
+          dashboardCache.overview.data = data;
+          dashboardCache.overview.ts = now;
+        }
+
+        const [ignoredRows, auditRows] = await Promise.all([
+          window.api.invoke('warnings:listIgnored'),
+          window.api.invoke('warnings:listAudit')
+        ]);
+        const ignoredIds = new Set((ignoredRows || []).map((w) => w.id));
+        const auditTranslations = window.Pages?.audit?.auditTranslations || {};
+        const auditItems = (auditRows || [])
+          .filter((w) => !ignoredIds.has(w.id))
+          .map((w) => {
+            const translated = { ...w, actionPage: 'audit' };
+            if (auditTranslations[w.title]) translated.title = t(auditTranslations[w.title]);
+            if (w.detail && auditTranslations[w.detail]) translated.detail = t(auditTranslations[w.detail]);
+            return translated;
+          });
+        const translatedWarnings = [
+          ...auditItems,
+          ...(data.recommendations || [])
+            .filter((i) => i.level === 'warn' || i.level === 'danger')
+            .map(translateWarning)
+        ];
+        warningList.innerHTML = translatedWarnings.length ? translatedWarnings.map((w) => {
+          const action = warningActions[w.title];
+          const actionButton = action ? `<button class="btn btn-sm btn-primary" data-action-warning="${escapeHtml(w.title)}">${escapeHtml(t(action.label))}</button>` : '';
+          return `
+          <div class="history-item">
+            <div>
+              <div class="history-title">${escapeHtml(w.title)} <span class="log-tag ${w.level === 'danger' ? 'match' : 'warn'}">${escapeHtml(w.level)}</span></div>
+              <div class="history-meta">${escapeHtml(w.detail)}</div>
+            </div>
+            <div style="display:flex; gap:6px;">
+              ${actionButton}
+              <button class="btn btn-sm" data-open-warning="${escapeHtml(w.actionPage || 'dashboard')}">${escapeHtml(t('dashboard.warningOpen'))}</button>
+              <button class="btn btn-sm" data-ignore-warning="${escapeHtml(w.id || w.title)}" data-title="${escapeHtml(w.title)}" data-detail="${escapeHtml(w.detail)}">${escapeHtml(t('dashboard.warningIgnore'))}</button>
+            </div>
+          </div>`;
+        }).join('') : `<div class="empty-state">${escapeHtml(t('dashboard.noWarnings'))}</div>`;
+
+        // Re-attach event listeners (they were lost when innerHTML was set)
+        warningList.querySelectorAll('[data-open-warning]').forEach((btn) => btn.addEventListener('click', () => window.AppRouter.navigate(btn.dataset.openWarning)));
+        warningList.querySelectorAll('[data-action-warning]').forEach((btn) => btn.addEventListener('click', async () => {
+          const warningTitle = btn.dataset.actionWarning;
+          const action = warningActions[warningTitle];
+          if (!action) return;
+
+          const item = btn.closest('.history-item');
+          const originalText = btn.textContent;
+          btn.disabled = true;
+          btn.textContent = t('common.loading');
+
+          try {
+            await action.handler();
+            invalidateDashboardCache();
+            await loadWarnings();
+          } catch (err) {
+            btn.disabled = false;
+            btn.textContent = originalText;
+            alert(err.message || t('common.failed'));
+          }
+        }));
+        warningList.querySelectorAll('[data-ignore-warning]').forEach((btn) => btn.addEventListener('click', async () => {
           const item = btn.closest('.history-item');
           btn.disabled = true;
           try {
-            await window.api.invoke('warnings:unignore', btn.dataset.unignoreWarning);
+            await window.api.invoke('warnings:ignore', { id: btn.dataset.ignoreWarning, title: btn.dataset.title, detail: btn.dataset.detail });
             if (item) item.remove();
+            await renderIgnoredList();
+            invalidateDashboardCache();
             await loadWarnings();
           } catch (err) {
             btn.disabled = false;
@@ -467,72 +729,110 @@ window.Pages['dashboard'] = {
 
     function setRtpState(active) {
       isRtpActive = !!active;
-      btnToggleRtp.textContent = isRtpActive ? t('dashboard.rtpDisable') : t('dashboard.rtpEnable');
-      rtpStatusText.textContent = isRtpActive ? t('dashboard.rtpActive') : t('dashboard.rtpDisabled');
-      rtpIcon.className = 'status-icon ' + (isRtpActive ? 'safe' : 'danger');
+      if (btnToggleRtp) btnToggleRtp.textContent = isRtpActive ? t('dashboard.rtpDisable') : t('dashboard.rtpEnable');
+      if (rtpStatusText) rtpStatusText.textContent = isRtpActive ? t('dashboard.rtpActive') : t('dashboard.rtpDisabled');
+      if (rtpIcon) rtpIcon.className = 'status-icon ' + (isRtpActive ? 'safe' : 'danger');
     }
 
-    try {
-      isRtpActive = await window.api.invoke('rtp:status');
+    async function loadDashboardData() {
+      window.api.invoke('splash:progress', { pct: 35, label: t('splash.checkingProtection') });
+
+      // Fetch the independent dashboard reads concurrently instead of one at a
+      // time so the splash doesn't linger on the slowest sequential call.
+      const [rtpResult, fwResult, scanResult, quarantineResult] = await Promise.allSettled([
+        window.api.invoke('rtp:status'),
+        window.api.invoke('firewall:status'),
+        window.api.invoke('scanReports:latest'),
+        window.api.invoke('quarantine:list', 'quarantined')
+      ]);
+
+      isRtpActive = rtpResult.status === 'fulfilled' ? !!rtpResult.value : false;
       setRtpState(isRtpActive);
-    } catch (_) {
-      setRtpState(false);
-    }
-    window.api.invoke('splash:progress', { pct: 35, label: t('splash.checkingProtection') });
+      window.api.invoke('splash:progress', { pct: 40, label: t('splash.checkingProtection') });
 
-    let fwEnabled = null;
-    try {
-      fwEnabled = await window.api.invoke('firewall:status');
+      let fwEnabled = null;
+      if (fwResult.status === 'fulfilled') {
+        fwEnabled = fwResult.value;
+      }
       const fwIcon = document.getElementById('fwIcon');
       const fwStatusText = document.getElementById('fwStatusText');
-      if (fwStatusText) fwStatusText.textContent = fwEnabled ? t('dashboard.firewallActive') : t('dashboard.firewallDisabled');
-      if (fwIcon) fwIcon.className = 'status-icon ' + (fwEnabled ? 'safe' : 'danger');
-    } catch (_) {
-      fwEnabled = null;
-      const fwIcon = document.getElementById('fwIcon');
-      const fwStatusText = document.getElementById('fwStatusText');
-      if (fwStatusText) fwStatusText.textContent = t('common.unknown');
-      if (fwIcon) fwIcon.className = 'status-icon warning';
-    }
-    window.api.invoke('splash:progress', { pct: 50, label: t('splash.verifyingFirewall') });
+      if (fwEnabled === null) {
+        if (fwStatusText) fwStatusText.textContent = t('common.unknown');
+        if (fwIcon) fwIcon.className = 'status-icon warning';
+      } else {
+        if (fwStatusText) fwStatusText.textContent = fwEnabled ? t('dashboard.firewallActive') : t('dashboard.firewallDisabled');
+        if (fwIcon) fwIcon.className = 'status-icon ' + (fwEnabled ? 'safe' : 'danger');
+      }
+      window.api.invoke('splash:progress', { pct: 50, label: t('splash.verifyingFirewall') });
 
-    let latestScanForHealth = null;
-    try {
-      latestScanForHealth = await window.api.invoke('scanReports:latest');
-    } catch (_) {
-      latestScanForHealth = null;
+      const latestScanForHealth = scanResult.status === 'fulfilled' ? scanResult.value : null;
+      const lastScanEl = container.querySelector('#lastScanTime');
+      if (lastScanEl) {
+        lastScanEl.textContent = latestScanForHealth
+          ? `${parseSqliteTimestamp(latestScanForHealth.timestamp).toLocaleString()} (${latestScanForHealth.status})`
+          : t('dashboard.lastScanNever');
+      }
+
+      if (quarantineResult.status === 'fulfilled' && quarantineResult.value) {
+        const threatsCountEl = container.querySelector('#threatsCount');
+        if (threatsCountEl) {
+          threatsCountEl.textContent = quarantineResult.value.length;
+        }
+      }
+      window.api.invoke('splash:progress', { pct: 55, label: t('splash.checkingQuarantine') });
+
+      // health:score depends on the reads above; warnings (security-overview,
+      // the slowest call) is independent, so run both concurrently. Both are
+      // cached at module scope so re-entering the dashboard is instant.
+      const [healthResult, warningsResult] = await Promise.allSettled([
+        (async () => {
+          const hNow = Date.now();
+          if (dashboardCache.health.data !== null && hNow - dashboardCache.health.ts < dashboardCacheTtl) {
+            return dashboardCache.health.data;
+          }
+          const result = await window.api.invoke('health:score', {
+            lastScanMatches: latestScanForHealth ? (latestScanForHealth.threats_found ?? null) : null,
+            lastScanDate: latestScanForHealth ? latestScanForHealth.timestamp : null,
+            rtpActive: isRtpActive,
+            firewallActive: fwEnabled === null ? undefined : fwEnabled
+          });
+          dashboardCache.health.data = result;
+          dashboardCache.health.ts = Date.now();
+          return result;
+        })(),
+        loadWarnings()
+      ]);
+
+      if (healthResult.status === 'fulfilled') {
+        lastHealthResult = healthResult.value;
+        healthScore.textContent = String(healthResult.value.score);
+        const level = healthResult.value.score >= 80 ? 'safe' : healthResult.value.score >= 60 ? 'warning' : 'danger';
+        healthIcon.className = 'status-icon ' + level;
+        healthDetail.textContent = summarizeHealth(healthResult.value);
+      } else {
+        healthScore.textContent = t('common.notAvailable');
+        healthDetail.textContent = (healthResult.reason && healthResult.reason.message) || t('common.failed');
+        healthIcon.className = 'status-icon warning';
+      }
+      window.api.invoke('splash:progress', { pct: 65, label: t('splash.calculatingHealth') });
+      if (warningsResult.status === 'rejected') {
+        console.warn('Failed to load dashboard warnings:', warningsResult.reason);
+      }
+      window.api.invoke('splash:progress', { pct: 75, label: t('splash.checkingWarnings') });
     }
 
-    const lastScanEl = container.querySelector('#lastScanTime');
-    if (lastScanEl) {
-      lastScanEl.textContent = latestScanForHealth
-        ? `${parseSqliteTimestamp(latestScanForHealth.timestamp).toLocaleString()} (${latestScanForHealth.status})`
-        : t('dashboard.lastScanNever');
-    }
-
-    try {
-      const health = await window.api.invoke('health:score', {
-        lastScanMatches: latestScanForHealth ? (latestScanForHealth.threats_found ?? null) : null,
-        lastScanDate: latestScanForHealth ? latestScanForHealth.timestamp : null,
-        rtpActive: isRtpActive,
-        firewallActive: fwEnabled === null ? undefined : fwEnabled
-      });
-      lastHealthResult = health;
-      healthScore.textContent = String(health.score);
-      const level = health.score >= 80 ? 'safe' : health.score >= 60 ? 'warning' : 'danger';
-      healthIcon.className = 'status-icon ' + level;
-      healthDetail.textContent = summarizeHealth(health);
-    } catch (e) {
-      healthScore.textContent = t('common.notAvailable');
-      healthDetail.textContent = e.message || t('common.failed');
-      healthIcon.className = 'status-icon warning';
-    }
-    window.api.invoke('splash:progress', { pct: 65, label: t('splash.calculatingHealth') });
+    await Promise.all([loadDashboardData(), loadCleanupHistory()]);
 
     const btnManageFirewall = document.getElementById('btnManageFirewall');
     if (btnManageFirewall) {
       btnManageFirewall.addEventListener('click', () => {
         if (window.AppRouter) window.AppRouter.navigate('firewall');
+      });
+    }
+    const btnOpenNetwork = document.getElementById('btnOpenNetwork');
+    if (btnOpenNetwork) {
+      btnOpenNetwork.addEventListener('click', () => {
+        if (window.AppRouter) window.AppRouter.navigate('network');
       });
     }
 
@@ -550,7 +850,82 @@ window.Pages['dashboard'] = {
     const btnViewQuarantine = document.getElementById('btnViewQuarantine');
     const originalQuickLabel = btnQuickScan ? btnQuickScan.textContent : t('dashboard.quickScan');
     const originalFullLabel = btnFullScan ? btnFullScan.textContent : t('dashboard.fullScan');
-    if (btnRefreshWarnings) btnRefreshWarnings.addEventListener('click', loadWarnings);
+
+    function setScanButtonsState(scanning) {
+      if (!hasView()) return;
+      if (btnQuickScan) {
+        btnQuickScan.disabled = scanning;
+        btnQuickScan.textContent = scanning ? t('scanner.statusScanning') : originalQuickLabel;
+      }
+      if (btnFullScan) {
+        btnFullScan.disabled = scanning;
+        btnFullScan.textContent = scanning ? t('scanner.statusScanning') : originalFullLabel;
+      }
+      const lastScanEl = container.querySelector('#lastScanTime');
+      if (lastScanEl && scanning) {
+        lastScanEl.textContent = t('scanner.statusScanning');
+      }
+      if (btnUpdateDb) {
+        btnUpdateDb.disabled = scanning;
+      }
+    }
+
+    async function restoreScanRunningState() {
+      if (!hasView()) return;
+      try {
+        const status = await window.api.invoke('scan:status');
+        if (!hasView()) return;
+        if (status.scan && status.scan.isScanning) {
+          setScanButtonsState(true);
+        }
+      } catch (_) {
+        // Status query must never break dashboard rendering.
+      }
+    }
+
+    if (btnRefreshWarnings) btnRefreshWarnings.addEventListener('click', async () => {
+      const originalLabel = btnRefreshWarnings.textContent;
+      btnRefreshWarnings.disabled = true;
+      btnRefreshWarnings.textContent = t('common.loading');
+      try {
+        invalidateDashboardCache();
+        await loadWarnings();
+      } finally {
+        btnRefreshWarnings.disabled = false;
+        btnRefreshWarnings.textContent = originalLabel;
+      }
+    });
+    const btnIgnoredWarningsToggle = container.querySelector('#ignoredWarningsToggle');
+    const ignoredWarningList = container.querySelector('#ignoredWarningList');
+    if (btnIgnoredWarningsToggle && ignoredWarningList) {
+      btnIgnoredWarningsToggle.addEventListener('click', async () => {
+        const expanded = btnIgnoredWarningsToggle.getAttribute('aria-expanded') === 'true';
+        btnIgnoredWarningsToggle.setAttribute('aria-expanded', String(!expanded));
+        btnIgnoredWarningsToggle.textContent = expanded ? t('dashboard.ignoredWarningsExpand') : t('dashboard.ignoredWarningsCollapse');
+        if (expanded) {
+          ignoredWarningList.hidden = true;
+        } else {
+          ignoredWarningList.hidden = false;
+          ignoredWarningList.innerHTML = `<div class="empty-state">${escapeHtml(t('common.loading'))}</div>`;
+          await renderIgnoredList();
+        }
+      });
+    }
+    const btnRefreshDashboard = container.querySelector('#btnRefreshDashboard');
+    if (btnRefreshDashboard) {
+      btnRefreshDashboard.addEventListener('click', async () => {
+        btnRefreshDashboard.disabled = true;
+        btnRefreshDashboard.textContent = t('common.loading');
+        try {
+          invalidateDashboardCache();
+          await loadDashboardData();
+          await restoreScanRunningState();
+        } finally {
+          btnRefreshDashboard.disabled = false;
+          btnRefreshDashboard.textContent = t('dashboard.refresh');
+        }
+      });
+    }
     if (btnUpdateDb) {
       btnUpdateDb.addEventListener('click', async () => {
         btnUpdateDb.disabled = true;
@@ -574,8 +949,48 @@ window.Pages['dashboard'] = {
         if (window.AppRouter) window.AppRouter.navigate('quarantine');
       });
     }
-    await loadWarnings();
-    window.api.invoke('splash:progress', { pct: 75, label: t('splash.loadingWarnings') });
+    const btnRunCleanup = container.querySelector('#btnRunCleanup');
+    if (btnRunCleanup) {
+      btnRunCleanup.addEventListener('click', async () => {
+        btnRunCleanup.disabled = true;
+        const originalText = btnRunCleanup.textContent;
+        btnRunCleanup.textContent = t('common.loading');
+try {
+          const scriptsResponse = await window.api.invoke('maintenance:getScripts');
+          const configResponse = await window.api.invoke('maintenance:get');
+          const browsersResponse = await window.api.invoke('maintenance:getBrowserOptions');
+          const runnableIds = new Set(['clear-temp-files', 'browser-cache-report']);
+          const scripts = (scriptsResponse?.data || []).filter((item) => runnableIds.has(item.id));
+          const browserOptions = browsersResponse?.ok ? browsersResponse.data || [] : [];
+          const effectiveScripts = scripts.filter((item) => item.id !== 'browser-cache-report' || browserOptions.some((browser) => browser.exists));
+          if (!effectiveScripts.length) throw new Error(t('common.notAvailable'));
+          const configuredIds = configResponse?.data?.scriptIds || Object.keys(configResponse?.data?.policies || {});
+          const selection = await showCleanupPicker(effectiveScripts, configuredIds.filter((id) => runnableIds.has(id)), browserOptions);
+          if (!selection) return;
+          const res = await window.api.invoke('maintenance:runManual', {
+            policies: Object.fromEntries(selection.map((item) => [item.id, { mode: item.mode, args: item.args }]))
+          });
+          if (res?.ok) {
+            invalidateDashboardCache();
+            await loadCleanupHistory();
+            await loadDashboardData();
+          } else {
+            alert(res?.error || t('common.failed'));
+          }
+        } catch (e) {
+          alert(t('common.failed', { error: e }));
+        } finally {
+          btnRunCleanup.disabled = false;
+          btnRunCleanup.textContent = originalText;
+        }
+      });
+    }
+    const btnViewCleanupHistory = container.querySelector('#btnViewCleanupHistory');
+    if (btnViewCleanupHistory) {
+      btnViewCleanupHistory.addEventListener('click', () => {
+        if (window.AppRouter) window.AppRouter.navigate('reports');
+      });
+    }
 
     btnToggleRtp.addEventListener('click', async () => {
       const previous = isRtpActive;
@@ -586,6 +1001,7 @@ window.Pages['dashboard'] = {
         const status = await window.api.invoke('rtp:toggle', next);
         await window.api.invoke('db:setSetting', 'feature.realtimeProtection', !!status);
         setRtpState(status);
+        invalidateDashboardCache();
       } catch (err) {
         setRtpState(previous);
         alert(errorMessage(err) || t('common.failed'));
@@ -596,10 +1012,7 @@ window.Pages['dashboard'] = {
 
     if (btnQuickScan) {
       btnQuickScan.addEventListener('click', async () => {
-        const lastScanEl = container.querySelector('#lastScanTime');
-        if (lastScanEl) lastScanEl.textContent = t('scanner.statusScanning');
-        btnQuickScan.disabled = true;
-        btnQuickScan.textContent = t('scanner.statusScanning');
+        setScanButtonsState(true);
         try {
           const res = await window.api.invoke('scan:quick');
           if (res.error) {
@@ -610,18 +1023,14 @@ window.Pages['dashboard'] = {
         } catch (e) {
           alert(t('scanner.scanFailed', { error: e }));
         } finally {
-          btnQuickScan.disabled = false;
-          btnQuickScan.textContent = originalQuickLabel;
+          setScanButtonsState(false);
         }
       });
     }
 
     if (btnFullScan) {
       btnFullScan.addEventListener('click', async () => {
-        const lastScanEl = container.querySelector('#lastScanTime');
-        if (lastScanEl) lastScanEl.textContent = t('scanner.statusScanning');
-        btnFullScan.disabled = true;
-        btnFullScan.textContent = t('scanner.statusScanning');
+        setScanButtonsState(true);
         try {
           const res = await window.api.invoke('scan:full');
           if (res.error) {
@@ -632,34 +1041,46 @@ window.Pages['dashboard'] = {
         } catch (e) {
           alert(t('scanner.scanFailed', { error: e }));
         } finally {
-          btnFullScan.disabled = false;
-          btnFullScan.textContent = originalFullLabel;
+          setScanButtonsState(false);
         }
       });
     }
 
-    try {
-      await loadLastScan();
-      window.api.invoke('splash:progress', { pct: 85, label: t('dashboard.lastScan') });
-
-      const quarantineList = await window.api.invoke('db:getQuarantineList');
-      if (quarantineList) {
-        const threatsCountEl = container.querySelector('#threatsCount');
-        if (threatsCountEl) {
-          threatsCountEl.textContent = quarantineList.length;
-        }
+    // Listen for scan progress events from other sources (scanner page, tray, etc.)
+    this.cleanups.push(window.api.on('scan:progress', (data) => {
+      if (!hasView()) return;
+      if (data?.scanType === 'folderwatch') return;
+      if (data && data.pct !== undefined) {
+        setScanButtonsState(true);
       }
-      window.api.invoke('splash:progress', { pct: 90, label: t('nav.quarantine') });
-    } catch (e) {
-      console.warn('Failed to load dashboard data:', e);
-    }
+    }));
 
-    try {
+    // Listen for scan complete events to reset button state
+    this.cleanups.push(window.api.on('scan:complete', async (data) => {
+      if (!hasView()) return;
+      if (data?.scanType === 'folderwatch') return;
+      setScanButtonsState(false);
+      invalidateDashboardCache();
+      if (container.querySelector('#lastScanTime')) {
+        await loadLastScan();
+      }
+    }));
+
+    // Restore "Scanning..." state if a scan is already in progress
+    // (e.g. page reloaded while a scan is still running).
+    restoreScanRunningState();
+
+    window.api.invoke('splash:progress', { pct: 85, label: t('splash.loadingDashboard') });
+    window.api.invoke('splash:progress', { pct: 90, label: t('splash.finalizing') });
+
+try {
       window.api.invoke('splash:progress', { pct: 100, label: t('splash.ready') });
       // Small delay to allow progress bar to finish animating to 100%
       await new Promise(resolve => setTimeout(resolve, 300));
       await window.api.invoke('app:ready');
     } catch (_) {
-    }
+      // app:ready failed or was never reached - ensure splash dismisses
+      await window.api.invoke('app:ready').catch(() => {});
+}
   }
 };

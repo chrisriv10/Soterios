@@ -1,63 +1,8 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { width: 360px; font: 13px/1.4 system-ui, -apple-system, Segoe UI, Roboto; color: #1f2328; background: #fff; }
-    .header { display: flex; align-items: center; gap: 10px; padding: 16px; background: #f6f8fa; border-bottom: 1px solid #d0d7de; }
-    .header img { width: 32px; height: 32px; }
-    .header h1 { font-size: 15px; font-weight: 600; }
-    .section { padding: 16px; border-bottom: 1px solid #d0d7de; }
-    .section:last-child { border-bottom: none; }
-    .label { font-size: 11px; font-weight: 600; text-transform: uppercase; color: #656d76; margin-bottom: 8px; }
-    .input-group { display: flex; gap: 8px; }
-    input[type="password"] { flex: 1; padding: 8px 12px; border: 1px solid #d0d7de; border-radius: 6px; font: inherit; }
-    input[type="password"]:focus { outline: none; border-color: #0969da; box-shadow: 0 0 0 3px rgba(9,105,218,0.3); }
-    .btn { padding: 8px 16px; border: none; border-radius: 6px; font: inherit; font-weight: 500; cursor: pointer; }
-    .btn-primary { background: #0969da; color: white; }
-    .btn-primary:hover { background: #0860ca; }
-    .btn-primary:disabled { background: #94bcee; cursor: not-allowed; }
-    .result { margin-top: 12px; padding: 12px; border-radius: 6px; display: none; }
-    .result.safe { background: #f0fdf4; border: 1px solid #86efac; color: #166534; }
-    .result.pwned { background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; }
-    .result-title { font-weight: 600; margin-bottom: 4px; }
-    .result-detail { font-size: 12px; opacity: 0.8; }
-    .settings-link { display: block; text-align: center; padding: 12px; color: #0969da; text-decoration: none; font-size: 12px; }
-    .settings-link:hover { text-decoration: underline; }
-    .status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #656d76; }
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #28a745; }
-    .status-dot.offline { background: #dc3545; }
-    .loading { display: none; }
-    .loading.active { display: inline-block; width: 16px; height: 16px; border: 2px solid #d0d7de; border-top-color: #0969da; border-radius: 50%; animation: spin 0.8s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <img src="icons/icon32.png" alt="">
-    <h1>Soterios Credential Safety</h1>
-  </div>
-
-  <div class="section">
-    <div class="label">Check a Password</div>
-    <div class="input-group">
-      <input type="password" id="passwordInput" placeholder="Enter password to check" autocomplete="off">
-      <button class="btn btn-primary" id="checkBtn"><span class="loading" id="loader"></span> Check</button>
-    </div>
-    <div class="result" id="result"></div>
-  </div>
-
-  <div class="section">
-    <div class="label">Desktop App</div>
-    <div class="status">
-      <span class="status-dot offline" id="statusDot"></span>
-      <span id="statusText">Checking connection...</span>
-    </div>
-  </div>
-
-  <a class="settings-link" href="#" id="openOptions">Settings</a>
-
-  <script src="src/popup.js"></script>
-</body>
-</html>
+<!doctype html><html lang="en" data-theme="system"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Soterios</title><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="ui.css"></head>
+<body class="popup"><header class="appbar"><div class="brand"><img class="brand-logo" src="icons/brand-logo.png" alt="" aria-hidden="true"><img class="brand-wordmark" src="icons/brand-wordmark.png" alt="Soterios"></div><span id="header-status" class="status unknown">Checking</span></header>
+<nav class="tabs" aria-label="Extension views"><button class="tab" role="tab" aria-selected="true" aria-controls="protection-view" data-view="protection-view">Protection</button><button class="tab" role="tab" aria-selected="false" aria-controls="tools-view" data-view="tools-view">Tools</button><button class="tab" role="tab" aria-selected="false" aria-controls="activity-view" data-view="activity-view">Activity</button></nav>
+<main class="popup-main">
+<section class="view stack" id="protection-view" role="tabpanel"><div class="card site-state"><div id="state-mark" class="state-mark" aria-hidden="true">…</div><div><div class="eyebrow">Current site</div><div id="current-domain" class="domain">Loading…</div><div id="site-status" class="big-status">Checking protection</div></div></div><div id="site-reasons" class="card subtle">Reviewing local protection signals.</div><div class="card stack"><div class="row"><span class="field-label">Threat feed</span><span id="feed-status" class="status unknown">Checking</span></div><div class="row"><span class="field-label">Desktop companion</span><span id="desktop-status" class="status unknown">Optional</span></div><div class="actions protection-actions"><button id="on-demand" class="button">Protect this page</button><button id="pause-hour" class="button">Pause 1 hour</button><button id="pause-site" class="button">Pause site</button><button id="resume-site" class="button" hidden>Resume</button></div></div></section>
+<section class="view stack" id="tools-view" role="tabpanel" hidden><div class="card stack"><div><h2>Password check</h2><p class="subtle">Offline strength runs locally. HIBP runs only when you choose Check now.</p></div><div class="field"><label for="password-input">Password</label><input class="input" id="password-input" type="password" autocomplete="off" maxlength="1024"></div><div class="meter" aria-hidden="true"><span id="strength-meter"></span></div><div id="strength-result" class="subtle result" aria-live="polite">Enter a password for offline analysis.</div><button id="check-password" class="button primary">Check now</button><div id="hibp-result" class="notice" aria-live="polite" hidden></div></div><div class="card stack"><div><h2>Secure generator</h2><p class="subtle">Generated locally with the browser cryptographic random source.</p></div><div class="row wrap generator-row"><select id="generator-mode" class="input" aria-label="Generator type"><option value="password">Password</option><option value="passphrase">Passphrase</option></select><button id="generate" class="button">Generate</button></div><div class="field"><label for="generated-value">Generated value</label><input id="generated-value" class="input" readonly></div><button id="copy-generated" class="button">Copy</button></div></section>
+<section class="view stack" id="activity-view" role="tabpanel" hidden><div class="card"><div class="row"><div><h2>Recent findings</h2><p class="subtle">Stored locally for up to 30 days.</p></div><button id="open-history" class="button small">View all</button></div><div id="recent-activity"><div class="empty">No findings recorded.</div></div></div></section>
+</main><footer class="footer-links"><a href="options.html" target="_blank">Settings</a><a href="onboarding.html" target="_blank">Privacy choices</a></footer><script src="popup.js"></script></body></html>

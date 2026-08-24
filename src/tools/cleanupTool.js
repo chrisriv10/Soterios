@@ -20,7 +20,7 @@ module.exports = [
     id: 'list-scripts', name: 'List Maintenance Scripts',
     description: 'Returns the registry of available safe maintenance scripts.',
     category: 'Maintenance', icon: 'list-checks',
-    run: async () => loadRegistry().map(({ id, name, description }) => ({ id, name, description }))
+    run: async () => loadRegistry()
   },
   {
     id: 'run-script', name: 'Run Maintenance Script',
@@ -29,7 +29,9 @@ module.exports = [
     run: async (args, ctx) => {
       const scriptId = args && args.scriptId;
       if (!scriptId) throw new Error('scriptId is required');
-      const result = await runScript(scriptId, args.scriptArgs || {}, ctx && ctx.sendProgress);
+      const result = await runScript(scriptId, args.scriptArgs || {}, ctx && ctx.sendProgress, {
+        signal: ctx && ctx.signal
+      });
       if (ctx.appStore) {
         ctx.appStore.addHistory('scripts', { scriptId, resultSummary: summarizeScriptResult(result) });
         ctx.appStore.addHistory('actions', { type: 'script', title: 'Maintenance script ran', detail: scriptId, level: 'ok' });
