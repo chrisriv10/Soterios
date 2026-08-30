@@ -19,6 +19,19 @@ test('HIBP reports exact prevalence from a validated response line', async () =>
 
 test('conservative URL heuristics produce advisories with exact reason codes', () => { assert.deepEqual(inspectUrl('http://127.0.0.1/login').map((item) => item.code), ['IP_LITERAL_HOST', 'INSECURE_CREDENTIAL_PATH']); assert.ok(inspectUrl('https://paypal.example.net/signin').some((item) => item.code === 'BRAND_IMPERSONATION')); assert.ok(inspectUrl('https://trusted.example@evil.example/login').some((item) => item.code === 'DECEPTIVE_USERINFO')); assert.equal(inspectCredentialDestination('https://example.com/login', 'https://collector.test/submit')[0].code, 'CROSS_SITE_CREDENTIAL_FORM'); });
 
+test('official Microsoft Outlook and account hosts are not reported as brand impersonation', () => {
+  const officialHosts = [
+    'https://outlook.office.com/mail/',
+    'https://outlook.live.com/mail/',
+    'https://outlook.cloud.microsoft/mail/',
+    'https://login.microsoftonline.com/common/oauth2/authorize',
+    'https://account.microsoft.com/'
+  ];
+  for (const url of officialHosts) {
+    assert.equal(inspectUrl(url).some((item) => item.code === 'BRAND_IMPERSONATION'), false, url);
+  }
+});
+
 test('migration suspends all online requests until the new disclosure is confirmed', () => { const migration = migrateSettings({ privacyMode: false, reuseMap: { old: true }, safeBrowsingApiKey: 'local-key' }, { theme: 'aurora', safeBrowsingApiKey: 'sync-key' }); assert.equal(migration.settings.onboarding.confirmedAt, null); assert.equal(migration.settings.onlineServices.hibp, true); assert.equal(providerEnabled(migration.settings, 'hibp'), false); assert.equal(migration.settings.onboarding.reuseResetNoticePending, true); assert.equal(migration.display.theme, 'aurora'); assert.equal(migration.googleKey, 'local-key'); assert.ok(migration.deleteLocalKeys.includes('reuseMap')); assert.ok(migration.deleteSyncKeys.includes('safeBrowsingApiKey')); });
 
 test('30-day findings retention removes old records and caps local history', () => { const now = Date.parse('2026-08-15T00:00:00Z'); const fresh = { id: '1', timestamp: '2026-08-14T00:00:00Z', category: 'phishing', severity: 'danger', domain: 'example.com', reasonCodes: ['X'], resolution: 'open' }; const old = { ...fresh, id: '2', timestamp: '2026-06-01T00:00:00Z' }; assert.deepEqual(pruneHistory([old, fresh], now).map((event) => event.id), ['1']); });

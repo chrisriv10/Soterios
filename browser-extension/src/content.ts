@@ -14,6 +14,7 @@ const lastCheckedValue = new WeakMap<HTMLInputElement, string>();
 const checkedForms = new WeakMap<HTMLFormElement, string>();
 let enabled = true;
 let lastUrl = location.href;
+let lastSiteNoticeKey = '';
 
 const host = document.createElement('div');
 host.id = 'soterios-protection-root';
@@ -25,8 +26,8 @@ const style = document.createElement('style');
 style.textContent = `
   :host{all:initial;color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
   *{box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
-  .field-button{position:fixed;width:28px;height:28px;border:1px solid #7a91a8;border-radius:9px;background:#102131;color:#eaf4ff;box-shadow:0 5px 18px #0005;display:grid;place-items:center;pointer-events:auto;cursor:pointer;font:700 13px/1 system-ui}
-  .field-button img{width:18px;height:18px;display:block;object-fit:contain;pointer-events:none}
+  .field-button{position:fixed;width:28px;height:28px;padding:0;border:1px solid #7a91a8;border-radius:9px;background:#102131;color:#eaf4ff;box-shadow:0 5px 18px #0005;display:flex;align-items:center;justify-content:center;line-height:0;pointer-events:auto;cursor:pointer;font:700 13px/1 system-ui}
+  .field-button img{width:18px;height:18px;display:block;margin:0;object-fit:contain;object-position:center;pointer-events:none}
   .field-button:hover{background:#18354d}.field-button:focus-visible,.action:focus-visible{outline:3px solid #63b3ed;outline-offset:2px}
   .field-button[data-state="warning"]{border-color:#e9b949;color:#ffe19a}.field-button[data-state="danger"]{border-color:#ff7878;color:#ffb4b4}.field-button[data-state="clear"]{border-color:#62c9a5;color:#a4f1d7}
   .notice{position:fixed;right:18px;bottom:18px;width:min(380px,calc(100vw - 36px));padding:16px;border:1px solid #39536b;border-radius:15px;background:#0d1a27;color:#ecf4fb;box-shadow:0 18px 50px #0008;pointer-events:auto;animation:enter .18s ease-out}
@@ -87,6 +88,28 @@ function showNotice(title: string, message: string, severity: 'info' | 'warning'
   if (detail) { const meta = document.createElement('div'); meta.className = 'meta'; meta.textContent = detail; notice.appendChild(meta); }
   notice.appendChild(close);
   shadow.appendChild(notice);
+}
+
+function siteNoticeKey(urlValue: string, verdict: string, reasons: string[]): string {
+  try {
+    const url = new URL(urlValue);
+    const path = url.pathname.replace(/\/{2,}/g, '/').replace(/\/$/, '') || '/';
+    return `${url.protocol}//${url.hostname.toLowerCase()}${url.port ? `:${url.port}` : ''}${path}|${verdict}|${[...reasons].sort().join(',')}`;
+  } catch (_) {
+    return `${urlValue}|${verdict}|${[...reasons].sort().join(',')}`;
+  }
+}
+
+function showSiteNotice(urlValue: string, verdict: string, reasons: string[]): void {
+  const key = siteNoticeKey(urlValue, verdict, reasons);
+  if (key === lastSiteNoticeKey) return;
+  lastSiteNoticeKey = key;
+  showNotice(
+    'Soterios found something to review',
+    reasons.map(reasonText).join(' '),
+    verdict === 'danger' ? 'danger' : 'warning',
+    'Heuristic advisories never block the page.'
+  );
 }
 
 function showInterstitial(reasons: string[]): void {
@@ -219,7 +242,7 @@ async function checkCurrentSite(): Promise<void> {
     if (result.verdict.verdict === 'danger' && result.verdict.source === 'feed' && !state.bypassed) {
       showInterstitial(result.verdict.reasons);
     } else if (result.verdict.verdict === 'warning' || (result.verdict.verdict === 'danger' && result.verdict.source !== 'feed')) {
-      showNotice('Soterios found something to review', result.verdict.reasons.map(reasonText).join(' '), result.verdict.verdict === 'danger' ? 'danger' : 'warning', 'Heuristic advisories never block the page.');
+      showSiteNotice(location.href, result.verdict.verdict, result.verdict.reasons);
     } else if (result.verdict.verdict === 'unknown' && result.verdict.reasons.includes('FEED_STALE')) {
       showNotice('Protection is degraded', reasonText('FEED_STALE'), 'warning');
     }
@@ -236,7 +259,7 @@ chrome.runtime.onMessage.addListener((message) => {
   if (message?.type === 'THEME_CHANGED') return;
 });
 const navigationTimer = setInterval(() => {
-  if (location.href !== lastUrl) { lastUrl = location.href; dismissNotices(); void checkCurrentSite(); }
+  if (location.href !== lastUrl) { lastUrl = location.href; lastSiteNoticeKey = ''; dismissNotices(); void checkCurrentSite(); }
   repositionAll();
 }, 1000);
 void checkCurrentSite();

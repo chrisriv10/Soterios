@@ -22,6 +22,8 @@ const CONTENT_ORIGINS = ['http://*/*', 'https://*/*'];
 const FEED_ALARM = 'soterios-feed-update-v2';
 const RETENTION_ALARM = 'soterios-history-retention-v2';
 const NATIVE_HOST = 'com.soterios.credential_safety';
+const DESKTOP_NOTICE_COOLDOWN_MS = 10 * 60 * 1000;
+const desktopNoticeTimes = new Map<string, number>();
 
 let ready = initialize();
 
@@ -150,6 +152,12 @@ async function notifyDesktop(event: ProtectionEvent, settings: SettingsV2): Prom
   if (!settings.desktop.sharingEnabled) return;
   const permitted = await chrome.permissions.contains({ permissions: ['nativeMessaging'] });
   if (!permitted) return;
+  const key = `${event.category}|${event.severity}|${event.domain}|${[...event.reasonCodes].sort().join(',')}`;
+  const now = Date.now();
+  for (const [priorKey, timestamp] of desktopNoticeTimes) {
+    if (now - timestamp >= DESKTOP_NOTICE_COOLDOWN_MS) desktopNoticeTimes.delete(priorKey);
+  }
+  if (desktopNoticeTimes.has(key)) return;
   try {
     await chrome.runtime.sendNativeMessage(NATIVE_HOST, {
       protocol: 2, requestId: randomRequestId('native'), type: 'REPORT_FINDING',
@@ -158,6 +166,7 @@ async function notifyDesktop(event: ProtectionEvent, settings: SettingsV2): Prom
         ...(event.prevalenceCount ? { prevalenceCount: event.prevalenceCount } : {})
       }
     });
+    desktopNoticeTimes.set(key, now);
   } catch (_) {}
 }
 

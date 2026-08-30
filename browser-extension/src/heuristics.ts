@@ -2,7 +2,17 @@ import { isIpLiteral, registrableDomain } from './domains';
 
 const BRANDS = [
   { name: 'paypal', domains: ['paypal.com'] },
-  { name: 'microsoft', domains: ['microsoft.com', 'live.com', 'office.com'] },
+  // Microsoft operates several first-party domains for Outlook and account
+  // sign-in flows in addition to microsoft.com itself. Keep these explicit so
+  // an official Outlook host is not mistaken for an impersonation just because
+  // its hostname contains "microsoft".
+  {
+    name: 'microsoft',
+    domains: [
+      'microsoft.com', 'microsoftonline.com', 'microsoft365.com',
+      'live.com', 'office.com', 'cloud.microsoft'
+    ]
+  },
   { name: 'google', domains: ['google.com', 'gmail.com'] },
   { name: 'apple', domains: ['apple.com', 'icloud.com'] },
   { name: 'amazon', domains: ['amazon.com'] },
