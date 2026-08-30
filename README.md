@@ -33,6 +33,8 @@ Download the latest Windows release:
 |----------|-----------|-------|
 | **Windows** | `Soterios-Setup-1.3.0.exe` | NSIS installer · requires admin for system-level checks |
 
+The release build also produces `soterios-extension-2.0.0.zip`, a Chromium Manifest V3 package for sideloading or store submission. The extension is included in the desktop installer resources and can also be built independently (see [Build Installers](#build-installers)).
+
 ---
 
 ## Features
@@ -45,13 +47,13 @@ Download the latest Windows release:
 - **Windows Security Audit** — Defender, UAC, Windows Update, BitLocker, PowerShell policy, and Secure Boot, with per-section management actions
 - **Firewall Management** — profile status, rule summaries, multi-select bulk rule actions, and an endpoint activity radar visualizing live connections
 - **Network Monitor** — active connections, interface activity, an adaptive geo activity map, and selectable traffic history ranges
-- **VPN Management** — on/off control, tray toggle, auto-connect, and a guided provider setup
+- **VPN Management** — on/off control, tray toggle, auto-connect, guided provider setup, and removal of Soterios-created profiles
 - **Credential Safety Hub** — local password generator, strength checker, HIBP k-anonymity password leak checks, and XposedOrNot email breach checks
-- **Browser Extension** — local password reuse detection, breach/reuse toolbar badge, Google Safe Browsing phishing/malware warnings, a signed threat feed, and themes that match the desktop app
+- **Browser Extension 2.0** — local password reuse detection, breach/reuse toolbar badge, Google Safe Browsing phishing/malware warnings, a signed threat feed, matching themes, and optional continuous protection for HTTP/HTTPS sites
 - **AI Assistant** — local Ollama integration with system context awareness and the ability to run safe Soterios actions on request
 - **Real-Time Protection** — toggles Windows Defender real-time monitoring on/off and verifies its state
 - **Privacy Mode** — one Settings toggle that disables Soterios's data-sharing and history features (external breach/geo lookups, AI assistant context, traffic and scan history, auto reports) and restores them when turned off
-- **Quarantine Management** — restore or permanently delete isolated files
+- **Quarantine Management** — restore or permanently delete isolated files, with status history and safe recovery controls
 - **Maintenance Scheduler** — configurable auto-clean policies with per-script settings, run-now overrides, and a Safety Vault that stages files before deletion instead of removing them immediately
 - **Device Optimization** — switch power plan modes to trade performance for battery life or vice versa
 - **Tools & Maintenance** — temp file cleanup, disk reports, large file finder, duplicate file finder, secure file shredder, folder watch, network alerts, browser cache reports, startup items and persistence monitoring, network reports, Windows services reports, scheduled tasks reports, hosts file integrity checks, and network interface/connection reports
@@ -79,7 +81,7 @@ Soterios does **not** collect telemetry or analytics. All scanning and system an
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) 22 or newer
+- [Node.js](https://nodejs.org/) 26 or newer (required by the package engine)
 - [Git](https://git-scm.com/)
 
 ### Clone & Run
@@ -96,8 +98,14 @@ npm start
 ```bash
 # Windows (NSIS .exe)
 npm run dist:win
+```
 
-Additional platform builds may be added in the future as cross-platform support develops.
+To build and package the Chromium extension separately:
+
+```bash
+npm run extension:build
+npm run extension:validate
+npm run extension:package
 ```
 
 Built artifacts are output to the `dist/` directory.
