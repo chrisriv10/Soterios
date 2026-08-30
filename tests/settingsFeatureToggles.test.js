@@ -19,6 +19,20 @@ describe('settings feature toggle grouping', () => {
     assert.equal(settingsSource.includes('Privacy, UI & Connectivity'), false);
   });
 
+  it('keeps the feature cards balanced with emergency lockdown and auto-updates on the left', () => {
+    const firstCardTitle = settingsSource.indexOf("t('settings.featureToggles')");
+    const secondCardTitle = settingsSource.indexOf("t('settings.featureToggles')", firstCardTitle + 1);
+    const updatesTitle = settingsSource.indexOf("t('settings.updates')");
+    const leftFeatureCard = settingsSource.slice(firstCardTitle, secondCardTitle);
+    const updatesCard = settingsSource.slice(updatesTitle, settingsSource.indexOf("t('settings.about')", updatesTitle));
+
+    assert.ok(leftFeatureCard.includes('id="emergencyLockdownToggle"'));
+    assert.ok(leftFeatureCard.includes('id="autoUpdatesToggle"'));
+    assert.equal((settingsSource.match(/id="emergencyLockdownToggle"/g) || []).length, 1);
+    assert.equal((settingsSource.match(/id="autoUpdatesToggle"/g) || []).length, 1);
+    assert.equal(updatesCard.includes('id="autoUpdatesToggle"'), false);
+  });
+
   it('places suspicious network alerts in the Notifications card and keeps its handler', () => {
     assert.equal((settingsSource.match(/id="networkAlertsToggle"/g) || []).length, 1);
     const notificationsTitle = settingsSource.indexOf("t('settings.notifications')");

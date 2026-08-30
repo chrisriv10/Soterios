@@ -75,10 +75,26 @@ window.Pages.settings = {
 
           <div class="toggle-row">
             <div>
+              <div class="toggle-label">${escapeHtml(t('settings.emergencyLockdown.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.emergencyLockdown.desc'))}</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="emergencyLockdownToggle" ${settings.features.emergencyLockdown !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+          </div>
+
+          <div class="toggle-row">
+            <div>
               <div class="toggle-label">${escapeHtml(t('settings.networkTrafficHistory.label'))}</div>
               <div class="toggle-desc">${escapeHtml(t('settings.networkTrafficHistory.desc'))}</div>
             </div>
             <label class="toggle"><input type="checkbox" id="networkTrafficHistoryToggle" ${settings.features.networkTrafficHistory !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+          </div>
+
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">${escapeHtml(t('settings.autoUpdates.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.autoUpdates.desc'))}</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="autoUpdatesToggle" ${settings.features.autoUpdates !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
 
           <div class="privacy-lock-hint" style="display:none; margin-top:8px; font-size:0.8rem; color:var(--text-dim);"></div>
@@ -109,14 +125,6 @@ window.Pages.settings = {
               <div class="toggle-desc">${escapeHtml(t('settings.networkPerimeterMap.desc'))}</div>
             </div>
             <label class="toggle"><input type="checkbox" id="networkPerimeterMapToggle" ${settings.features.networkPerimeterMap !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
-          </div>
-
-          <div class="toggle-row">
-            <div>
-              <div class="toggle-label">${escapeHtml(t('settings.emergencyLockdown.label'))}</div>
-              <div class="toggle-desc">${escapeHtml(t('settings.emergencyLockdown.desc'))}</div>
-            </div>
-            <label class="toggle"><input type="checkbox" id="emergencyLockdownToggle" ${settings.features.emergencyLockdown !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
 
           <div class="toggle-row">
@@ -273,13 +281,6 @@ window.Pages.settings = {
 
         <div class="card">
           <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.updates'))}</div>
-          <div class="toggle-row">
-            <div>
-              <div class="toggle-label">${escapeHtml(t('settings.autoUpdates.label'))}</div>
-              <div class="toggle-desc">${escapeHtml(t('settings.autoUpdates.desc'))}</div>
-            </div>
-            <label class="toggle"><input type="checkbox" id="autoUpdatesToggle" ${settings.features.autoUpdates !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
-          </div>
           <div id="updateStatusText" style="margin-top:12px; font-size:0.85rem; color:var(--text-muted);">${escapeHtml(t('settings.checkingUpdateStatus'))}</div>
           <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
             <button class="btn btn-primary" id="checkUpdatesBtn">${escapeHtml(t('settings.checkUpdates'))}</button>
