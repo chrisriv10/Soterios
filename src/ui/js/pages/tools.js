@@ -588,7 +588,7 @@
       const pending = result.pending || (result.items ? result : null);
       const changes = pending?.changes || { added: [], modified: [], removed: [], total: 0 };
       if (!result.baselineExists && !pending) return '<div class="maintenance-empty"><h3>No approved baseline yet</h3><p>Run a scan, review the collected persistence mechanisms, then explicitly approve the first baseline.</p></div>';
-      return `${this._summaryTiles([['Baseline items', result.baselineItemCount || pending?.itemCount || 0], ['Added', changes.added?.length || 0, changes.added?.length ? 'warn' : ''], ['Modified', changes.modified?.length || 0, changes.modified?.length ? 'warn' : ''], ['Removed', changes.removed?.length || 0]])}<div class="maintenance-result-banner result-${pending?.needsBaselineApproval ? 'warning' : (changes.total ? 'warning' : 'clean')}"><strong>${pending?.needsBaselineApproval ? 'Baseline approval required' : (changes.total ? 'Persistence changes need review' : 'No persistence changes detected')}</strong></div>${pending?.needsBaselineApproval ? '<div class="maintenance-result-toolbar"><span>Approving establishes the first trusted state. It will never update automatically.</span><button class="btn btn-primary" data-action="approve-persistence" data-scope="all">Approve reviewed baseline</button></div>' : ''}${this._renderChangeSection('Added', changes.added)}${this._renderChangeSection('Modified', changes.modified)}${this._renderChangeSection('Removed', changes.removed)}${pending?.warnings?.length ? this._renderIssueList(pending.warnings.map((message) => ({ reason: message })), 'Collector warnings') : ''}`;
+      return `${this._summaryTiles([['Baseline items', result.baselineItemCount || pending?.itemCount || 0], ['Added', changes.added?.length || 0, changes.added?.length ? 'warn' : ''], ['Modified', changes.modified?.length || 0, changes.modified?.length ? 'warn' : ''], ['Removed', changes.removed?.length || 0]])}<div class="maintenance-result-banner result-${pending?.needsBaselineApproval ? 'warning' : (changes.total ? 'warning' : 'clean')}"><strong>${pending?.needsBaselineApproval ? 'Baseline approval required' : (changes.total ? 'Persistence changes need review' : 'No persistence changes detected')}</strong></div>${pending?.needsBaselineApproval ? '<div class="maintenance-result-toolbar"><span>Approving establishes the first trusted state. It will never update automatically.</span><button class="btn btn-primary" data-action="approve-persistence" data-scope="all">Approve reviewed baseline</button></div>' : ''}${changes.total ? '<div class="maintenance-result-toolbar persistence-selection-toolbar"><label class="check-label"><input type="checkbox" id="persistenceSelectAll"> Select all changes</label><span>Review the selected items before approving them.</span></div>' : ''}${this._renderChangeSection('Added', changes.added)}${this._renderChangeSection('Modified', changes.modified)}${this._renderChangeSection('Removed', changes.removed)}${pending?.warnings?.length ? this._renderIssueList(pending.warnings.map((message) => ({ reason: message })), 'Collector warnings') : ''}`;
     },
 
     _renderChangeSection(label, changes = []) {
@@ -778,6 +778,20 @@
         return;
       }
       if (target.classList.contains('leftover-select')) { target.checked ? this._selectedLeftovers.add(target.dataset.path) : this._selectedLeftovers.delete(target.dataset.path); }
+      if (target.id === 'persistenceSelectAll') {
+        this._container.querySelectorAll('.persistence-change-select').forEach((input) => { input.checked = target.checked; });
+        target.indeterminate = false;
+        return;
+      }
+      if (target.classList.contains('persistence-change-select')) {
+        const inputs = [...this._container.querySelectorAll('.persistence-change-select')];
+        const selected = inputs.filter((input) => input.checked).length;
+        const selectAll = this._container.querySelector('#persistenceSelectAll');
+        if (selectAll) {
+          selectAll.checked = inputs.length > 0 && selected === inputs.length;
+          selectAll.indeterminate = selected > 0 && selected < inputs.length;
+        }
+      }
     },
 
     async _saveMaintenance() {
