@@ -12,7 +12,11 @@ if (manifest.content_scripts) failures.push('static content_scripts are forbidde
 for (const permission of manifest.permissions || []) if (!['storage', 'alarms', 'activeTab', 'scripting'].includes(permission)) failures.push(`unexpected required permission: ${permission}`);
 if (JSON.stringify(manifest).includes('<all_urls>')) failures.push('manifest must not contain <all_urls>');
 if (!manifest.content_security_policy?.extension_pages?.includes("script-src 'self'")) failures.push('explicit self-only script CSP is required');
-if (manifest.web_accessible_resources?.length) failures.push('no web-accessible resources are expected');
+const webResources = manifest.web_accessible_resources || [];
+if (webResources.length !== 1
+  || JSON.stringify(webResources[0]) !== JSON.stringify({ resources: ['icons/icon32.png'], matches: ['http://*/*', 'https://*/*'] })) {
+  failures.push('only the Soterios field-button icon may be web-accessible');
+}
 
 async function files(dir) {
   const output = [];

@@ -578,6 +578,10 @@ class DatabaseService {
       .run(status, JSON.stringify(metadata), id);
   }
 
+  deleteVaultItem(id) {
+    return this.db.prepare('DELETE FROM maintenance_vault WHERE id = ?').run(id);
+  }
+
   getVaultItem(id) {
     const row = this.db.prepare('SELECT * FROM maintenance_vault WHERE id = ?').get(id);
     return row ? this._mapVaultRow(row) : null;

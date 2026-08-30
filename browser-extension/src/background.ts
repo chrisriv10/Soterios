@@ -9,7 +9,7 @@ import { clearHistory, getHistory, recordFinding } from './history';
 import { inspectCredentialDestination, inspectUrl } from './heuristics';
 import {
   PROVIDERS, beginProviderRequest, cancelAllProviders, cancelProvider, checkGoogleUrl,
-  finishProviderRequest, noteProviderContact, providerDescriptors, requestProviderPermission,
+  finishProviderRequest, noteProviderContact, providerDescriptors,
   revokeProviderPermission, scheduledFeedUpdate, setGoogleKey
 } from './providers';
 import {
@@ -29,7 +29,14 @@ async function initialize(): Promise<void> {
   const { settings } = await initializeStorage();
   await chrome.alarms.create(FEED_ALARM, { periodInMinutes: 6 * 60 });
   await chrome.alarms.create(RETENTION_ALARM, { periodInMinutes: 24 * 60 });
-  if (settings.continuousAccess) await syncContentScriptRegistration(true);
+  const hasSiteAccess = await chrome.permissions.contains({ origins: CONTENT_ORIGINS });
+  if (settings.continuousAccess && hasSiteAccess) {
+    await syncContentScriptRegistration(true);
+  } else if (settings.continuousAccess && settings.onboarding.confirmedAt && !hasSiteAccess) {
+    settings.continuousAccess = false;
+    await setSettings(settings);
+    await syncContentScriptRegistration(false);
+  }
 }
 
 async function syncContentScriptRegistration(enabled: boolean): Promise<void> {
@@ -214,13 +221,16 @@ async function handleRequest(request: RuntimeRequest, sender: chrome.runtime.Mes
     case 'UPDATE_SETTINGS':
       return { settings: await updateSettingsFromPayload(request.payload), providers: await providerDescriptors(await getSettings()) };
     case 'CONFIRM_ONBOARDING': {
-      const payload = (request.payload || {}) as { hibp?: boolean; feed?: boolean; googleSafeBrowsing?: boolean };
+      const payload = (request.payload || {}) as { hibp?: boolean; feed?: boolean; googleSafeBrowsing?: boolean; continuousAccess?: boolean };
       const next = await updateSettingsFromPayload({ onlineServices: {
         enabled: true, hibp: payload.hibp !== false, feed: payload.feed !== false,
         googleSafeBrowsing: payload.googleSafeBrowsing === true
-      } });
-      for (const id of Object.keys(PROVIDERS) as Array<keyof typeof PROVIDERS>) {
-        if (next.onlineServices[id]) await requestProviderPermission(id).catch(() => false);
+      }, ...(typeof payload.continuousAccess === 'boolean' ? { continuousAccess: payload.continuousAccess } : {}) });
+      if (typeof payload.continuousAccess === 'boolean') {
+        const granted = payload.continuousAccess && await chrome.permissions.contains({ origins: CONTENT_ORIGINS });
+        next.continuousAccess = granted;
+        await setSettings(next);
+        await syncContentScriptRegistration(granted);
       }
       next.onboarding.confirmedAt = new Date().toISOString();
       next.onboarding.disclosureVersion = 2;
@@ -230,7 +240,8 @@ async function handleRequest(request: RuntimeRequest, sender: chrome.runtime.Mes
       return { settings: next, providers: await providerDescriptors(next) };
     }
     case 'REQUEST_CONTINUOUS_ACCESS': {
-      const granted = await chrome.permissions.request({ origins: CONTENT_ORIGINS });
+      const requested = (request.payload as { granted?: unknown } | undefined)?.granted === true;
+      const granted = requested && await chrome.permissions.contains({ origins: CONTENT_ORIGINS });
       const next = await getSettings();
       next.continuousAccess = granted;
       await setSettings(next);

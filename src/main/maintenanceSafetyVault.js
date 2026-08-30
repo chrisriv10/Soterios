@@ -221,6 +221,16 @@ class MaintenanceSafetyVault {
     return { ...item, status: 'purged', reclaimedBytes: item.sizeBytes };
   }
 
+  deleteLog(id) {
+    const item = this.db.getVaultItem(id);
+    if (!item) throw new Error('Vault item was not found.');
+    if (!['purged', 'restored'].includes(item.status)) {
+      throw new Error('Vault records can only be removed after the item is deleted or restored.');
+    }
+    this.db.deleteVaultItem(id);
+    return { id: item.id, status: item.status, deleted: true };
+  }
+
   async purgeExpired(now = new Date()) {
     const expired = this.db.getVaultItems({ status: 'staged', expiredBefore: now.toISOString() });
     const results = [];

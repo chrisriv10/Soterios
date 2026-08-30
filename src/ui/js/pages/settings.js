@@ -75,14 +75,6 @@ window.Pages.settings = {
 
           <div class="toggle-row">
             <div>
-              <div class="toggle-label">${escapeHtml(t('settings.networkAlerts.label'))}</div>
-              <div class="toggle-desc">${escapeHtml(t('settings.networkAlerts.desc'))}</div>
-            </div>
-            <label class="toggle"><input type="checkbox" id="networkAlertsToggle" ${settings.features.networkAlerts !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
-          </div>
-
-          <div class="toggle-row">
-            <div>
               <div class="toggle-label">${escapeHtml(t('settings.networkTrafficHistory.label'))}</div>
               <div class="toggle-desc">${escapeHtml(t('settings.networkTrafficHistory.desc'))}</div>
             </div>
@@ -93,7 +85,7 @@ window.Pages.settings = {
         </div>
 
         <div class="card">
-          <div class="panel-title" style="margin-bottom:16px;">Privacy, UI & Connectivity</div>
+          <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.featureToggles'))}</div>
 
           <div class="toggle-row">
             <div>
@@ -245,6 +237,13 @@ window.Pages.settings = {
               <div class="toggle-desc">${escapeHtml(t('settings.scanNotifications.desc'))}</div>
             </div>
             <label class="toggle"><input type="checkbox" id="scanNotificationsToggle" ${settings.features.scanNotifications !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+          </div>
+          <div class="toggle-row" style="margin-top:8px;">
+            <div>
+              <div class="toggle-label">${escapeHtml(t('settings.networkAlerts.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.networkAlerts.desc'))}</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="networkAlertsToggle" ${settings.features.networkAlerts !== false ? 'checked' : ''} /><span class="toggle-slider"></span></label>
           </div>
         </div>
 

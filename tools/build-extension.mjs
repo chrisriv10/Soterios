@@ -24,6 +24,10 @@ const manifest = {
   options_ui: { page: 'options.html', open_in_tab: true },
   permissions: ['storage', 'alarms', 'activeTab', 'scripting'],
   optional_permissions: ['nativeMessaging'],
+  web_accessible_resources: [{
+    resources: ['icons/icon32.png'],
+    matches: ['http://*/*', 'https://*/*']
+  }],
   optional_host_permissions: [
     'http://*/*', 'https://*/*', 'https://api.pwnedpasswords.com/*',
     'https://christopher-rivera.me/*', 'https://safebrowsing.googleapis.com/*'

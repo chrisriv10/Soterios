@@ -84,30 +84,35 @@ window.Pages.reports = {
 
 <div class="reports-layout">
         <section class="panel report-browser">
-          <div class="panel-title report-section-toggle" data-collapse-target="scanReportHistory" role="button" tabindex="0" aria-expanded="true" style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-            ${escapeHtml(t('reports.scanReports'))}
-            <button class="btn btn-xs btn-ghost hidden" id="clearAllScanReports">${escapeHtml(t('reports.clearAllScanReports'))}</button>
+          <div class="panel-title report-section-toggle report-section-toggle--single-action" data-collapse-target="scanReportHistory" role="button" tabindex="0" aria-expanded="true">
+            <span class="report-section-label">${escapeHtml(t('reports.scanReports'))}</span>
+            <span class="report-section-clear-slot"><button class="btn btn-xs btn-ghost report-clear-button hidden" id="clearAllScanReports">${escapeHtml(t('reports.clearAllScanReports'))}</button></span>
+            <span class="report-section-extra-slot" aria-hidden="true"></span>
+            <span class="report-section-chevron" aria-hidden="true"></span>
           </div>
           <div id="scanReportHistory" class="history-list"><div class="empty-state">${escapeHtml(t('reports.loadingScanReports'))}</div></div>
 
-          <div class="panel-title report-section-toggle" data-collapse-target="reportHistory" role="button" tabindex="0" aria-expanded="true" style="margin-top:18px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
-            ${escapeHtml(t('reports.savedReports'))}
-            <div style="display:flex; gap:8px; align-items:center;">
-              <button class="btn btn-xs btn-ghost hidden" id="clearAllSavedReports">${escapeHtml(t('reports.clearAllSavedReports'))}</button>
-              <button class="btn btn-primary btn-sm" id="generateReport">${escapeHtml(t('reports.generateReport'))}</button>
-            </div>
+          <div class="panel-title report-section-toggle report-section-toggle--spaced" data-collapse-target="reportHistory" role="button" tabindex="0" aria-expanded="true">
+            <span class="report-section-label">${escapeHtml(t('reports.savedReports'))}</span>
+            <span class="report-section-clear-slot"><button class="btn btn-xs btn-ghost report-clear-button hidden" id="clearAllSavedReports">${escapeHtml(t('reports.clearAllSavedReports'))}</button></span>
+            <span class="report-section-extra-slot"><button class="btn btn-primary btn-sm report-generate-button" id="generateReport">${escapeHtml(t('reports.generateReport'))}</button></span>
+            <span class="report-section-chevron" aria-hidden="true"></span>
           </div>
           <div id="reportHistory" class="history-list"><div class="empty-state">${escapeHtml(t('reports.loadingSavedReports'))}</div></div>
 
-          <div class="panel-title report-section-toggle" data-collapse-target="maintenanceHistory" role="button" tabindex="0" aria-expanded="true" style="margin-top:18px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
-            ${escapeHtml(t('reports.maintenanceHistory'))}
-            <button class="btn btn-xs btn-ghost hidden" id="clearAllManualMaintenance">${escapeHtml(t('reports.clearAllMaintenance'))}</button>
+          <div class="panel-title report-section-toggle report-section-toggle--spaced report-section-toggle--single-action" data-collapse-target="maintenanceHistory" role="button" tabindex="0" aria-expanded="true">
+            <span class="report-section-label">${escapeHtml(t('reports.maintenanceHistory'))}</span>
+            <span class="report-section-clear-slot"><button class="btn btn-xs btn-ghost report-clear-button hidden" id="clearAllManualMaintenance">${escapeHtml(t('reports.clearAllMaintenance'))}</button></span>
+            <span class="report-section-extra-slot" aria-hidden="true"></span>
+            <span class="report-section-chevron" aria-hidden="true"></span>
           </div>
           <div id="maintenanceHistory" class="history-list"><div class="empty-state">${escapeHtml(t('reports.loadingMaintenance'))}</div></div>
 
-          <div class="panel-title report-section-toggle" data-collapse-target="scheduledMaintenanceHistory" role="button" tabindex="0" aria-expanded="true" style="margin-top:18px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
-            ${escapeHtml(t('reports.scheduledMaintenanceHistory'))}
-            <button class="btn btn-xs btn-ghost hidden" id="clearAllScheduledMaintenance">${escapeHtml(t('reports.clearAllScheduledMaintenance'))}</button>
+          <div class="panel-title report-section-toggle report-section-toggle--spaced report-section-toggle--single-action" data-collapse-target="scheduledMaintenanceHistory" role="button" tabindex="0" aria-expanded="true">
+            <span class="report-section-label">${escapeHtml(t('reports.scheduledMaintenanceHistory'))}</span>
+            <span class="report-section-clear-slot"><button class="btn btn-xs btn-ghost report-clear-button hidden" id="clearAllScheduledMaintenance">${escapeHtml(t('reports.clearAllScheduledMaintenance'))}</button></span>
+            <span class="report-section-extra-slot" aria-hidden="true"></span>
+            <span class="report-section-chevron" aria-hidden="true"></span>
           </div>
           <div id="scheduledMaintenanceHistory" class="history-list"><div class="empty-state">${escapeHtml(t('reports.loadingMaintenance'))}</div></div>
         </section>

@@ -170,6 +170,21 @@ describe('windowsChecks', () => {
     }
   });
 
+  it('runJsonPowerShell keeps the serializer on the final expression line', async () => {
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+
+    try {
+      const result = await windowsChecks.runJsonPowerShell('@(\n  Get-NetFirewallProfile\n)\n');
+      assert.equal(result.ok, true);
+      const script = mockExecResults.at(-1).args.at(-1);
+      assert.match(script, /\)\s+\|\s+ConvertTo-Json/);
+      assert.doesNotMatch(script, /\)\s*\n\s*\|/);
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    }
+  });
+
   it('runJsonPowerShell handles parse errors', async () => {
     const originalPlatform = process.platform;
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });

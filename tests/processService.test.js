@@ -253,6 +253,20 @@ describe('process affinity and priority actions', () => {
     const maskRegion = script.match(/\[uint64\]([^\s;)]+)/)[1];
     assert.equal(maskRegion, '9223372036854775808');
     assert.match(maskRegion, /^\d+$/);
+    assert.match(script, /\[BitConverter\]::GetBytes\(\$mask\)/);
+    assert.match(script, /\[System\.IntPtr\]::new\(\[BitConverter\]::ToInt64\(\$maskBytes, 0\)\)/);
+    await service.stop();
+  });
+
+  it('returns an actionable error when Windows rejects an affinity change', async () => {
+    const service = makeService(async () => {
+      throw new Error('Cannot convert the "255" value of type "System.UInt64" to type "System.IntPtr".');
+    });
+
+    await assert.rejects(
+      service._setAffinity(401, 3),
+      /could not apply this CPU affinity selection.*selected CPUs may be unavailable/i,
+    );
     await service.stop();
   });
 

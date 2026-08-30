@@ -30,7 +30,7 @@ a{color:var(--accent-primary)}
 
 /* Keep the action popup compact while giving the brand room to read. */
 .popup{width:500px;min-width:500px}
-.brand-wordmark{height:34px}
+.brand-wordmark{width:180px;height:26px;object-fit:cover;object-position:center;flex:0 0 auto}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 [hidden]{display:none!important}
 .settings-nav{scrollbar-width:thin;scrollbar-color:var(--text-muted) transparent}

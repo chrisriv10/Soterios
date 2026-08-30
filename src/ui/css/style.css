@@ -1844,14 +1844,49 @@ body {
 .report-section-toggle {
   cursor: pointer;
   user-select: none;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 80px 168px 14px;
+  align-items: center;
+  column-gap: 12px;
 }
-.report-section-toggle::after {
-  content: '▾';
-  display: inline-block;
-  margin-left: 10px;
+.report-section-toggle--single-action {
+  grid-template-columns: minmax(0, 1fr) 80px 0 14px;
+}
+.report-section-toggle--spaced { margin-top: 18px; }
+.report-section-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.report-section-clear-slot,
+.report-section-extra-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+.report-clear-button {
+  width: 80px;
+  justify-content: center;
+  white-space: nowrap;
+}
+.report-generate-button {
+  width: 168px;
+  justify-content: center;
+  text-align: center;
+}
+.report-section-chevron {
+  width: 14px;
+  height: 14px;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
   transition: transform .2s ease;
 }
-.report-section-toggle[aria-expanded="false"]::after { transform: rotate(-90deg); }
+.report-section-chevron::before { content: '▾'; }
+.report-section-toggle[aria-expanded="false"] .report-section-chevron { transform: rotate(-90deg); }
+.report-section-toggle::after {
+  content: none;
+}
 .report-section-toggle:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
 .report-section-toggle + [hidden] { display: none !important; }
 .reports-layout { display: grid; grid-template-columns: minmax(320px, 0.9fr) minmax(420px, 1.1fr); gap: 18px; align-items: start; }
@@ -3669,14 +3704,22 @@ body {
   transform: rotate(90deg);
 }
 
-.duplicate-result-group label {
+.duplicate-result-group > header > label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
   color: var(--text-muted);
   font-size: .75rem;
 }
 
-.duplicate-result-group select {
+.duplicate-result-group > header select {
+  width: 100%;
+  min-width: 0;
   max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .duplicate-file-list {
@@ -3690,6 +3733,15 @@ body {
   gap: 9px;
   padding: 9px 12px;
   border-bottom: 1px solid var(--glass-border);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.duplicate-file-row > small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .maintenance-issues,

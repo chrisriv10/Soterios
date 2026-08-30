@@ -17,7 +17,7 @@ describe('Soterios extension 2.0 public and privacy contracts', () => {
     assert.deepEqual(manifest.permissions, ['storage', 'alarms', 'activeTab', 'scripting']);
     assert.deepEqual(manifest.optional_permissions, ['nativeMessaging']);
     assert.equal(manifest.content_scripts, undefined);
-    assert.equal(manifest.web_accessible_resources, undefined);
+    assert.deepEqual(manifest.web_accessible_resources, [{ resources: ['icons/icon32.png'], matches: ['http://*/*', 'https://*/*'] }]);
     assert.match(manifest.content_security_policy.extension_pages, /script-src 'self'/);
     assert.ok(manifest.optional_host_permissions.includes('http://*/*'));
     assert.ok(manifest.optional_host_permissions.includes('https://api.pwnedpasswords.com/*'));

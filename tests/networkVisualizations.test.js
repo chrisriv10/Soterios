@@ -175,6 +175,7 @@ describe('adaptive geo activity model', () => {
     assert.match(panelRules, /right:\s*0/);
     assert.match(panelRules, /min-height:\s*0/);
     assert.match(panelRules, /display:\s*flex/);
+    assert.match(panelRules, /background:\s*color-mix\(in\s+srgb,\s*var\(--bg-panel\)\s+92%,\s*transparent\)/);
     assert.doesNotMatch(panelRules, /max-height:\s*min\(620px/);
 
     const bodyStart = css.indexOf('.heatmap-drawer-body {');

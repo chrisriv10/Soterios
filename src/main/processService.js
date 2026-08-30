@@ -59,6 +59,20 @@ function safeError(error) {
   return error && error.message ? error.message : String(error || 'Unknown error');
 }
 
+function friendlyAffinityError(error) {
+  const detail = safeError(error);
+  if (/access is denied|unauthorizedaccess|permission/i.test(detail)) {
+    return new Error('Windows denied changing this process\'s CPU affinity. Try a process you own or run Soterios with administrator rights.');
+  }
+  if (/cannot find.*process|process.*not found|no process/i.test(detail)) {
+    return new Error('The process is no longer running, so its CPU affinity could not be changed.');
+  }
+  if (/cannot convert|invalidcastexception|processoraffinity|intptr|arithmetic operation/i.test(detail)) {
+    return new Error('Windows could not apply this CPU affinity selection. The process may not support affinity changes or the selected CPUs may be unavailable.');
+  }
+  return new Error('Windows could not change this process\'s CPU affinity. The process may have exited or denied the request.');
+}
+
 function sanitizedDiagnosticError(error) {
   return safeError(error)
     .replace(/[A-Za-z]:\\Users\\[^\\\s"']+/gi, '%USERPROFILE%')
@@ -700,14 +714,20 @@ class ProcessService extends EventEmitter {
     }
     if (mask <= 0n || mask > ((1n << 64n) - 1n)) throw new Error('Invalid processor affinity mask.');
     const decimalMask = mask.toString(10);
-    // PowerShell's property binder can still treat a cast expression as
-    // UInt64 on some Windows builds. Construct IntPtr explicitly before
-    // assigning ProcessorAffinity so ordinary masks such as 255 are accepted.
-    const script = `$p = Get-Process -Id ${pid} -ErrorAction Stop; $mask = [uint64]${decimalMask}; $pointer = [System.IntPtr]::new([int64]$mask); $p.ProcessorAffinity = $pointer; [Console]::Write(([uint64]$p.ProcessorAffinity).ToString())`;
-    const result = await this._execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', powershellEncoded(script)], {
-      timeout: 10000,
-      windowsHide: true,
-    });
+    // ProcessorAffinity is an IntPtr, while the UI sends an unsigned mask.
+    // Reinterpret the mask's bits before constructing the pointer so values
+    // such as 255 (and masks using the high bit on x64) avoid PowerShell's
+    // UInt64-to-IntPtr binder conversion error.
+    const script = `$p = Get-Process -Id ${pid} -ErrorAction Stop; $mask = [uint64]${decimalMask}; if ([IntPtr]::Size -eq 4 -and $mask -gt [uint64]4294967295) { throw 'The selected affinity mask is not supported by this process architecture.' }; $maskBytes = [BitConverter]::GetBytes($mask); $pointer = if ([IntPtr]::Size -eq 4) { [System.IntPtr]::new([BitConverter]::ToInt32($maskBytes, 0)) } else { [System.IntPtr]::new([BitConverter]::ToInt64($maskBytes, 0)) }; $p.ProcessorAffinity = $pointer; [Console]::Write(([uint64]$p.ProcessorAffinity).ToString())`;
+    let result;
+    try {
+      result = await this._execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', powershellEncoded(script)], {
+        timeout: 10000,
+        windowsHide: true,
+      });
+    } catch (error) {
+      throw friendlyAffinityError(error);
+    }
     return { success: true, effectiveAffinityMask: String(result.stdout || '').trim() || decimalMask };
   }
 

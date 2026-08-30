@@ -953,6 +953,12 @@ function register(mainWindow, {
     catch (err) { return { ok: false, error: err.message }; }
   });
 
+  ipcMain.handle('vault:deleteLog', async (_event, id) => {
+    if (!maintenanceSafetyVault) return { ok: false, error: 'File Vault unavailable' };
+    try { return { ok: true, data: maintenanceSafetyVault.deleteLog(String(id || '')) }; }
+    catch (err) { return { ok: false, error: err.message }; }
+  });
+
   // -- Persistence Change Monitor --
   ipcMain.handle('persistence:getStatus', () => {
     if (!persistenceMonitor) return { ok: false, error: 'Persistence Monitor unavailable' };

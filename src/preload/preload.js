@@ -61,6 +61,7 @@ contextBridge.exposeInMainWorld('soterios', {
     stage: (items, options) => ipcRenderer.invoke('vault:stage', items, options),
     restore: (id) => ipcRenderer.invoke('vault:restore', id),
     purge: (id) => ipcRenderer.invoke('vault:purge', id),
+    deleteLog: (id) => ipcRenderer.invoke('vault:deleteLog', id),
     onProgress: (callback) => {
       const listener = (_event, payload) => callback(payload);
       ipcRenderer.on('vault:progress', listener);

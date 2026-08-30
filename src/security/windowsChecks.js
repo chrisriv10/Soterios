@@ -21,7 +21,12 @@ function runPowerShell(script, timeout = 20000) {
 }
 
 async function runJsonPowerShell(script, fallback = null, timeout) {
-  const wrapped = `${script} | ConvertTo-Json -Depth 6`;
+  // PowerShell treats a pipe that starts on a new line as an empty pipeline
+  // when the preceding script ends with a parenthesized expression (for
+  // example, the `@(...)` collectors used by the persistence monitor).  Trim
+  // the caller-provided script so the serializer is attached to its final
+  // expression instead of being parsed as a standalone pipe.
+  const wrapped = `${String(script || '').trim()} | ConvertTo-Json -Depth 6`;
   const result = await runPowerShell(wrapped, timeout);
   if (!result.ok) return { ok: false, error: result.error, data: fallback };
   try {

@@ -26,6 +26,7 @@ style.textContent = `
   :host{all:initial;color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
   *{box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
   .field-button{position:fixed;width:28px;height:28px;border:1px solid #7a91a8;border-radius:9px;background:#102131;color:#eaf4ff;box-shadow:0 5px 18px #0005;display:grid;place-items:center;pointer-events:auto;cursor:pointer;font:700 13px/1 system-ui}
+  .field-button img{width:18px;height:18px;display:block;object-fit:contain;pointer-events:none}
   .field-button:hover{background:#18354d}.field-button:focus-visible,.action:focus-visible{outline:3px solid #63b3ed;outline-offset:2px}
   .field-button[data-state="warning"]{border-color:#e9b949;color:#ffe19a}.field-button[data-state="danger"]{border-color:#ff7878;color:#ffb4b4}.field-button[data-state="clear"]{border-color:#62c9a5;color:#a4f1d7}
   .notice{position:fixed;right:18px;bottom:18px;width:min(380px,calc(100vw - 36px));padding:16px;border:1px solid #39536b;border-radius:15px;background:#0d1a27;color:#ecf4fb;box-shadow:0 18px 50px #0008;pointer-events:auto;animation:enter .18s ease-out}
@@ -114,30 +115,43 @@ function buttonPosition(field: HTMLInputElement, button: HTMLButtonElement): voi
   button.style.top = `${Math.max(4, Math.min(innerHeight - 32, rect.top + (rect.height - 28) / 2))}px`;
 }
 
+function setFieldGlyph(button: HTMLButtonElement, glyph: 'S' | '…' | '!' | '✓' | '?'): void {
+  button.replaceChildren();
+  if (glyph === 'S') {
+    const icon = document.createElement('img');
+    icon.src = chrome.runtime.getURL('icons/icon32.png');
+    icon.alt = '';
+    icon.setAttribute('aria-hidden', 'true');
+    button.appendChild(icon);
+  } else {
+    button.textContent = glyph;
+  }
+}
+
 async function checkField(field: HTMLInputElement): Promise<void> {
   const password = field.value;
   if (!enabled || !password || lastCheckedValue.get(field) === password) return;
   lastCheckedValue.set(field, password);
   const button = fieldButtons.get(field);
-  if (button) { button.dataset.state = 'checking'; button.textContent = '…'; button.setAttribute('aria-label', 'Soterios is checking this completed password'); }
+  if (button) { button.dataset.state = 'checking'; setFieldGlyph(button, '…'); button.setAttribute('aria-label', 'Soterios is checking this completed password'); }
   try {
     const [check, reuse] = await Promise.all([
       send<{ strength: { label: string }; hibp: { found: boolean; count: number } | null; serviceState: string }>('CHECK_PASSWORD', { password }),
       send<{ reused: boolean; domains: string[] }>('CHECK_REUSE', { password })
     ]);
     if (check.hibp?.found) {
-      if (button) { button.dataset.state = 'danger'; button.textContent = '!'; }
+      if (button) { button.dataset.state = 'danger'; setFieldGlyph(button, '!'); }
       showNotice('Password found in breach corpus', `This password was seen ${check.hibp.count.toLocaleString()} times in the breach corpus. Change it anywhere you use it.`, 'danger', `Offline strength: ${check.strength.label}`);
     } else if (reuse.reused) {
-      if (button) { button.dataset.state = 'warning'; button.textContent = '!'; }
+      if (button) { button.dataset.state = 'warning'; setFieldGlyph(button, '!'); }
       showNotice('Password reuse detected', `This password was previously used on ${reuse.domains.join(', ')}. Use a unique password for each site.`, 'warning', `Offline strength: ${check.strength.label}`);
     } else {
-      if (button) { button.dataset.state = 'clear'; button.textContent = '✓'; }
+      if (button) { button.dataset.state = 'clear'; setFieldGlyph(button, '✓'); }
       const corpusText = check.hibp ? 'No match was found in the configured breach corpus.' : 'The online breach service is suspended.';
       showNotice('Password check complete', `${corpusText} This is not a guarantee that the password is safe.`, 'info', `Offline strength: ${check.strength.label}`);
     }
   } catch (error) {
-    if (button) { button.dataset.state = 'warning'; button.textContent = '?'; }
+    if (button) { button.dataset.state = 'warning'; setFieldGlyph(button, '?'); }
     showNotice('Password check unavailable', error instanceof Error ? error.message : String(error), 'warning');
   }
 }
@@ -145,7 +159,7 @@ async function checkField(field: HTMLInputElement): Promise<void> {
 function addField(field: HTMLInputElement): void {
   if (fieldButtons.has(field)) return;
   const button = document.createElement('button');
-  button.className = 'field-button'; button.type = 'button'; button.textContent = 'S';
+  button.className = 'field-button'; button.type = 'button'; setFieldGlyph(button, 'S');
   button.setAttribute('aria-label', 'Check this completed password with Soterios');
   button.addEventListener('click', () => void checkField(field), { signal: controller.signal });
   field.addEventListener('blur', () => void checkField(field), { signal: controller.signal });

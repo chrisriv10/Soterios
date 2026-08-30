@@ -570,7 +570,10 @@
   flex-direction: column;
   overflow: hidden;
   border-left: 1px solid var(--glass-border);
-  background: var(--bg-surface);
+  /* Keep the drawer readable over the map while retaining a subtle layered
+     effect.  The shared --bg-surface token is intentionally translucent for
+     other visualization surfaces, but is too see-through for this overlay. */
+  background: color-mix(in srgb, var(--bg-panel) 92%, transparent);
 }
 
 .heatmap-cluster-panel[hidden] { display: none; }

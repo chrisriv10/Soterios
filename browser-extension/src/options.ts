@@ -67,26 +67,80 @@ async function refresh(): Promise<void> {
 }
 
 document.getElementById('credential-protection')!.addEventListener('change', (event) => void update({ credentialProtection: (event.target as HTMLInputElement).checked }));
-document.getElementById('online-global')!.addEventListener('change', async (event) => {
-  const enabled = (event.target as HTMLInputElement).checked;
-  if (enabled) {
-    const origins = (Object.keys(PROVIDERS) as ProviderId[]).filter((id) => settings.onlineServices[id]).flatMap((id) => [...PROVIDERS[id].origins]);
-    if (origins.length) await chrome.permissions.request({ origins });
+document.getElementById('online-global')!.addEventListener('change', (event) => {
+  const input = event.target as HTMLInputElement;
+  const enabled = input.checked;
+  const origins = enabled
+    ? (Object.keys(PROVIDERS) as ProviderId[]).filter((id) => settings.onlineServices[id]).flatMap((id) => [...PROVIDERS[id].origins])
+    : [];
+  try {
+    const permissionRequest = origins.length
+      ? chrome.permissions.request({ origins })
+      : Promise.resolve(true);
+    void permissionRequest.then(async () => {
+      await update({ onlineServices: { enabled } });
+      showProviderMessage(enabled ? 'Online services follow the individual provider switches.' : 'All online protection services are off. In-flight requests were cancelled and provider permissions removed.');
+    }).catch((error) => {
+      input.checked = false;
+      showProviderMessage(error instanceof Error ? error.message : String(error), true);
+    });
+  } catch (error) {
+    input.checked = false;
+    showProviderMessage(error instanceof Error ? error.message : String(error), true);
   }
-  await update({ onlineServices: { enabled } }); showProviderMessage(enabled ? 'Online services follow the individual provider switches.' : 'All online protection services are off. In-flight requests were cancelled and provider permissions removed.');
 });
 for (const id of Object.keys(PROVIDERS) as ProviderId[]) {
-  document.getElementById(`provider-${id}`)!.addEventListener('change', async (event) => {
-    const enabled = (event.target as HTMLInputElement).checked;
-    if (enabled) await chrome.permissions.request({ origins: [...PROVIDERS[id].origins] });
-    await update({ onlineServices: { [id]: enabled } });
+  document.getElementById(`provider-${id}`)!.addEventListener('change', (event) => {
+    const input = event.target as HTMLInputElement;
+    const enabled = input.checked;
+    try {
+      const permissionRequest = enabled
+        ? chrome.permissions.request({ origins: [...PROVIDERS[id].origins] })
+        : Promise.resolve(true);
+      void permissionRequest.then(async () => {
+        await update({ onlineServices: { [id]: enabled } });
+      }).catch((error) => {
+        input.checked = false;
+        showProviderMessage(error instanceof Error ? error.message : String(error), true);
+      });
+    } catch (error) {
+      input.checked = false;
+      showProviderMessage(error instanceof Error ? error.message : String(error), true);
+    }
   });
 }
-document.getElementById('grant-continuous')!.addEventListener('click', async () => { await send('REQUEST_CONTINUOUS_ACCESS'); await refresh(); });
+document.getElementById('grant-continuous')!.addEventListener('click', () => {
+  try {
+    // Keep the permission request in this click handler so Chromium preserves
+    // the user's gesture and shows the one-time all-sites permission prompt.
+    const permissionRequest = chrome.permissions.request({ origins: ['http://*/*', 'https://*/*'] });
+    void permissionRequest.then(async (granted) => {
+      await send('REQUEST_CONTINUOUS_ACCESS', { granted });
+      await refresh();
+    }).catch((error) => {
+      showProviderMessage(error instanceof Error ? error.message : String(error), true);
+    });
+  } catch (error) {
+    showProviderMessage(error instanceof Error ? error.message : String(error), true);
+  }
+});
 document.getElementById('revoke-continuous')!.addEventListener('click', async () => { await send('REVOKE_CONTINUOUS_ACCESS'); await refresh(); });
 document.getElementById('history-enabled')!.addEventListener('change', (event) => void update({ history: { enabled: (event.target as HTMLInputElement).checked } }));
 document.getElementById('save-google-key')!.addEventListener('click', async () => { const input = document.getElementById('google-key') as HTMLInputElement; try { await send('SET_GOOGLE_KEY', { key: input.value }); input.value = ''; showProviderMessage('Google Safe Browsing key saved in trusted local extension storage.'); } catch (error) { showProviderMessage(error instanceof Error ? error.message : String(error), true); } });
-document.getElementById('desktop-sharing')!.addEventListener('change', async (event) => { const enabled = (event.target as HTMLInputElement).checked; if (enabled) { const granted = await chrome.permissions.request({ permissions: ['nativeMessaging'] }); if (!granted) { (event.target as HTMLInputElement).checked = false; return; } } else { await chrome.permissions.remove({ permissions: ['nativeMessaging'] }); } await update({ desktop: { sharingEnabled: enabled } }); setText('desktop-message', enabled ? 'Minimal findings can be forwarded over the local named-pipe bridge.' : 'Desktop integration is optional and currently disabled.'); });
+document.getElementById('desktop-sharing')!.addEventListener('change', (event) => {
+  const input = event.target as HTMLInputElement;
+  const permissionRequest = input.checked
+    ? chrome.permissions.request({ permissions: ['nativeMessaging'] })
+    : chrome.permissions.remove({ permissions: ['nativeMessaging'] }).then(() => true);
+  void permissionRequest.then(async (granted) => {
+    if (input.checked && !granted) { input.checked = false; return; }
+    await update({ desktop: { sharingEnabled: input.checked } });
+    setText('desktop-message', input.checked ? 'Minimal findings can be forwarded over the local named-pipe bridge.' : 'Desktop integration is optional and currently disabled.');
+  }).catch((error) => {
+    input.checked = false;
+    showProviderMessage(error instanceof Error ? error.message : String(error), true);
+  });
+});
 document.getElementById('export-history')!.addEventListener('click', async () => downloadJson('soterios-findings.json', await send('EXPORT_HISTORY')));
 document.getElementById('clear-history')!.addEventListener('click', async () => { if (confirm('Delete all local Soterios finding history?')) { await send('CLEAR_HISTORY'); showProviderMessage('Local finding history deleted.'); } });
 void refresh();
