@@ -16,6 +16,10 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+
       - name: Sync to Wiki
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -27,6 +31,10 @@ jobs:
           
           # Copy all wiki files
           cp -r ../docs/wiki/* .
+
+          # GitHub Wiki page URLs omit the .md suffix. Keep repository source
+          # links in docs/wiki/*.md, then normalize the copied pages only.
+          node ../tools/convert-wiki-links.js .
           
           # Configure git
           git config user.name "github-actions[bot]"

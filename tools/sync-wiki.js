@@ -11,7 +11,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
+const { convertMarkdownLinks, convertWikiDirectory } = require('./convert-wiki-links');
 
 const SOURCE_DIR = path.join(__dirname, '..', 'docs', 'wiki');
 const WIKI_REPO_DIR = path.join(__dirname, '..', '.wiki');
@@ -19,21 +20,12 @@ const WIKI_REPO_DIR = path.join(__dirname, '..', '.wiki');
 // Configuration: set this to your wiki repository URL if not already cloned
 const WIKI_REPO_URL = 'https://github.com/chrisriv10/Soterios.wiki.git';
 
-function convertMarkdownLinks(content) {
-  // Convert ](Something.md) to ](Something)
-  // This regex matches markdown links with .md extension
-  return content.replace(/\]\(([^)]+\.md)\)/g, (match, linkPath) => {
-    const newPath = linkPath.replace(/\.md$/, '');
-    return `](${newPath})`;
-  });
-}
-
 function ensureWikiRepo() {
   if (!fs.existsSync(WIKI_REPO_DIR)) {
     console.log('Cloning wiki repository...');
     try {
-      // Use array form to avoid shell injection
-      execSync('git', ['clone', WIKI_REPO_URL, WIKI_REPO_DIR], { stdio: 'inherit' });
+      // Use an argument array to avoid shell injection.
+      execFileSync('git', ['clone', WIKI_REPO_URL, WIKI_REPO_DIR], { stdio: 'inherit' });
     } catch (error) {
       console.error('Failed to clone wiki repository:', error.message);
       process.exit(1);
@@ -61,26 +53,27 @@ function syncWiki() {
     // Read source content
     const content = fs.readFileSync(sourcePath, 'utf8');
 
-    // Convert links
-    const convertedContent = convertMarkdownLinks(content);
-
     // Write to wiki repo
-    fs.writeFileSync(targetPath, convertedContent, 'utf8');
+    fs.writeFileSync(targetPath, content, 'utf8');
     console.log(`  ✓ ${file}`);
   });
+
+  // GitHub Wiki page URLs omit the .md suffix. Keep the source links
+  // repository-friendly, and normalize only the copied wiki pages.
+  convertWikiDirectory(WIKI_REPO_DIR);
 
   // Commit and push
   console.log('\nCommitting changes to wiki repository...');
   try {
-    execSync('git add .', { cwd: WIKI_REPO_DIR, stdio: 'inherit' });
+    execFileSync('git', ['add', '.'], { cwd: WIKI_REPO_DIR, stdio: 'inherit' });
     
     // Check if there are changes to commit
-    const status = execSync('git status --porcelain', { cwd: WIKI_REPO_DIR, encoding: 'utf8' });
+    const status = execFileSync('git', ['status', '--porcelain'], { cwd: WIKI_REPO_DIR, encoding: 'utf8' });
     
     if (status.trim()) {
-      execSync('git commit -m "Sync wiki from docs/wiki"', { cwd: WIKI_REPO_DIR, stdio: 'inherit' });
+      execFileSync('git', ['commit', '-m', 'Sync wiki from docs/wiki'], { cwd: WIKI_REPO_DIR, stdio: 'inherit' });
       console.log('Pushing to GitHub...');
-      execSync('git push origin master', { cwd: WIKI_REPO_DIR, stdio: 'inherit' });
+      execFileSync('git', ['push', 'origin', 'master'], { cwd: WIKI_REPO_DIR, stdio: 'inherit' });
       console.log('✓ Wiki synced successfully!');
     } else {
       console.log('No changes to commit.');
@@ -91,5 +84,6 @@ function syncWiki() {
   }
 }
 
-// Run the sync
-syncWiki();
+if (require.main === module) syncWiki();
+
+module.exports = { convertMarkdownLinks, syncWiki };

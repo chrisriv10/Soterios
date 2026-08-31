@@ -40,7 +40,7 @@ The current driverless release exposes module and thread enumeration and handle 
 
 System network throughput comes from Windows interface counters, while per-process network fallback shows active connection counts until ETW byte attribution is enabled. GPU percentages come from Windows GPU Engine counters and may take several seconds to warm up. The inexpensive per-process storage column is deliberately labeled **Process I/O** because Windows process I/O counters can also include pipes and device traffic; Soterios does not mislabel that value as disk-only throughput.
 
-See [Process Inspector protocol](../PROCESS_INSPECTOR_PROTOCOL.md) and [security and privacy model](../PROCESS_INSPECTOR_SECURITY.md).
+See the [Process Inspector protocol](https://github.com/chrisriv10/Soterios/blob/main/docs/PROCESS_INSPECTOR_PROTOCOL.md) and [security and privacy model](https://github.com/chrisriv10/Soterios/blob/main/docs/PROCESS_INSPECTOR_SECURITY.md).
 
 ---
 

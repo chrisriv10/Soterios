@@ -26,16 +26,13 @@ Version-controlled wiki source for [Soterios](https://github.com/chrisriv10/Sote
 
 ## Syncing to GitHub Wiki
 
-Maintainers can copy pages to the wiki git repository:
+Maintainers can sync pages to the wiki git repository with the repository helper (it also converts relative links to GitHub Wiki page URLs):
 
 ```bash
-git clone https://github.com/chrisriv10/Soterios.wiki.git
-cp docs/wiki/*.md Soterios.wiki/
-cd Soterios.wiki
-git add .
-git commit -m "Sync wiki from docs/wiki"
-git push
+npm run sync-wiki
 ```
+
+For a manual copy, run `node tools/convert-wiki-links.js Soterios.wiki` after copying the Markdown files and before committing.
 
 GitHub Wiki uses page names without the `.md` extension in links (e.g., `[Installation](Installation)`).
 
