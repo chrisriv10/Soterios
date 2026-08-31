@@ -19,4 +19,7 @@ test('wiki link conversion preserves external URLs and anchors', () => {
 test('the GitHub Wiki workflow normalizes links after copying source pages', () => {
   const workflow = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'wiki-sync.yml'), 'utf8');
   assert.match(workflow, /node \.\.\/tools\/convert-wiki-links\.js \./);
+  assert.match(workflow, /find \. -maxdepth 1 -type f -name '\*\.md'/);
+  assert.match(workflow, /! -name '_Sidebar\.md'/);
+  assert.match(workflow, /! -name '_Footer\.md'/);
 });

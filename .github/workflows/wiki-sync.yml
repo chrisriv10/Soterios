@@ -28,6 +28,13 @@ jobs:
           # Clone wiki repo
           git clone https://x-access-token:${GH_TOKEN}@github.com/chrisriv10/Soterios.wiki.git wiki-repo
           cd wiki-repo
+
+          # docs/wiki is the source of truth. Remove stale generated pages while
+          # preserving GitHub Wiki's optional navigation/footer files.
+          find . -maxdepth 1 -type f -name '*.md' \
+            ! -name '_Sidebar.md' \
+            ! -name '_Footer.md' \
+            -delete
           
           # Copy all wiki files
           cp -r ../docs/wiki/* .
