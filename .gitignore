@@ -6,6 +6,8 @@ dist/
 /build/feed-smoke/
 build/win-unpacked/
 .tmp-user-data/
+tests/*-output.txt
+tests/*-out.txt
 *.log
 app.log
 debug.log
