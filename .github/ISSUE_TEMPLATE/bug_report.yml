@@ -1,6 +1,6 @@
 name: Bug Report
 description: Report a reproducible problem with Soterios
-title: \"[Bug]: \"
+title: "[Bug]: "
 labels:
   - bug
 
@@ -14,8 +14,8 @@ body:
     id: soterios-version
     attributes:
       label: Soterios version
-      description: Find this under **Settings > About** or in the \package.json\ version.
-      placeholder: \"e.g. 1.2.3\"
+      description: Find this under **Settings > About** or in the `package.json` version.
+      placeholder: "e.g. 1.2.3"
     validations:
       required: true
 
@@ -24,8 +24,8 @@ body:
     attributes:
       label: Windows version/build
       description: |
-        Please provide your Windows version and build number. You can find this by running \winver\.
-      placeholder: \"e.g. Windows 11 23H2 22631.xxx\"
+        Please provide your Windows version and build number. You can find this by running `winver`.
+      placeholder: "e.g. Windows 11 23H2 22631.xxx"
     validations:
       required: true
 
@@ -45,9 +45,9 @@ body:
       label: Running as administrator?
       description: Many Soterios system features require administrator privileges.
       options:
-        - \"Yes\"
-        - \"No\"
-        - \"Not sure\"
+        - "Yes"
+        - "No"
+        - "Not sure"
     validations:
       required: true
 
@@ -85,7 +85,7 @@ body:
     attributes:
       label: Relevant logs
       description: |
-        If file logging was enabled via \SOTERIOS_LOG_FILE\, include relevant log output. When \SOTERIOS_LOG_FILE=1\, the default log is written under Soterios's userData directory.
+        If file logging was enabled via SOTERIOS_LOG_FILE, include relevant log output. When SOTERIOS_LOG_FILE=1, Soterios writes to the default log file under its userData directory.
 
         **IMPORTANT:** Before attaching or pasting logs, sanitize any paths, usernames, personal information, credentials, or other sensitive data.
       render: shell
