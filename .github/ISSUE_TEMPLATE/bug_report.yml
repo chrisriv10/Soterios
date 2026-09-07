@@ -3,6 +3,7 @@ description: Report a reproducible problem with Soterios
 title: "[Bug]: "
 labels:
   - bug
+
 body:
   - type: markdown
     attributes:
@@ -98,5 +99,7 @@ body:
       label: Screenshots
       description: |
         Screenshots are optional but often very helpful. Drag and drop images here if they help demonstrate the problem.
+
+        **⚠️ IMPORTANT:** Before uploading screenshots, sanitize or redact any usernames, file paths, tokens, personal information, or other sensitive data.
     validations:
       required: false
