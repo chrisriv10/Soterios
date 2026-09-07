@@ -1,38 +1,102 @@
----
-name: Bug report
-about: Create a report to help us improve
-title: ''
-labels: ''
-assignees: ''
+name: Bug Report
+description: Report a reproducible problem with Soterios
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please provide as much detail as possible so the issue can be reproduced and investigated.
 
----
+  - type: input
+    id: soterios-version
+    attributes:
+      label: Soterios version
+      description: Find this under **Settings → About** or in the `package.json` version.
+      placeholder: "e.g. 1.2.3"
+    validations:
+      required: true
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+  - type: input
+    id: windows-version
+    attributes:
+      label: Windows version/build
+      description: |
+        Please provide your Windows version and build number. You can find this by running `winver`.
+      placeholder: "e.g. Windows 11 23H2 22631.xxx"
+    validations:
+      required: true
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+  - type: dropdown
+    id: install-type
+    attributes:
+      label: Install type
+      options:
+        - Installer
+        - Portable
+        - Dev build (npm start)
+    validations:
+      required: true
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+  - type: dropdown
+    id: administrator
+    attributes:
+      label: Running as administrator?
+      description: Many Soterios system features require administrator privileges.
+      options:
+        - "Yes"
+        - "No"
+        - "Not sure"
+    validations:
+      required: true
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Please provide clear, numbered steps that reliably reproduce the problem.
+      placeholder: |
+        1. Open Soterios
+        2. Go to ...
+        3. Click ...
+        4. Observe ...
+    validations:
+      required: true
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
 
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened?
+    validations:
+      required: true
 
-**Additional context**
-Add any other context about the problem here.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: |
+        Please include relevant log output from `SOTERIOS_LOG_FILE` or `%APPDATA%\Soterios\soterios.log`.
+
+        **⚠️ IMPORTANT:** Before attaching or pasting logs, sanitize any paths, usernames, personal information, credentials, or other sensitive data.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: |
+        Screenshots are optional but often very helpful. Drag and drop images here if they help demonstrate the problem.
+    validations:
+      required: false
