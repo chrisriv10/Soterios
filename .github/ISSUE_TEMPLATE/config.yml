@@ -1,0 +1,16 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/chrisriv10/Soterios?tab=security-ov-file
+    about: >
+      Please do not report security vulnerabilities through public issues.
+      Review SECURITY.md and use GitHub Private Vulnerability Reporting instead.
+
+  - name: Questions and support
+    url: https://github.com/chrisriv10/Soterios/discussions
+    about: Ask questions, get help, and discuss Soterios with the community.
+
+  - name: Contribution guidelines
+    url: https://github.com/chrisriv10/Soterios?tab=contributing-ov-file
+    about: Read the contribution guidelines before submitting changes.
