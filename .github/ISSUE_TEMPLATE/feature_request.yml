@@ -1,0 +1,53 @@
+name: Feature Request
+description: Suggest a new feature or improvement for Soterios
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement to Soterios! Please describe the problem, your proposed solution, and any Windows or security considerations.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem being solved
+      description: What problem, limitation, or use case would this feature address?
+      placeholder: Describe the problem and why solving it would be useful.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed solution
+      description: How would you like Soterios to solve this problem?
+      placeholder: Describe the feature, behavior, or workflow you have in mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: windows-considerations
+    attributes:
+      label: Windows-specific considerations
+      description: |
+        Are there any Windows-specific considerations involved, such as APIs, system privileges, permissions, services, registry access, or version compatibility?
+      placeholder: |
+        Examples:
+        - Windows APIs involved
+        - Administrator privileges required
+        - Windows version limitations
+        - Registry or system configuration changes
+    validations:
+      required: true
+
+  - type: textarea
+    id: security-privacy
+    attributes:
+      label: Security/privacy implications
+      description: |
+        Could this feature affect system security, user privacy, permissions, stored data, network access, or other sensitive resources?
+      placeholder: Describe any known implications, or enter "None known."
+    validations:
+      required: true
