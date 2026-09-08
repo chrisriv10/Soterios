@@ -56,6 +56,14 @@ npm start
 
 ## Development Guidelines
 
+### Claiming an Issue
+
+Before starting substantial work, find an unassigned issue and comment that you would like to work on it. Please wait for a maintainer to assign the issue before beginning substantial work.
+
+If the requirements are unclear, ask questions in the issue before proceeding. When opening a pull request, reference the issue (for example, `Fixes #136`) and keep the PR focused on that issue.
+
+If you can no longer complete an assigned issue, let the maintainers know so the issue can be reassigned.
+
 ### Branching
 
 Create a branch for your work:
