@@ -650,7 +650,17 @@ class DatabaseService {
   getSetting(key, defaultValue = null) {
     const stmt = this.db.prepare('SELECT value FROM settings WHERE key = ?');
     const row = stmt.get(key);
-    return row ? JSON.parse(row.value) : defaultValue;
+    let parsedValue = defaultValue;
+    if (row) {
+      try {
+        parsedValue = JSON.parse(row.value);
+      } catch (e) {
+        console.error(`Malformed JSON for setting '$ {key}', using default:`, e.message);
+        // Fallback to defaultValue if JSON is malformed
+        parsedValue = defaultValue;
+      }
+    }
+    return parsedValue;
   }
 
   setSetting(key, value) {
