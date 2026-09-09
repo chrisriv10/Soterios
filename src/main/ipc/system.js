@@ -745,6 +745,7 @@ function register(mainWindow, {
     }
     try {
       const result = await emergencyLockdown.lockdown();
+      await db.setSetting('feature.emergencyLockdown', true);
       return { ok: true, data: result };
     } catch (err) {
       return { ok: false, error: err.message };
@@ -757,6 +758,7 @@ function register(mainWindow, {
     }
     try {
       const result = await emergencyLockdown.restore();
+      await db.setSetting('feature.emergencyLockdown', false);
       return { ok: true, data: result };
     } catch (err) {
       return { ok: false, error: err.message };
