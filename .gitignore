@@ -21,3 +21,4 @@ assets/clamav/
 tools/extension-key.pem
 tests/fixtures/screenshots/*.png
 *.zip
+clinical-guidelines-qa/
