@@ -4,17 +4,21 @@ const { describe, it, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const EmergencyLockdown = require('../src/security/EmergencyLockdown');
 
+// Mirrors the REAL DatabaseService settings API (getSetting/setSetting).
+// Previously this double exposed get()/set() methods that the real class
+// does not have, so the suite passed while production calls threw TypeError.
 class FakeDatabase {
   constructor() {
     this.data = {};
   }
 
-  get(key) {
-    return this.data[key];
+  getSetting(key, defaultValue = null) {
+    return Object.prototype.hasOwnProperty.call(this.data, key) ? this.data[key] : defaultValue;
   }
 
-  set(key, value) {
+  setSetting(key, value) {
     this.data[key] = value;
+    return { changes: 1 };
   }
 }
 
@@ -62,7 +66,7 @@ describe('EmergencyLockdown', () => {
       };
       const result = lockdown.setAllowlist(newAllowlist);
       assert.deepStrictEqual(result, newAllowlist);
-      assert.deepStrictEqual(db.get('lockdown_allowlist'), newAllowlist);
+      assert.deepStrictEqual(db.getSetting(EmergencyLockdown.SETTINGS_KEY), newAllowlist);
     });
 
     it('should add to allowlist', () => {
@@ -98,7 +102,7 @@ describe('EmergencyLockdown', () => {
     });
 
     it('should load allowlist from database on initialization', () => {
-      db.set('lockdown_allowlist', {
+      db.setSetting(EmergencyLockdown.SETTINGS_KEY, {
         interfaces: ['ethernet0'],
         services: ['spooler'],
         ips: ['192.168.1.1']
@@ -108,6 +112,39 @@ describe('EmergencyLockdown', () => {
       const allowlist = newLockdown.getAllowlist();
       assert.strictEqual(allowlist.interfaces.length, 1);
       assert.strictEqual(allowlist.interfaces[0], 'ethernet0');
+    });
+
+    it('should persist allowlist across service instances using the real settings API', () => {
+      // Regression for #140: set an allowlist, then re-instantiate the service
+      // against the same database (simulating an app restart) and assert the
+      // allowlist survives.
+      const first = new EmergencyLockdown(db, eventBus, notify);
+      first.setAllowlist({
+        interfaces: ['Ethernet0'],
+        services: ['Spooler'],
+        ips: ['10.0.0.0/8']
+      });
+
+      const second = new EmergencyLockdown(db, eventBus, notify);
+      assert.deepStrictEqual(second.getAllowlist(), {
+        interfaces: ['Ethernet0'],
+        services: ['Spooler'],
+        ips: ['10.0.0.0/8']
+      });
+    });
+
+    it('should surface persistence failures instead of silently reporting success', () => {
+      // Regression for #140: a failed write must throw so the caller (IPC
+      // handler) can surface it, not be swallowed and reported as success.
+      const failingDb = new FakeDatabase();
+      failingDb.setSetting = () => {
+        throw new Error('disk full');
+      };
+      const svc = new EmergencyLockdown(failingDb, eventBus, notify);
+      assert.throws(
+        () => svc.setAllowlist({ interfaces: ['Ethernet0'], services: [], ips: [] }),
+        /disk full/
+      );
     });
 
     it('should reject invalid IP addresses', () => {
