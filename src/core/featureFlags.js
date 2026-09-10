@@ -18,7 +18,6 @@ const DEFAULT_FLAGS = Object.freeze({
   networkTrafficHistory: true,
   autoUpdates: true,
   vpnAutoConnect: false,
-  emergencyLockdown: false,
   privacyMode: false,
 });
 

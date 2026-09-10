@@ -661,7 +661,7 @@ class DatabaseService {
       // and fall back to the supplied default. The corrupt row is deliberately
       // left in place: removing user data on a parse failure would be
       // destructive, and the next successful write for this key overwrites it.
-      console.error(`Malformed JSON for setting '${key}', using default:`, e.message);
+      console.warn(`Malformed JSON for setting '${key}', using default:`, e.message);
       return defaultValue;
     }
   }
