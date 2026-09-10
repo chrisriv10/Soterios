@@ -10,6 +10,14 @@ const os = require('os');
  * Provides one-click network and service isolation for emergency situations
  */
 class EmergencyLockdown {
+  /**
+   * Settings key used to persist the allowlist through the real settings API
+   * (DatabaseService.getSetting/setSetting). Previously this class called
+   * `db.get`/`db.set`, which the real DatabaseService does not expose, so
+   * allowlist changes were silently discarded on restart.
+   */
+  static SETTINGS_KEY = 'security.emergencyLockdown.allowlist';
+
   constructor(db, eventBus, notify) {
     this.db = db;
     this.eventBus = eventBus;
@@ -27,21 +35,27 @@ class EmergencyLockdown {
 
   _loadAllowlist() {
     try {
-      const stored = this.db.get('lockdown_allowlist');
-      if (stored) {
-        this.allowlist = { ...this.allowlist, ...stored };
+      const stored = this.db.getSetting(EmergencyLockdown.SETTINGS_KEY, null);
+      if (stored && typeof stored === 'object') {
+        this.allowlist = {
+          interfaces: Array.isArray(stored.interfaces) ? stored.interfaces : [],
+          services: Array.isArray(stored.services) ? stored.services : [],
+          ips: Array.isArray(stored.ips) ? stored.ips : []
+        };
       }
     } catch (err) {
-      // Ignore, use defaults
+      // Fall back to the default empty allowlist rather than crashing at
+      // construction time. Log the key name, never the raw stored value.
+      console.error(`Failed to load lockdown allowlist from setting '${EmergencyLockdown.SETTINGS_KEY}':`, err.message);
     }
   }
 
   _saveAllowlist() {
-    try {
-      this.db.set('lockdown_allowlist', this.allowlist);
-    } catch (err) {
-      console.error('Failed to save lockdown allowlist:', err);
-    }
+    // Persist through the real settings API (DatabaseService.setSetting),
+    // which JSON-encodes on write. Do NOT swallow failures: propagate so the
+    // caller (e.g. the IPC handler) can surface them instead of reporting
+    // success for a write that never happened.
+    this.db.setSetting(EmergencyLockdown.SETTINGS_KEY, this.allowlist);
   }
 
   getAllowlist() {

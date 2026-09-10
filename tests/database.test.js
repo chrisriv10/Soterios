@@ -355,3 +355,56 @@ describe('DatabaseService quarantine history', () => {
     service.db.close();
   });
 });
+
+describe('DatabaseService getSetting', () => {
+  const tempDbs = [];
+
+  afterEach(() => {
+    while (tempDbs.length) {
+      const p = tempDbs.pop();
+      try { fs.rmSync(p, { force: true }); } catch (_) {}
+      try { fs.rmSync(p + '-wal', { force: true }); } catch (_) {}
+      try { fs.rmSync(p + '-shm', { force: true }); } catch (_) {}
+    }
+  });
+
+  function tempDbPath() {
+    const p = path.join(os.tmpdir(), `soterios-db-getsetting-${Date.now()}-${Math.random().toString(16).slice(2)}.db`);
+    tempDbs.push(p);
+    return p;
+  }
+
+  it('returns the parsed value for valid JSON', () => {
+    const service = new DatabaseService(tempDbPath());
+    service.setSetting('theme', { name: 'ocean' });
+    assert.deepEqual(service.getSetting('theme'), { name: 'ocean' });
+    service.db.close();
+  });
+
+  it('returns the supplied default when the key is missing', () => {
+    const service = new DatabaseService(tempDbPath());
+    assert.equal(service.getSetting('missing', 'fallback'), 'fallback');
+    service.db.close();
+  });
+
+  it('returns the default (does not throw) when a stored value is malformed JSON', () => {
+    const service = new DatabaseService(tempDbPath());
+    // Insert a corrupt row directly, bypassing setSetting (which would encode).
+    service.db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('theme', '{corrupt');
+    assert.equal(service.getSetting('theme', 'dark'), 'dark');
+    service.db.close();
+  });
+
+  it('keeps a corrupt row in place and returns the default until a valid write recovers it', () => {
+    const service = new DatabaseService(tempDbPath());
+    service.db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('theme', '{corrupt');
+    // Malformed value falls back to the default and the row is NOT removed.
+    assert.equal(service.getSetting('theme', 'dark'), 'dark');
+    const row = service.db.prepare("SELECT value FROM settings WHERE key = 'theme'").get();
+    assert.equal(row.value, '{corrupt');
+    // A later valid write restores normal behaviour.
+    service.setSetting('theme', 'light');
+    assert.equal(service.getSetting('theme', 'dark'), 'light');
+    service.db.close();
+  });
+});

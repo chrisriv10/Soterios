@@ -650,7 +650,20 @@ class DatabaseService {
   getSetting(key, defaultValue = null) {
     const stmt = this.db.prepare('SELECT value FROM settings WHERE key = ?');
     const row = stmt.get(key);
-    return row ? JSON.parse(row.value) : defaultValue;
+    if (!row) {
+      return defaultValue;
+    }
+    try {
+      return JSON.parse(row.value);
+    } catch (e) {
+      // A corrupt stored value must not crash the hot settings read path.
+      // Log the key name only (never the raw value, which could be sensitive)
+      // and fall back to the supplied default. The corrupt row is deliberately
+      // left in place: removing user data on a parse failure would be
+      // destructive, and the next successful write for this key overwrites it.
+      console.warn(`Malformed JSON for setting '${key}', using default.`);
+      return defaultValue;
+    }
   }
 
   setSetting(key, value) {
