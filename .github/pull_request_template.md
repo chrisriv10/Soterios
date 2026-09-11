@@ -15,7 +15,7 @@
 <!-- Commands run and any manual verification. -->
 
 - [ ] `npm test`
-- [ ] Application starts successfully
+- [ ] Application starts successfully (or mark N/A and explain why for documentation-only changes)
 - [ ] Relevant edge cases checked
 - [ ] Relevant tests were added or updated
 
