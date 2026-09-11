@@ -4,6 +4,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
+const MAX_QUEUE_SIZE = 256;
+const RECENT_SCAN_WINDOW_MS = 60_000;
+
 /**
  * Watches high-risk directories and queues custom scans when files appear
  * or change. Uses Node's fs.watch (no extra dependency).
@@ -42,6 +45,7 @@ class FolderWatcher {
     this._draining = false;
     this._running = false;
     this._scannedRecently = new Map();
+    this._droppedQueueJobs = 0;
   }
 
   static defaultWatchDirs() {
@@ -60,7 +64,8 @@ class FolderWatcher {
     return {
       running: this._running,
       watched: [...this._watchers.keys()],
-      queued: this._queue.length
+      queued: this._queue.length,
+      dropped: this._droppedQueueJobs
     };
   }
 
@@ -117,6 +122,14 @@ class FolderWatcher {
     this._pending.set(filePath, timer);
   }
 
+  _pruneRecentScans(now = Date.now()) {
+    for (const [filePath, timestamp] of this._scannedRecently) {
+      if (now - timestamp >= RECENT_SCAN_WINDOW_MS) {
+        this._scannedRecently.delete(filePath);
+      }
+    }
+  }
+
   _enqueue(filePath) {
     try {
       const st = fs.statSync(filePath);
@@ -124,9 +137,21 @@ class FolderWatcher {
     } catch (_) {
       return;
     }
+
+    const now = Date.now();
+    this._pruneRecentScans(now);
+
     const last = this._scannedRecently.get(filePath) || 0;
-    if (Date.now() - last < 60_000) return;
+    if (now - last < RECENT_SCAN_WINDOW_MS) return;
+
     if (this._queue.includes(filePath)) return;
+
+    if (this._queue.length >= MAX_QUEUE_SIZE) {
+      this._droppedQueueJobs++;
+      console.warn(`FolderWatcher scan queue full; dropping ${filePath}`);
+      return;
+    }
+
     this._queue.push(filePath);
     this._drain();
   }
