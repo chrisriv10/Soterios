@@ -1,5 +1,3 @@
-SOTERIOS - LICENSE AGREEMENT
-
 MIT License
 
 Copyright (c) 2026 Christopher Rivera
@@ -22,16 +20,3 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
----
-
-ABOUT THIS APPLICATION
-
-Soterios is a local-first Windows security and maintenance application with
-ClamAV-backed file scanning, process inspection, Windows audit checks,
-firewall visibility, password tools, reports, quarantine, real-time
-protection, and maintenance scripts.
-
-Soterios does not collect telemetry or analytics. Local scanning and system
-analysis happen on your own machine. Network calls are limited to actions
-you request, such as ClamAV definition updates, HIBP k-anonymity password
-checks, or XposedOrNot email breach checks.
