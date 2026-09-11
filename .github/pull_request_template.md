@@ -17,6 +17,7 @@
 - [ ] `npm test`
 - [ ] Application starts successfully
 - [ ] Relevant edge cases checked
+- [ ] Relevant tests were added or updated
 
 ## Screenshots
 
