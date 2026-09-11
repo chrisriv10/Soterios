@@ -31,7 +31,7 @@ Download the latest Windows release:
 
 | Platform | Installer | Notes |
 |----------|-----------|-------|
-| **Windows** | `Soterios-Setup-1.3.0.exe` | NSIS installer · requires admin for system-level checks |
+| **Windows** | [Latest release](https://github.com/chrisriv10/Soterios/releases/latest) | NSIS installer · requires admin for system-level checks |
 
 The release build also produces `soterios-extension-2.0.0.zip`, a Chromium Manifest V3 package for sideloading or store submission. The extension is included in the desktop installer resources and can also be built independently (see [Build Installers](#build-installers)).
 
