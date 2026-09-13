@@ -24,6 +24,7 @@
     "test": "node tests/node-test-runner.js && jest tests/passwordTools.test.js tests/reportExport.test.js tests/splashProgress.test.js",
     "test:force": "node --test --test-force-exit tests/",
     "sync-wiki": "node tools/sync-wiki.js",
+    "check:i18n": "node tools/check-i18n.js",
     "extension:build": "node tools/build-extension.mjs",
     "extension:package": "node tools/package-extension.mjs",
     "extension:validate": "node tools/validate-extension.mjs",
