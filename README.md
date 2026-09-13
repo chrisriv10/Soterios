@@ -83,6 +83,13 @@ Soterios does **not** collect telemetry or analytics. All scanning and system an
 
 - [Node.js](https://nodejs.org/) 26 or newer (required by the package engine)
 - [Git](https://git-scm.com/)
+- Rust toolchain 1.85.1 for native process inspector builds on Windows
+
+Set up the pinned Windows Rust toolchain:
+
+```bash
+rustup toolchain install 1.85.1-x86_64-pc-windows-msvc --profile minimal --component clippy,rustfmt
+```
 
 ### Clone & Run
 
@@ -114,10 +121,15 @@ Built artifacts are output to the `dist/` directory.
 
 | Variable | Description |
 |----------|-------------|
-| `SOTERIOS_DISABLE_GPU=1` | Setting this will disable GPU acceleration (which is enabled by default), to force full software rendering. Set this if rendering glitches or crashes occur related to GPU drivers.
-| `SOTERIOS_USERDATA=<path>` | Allows for specifying a custom path to override the default user data directory (%APPDATA%\Soterios). This may be useful for running isolating instances to retain results.
+| `SOTERIOS_DISABLE_GPU=1` | Disables GPU acceleration and forces software rendering. This can help when GPU drivers cause rendering glitches or crashes. |
+| `SOTERIOS_USERDATA=<path>` | Overrides the default user data directory (`%APPDATA%\Soterios`) with a custom path, which can be useful for isolated instances. |
+| `SOTERIOS_LOG_FILE=1` or `SOTERIOS_LOG_FILE=<path>` | Enables file logging. Use `1` for the default user data log location or provide a custom log file path. |
 
-In order to utilize these environment variables during runtime, the start command can be modified as followed: `set SOTERIOS_DISABLE_GPU=1 && npm start`.
+To use an environment variable at runtime on Windows, set it before starting Soterios. For example:
+
+```bat
+set SOTERIOS_DISABLE_GPU=1 && npm start
+```
 
 ---
 
