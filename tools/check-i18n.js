@@ -48,17 +48,24 @@ const EXEMPT_VALUES = new Set([
 // Matches values that carry no translatable text: URLs, emails, file paths,
 // registry keys, environment variables, CLI flags, version numbers, and
 // strings that consist only of {placeholders} or non-letter characters.
+// Every pattern is anchored: the ENTIRE value must match, so a translatable
+// sentence that merely contains a URL, path, or env var is still reported.
+// Path-like patterns allow spaces inside segments only when the value starts
+// with an unambiguous prefix (drive letter, \\, registry hive, or %VAR%);
+// bare rooted/relative paths stay space-free so "word/word" text is not
+// mistaken for a path.
 const EXEMPT_PATTERNS = [
-  /[a-z][a-z0-9+.-]*:\/\//i,                 // URLs (http://, chrome://, …)
-  /^www\./i,                                 // bare www links
+  /^[a-z][a-z0-9+.-]*:\/\/\S+$/i,            // URLs (http://, chrome://, …)
+  /^www\.\S+$/i,                             // bare www links
   /^[a-z0-9_*-]+(\.[a-z0-9_-]+)+$/i,         // bare hostnames (vpn.example.com)
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/,              // email addresses
-  /^[A-Z]:[\\/]/i,                           // Windows drive paths
-  /^[\\/]/,                                  // rooted paths (/etc/hosts, \System32)
-  /[\\/][\w.-]+[\\/]/,                       // embedded path separators
-  /^HKEY_|^HKLM\\|^HKCU\\/i,                 // registry hives
-  /%[A-Z_]+%/i,                              // env vars like %APPDATA%
-  /^-{1,2}[\w-]/,                            // CLI flags
+  /^[A-Z]:[\\/](?:[\w .-]+[\\/]?)*$/i,       // Windows drive paths (C:\…)
+  /^[\\/]{2}[\w .-]+(?:[\\/][\w .-]+)*[\\/]?$/, // UNC paths (\\server\share)
+  /^[\\/][\w.-]+(?:[\\/][\w.-]+)*[\\/]?$/,   // rooted paths (/etc/hosts, \System32)
+  /^[\w.-]+(?:[\\/][\w.-]+)+[\\/]$|^[\w.-]+(?:[\\/][\w.-]+){2,}$/, // relative paths (assets/clamav/, a\b\c)
+  /^(?:HKEY_[A-Z_]+|HKLM|HKCU):?(?:\\[\w .-]+)*\\?$/i, // registry keys
+  /^%[\w()]+%(?:[\\/][\w .-]+)*$/i,          // env vars like %APPDATA% (optionally followed by a path)
+  /^--?[\w-]+(?:=\S+)?$/,                    // CLI flags (-v, --verbose, --output=json)
   /^v?\d+(\.\d+)+([-.][\w.-]*)?$/,           // version numbers
   /^[\w.-]+\.(exe|dll|sys|json|js|mjs|cjs|ts|ps1|bat|cmd|sh|log|txt|md|reg|xml|ya?ml|ini|cfg|toml|zip|7z|png|jpe?g|ico|svg|html?|csv|pdf|msi|dat|tmp|bak|key|pem|pub|sig|plist|app|dmg|pkg|deb|rpm)$/i, // file names
 ];
