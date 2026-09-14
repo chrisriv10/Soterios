@@ -506,6 +506,16 @@ describe('ClamAV secure extraction (Dependabot #51)', () => {
     assert.throws(() => dl.validateInstall(dir), /Missing required ClamAV binary/i);
   });
 
+  it('treats a partial install as not downloaded', () => {
+    const dir = path.join(tmp, 'partial-clam');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'clamscan.exe'), 'x');
+    assert.equal(dl.hasCompleteInstall(dir), false);
+    fs.writeFileSync(path.join(dir, 'freshclam.exe'), 'x');
+    assert.equal(dl.hasCompleteInstall(dir), true);
+    assert.equal(dl.hasCompleteInstall(path.join(tmp, 'missing')), false);
+  });
+
   it('uses secure private staging dirs, not predictable pid paths', () => {
     const parent = path.join(tmp, 'parent');
     fs.mkdirSync(parent, { recursive: true });

@@ -1,3 +1,5 @@
+'use strict';
+
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -14,6 +16,65 @@ const TARGET_DIR = path.join(ASSETS_DIR, 'clamav');
 // ever removed (rm of a symlink removes the link itself), never written to.
 const LEGACY_ZIP_PATH = path.join(ASSETS_DIR, 'clamav.zip');
 const DOWNLOAD_TIMEOUT_MS = 120000;
+
+// The pinned archive only ships Windows binaries, so downloading it on other
+// platforms is wasted work for contributors. SOTERIOS_SKIP_CLAMAV=1 always
+// skips the bootstrap (offline or minimal installs) and
+// SOTERIOS_FORCE_CLAMAV=1 forces the download anyway, e.g. when assembling a
+// Windows package from a non-Windows host.
+const SKIP_ENV_VAR = 'SOTERIOS_SKIP_CLAMAV';
+const FORCE_ENV_VAR = 'SOTERIOS_FORCE_CLAMAV';
+const PACKAGE_PLATFORM = 'win32';
+const MAX_DOWNLOAD_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 1500;
+
+const TRUTHY_FLAG_VALUES = new Set(['1', 'true', 'yes']);
+
+// Network failures worth retrying: resets, refused/aborted connections,
+// DNS hiccups, timeouts, rate limiting, and server-side 5xx responses.
+// Checksum mismatches and local filesystem errors are deliberately absent —
+// a tampered or corrupt archive must fail fast rather than be retried into
+// acceptance.
+const TRANSIENT_ERROR_CODES = new Set([
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ECONNABORTED',
+  'ETIMEDOUT',
+  'EAI_AGAIN',
+  'ENOTFOUND',
+  'EPIPE',
+  'ERR_NETWORK',
+  'ERR_BAD_RESPONSE'
+]);
+
+function envFlagEnabled(env, name) {
+  return TRUTHY_FLAG_VALUES.has(String(env[name] || '').trim().toLowerCase());
+}
+
+// Returns a human-readable reason when the download should be skipped, or
+// null when it should proceed.
+function downloadSkipReason(env = process.env, platform = process.platform) {
+  if (envFlagEnabled(env, SKIP_ENV_VAR)) {
+    return `${SKIP_ENV_VAR} is set`;
+  }
+  if (platform !== PACKAGE_PLATFORM && !envFlagEnabled(env, FORCE_ENV_VAR)) {
+    return `the pinned ClamAV archive only contains Windows binaries (platform: ${platform}; set ${FORCE_ENV_VAR}=1 to download anyway)`;
+  }
+  return null;
+}
+
+function isTransientDownloadError(err) {
+  if (!err) return false;
+  if (err.isAxiosError) {
+    if (!err.response) return true;
+    return err.response.status === 429 || err.response.status >= 500;
+  }
+  return TRANSIENT_ERROR_CODES.has(err.code);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function removePath(targetPath) {
   fs.rmSync(targetPath, { recursive: true, force: true });
@@ -221,13 +282,18 @@ async function installStagedArchive(stagedZipPath, options = {}) {
   }
 }
 
-async function downloadClamAV() {
-  if (fs.existsSync(TARGET_DIR) && fs.existsSync(path.join(TARGET_DIR, 'clamscan.exe'))) {
-    console.log('ClamAV already downloaded.');
+function hasCompleteInstall(dir) {
+  return fs.existsSync(dir) &&
+    REQUIRED_BINARIES.every((binary) => fs.existsSync(path.join(dir, binary)));
+}
+
+async function downloadClamAV({ log = console.log } = {}) {
+  if (hasCompleteInstall(TARGET_DIR)) {
+    log('ClamAV already downloaded.');
     return;
   }
 
-  console.log(`Downloading ClamAV from ${CLAMAV_URL}...`);
+  log(`Downloading ClamAV from ${CLAMAV_URL}...`);
   const stagingRoot = createSecureStagingDir(ASSETS_DIR);
   const stagedZipPath = path.join(stagingRoot, 'clamav.zip');
 
@@ -263,7 +329,7 @@ async function downloadClamAV() {
     try {
       removePath(LEGACY_ZIP_PATH);
     } catch (_) {}
-    console.log('ClamAV downloaded and extracted successfully.');
+    log('ClamAV downloaded and extracted successfully.');
   } catch (err) {
     try {
       removePath(stagingRoot);
@@ -277,8 +343,36 @@ async function downloadClamAV() {
   }
 }
 
+// Retries the download a small number of times for transient network
+// failures. Verification failures (checksum, missing binaries) are not
+// transient and propagate immediately.
+async function downloadClamAVWithRetry({ log = console.log, sleepFn = sleep, downloadFn = downloadClamAV } = {}) {
+  for (let attempt = 1; attempt <= MAX_DOWNLOAD_ATTEMPTS; attempt += 1) {
+    try {
+      await downloadFn({ log });
+      return;
+    } catch (err) {
+      if (!isTransientDownloadError(err) || attempt === MAX_DOWNLOAD_ATTEMPTS) {
+        throw err;
+      }
+      const delayMs = RETRY_DELAY_MS * attempt;
+      log(`ClamAV download attempt ${attempt}/${MAX_DOWNLOAD_ATTEMPTS} failed (${err.message}). Retrying in ${delayMs}ms...`);
+      await sleepFn(delayMs);
+    }
+  }
+}
+
+async function run({ env = process.env, platform = process.platform, log = console.log } = {}) {
+  const skipReason = downloadSkipReason(env, platform);
+  if (skipReason) {
+    log(`Skipping ClamAV download: ${skipReason}.`);
+    return;
+  }
+  await downloadClamAVWithRetry({ log });
+}
+
 if (require.main === module) {
-  downloadClamAV().catch((err) => {
+  run().catch((err) => {
     console.error(err);
     process.exit(1);
   });
@@ -293,6 +387,14 @@ module.exports = {
   LEGACY_ZIP_PATH,
   ZIP_PATH: LEGACY_ZIP_PATH,
   DOWNLOAD_TIMEOUT_MS,
+  SKIP_ENV_VAR,
+  FORCE_ENV_VAR,
+  PACKAGE_PLATFORM,
+  MAX_DOWNLOAD_ATTEMPTS,
+  RETRY_DELAY_MS,
+  envFlagEnabled,
+  downloadSkipReason,
+  isTransientDownloadError,
   removePath,
   sha256File,
   verifyChecksum,
@@ -300,7 +402,10 @@ module.exports = {
   createUniqueBackupPath,
   flattenExtractedDir,
   validateInstall,
+  hasCompleteInstall,
   restoreBackupIfNeeded,
   installStagedArchive,
   downloadClamAV,
+  downloadClamAVWithRetry,
+  run
 };

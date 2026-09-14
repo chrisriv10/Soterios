@@ -52,6 +52,10 @@ Contributor-relevant variables include:
 - `SOTERIOS_DISABLE_GPU=1`
 - `SOTERIOS_USERDATA=<path>`
 - `SOTERIOS_LOG_FILE=1` or `SOTERIOS_LOG_FILE=<path>`
+- `SOTERIOS_SKIP_CLAMAV=1`
+- `SOTERIOS_FORCE_CLAMAV=1`
+
+`npm install` downloads a prebuilt Windows ClamAV archive via `tools/download-clamav.js`. The pinned archive only contains Windows binaries, so the download is skipped automatically on Linux and macOS. Set `SOTERIOS_SKIP_CLAMAV=1` to skip it on Windows as well (for example when working offline or on a metered connection), or `SOTERIOS_FORCE_CLAMAV=1` to force the download on a non-Windows host when assembling a Windows package. Transient download failures are retried a few times before the install fails, and the archive's SHA-256 checksum is always verified.
 
 See the [Logging](#logging) section below for additional details about `SOTERIOS_LOG_FILE`.
 
