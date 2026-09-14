@@ -59,7 +59,7 @@ const EXEMPT_PATTERNS = [
   /^www\.\S+$/i,                             // bare www links
   /^[a-z0-9_*-]+(\.[a-z0-9_-]+)+$/i,         // bare hostnames (vpn.example.com)
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/,              // email addresses
-  /^[A-Z]:[\\/](?:[\w .-]+[\\/]?)*$/i,       // Windows drive paths (C:\…)
+  /^[A-Z]:[\\/](?:[\w .-]+(?:[\\/][\w .-]+)*[\\/]?)?$/i, // Windows drive paths (C:\…)
   /^[\\/]{2}[\w .-]+(?:[\\/][\w .-]+)*[\\/]?$/, // UNC paths (\\server\share)
   /^[\\/][\w.-]+(?:[\\/][\w.-]+)*[\\/]?$/,   // rooted paths (/etc/hosts, \System32)
   /^[\w.-]+(?:[\\/][\w.-]+)+[\\/]$|^[\w.-]+(?:[\\/][\w.-]+){2,}$/, // relative paths (assets/clamav/, a\b\c)
@@ -76,13 +76,9 @@ function isExempt(value) {
   if (EXEMPT_VALUES.has(trimmed)) return true;
   // No letters at all: punctuation, digits, symbols (",", "—", "100%").
   if (!/\p{L}/u.test(trimmed)) return true;
-  // Only placeholders/markup once {tokens}, %tokens% and punctuation go away.
-  const stripped = trimmed
-    .replace(/\{[^{}]*\}/g, '')
-    .replace(/%[\w]+%/g, '')
-    .replace(/<[^>]*>/g, '')
-    .trim();
-  if (!/\p{L}/u.test(stripped)) return true;
+  // Only placeholders/markup: every character is inside a {token}, a
+  // %VAR%, a <tag>, or is a non-letter (punctuation, digits, symbols).
+  if (/^(?:\{[^{}]*\}|%[\w]+%|<[^>]*>|[^\p{L}])*$/u.test(trimmed)) return true;
   return EXEMPT_PATTERNS.some((re) => re.test(trimmed));
 }
 
