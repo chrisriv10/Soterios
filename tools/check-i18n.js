@@ -89,14 +89,21 @@ function isExempt(value) {
 // Recursively collects leaf string values keyed by dotted path so flat files
 // ("a.b": "x") and nested files ({a: {b: "x"}}) compare on equal footing.
 // Non-string leaves are ignored: numbers and booleans cannot be untranslated.
-function collectStrings(value, prefix, out) {
+// A flattened key produced twice ("a.b" plus a nested a.b) is a collision:
+// overwriting would compare against the wrong English value, so the key is
+// recorded in `duplicates` and the first entry is kept.
+function collectStrings(value, prefix, out, duplicates) {
   if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
     for (const [key, child] of Object.entries(value)) {
-      collectStrings(child, prefix ? `${prefix}.${key}` : key, out);
+      collectStrings(child, prefix ? `${prefix}.${key}` : key, out, duplicates);
     }
     return;
   }
   if (typeof value === 'string' && prefix) {
+    if (out.has(prefix)) {
+      duplicates.add(prefix);
+      return;
+    }
     out.set(prefix, value);
   }
 }
@@ -124,7 +131,13 @@ function loadLocale(file) {
   }
 
   const strings = new Map();
-  collectStrings(parsed, '', strings);
+  const duplicates = new Set();
+  collectStrings(parsed, '', strings, duplicates);
+  if (duplicates.size) {
+    return {
+      error: `duplicate key(s): ${[...duplicates].sort().join(', ')}`,
+    };
+  }
   return { strings };
 }
 
