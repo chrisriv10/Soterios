@@ -52,19 +52,21 @@ const EXEMPT_VALUES = new Set([
 // sentence that merely contains a URL, path, or env var is still reported.
 // Path-like patterns allow spaces inside segments only when the value starts
 // with an unambiguous prefix (drive letter, \\, registry hive, or %VAR%);
-// bare rooted/relative paths stay space-free so "word/word" text is not
+// segments are written as [^\\/]+ (anything-but-separator) so each separator
+// split is deterministic and the regex cannot backtrack on space runs.
+// Bare rooted/relative paths stay space-free so "word/word" text is not
 // mistaken for a path.
 const EXEMPT_PATTERNS = [
   /^[a-z][a-z0-9+.-]*:\/\/\S+$/i,            // URLs (http://, chrome://, …)
   /^www\.\S+$/i,                             // bare www links
   /^[a-z0-9_*-]+(\.[a-z0-9_-]+)+$/i,         // bare hostnames (vpn.example.com)
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/,              // email addresses
-  /^[A-Z]:[\\/](?:[\w .-]+(?:[\\/][\w .-]+)*[\\/]?)?$/i, // Windows drive paths (C:\…)
-  /^[\\/]{2}[\w .-]+(?:[\\/][\w .-]+)*[\\/]?$/, // UNC paths (\\server\share)
+  /^[A-Z]:[\\/](?:[^\\/]+[\\/])*[^\\/]*$/i,  // Windows drive paths (C:\…)
+  /^[\\/]{2}[^\\/]+(?:[\\/][^\\/]+)*[\\/]?$/, // UNC paths (\\server\share)
   /^[\\/][\w.-]+(?:[\\/][\w.-]+)*[\\/]?$/,   // rooted paths (/etc/hosts, \System32)
   /^[\w.-]+(?:[\\/][\w.-]+)+[\\/]$|^[\w.-]+(?:[\\/][\w.-]+){2,}$/, // relative paths (assets/clamav/, a\b\c)
-  /^(?:HKEY_[A-Z_]+|HKLM|HKCU):?(?:\\[\w .-]+)*\\?$/i, // registry keys
-  /^%[\w()]+%(?:[\\/][\w .-]+)*$/i,          // env vars like %APPDATA% (optionally followed by a path)
+  /^(?:HKEY_[A-Z_]+|HKLM|HKCU):?(?:\\[^\\]+)*\\?$/i, // registry keys
+  /^%[\w()]+%(?:[\\/][^\\/]+)*$/i,           // env vars like %APPDATA% (optionally followed by a path)
   /^--?[\w-]+(?:=\S+)?$/,                    // CLI flags (-v, --verbose, --output=json)
   /^v?\d+(\.\d+)+([-.][\w.-]*)?$/,           // version numbers
   /^[\w.-]+\.(exe|dll|sys|json|js|mjs|cjs|ts|ps1|bat|cmd|sh|log|txt|md|reg|xml|ya?ml|ini|cfg|toml|zip|7z|png|jpe?g|ico|svg|html?|csv|pdf|msi|dat|tmp|bak|key|pem|pub|sig|plist|app|dmg|pkg|deb|rpm)$/i, // file names
@@ -76,9 +78,11 @@ function isExempt(value) {
   if (EXEMPT_VALUES.has(trimmed)) return true;
   // No letters at all: punctuation, digits, symbols (",", "—", "100%").
   if (!/\p{L}/u.test(trimmed)) return true;
-  // Only placeholders/markup: every character is inside a {token}, a
-  // %VAR%, a <tag>, or is a non-letter (punctuation, digits, symbols).
-  if (/^(?:\{[^{}]*\}|%[\w]+%|<[^>]*>|[^\p{L}])*$/u.test(trimmed)) return true;
+  // Only placeholders or markup: every character is inside a {token}, a
+  // %VAR%, or is a non-letter (punctuation, digits, symbols). The {token}
+  // body may not contain '<', and bare <…> spans are not exempt, so a
+  // value holding something like <script is still reported.
+  if (/^(?:\{[^{}<]*\}|%[\w]+%|[^\p{L}])*$/u.test(trimmed)) return true;
   return EXEMPT_PATTERNS.some((re) => re.test(trimmed));
 }
 
