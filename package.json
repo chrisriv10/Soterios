@@ -18,6 +18,7 @@
     "dist:win": "npm run extension:build && npm run native-host:build && npm run native:process && electron-builder --win --publish never",
     "dist:mac": "electron-builder --mac --publish never",
     "dist:linux": "electron-builder --linux --publish never",
+    "doctor": "node tools/doctor.js",
     "postinstall": "node tools/download-clamav.js",
     "prepack": "node tools/download-clamav.js",
     "pretest": "npm run extension:build",

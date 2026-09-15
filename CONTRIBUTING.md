@@ -43,6 +43,27 @@ rustup toolchain install 1.85.1-x86_64-pc-windows-msvc --profile minimal --compo
 
 For the canonical clone, dependency installation, and application startup instructions, follow the [Development Setup](README.md#development-setup) section in the README.
 
+### Environment Doctor
+
+Run the read-only environment check to verify your local setup:
+
+```bash
+npm run doctor
+```
+
+It checks common setup problems (Node.js version, platform, PowerShell,
+ClamAV installation completeness, native helper/host artifacts, extension
+build output, repository configuration, and writable working locations) and
+prints remediation hints. It does not modify the system, install anything,
+build anything, or make network requests. It exits nonzero when a required
+check fails; warnings about optional build artifacts do not fail the command.
+Missing artifacts can usually be produced with `npm install`,
+`npm run native:process`, `npm run native-host:build`, or
+`npm run extension:build`. (On Linux/macOS the ClamAV bundle is skipped by
+design — see `SOTERIOS_SKIP_CLAMAV` / `SOTERIOS_FORCE_CLAMAV` under
+[Environment Variables](#environment-variables) — so a ClamAV "not installed"
+warning is expected there.)
+
 ### Environment Variables
 
 Runtime environment variables are documented in the [Environment Variables](README.md#environment-variables) section of the README.
