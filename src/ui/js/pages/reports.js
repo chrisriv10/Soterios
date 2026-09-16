@@ -115,6 +115,30 @@ window.Pages.reports = {
             <span class="report-section-chevron" aria-hidden="true"></span>
           </div>
           <div id="scheduledMaintenanceHistory" class="history-list"><div class="empty-state">${escapeHtml(t('reports.loadingMaintenance'))}</div></div>
+
+          <div class="panel-title report-section-toggle report-section-toggle--spaced" data-collapse-target="defenderHistorySection" role="button" tabindex="0" aria-expanded="true">
+            <span class="report-section-label">${escapeHtml(t('defender.history.title'))}</span>
+            <span class="report-section-clear-slot" aria-hidden="true"></span>
+            <span class="report-section-extra-slot"><button class="btn btn-primary btn-sm report-generate-button" id="refreshDefenderHistory">${escapeHtml(t('defender.history.refresh'))}</button></span>
+            <span class="report-section-chevron" aria-hidden="true"></span>
+          </div>
+          <div id="defenderHistorySection">
+            <div class="page-subtitle" style="font-size:0.85rem; margin:2px 0 8px;">${escapeHtml(t('defender.history.subtitle'))}</div>
+            <div id="defenderHistoryFilters" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:8px;" role="group" aria-label="${escapeHtml(t('defender.history.title'))}">
+              <button type="button" class="btn btn-xs defender-filter" data-status="all" aria-pressed="true">${escapeHtml(t('defender.history.filterAll'))}</button>
+              <button type="button" class="btn btn-xs defender-filter" data-status="active" aria-pressed="false">${escapeHtml(t('defender.history.filterActive'))}</button>
+              <button type="button" class="btn btn-xs defender-filter" data-status="remediated" aria-pressed="false">${escapeHtml(t('defender.history.filterRemediated'))}</button>
+              <button type="button" class="btn btn-xs defender-filter" data-status="failed" aria-pressed="false">${escapeHtml(t('defender.history.filterFailed'))}</button>
+              <input type="search" id="defenderHistorySearch" class="ai-input" style="flex:1; min-width:140px; padding:4px 8px; font-size:0.8rem;" placeholder="${escapeHtml(t('defender.history.searchPlaceholder'))}" aria-label="${escapeHtml(t('defender.history.searchPlaceholder'))}">
+              <select id="defenderHistoryRange" class="ai-input" style="padding:4px 8px; font-size:0.8rem;" aria-label="${escapeHtml(t('defender.history.rangeLabel'))}">
+                <option value="all">${escapeHtml(t('defender.history.rangeAll'))}</option>
+                <option value="24h">${escapeHtml(t('defender.history.range24h'))}</option>
+                <option value="7d">${escapeHtml(t('defender.history.range7d'))}</option>
+                <option value="30d">${escapeHtml(t('defender.history.range30d'))}</option>
+              </select>
+            </div>
+            <div id="defenderHistory" class="history-list" aria-live="polite"><div class="empty-state">${escapeHtml(t('defender.history.loading'))}</div></div>
+          </div>
         </section>
 
         <section class="panel report-viewer">
@@ -193,6 +217,7 @@ container.querySelector('#generateReport').addEventListener('click', () => this.
     this.listReports(container);
     this.listManualMaintenanceHistory(container);
     this.listScheduledMaintenanceHistory(container);
+    this.initDefenderHistory(container);
   },
 
   clearViewer(container) {
@@ -732,6 +757,262 @@ container.querySelector('#generateReport').addEventListener('click', () => this.
     }
     const clearBtn = container.querySelector('#clearAllScheduledMaintenance');
     if (clearBtn) clearBtn.classList.toggle('hidden', !rows.length);
+  },
+
+  // -- Defender threat history (read-only v1) --
+  _defenderDetections: [],
+  _defenderFilter: null,
+  _defenderRendered: [],
+  _defenderTruncated: false,
+
+  defenderHistoryRenderLimit() {
+    return 200;
+  },
+
+  defenderSecurityUri() {
+    // Fixed deep link; validated against shell.openExternal's allowlist
+    // (windowsdefender://). Opens Windows Security for review only.
+    return 'windowsdefender://threat/';
+  },
+
+  defenderDefaultFilter() {
+    return { status: 'all', query: '', range: 'all' };
+  },
+
+  // Pure helper (no DOM): status + text search + date-range filtering.
+  // Tested in Node via tests/defenderThreatHistory.test.js.
+  filterDefenderDetections(list, filter) {
+    const criteria = { ...this.defenderDefaultFilter(), ...(filter || {}) };
+    const query = String(criteria.query || '').trim().toLowerCase();
+    const now = Date.now();
+    const rangeMs = criteria.range === '24h' ? 86400000 : criteria.range === '7d' ? 604800000 : criteria.range === '30d' ? 2592000000 : 0;
+    return (Array.isArray(list) ? list : []).filter((d) => {
+      if (!d || typeof d !== 'object') return false;
+      if (criteria.status !== 'all' && d.status !== criteria.status) return false;
+      if (query && !String(d.threatName || '').toLowerCase().includes(query)) return false;
+      if (rangeMs > 0) {
+        const when = d.detectedAt ? Date.parse(d.detectedAt) : NaN;
+        if (!Number.isFinite(when) || now - when > rangeMs) return false;
+      }
+      return true;
+    });
+  },
+
+  defenderStatusPill(status, t) {
+    const key = status === 'active' ? 'defender.history.statusActive'
+      : status === 'remediated' ? 'defender.history.statusRemediated'
+      : status === 'failed' ? 'defender.history.statusFailed'
+      : 'defender.history.statusUnknown';
+    const css = status === 'remediated' ? 'clean' : status === 'unknown' ? 'warn' : 'match';
+    return `<span class="log-tag ${css}">${escapeHtml(t(key))}</span>`;
+  },
+
+  defenderActionName(action, t) {
+    const key = action === 'quarantined' ? 'defender.history.actionName.quarantined'
+      : action === 'removed' ? 'defender.history.actionName.removed'
+      : action === 'allowed' ? 'defender.history.actionName.allowed'
+      : action === 'blocked' ? 'defender.history.actionName.blocked'
+      : action === 'cleaned' ? 'defender.history.actionName.cleaned'
+      : action === 'no action' ? 'defender.history.actionName.noAction'
+      : 'defender.history.actionName.unknown';
+    return t(key);
+  },
+
+  defenderSeverityName(severity, t) {
+    const key = severity === 'low' ? 'defender.history.severityName.low'
+      : severity === 'moderate' ? 'defender.history.severityName.moderate'
+      : severity === 'high' ? 'defender.history.severityName.high'
+      : severity === 'severe' ? 'defender.history.severityName.severe'
+      : 'defender.history.unknown';
+    return t(key);
+  },
+
+  formatDefenderDate(iso, t) {
+    if (!iso) return t('defender.history.notAvailable');
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return t('defender.history.notAvailable');
+    return date.toLocaleString();
+  },
+
+  async defenderInvoke(refresh) {
+    // Narrow preload API only. No generic IPC fallback: if the bridge is
+    // unavailable the list renders a clean error state instead.
+    const narrow = window.soterios && window.soterios.defender && window.soterios.defender.getThreatHistory;
+    if (typeof narrow !== 'function') {
+      throw new Error('Defender history API unavailable');
+    }
+    return narrow(refresh ? { refresh: true } : undefined);
+  },
+
+  initDefenderHistory(container) {
+    this._defenderDetections = [];
+    this._defenderRendered = [];
+    this._defenderTruncated = false;
+    this._defenderFilter = this.defenderDefaultFilter();
+    const refreshBtn = container.querySelector('#refreshDefenderHistory');
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        setButtonLoading(refreshBtn, true, tFactory()('defender.history.refreshing'));
+        try {
+          await this.listDefenderHistory(container, true);
+        } finally {
+          setButtonLoading(refreshBtn, false);
+        }
+      });
+    }
+    container.querySelectorAll('.defender-filter').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this._defenderFilter.status = btn.dataset.status || 'all';
+        container.querySelectorAll('.defender-filter').forEach((other) => {
+          const pressed = other === btn;
+          other.setAttribute('aria-pressed', String(pressed));
+          other.classList.toggle('btn-primary', pressed);
+        });
+        this.renderDefenderHistory(container);
+      });
+    });
+    const search = container.querySelector('#defenderHistorySearch');
+    if (search) {
+      search.addEventListener('input', () => {
+        this._defenderFilter.query = search.value || '';
+        this.renderDefenderHistory(container);
+      });
+    }
+    const range = container.querySelector('#defenderHistoryRange');
+    if (range) {
+      range.addEventListener('change', () => {
+        this._defenderFilter.range = range.value || 'all';
+        this.renderDefenderHistory(container);
+      });
+    }
+    this.listDefenderHistory(container, false);
+  },
+
+  defenderErrorText(code) {
+    const t = tFactory();
+    if (code === 'unavailable') return t('defender.history.errorUnavailable');
+    if (code === 'timeout') return t('defender.history.errorTimeout');
+    return t('defender.history.errorFailed');
+  },
+
+  async listDefenderHistory(container, refresh) {
+    const t = tFactory();
+    const el = container.querySelector('#defenderHistory');
+    if (el) el.innerHTML = `<div class="empty-state">${escapeHtml(t('defender.history.loading'))}</div>`;
+    try {
+      const res = await this.defenderInvoke(refresh);
+      if (!res || res.ok !== true) {
+        if (el) {
+          el.innerHTML = `<div class="empty-state"><strong>${escapeHtml(t('defender.history.unavailableTitle'))}</strong><br>${escapeHtml(this.defenderErrorText(res && res.code))}</div>`;
+        }
+        this._defenderDetections = [];
+        this._defenderRendered = [];
+        this._defenderTruncated = false;
+        return;
+      }
+      const detections = res.data && Array.isArray(res.data.detections) ? res.data.detections : [];
+      this._defenderDetections = detections;
+      this._defenderTruncated = !!(res.data && res.data.truncated);
+      this.renderDefenderHistory(container);
+    } catch (_) {
+      if (el) {
+        el.innerHTML = `<div class="empty-state"><strong>${escapeHtml(t('defender.history.unavailableTitle'))}</strong><br>${escapeHtml(t('defender.history.errorFailed'))}</div>`;
+      }
+      this._defenderDetections = [];
+      this._defenderRendered = [];
+      this._defenderTruncated = false;
+    }
+  },
+
+  renderDefenderHistory(container) {
+    const t = tFactory();
+    const el = container.querySelector('#defenderHistory');
+    if (!el) return;
+    const filtered = this.filterDefenderDetections(this._defenderDetections, this._defenderFilter);
+    if (!this._defenderDetections.length) {
+      el.innerHTML = `<div class="empty-state"><strong>${escapeHtml(t('defender.history.emptyTitle'))}</strong><br>${escapeHtml(t('defender.history.emptyDetail'))}</div>`;
+      this._defenderRendered = [];
+      return;
+    }
+    if (!filtered.length) {
+      el.innerHTML = `<div class="empty-state"><strong>${escapeHtml(t('defender.history.noMatchTitle'))}</strong><br>${escapeHtml(t('defender.history.noMatchDetail'))}</div>`;
+      this._defenderRendered = [];
+      return;
+    }
+    const limit = this.defenderHistoryRenderLimit();
+    const shown = filtered.slice(0, limit);
+    this._defenderRendered = shown;
+    el.innerHTML = shown.map((d, index) => {
+      const name = d.threatName || t('defender.history.unknownThreat');
+      const firstResource = d.resources && d.resources[0] ? d.resources[0].display : '';
+      return `
+        <div class="history-item">
+          <div style="min-width:0;">
+            <div class="history-title">${escapeHtml(name)} ${this.defenderStatusPill(d.status, t)}</div>
+            <div class="history-meta">${escapeHtml(t('defender.history.detected'))}: ${escapeHtml(this.formatDefenderDate(d.detectedAt, t))}${firstResource ? ` · ${escapeHtml(firstResource)}` : ''}</div>
+          </div>
+          <div style="display:flex; gap:6px; flex-shrink:0;">
+            <button type="button" class="btn btn-sm open-defender-detection" data-index="${index}">${escapeHtml(t('defender.history.details'))}</button>
+          </div>
+        </div>`;
+    }).join('') + (filtered.length > shown.length ? `<div class="empty-state compact-empty">${escapeHtml(t('defender.history.showingOf', { shown: shown.length, total: filtered.length }))}</div>` : '')
+      + (this._defenderTruncated ? `<div class="empty-state compact-empty">${escapeHtml(t('defender.history.truncatedNote'))}</div>` : '');
+    el.querySelectorAll('.open-defender-detection').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const detection = this._defenderRendered[Number(btn.dataset.index)];
+        if (detection) this.openDefenderDetails(container, detection);
+      });
+    });
+  },
+
+  openDefenderDetails(container, d) {
+    const t = tFactory();
+    const name = d.threatName || t('defender.history.unknownThreat');
+    const result = d.actionSuccess === true ? t('defender.history.succeeded') : d.actionSuccess === false ? t('defender.history.failed') : t('defender.history.notAvailable');
+    const resultClass = d.actionSuccess === true ? 'clean' : d.actionSuccess === false ? 'match' : 'warn';
+    const resources = Array.isArray(d.resources) ? d.resources : [];
+    const metaRow = (label, value) => value ? `<div style="display:flex; justify-content:space-between; gap:12px; font-size:0.85rem;"><span class="page-subtitle" style="flex-shrink:0;">${escapeHtml(label)}</span><span style="text-align:right; word-break:break-word;">${escapeHtml(value)}</span></div>` : '';
+    const html = `
+      <div class="report-stats">
+        <div class="stat-tile"><div class="stat-label">${escapeHtml(t('defender.history.status'))}</div><div class="stat-value">${this.defenderStatusPill(d.status, t)}</div></div>
+        <div class="stat-tile"><div class="stat-label">${escapeHtml(t('defender.history.action'))}</div><div class="stat-value small">${escapeHtml(this.defenderActionName(d.action, t))}</div></div>
+        <div class="stat-tile"><div class="stat-label">${escapeHtml(t('defender.history.result'))}</div><div class="stat-value ${resultClass}">${escapeHtml(result)}</div></div>
+        <div class="stat-tile"><div class="stat-label">${escapeHtml(t('defender.history.detected'))}</div><div class="stat-value small">${escapeHtml(this.formatDefenderDate(d.detectedAt, t))}</div></div>
+      </div>
+      ${d.status === 'active' ? `<div class="report-section"><div class="page-subtitle" style="font-size:0.85rem;">${escapeHtml(t('defender.history.activeNote'))}</div></div>` : ''}
+      <div class="report-section"><div class="panel-title">${escapeHtml(t('defender.history.resource'))}</div>
+        ${resources.length ? resources.map((r) => `<div class="log-row"><span class="log-tag ${r.type === 'file' ? 'match' : 'warn'}">${escapeHtml(r.type)}</span><span class="log-path">${escapeHtml(r.display)}</span></div>`).join('') : `<div class="empty-state compact-empty">${escapeHtml(t('defender.history.notAvailable'))}</div>`}
+      </div>
+      <div class="report-section"><div class="panel-title">${escapeHtml(t('defender.history.details'))}</div>
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          ${metaRow(t('defender.history.threatId'), d.threatId)}
+          ${metaRow(t('defender.history.category'), d.category)}
+          ${metaRow(t('defender.history.severity'), this.defenderSeverityName(d.severity, t))}
+          ${metaRow(t('defender.history.process'), d.processName)}
+          ${metaRow(t('defender.history.lastChange'), this.formatDefenderDate(d.lastUpdatedAt, t))}
+          ${metaRow(t('defender.history.remediatedAt'), d.remediatedAt ? this.formatDefenderDate(d.remediatedAt, t) : '')}
+          ${metaRow(t('defender.history.detectionSource'), d.detectionSource)}
+          ${metaRow(t('defender.history.source'), d.source || t('defender.history.microsoftDefender'))}
+        </div>
+      </div>
+      <div class="report-section"><button type="button" class="btn btn-sm" id="openDefenderSecurity">${escapeHtml(t('defender.history.openSecurity'))}</button></div>`;
+    this._currentScanReportId = null;
+    this._currentSecurityReportPath = null;
+    this.showViewer(container, name, html);
+    const securityBtn = container.querySelector('#openDefenderSecurity');
+    if (securityBtn) {
+      securityBtn.addEventListener('click', () => this.openWindowsSecurity());
+    }
+  },
+
+  async openWindowsSecurity() {
+    // Narrow shell API only; failures stay silent (best-effort opener).
+    try {
+      await window.soterios.shell.openExternal(this.defenderSecurityUri());
+    } catch (_) {
+      // Opening Windows Security is best-effort; failures stay silent.
+    }
   },
 
   showManualMaintenanceDetails(container, row) {

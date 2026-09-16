@@ -138,6 +138,9 @@ contextBridge.exposeInMainWorld('soterios', {
     install: (browserId) => ipcRenderer.invoke('browserExtension:install', browserId),
     openPage: (browserId) => ipcRenderer.invoke('browserExtension:openPage', browserId)
   },
+  defender: {
+    getThreatHistory: (options) => ipcRenderer.invoke('defender:get-threat-history', options && options.refresh === true ? { refresh: true } : undefined)
+  },
   ai: {
     status: () => ipcRenderer.invoke('ai:status'),
     chat: (messages, model) => ipcRenderer.invoke('ai:chat', { messages, model }),

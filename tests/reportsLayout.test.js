@@ -16,8 +16,8 @@ const reportsStyles = fs.readFileSync(
 
 describe('reports section action alignment', () => {
   it('gives every report heading the same clear and chevron slots', () => {
-    assert.equal((reportsSource.match(/class="report-section-clear-slot"/g) || []).length, 4);
-    assert.equal((reportsSource.match(/class="report-section-chevron"/g) || []).length, 4);
+    assert.equal((reportsSource.match(/class="report-section-clear-slot"/g) || []).length, 5);
+    assert.equal((reportsSource.match(/class="report-section-chevron"/g) || []).length, 5);
     assert.equal((reportsSource.match(/report-section-toggle--single-action/g) || []).length, 3);
     assert.match(reportsStyles, /\.report-section-toggle\s*\{[\s\S]*display:\s*grid\s*!important;[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) 80px 168px 14px;/);
     assert.match(reportsStyles, /\.report-section-toggle--single-action\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) 80px 0 14px;/);
