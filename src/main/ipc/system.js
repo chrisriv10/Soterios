@@ -33,6 +33,11 @@ const {
 } = require('../shellLaunchers');
 const featureFlags = require('../../core/featureFlags');
 const privacyMode = require('../../core/privacyMode');
+const { DefenderThreatHistory } = require('../../security/DefenderThreatHistory');
+
+// Single shared reader. Defender remains the authoritative store; results are
+// cached in memory briefly inside the module and never persisted to disk.
+const defenderThreatHistory = new DefenderThreatHistory();
 
 function deleteFileIfSafe(filePath) {
   if (!filePath) return;
@@ -173,6 +178,18 @@ function register(mainWindow, {
     });
     db.replaceAuditWarnings(auditWarnings);
     return results;
+  });
+
+  // -- Defender threat history (read-only v1) --
+  // The renderer may only request a refresh; every other value is ignored so
+  // no filter string, path, or script can reach PowerShell from the UI.
+  ipcMain.handle('defender:get-threat-history', async (_event, options) => {
+    const refresh = options !== null && typeof options === 'object' && options.refresh === true;
+    try {
+      return await defenderThreatHistory.getHistory({ refresh });
+    } catch (_) {
+      return { ok: false, code: 'failed', error: 'Soterios could not read Defender threat history.' };
+    }
   });
 
   // -- Scheduled maintenance (#71) --
