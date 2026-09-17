@@ -49,7 +49,7 @@ The release build also produces `soterios-extension-2.0.0.zip`, a Chromium Manif
 - **Network Monitor** — active connections, interface activity, an adaptive geo activity map, and selectable traffic history ranges
 - **VPN Management** — on/off control, tray toggle, auto-connect, guided provider setup, and removal of Soterios-created profiles
 - **Credential Safety Hub** — local password generator, strength checker, HIBP k-anonymity password leak checks, and XposedOrNot email breach checks
-- **Browser Extension 2.0** — local password reuse detection, breach/reuse toolbar badge, Google Safe Browsing phishing/malware warnings, a signed threat feed, matching themes, and optional continuous protection for HTTP/HTTPS sites
+- **Browser Extension** — local password reuse detection, breach/reuse toolbar badge, Google Safe Browsing phishing/malware warnings, a signed threat feed, matching themes, and optional continuous protection for HTTP/HTTPS sites
 - **AI Assistant** — local Ollama integration with system context awareness and the ability to run safe Soterios actions on request
 - **Real-Time Protection** — toggles Windows Defender real-time monitoring on/off and verifies its state
 - **Privacy Mode** — one Settings toggle that disables Soterios's data-sharing and history features (external breach/geo lookups, AI assistant context, traffic and scan history, auto reports) and restores them when turned off
