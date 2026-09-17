@@ -1,0 +1,100 @@
+{
+  "schema": 1,
+  "converter": {
+    "name": "soterios-filter-compiler",
+    "version": 1,
+    "schema": 1
+  },
+  "budgets": {
+    "maxCombinedStaticRules": 30000,
+    "maxRegexRules": 1000,
+    "maxDomainsPerRule": 1000,
+    "combinedRules": 12314,
+    "combinedRegexRules": 0,
+    "withinBudget": true
+  },
+  "lists": {
+    "easylist": {
+      "title": "EasyList",
+      "repository": "https://github.com/easylist/easylist",
+      "upstreamCommit": "8532102a8465aba707cd5062a6f62d99cef12f9d",
+      "publishedUrl": "https://easylist.to/easylist/easylist.txt",
+      "listVersion": "202609170011",
+      "lastModified": "17 Sep 2026 00:11 UTC",
+      "sourceFile": "tools/filter-lists/easylist.txt",
+      "sha256": "cca96e16849f072793a200287ebd62fac5a0dc389fd407b0300e233fd11b3129",
+      "license": "CC-BY-SA-3.0-or-later",
+      "licenseUrl": "https://easylist.to/pages/licence.html",
+      "attribution": "The EasyList authors (https://easylist.to/)",
+      "sourceBytes": 2144195,
+      "inputRules": 81281,
+      "supported": 52780,
+      "generated": 3670,
+      "duplicates": 1,
+      "unsupported": 28501,
+      "unsupportedByReason": {
+        "unsupported-option": 3649,
+        "pattern-unsupported": 91,
+        "regex-unsupported": 21,
+        "cosmetic": 23772,
+        "cosmetic-extended": 968
+      },
+      "compactable": 49298,
+      "nonCompactable": 3481,
+      "groups": 141,
+      "groupedRules": 189,
+      "individualRules": 3481,
+      "largestGroup": 47508,
+      "chunks": 189,
+      "outputFile": "browser-extension/rules/ads.json",
+      "outputBytes": 2202440
+    },
+    "easyprivacy": {
+      "title": "EasyPrivacy",
+      "repository": "https://github.com/easylist/easylist",
+      "upstreamCommit": "b44410f9ed471a59daf44ad1f3bc9b87269e9045",
+      "publishedUrl": "https://easylist.to/easylist/easyprivacy.txt",
+      "listVersion": "202609170008",
+      "lastModified": "17 Sep 2026 00:08 UTC",
+      "sourceFile": "tools/filter-lists/easyprivacy.txt",
+      "sha256": "3e7d02132541923fe5e8c67872d631c88470eef360131c278245f635adb0839c",
+      "license": "CC-BY-SA-3.0-or-later",
+      "licenseUrl": "https://easylist.to/pages/licence.html",
+      "attribution": "The EasyList authors (https://easylist.to/)",
+      "sourceBytes": 1503205,
+      "inputRules": 56100,
+      "supported": 55587,
+      "generated": 8644,
+      "duplicates": 2,
+      "unsupported": 513,
+      "unsupportedByReason": {
+        "regex-unsupported": 103,
+        "unsupported-option": 28,
+        "pattern-unsupported": 318,
+        "domain-entity": 1,
+        "cosmetic": 2,
+        "redirect": 28,
+        "cosmetic-extended": 33
+      },
+      "compactable": 47155,
+      "nonCompactable": 8430,
+      "groups": 168,
+      "groupedRules": 214,
+      "individualRules": 8430,
+      "largestGroup": 43064,
+      "chunks": 214,
+      "outputFile": "browser-extension/rules/trackers.json",
+      "outputBytes": 3042692
+    }
+  },
+  "rulesets": {
+    "ads.json": {
+      "source": "easylist",
+      "rules": 3670
+    },
+    "trackers.json": {
+      "source": "easyprivacy",
+      "rules": 8644
+    }
+  }
+}

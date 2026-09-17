@@ -29,6 +29,7 @@
     "extension:build": "node tools/build-extension.mjs",
     "extension:package": "node tools/package-extension.mjs",
     "extension:validate": "node tools/validate-extension.mjs",
+    "filter:compile": "node tools/compile-filter-lists.js",
     "extension:install": "npm run extension:build && npm run native-host:build && node tools/install-native-host.js",
     "native-host:build": "node tools/build-native-host.mjs",
     "feed:verify": "node tools/verify-threat-feed.mjs",

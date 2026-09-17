@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "comment": "Pinned upstream filter-list sources for Soterios Ad & Tracker Protection (Phase 1). The upstream repository commit SHAs below are repository references corroborating which upstream revision a published subscription build claims to derive from; they are NOT cryptographic pins of the published bytes (the published builds are generated artifacts, not git blobs, so no verifiable byte-level link exists). The authoritative content integrity pin for each vendored snapshot is its SHA-256 recorded here. Normal builds, tests, and --check never touch the network; only an explicit --update re-fetches.",
+  "lists": {
+    "easylist": {
+      "title": "EasyList",
+      "purpose": "ads",
+      "repository": "https://github.com/easylist/easylist",
+      "publishedUrl": "https://easylist.to/easylist/easylist.txt",
+      "listVersion": "202609170011",
+      "lastModified": "17 Sep 2026 00:11 UTC",
+      "vendoredFile": "tools/filter-lists/easylist.txt",
+      "sha256": "cca96e16849f072793a200287ebd62fac5a0dc389fd407b0300e233fd11b3129",
+      "license": "CC-BY-SA-3.0-or-later",
+      "licenseUrl": "https://easylist.to/pages/licence.html",
+      "attribution": "The EasyList authors (https://easylist.to/)",
+      "upstreamCommit": "8532102a8465aba707cd5062a6f62d99cef12f9d",
+      "upstreamCommitRole": "upstream-repository-reference-only"
+    },
+    "easyprivacy": {
+      "title": "EasyPrivacy",
+      "purpose": "trackers",
+      "repository": "https://github.com/easylist/easylist",
+      "publishedUrl": "https://easylist.to/easylist/easyprivacy.txt",
+      "listVersion": "202609170008",
+      "lastModified": "17 Sep 2026 00:08 UTC",
+      "vendoredFile": "tools/filter-lists/easyprivacy.txt",
+      "sha256": "3e7d02132541923fe5e8c67872d631c88470eef360131c278245f635adb0839c",
+      "license": "CC-BY-SA-3.0-or-later",
+      "licenseUrl": "https://easylist.to/pages/licence.html",
+      "attribution": "The EasyList authors (https://easylist.to/)",
+      "upstreamCommit": "b44410f9ed471a59daf44ad1f3bc9b87269e9045",
+      "upstreamCommitRole": "upstream-repository-reference-only"
+    }
+  }
+}
