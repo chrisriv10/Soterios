@@ -1,4 +1,5 @@
 import { ProtectionEvent, ProtectionVerdict, ProviderDescriptor, SettingsV2 } from './contracts';
+import { AdblockState, adblockStatusPresentation, adblockViewState } from './adblock';
 import { applyTheme, formatContact, reasonLabel, send, setText } from './ui';
 
 type PopupState = { settings: SettingsV2; display: { theme: any }; domain: string; verdict: ProtectionVerdict | null; providers: ProviderDescriptor[]; feed: { version: number; generatedAt: string; expiresAt: string; stale: boolean }; desktop: string };
@@ -22,6 +23,52 @@ function renderState(state: PopupState): void {
   const paused = reasons.includes('SITE_PAUSED'); (document.getElementById('resume-site') as HTMLButtonElement).hidden = !paused; (document.getElementById('pause-hour') as HTMLButtonElement).hidden = paused; (document.getElementById('pause-site') as HTMLButtonElement).hidden = paused;
 }
 async function loadState(): Promise<void> { try { renderState(await send<PopupState>('GET_STATE')); } catch (error) { setText('site-status', 'Unavailable'); setText('site-reasons', error instanceof Error ? error.message : String(error)); } }
+
+let adblockBusy = false;
+
+function renderAdblock(state: AdblockState | null): void {
+  const view = adblockViewState(state);
+  const presentation = adblockStatusPresentation(view.status);
+  const pill = document.getElementById('adblock-status')!;
+  pill.textContent = presentation.label;
+  pill.className = `status ${presentation.className}`;
+  const enabledInput = document.getElementById('adblock-enabled') as HTMLInputElement;
+  const adsInput = document.getElementById('adblock-ads') as HTMLInputElement;
+  const trackersInput = document.getElementById('adblock-trackers') as HTMLInputElement;
+  enabledInput.checked = view.globalChecked;
+  adsInput.checked = view.adsChecked;
+  trackersInput.checked = view.trackersChecked;
+  // The global toggle always stays operable except when DNR itself is
+  // unavailable; child toggles follow the view model.
+  enabledInput.disabled = view.status === 'unavailable';
+  adsInput.disabled = view.controlsDisabled;
+  trackersInput.disabled = view.controlsDisabled;
+  const warning = document.getElementById('adblock-warning')!;
+  warning.hidden = !view.showApplyWarning;
+  if (view.showApplyWarning) warning.textContent = 'Settings and active blocking disagree. Blocking may be partially off.';
+}
+
+async function loadAdblock(): Promise<void> {
+  try {
+    renderAdblock(await send<AdblockState>('GET_ADBLOCK_STATE'));
+  } catch (_) {
+    renderAdblock(null);
+  }
+}
+
+async function updateAdblock(patch: { enabled?: boolean; blockAds?: boolean; blockTrackers?: boolean }): Promise<void> {
+  if (adblockBusy) return;
+  adblockBusy = true;
+  try {
+    await send('UPDATE_SETTINGS', { adTrackerProtection: patch });
+  } catch (_) {
+    // Fall through to the authoritative refresh below so the UI reflects
+    // actual state instead of the attempted change.
+  } finally {
+    await loadAdblock();
+    adblockBusy = false;
+  }
+}
 async function loadActivity(): Promise<void> {
   const { events } = await send<{ events: ProtectionEvent[] }>('GET_HISTORY'); const container = document.getElementById('recent-activity')!; container.replaceChildren();
   if (!events.length) { const empty = document.createElement('div'); empty.className = 'empty'; empty.textContent = 'No findings recorded.'; container.appendChild(empty); return; }
@@ -36,5 +83,9 @@ document.getElementById('copy-generated')!.addEventListener('click', async () =>
 document.getElementById('on-demand')!.addEventListener('click', async () => { await send('RUN_ON_DEMAND'); window.close(); });
 document.getElementById('pause-hour')!.addEventListener('click', async () => { await send('PAUSE_SITE', { duration: 'hour' }); await loadState(); }); document.getElementById('pause-site')!.addEventListener('click', async () => { await send('PAUSE_SITE', { duration: 'indefinite' }); await loadState(); }); document.getElementById('resume-site')!.addEventListener('click', async () => { await send('RESUME_SITE'); await loadState(); });
 document.getElementById('open-history')!.addEventListener('click', () => chrome.tabs.create({ url: chrome.runtime.getURL('activity.html') })); void loadState();
+(document.getElementById('adblock-enabled') as HTMLInputElement).addEventListener('change', (event) => void updateAdblock({ enabled: (event.target as HTMLInputElement).checked }));
+(document.getElementById('adblock-ads') as HTMLInputElement).addEventListener('change', (event) => void updateAdblock({ blockAds: (event.target as HTMLInputElement).checked }));
+(document.getElementById('adblock-trackers') as HTMLInputElement).addEventListener('change', (event) => void updateAdblock({ blockTrackers: (event.target as HTMLInputElement).checked }));
+void loadAdblock();
 const generatorHeading = document.querySelector('#tools-view .card:nth-child(2) h2');
 if (generatorHeading) generatorHeading.textContent = 'Password/passphrase generator';

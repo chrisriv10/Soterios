@@ -14,6 +14,8 @@ const {
   desiredRulesets,
   syncAdblockRulesets,
   getAdblockState,
+  applyAdTrackerPatch,
+  adblockViewState,
 } = require('../browser-extension/dist/test/adblock.js');
 const {
   DEFAULT_SETTINGS,
@@ -145,12 +147,16 @@ describe('adblock state helper', () => {
     assert.equal(state.enabled, true);
     assert.equal(state.blockAds, true);
     assert.equal(state.blockTrackers, true);
+    assert.equal(state.adsActive, true);
+    assert.equal(state.trackersActive, false);
     assert.deepEqual(state.enabledRulesets, [AD_RULESET_ID]);
   });
 
   it('reports unavailable without DNR access', async () => {
     const state = await getAdblockState(ON_BOTH, null);
     assert.equal(state.available, false);
+    assert.equal(state.adsActive, false);
+    assert.equal(state.trackersActive, false);
     assert.deepEqual(state.enabledRulesets, []);
   });
 });
@@ -189,6 +195,130 @@ describe('adblock lifecycle', () => {
     const state = await getAdblockState(ON_BOTH, failing);
     assert.equal(state.available, false);
     assert.deepEqual(state.enabledRulesets, []);
+  });
+});
+
+describe('adblock settings patch validation', () => {
+  const current = { enabled: false, blockAds: true, blockTrackers: true };
+
+  it('applies supported boolean fields', () => {
+    assert.deepEqual(applyAdTrackerPatch(current, { enabled: true }), { enabled: true, blockAds: true, blockTrackers: true });
+    assert.deepEqual(applyAdTrackerPatch(current, { blockAds: false }), { enabled: false, blockAds: false, blockTrackers: true });
+  });
+
+  it('rejects invalid values without changing stored state', () => {
+    assert.deepEqual(applyAdTrackerPatch(current, { enabled: 'yes' }), current);
+    assert.deepEqual(applyAdTrackerPatch(current, { blockAds: 1 }), current);
+    assert.deepEqual(applyAdTrackerPatch(current, null), current);
+    assert.deepEqual(applyAdTrackerPatch(current, 'enabled'), current);
+  });
+
+  it('ignores unknown fields and arbitrary DNR operations', () => {
+    assert.deepEqual(
+      applyAdTrackerPatch(current, { enabled: true, disabledSites: ['example.com'], rulesetIds: ['x'], updateDynamicRules: [] }),
+      { enabled: true, blockAds: true, blockTrackers: true }
+    );
+  });
+});
+
+describe('adblock runtime status', () => {
+  function stateWith(overrides) {
+    return {
+      available: true, enabled: false, blockAds: true, blockTrackers: true,
+      adsActive: false, trackersActive: false, enabledRulesets: [], ...overrides,
+    };
+  }
+
+  it('reports active only when desired and live rulesets match with protection on', () => {
+    const { adblockRuntimeStatus } = require('../browser-extension/dist/test/adblock.js');
+    assert.equal(
+      adblockRuntimeStatus(stateWith({ enabled: true, enabledRulesets: [AD_RULESET_ID, TRACKER_RULESET_ID] })),
+      'active'
+    );
+  });
+
+  it('reports off when globally disabled with nothing live', () => {
+    const { adblockRuntimeStatus } = require('../browser-extension/dist/test/adblock.js');
+    assert.equal(adblockRuntimeStatus(stateWith({ enabled: false })), 'off');
+  });
+
+  it('reports inactive when enabled but no child preference is selected', () => {
+    const { adblockRuntimeStatus } = require('../browser-extension/dist/test/adblock.js');
+    assert.equal(
+      adblockRuntimeStatus(stateWith({ enabled: true, blockAds: false, blockTrackers: false })),
+      'inactive'
+    );
+  });
+
+  it('reports attention when a desired ruleset failed to enable', () => {
+    const { adblockRuntimeStatus } = require('../browser-extension/dist/test/adblock.js');
+    assert.equal(
+      adblockRuntimeStatus(stateWith({ enabled: true, enabledRulesets: [TRACKER_RULESET_ID] })),
+      'attention'
+    );
+  });
+
+  it('reports attention when a ruleset failed to disable', () => {
+    const { adblockRuntimeStatus } = require('../browser-extension/dist/test/adblock.js');
+    assert.equal(
+      adblockRuntimeStatus(stateWith({ enabled: false, enabledRulesets: [AD_RULESET_ID] })),
+      'attention'
+    );
+  });
+
+  it('reports unavailable without DNR access', () => {
+    const { adblockRuntimeStatus } = require('../browser-extension/dist/test/adblock.js');
+    assert.equal(adblockRuntimeStatus({ ...stateWith({ enabled: true }), available: false }), 'unavailable');
+    assert.equal(adblockRuntimeStatus(null), 'unavailable');
+  });
+});
+
+describe('adblock view state', () => {
+  it('shows on with available controls when fully active', () => {
+    assert.deepEqual(
+      adblockViewState({ available: true, enabled: true, blockAds: true, blockTrackers: true, adsActive: true, trackersActive: true, enabledRulesets: [AD_RULESET_ID, TRACKER_RULESET_ID] }),
+      { status: 'active', controlsDisabled: false, globalChecked: true, adsChecked: true, trackersChecked: true, showApplyWarning: false }
+    );
+  });
+
+  it('disables child controls but preserves prefs when globally off', () => {
+    assert.deepEqual(
+      adblockViewState({ available: true, enabled: false, blockAds: true, blockTrackers: false, adsActive: false, trackersActive: false, enabledRulesets: [] }),
+      { status: 'off', controlsDisabled: true, globalChecked: false, adsChecked: true, trackersChecked: false, showApplyWarning: false }
+    );
+  });
+
+  it('keeps the global toggle checked for the inactive state', () => {
+    assert.deepEqual(
+      adblockViewState({ available: true, enabled: true, blockAds: false, blockTrackers: false, adsActive: false, trackersActive: false, enabledRulesets: [] }),
+      { status: 'inactive', controlsDisabled: false, globalChecked: true, adsChecked: false, trackersChecked: false, showApplyWarning: false }
+    );
+  });
+
+  it('shows unavailable with disabled controls when DNR is missing', () => {
+    assert.deepEqual(
+      adblockViewState({ available: false, enabled: true, blockAds: true, blockTrackers: true, adsActive: false, trackersActive: false, enabledRulesets: [] }),
+      { status: 'unavailable', controlsDisabled: true, globalChecked: false, adsChecked: false, trackersChecked: false, showApplyWarning: false }
+    );
+    assert.deepEqual(
+      adblockViewState(null),
+      { status: 'unavailable', controlsDisabled: true, globalChecked: false, adsChecked: false, trackersChecked: false, showApplyWarning: false }
+    );
+  });
+
+  it('warns instead of claiming protection when intent diverges from live state', () => {
+    const view = adblockViewState({ available: true, enabled: true, blockAds: true, blockTrackers: true, adsActive: false, trackersActive: true, enabledRulesets: [TRACKER_RULESET_ID] });
+    assert.equal(view.status, 'attention');
+    assert.equal(view.showApplyWarning, true);
+  });
+
+  it('labels every runtime status distinctly', () => {
+    const { adblockStatusPresentation } = require('../browser-extension/dist/test/adblock.js');
+    assert.deepEqual(adblockStatusPresentation('active'), { label: 'On', className: 'healthy' });
+    assert.deepEqual(adblockStatusPresentation('off'), { label: 'Off', className: 'unknown' });
+    assert.deepEqual(adblockStatusPresentation('inactive'), { label: 'Inactive', className: 'unknown' });
+    assert.deepEqual(adblockStatusPresentation('attention'), { label: 'Needs attention', className: 'warn' });
+    assert.deepEqual(adblockStatusPresentation('unavailable'), { label: 'Unavailable', className: 'degraded' });
   });
 });
 

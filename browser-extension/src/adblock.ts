@@ -11,6 +11,8 @@ export interface AdblockState {
   enabled: boolean;
   blockAds: boolean;
   blockTrackers: boolean;
+  adsActive: boolean;
+  trackersActive: boolean;
   enabledRulesets: string[];
 }
 
@@ -81,7 +83,89 @@ export async function syncAdblockRulesets(
   }
 }
 
-// Narrow state snapshot for future popup/options integration.
+// Narrow patch application for UPDATE_SETTINGS. Only the three supported
+// booleans are accepted; unknown fields, wrong types, and arbitrary ruleset
+// IDs or DNR operations are ignored. Missing keys keep current values.
+export function applyAdTrackerPatch(
+  current: AdTrackerProtection,
+  patch: unknown
+): AdTrackerProtection {
+  const next: AdTrackerProtection = {
+    enabled: current.enabled,
+    blockAds: current.blockAds,
+    blockTrackers: current.blockTrackers,
+  };
+  if (!patch || typeof patch !== 'object') return next;
+  const candidate = patch as Record<string, unknown>;
+  for (const key of ['enabled', 'blockAds', 'blockTrackers'] as const) {
+    if (typeof candidate[key] === 'boolean') next[key] = candidate[key];
+  }
+  return next;
+}
+
+// Runtime protection status, derived from desired settings AND live DNR
+// state — never from preference alone. 'active'/'on' wording is reserved
+// for states where actual protection is confirmed running.
+export type AdblockRuntimeStatus = 'active' | 'off' | 'inactive' | 'attention' | 'unavailable';
+
+export function adblockRuntimeStatus(state: AdblockState | null | undefined): AdblockRuntimeStatus {
+  if (!state || !state.available) return 'unavailable';
+  const desired = new Set(desiredRulesets({
+    adTrackerProtection: { enabled: state.enabled, blockAds: state.blockAds, blockTrackers: state.blockTrackers },
+  }));
+  const live: Set<string> = new Set(
+    (Array.isArray(state.enabledRulesets) ? state.enabledRulesets : [])
+      .filter((id) => id === AD_RULESET_ID || id === TRACKER_RULESET_ID)
+  );
+  if (desired.size !== live.size || [...desired].some((id) => !live.has(id))) return 'attention';
+  if (desired.size > 0) return 'active';
+  if (state.enabled === true) return 'inactive';
+  return 'off';
+}
+
+// Pure view-model shared by popup and options so both render identical
+// states. Preferences are preserved as-is; only the status pill and control
+// enablement reflect the desired-vs-actual comparison.
+export interface AdblockViewState {
+  status: AdblockRuntimeStatus;
+  controlsDisabled: boolean;
+  globalChecked: boolean;
+  adsChecked: boolean;
+  trackersChecked: boolean;
+  showApplyWarning: boolean;
+}
+
+export function adblockViewState(state: AdblockState | null | undefined): AdblockViewState {
+  const status = adblockRuntimeStatus(state);
+  const globalChecked = state?.enabled === true;
+  const blockAds = state?.blockAds === true;
+  const blockTrackers = state?.blockTrackers === true;
+  if (status === 'unavailable') {
+    return { status, controlsDisabled: true, globalChecked: false, adsChecked: false, trackersChecked: false, showApplyWarning: false };
+  }
+  if (status === 'off') {
+    return { status, controlsDisabled: true, globalChecked, adsChecked: blockAds, trackersChecked: blockTrackers, showApplyWarning: false };
+  }
+  return {
+    status,
+    controlsDisabled: false,
+    globalChecked,
+    adsChecked: blockAds,
+    trackersChecked: blockTrackers,
+    showApplyWarning: status === 'attention',
+  };
+}
+
+export function adblockStatusPresentation(status: AdblockRuntimeStatus): { label: string; className: string } {
+  if (status === 'active') return { label: 'On', className: 'healthy' };
+  if (status === 'off') return { label: 'Off', className: 'unknown' };
+  if (status === 'inactive') return { label: 'Inactive', className: 'unknown' };
+  if (status === 'attention') return { label: 'Needs attention', className: 'warn' };
+  return { label: 'Unavailable', className: 'degraded' };
+}
+
+// Narrow state snapshot for popup/options. adsActive/trackersActive report
+// the live ruleset state so the UI can distinguish intent from reality.
 export async function getAdblockState(
   settings: { adTrackerProtection?: Partial<AdTrackerProtection> | null },
   apiOverride?: DeclarativeNetRequestApi | null
@@ -89,18 +173,21 @@ export async function getAdblockState(
   const flags = readFlags(settings);
   const api = resolveApi(apiOverride === undefined ? null : apiOverride);
   if (!api) {
-    return { available: false, enabled: flags.enabled, blockAds: flags.blockAds, blockTrackers: flags.blockTrackers, enabledRulesets: [] };
+    return { available: false, enabled: flags.enabled, blockAds: flags.blockAds, blockTrackers: flags.blockTrackers, adsActive: false, trackersActive: false, enabledRulesets: [] };
   }
   try {
     const enabled = await api.getEnabledRulesets();
+    const live = new Set(Array.isArray(enabled) ? enabled : []);
     return {
       available: true,
       enabled: flags.enabled,
       blockAds: flags.blockAds,
       blockTrackers: flags.blockTrackers,
-      enabledRulesets: Array.isArray(enabled) ? [...enabled] : [],
+      adsActive: live.has(AD_RULESET_ID),
+      trackersActive: live.has(TRACKER_RULESET_ID),
+      enabledRulesets: [...live],
     };
   } catch (_) {
-    return { available: false, enabled: flags.enabled, blockAds: flags.blockAds, blockTrackers: flags.blockTrackers, enabledRulesets: [] };
+    return { available: false, enabled: flags.enabled, blockAds: flags.blockAds, blockTrackers: flags.blockTrackers, adsActive: false, trackersActive: false, enabledRulesets: [] };
   }
 }

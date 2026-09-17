@@ -2,7 +2,7 @@ import {
   DISCLOSURE_VERSION, ProtectionEvent, ProtectionVerdict, RuntimeRequest, SettingsV2, failure,
   isRuntimeRequest, response
 } from './contracts';
-import { getAdblockState, syncAdblockRulesets } from './adblock';
+import { applyAdTrackerPatch, getAdblockState, syncAdblockRulesets } from './adblock';
 import { analyzePassword, checkAndRememberReuse, checkHibpPassword, generateCredential } from './credential';
 import { registrableDomain } from './domains';
 import { checkFeed, feedStatus } from './feed';
@@ -194,10 +194,7 @@ async function updateSettingsFromPayload(payload: unknown): Promise<SettingsV2> 
     next.desktop.sharingEnabled = (patch.desktop as { sharingEnabled: boolean }).sharingEnabled;
   }
   if (patch.adTrackerProtection && typeof patch.adTrackerProtection === 'object') {
-    const adPatch = patch.adTrackerProtection as Record<string, unknown>;
-    for (const key of ['enabled', 'blockAds', 'blockTrackers'] as const) {
-      if (typeof adPatch[key] === 'boolean') next.adTrackerProtection[key] = adPatch[key];
-    }
+    next.adTrackerProtection = applyAdTrackerPatch(next.adTrackerProtection, patch.adTrackerProtection);
   }
 
   // Persist the network gate before cancelling/removing permissions so alarms

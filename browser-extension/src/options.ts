@@ -1,4 +1,5 @@
 import { ProviderDescriptor, ProviderId, SettingsV2, THEME_KEYS, ThemeKey } from './contracts';
+import { AdblockState, adblockStatusPresentation, adblockViewState } from './adblock';
 import { PROVIDERS } from './providers';
 import { applyTheme, downloadJson, formatContact, send, setText } from './ui';
 
@@ -53,6 +54,47 @@ async function update(patch: unknown): Promise<void> {
   const result = await send<{ settings: SettingsV2; providers: ProviderDescriptor[] }>('UPDATE_SETTINGS', patch); settings = result.settings; renderProviders(result.providers);
 }
 
+let adblockBusy = false;
+
+async function renderAdblockOptions(): Promise<void> {
+  let state: AdblockState | null = null;
+  try {
+    state = await send<AdblockState>('GET_ADBLOCK_STATE');
+  } catch (_) {
+    state = null;
+  }
+  const view = adblockViewState(state);
+  const presentation = adblockStatusPresentation(view.status);
+  const pill = document.getElementById('adblock-options-status')!;
+  pill.textContent = presentation.label;
+  pill.className = `status ${presentation.className}`;
+  const enabledInput = document.getElementById('adblock-opt-enabled') as HTMLInputElement;
+  const adsInput = document.getElementById('adblock-opt-ads') as HTMLInputElement;
+  const trackersInput = document.getElementById('adblock-opt-trackers') as HTMLInputElement;
+  enabledInput.checked = view.globalChecked;
+  adsInput.checked = view.adsChecked;
+  trackersInput.checked = view.trackersChecked;
+  enabledInput.disabled = view.status === 'unavailable';
+  adsInput.disabled = view.controlsDisabled;
+  trackersInput.disabled = view.controlsDisabled;
+  const warning = document.getElementById('adblock-options-warning')!;
+  warning.hidden = !view.showApplyWarning;
+  if (view.showApplyWarning) warning.textContent = 'A change could not be applied. Blocking may be partially off.';
+}
+
+async function updateAdblock(patch: { enabled?: boolean; blockAds?: boolean; blockTrackers?: boolean }): Promise<void> {
+  if (adblockBusy) return;
+  adblockBusy = true;
+  try {
+    await send('UPDATE_SETTINGS', { adTrackerProtection: patch });
+  } catch (_) {
+    // Fall through to the authoritative refresh below.
+  } finally {
+    await renderAdblockOptions();
+    adblockBusy = false;
+  }
+}
+
 async function refresh(): Promise<void> {
   const state = await send<{ settings: SettingsV2; display: { theme: ThemeKey } }>('GET_SETTINGS'); settings = state.settings; currentTheme = state.display.theme; applyTheme(currentTheme);
   (document.getElementById('credential-protection') as HTMLInputElement).checked = settings.credentialProtection;
@@ -63,10 +105,14 @@ async function refresh(): Promise<void> {
   setText('continuous-note', hasContinuous ? 'Enabled for HTTP and HTTPS sites.' : 'On-demand mode; no persistent site access.');
   (document.getElementById('grant-continuous') as HTMLButtonElement).hidden = hasContinuous; (document.getElementById('revoke-continuous') as HTMLButtonElement).hidden = !hasContinuous;
   renderProviders(await send<ProviderDescriptor[]>('GET_PROVIDER_DESCRIPTORS')); renderSites(); renderThemes();
+  await renderAdblockOptions();
   if (!settings.onboarding.confirmedAt) showProviderMessage('Online requests remain suspended until you confirm the first-run disclosure.', true);
 }
 
 document.getElementById('credential-protection')!.addEventListener('change', (event) => void update({ credentialProtection: (event.target as HTMLInputElement).checked }));
+document.getElementById('adblock-opt-enabled')!.addEventListener('change', (event) => void updateAdblock({ enabled: (event.target as HTMLInputElement).checked }));
+document.getElementById('adblock-opt-ads')!.addEventListener('change', (event) => void updateAdblock({ blockAds: (event.target as HTMLInputElement).checked }));
+document.getElementById('adblock-opt-trackers')!.addEventListener('change', (event) => void updateAdblock({ blockTrackers: (event.target as HTMLInputElement).checked }));
 document.getElementById('online-global')!.addEventListener('change', (event) => {
   const input = event.target as HTMLInputElement;
   const enabled = input.checked;
