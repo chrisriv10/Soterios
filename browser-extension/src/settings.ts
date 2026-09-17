@@ -1,5 +1,5 @@
 import {
-  DISCLOSURE_VERSION, DisplaySettings, HISTORY_RETENTION_DAYS, SETTINGS_VERSION,
+  AdTrackerProtection, DISCLOSURE_VERSION, DisplaySettings, HISTORY_RETENTION_DAYS, SETTINGS_VERSION,
   SettingsV2, isThemeKey
 } from './contracts';
 
@@ -18,6 +18,10 @@ export const DEFAULT_SETTINGS: SettingsV2 = {
   },
   continuousAccess: false,
   credentialProtection: true,
+  // Fresh installs start with ad/tracker blocking off; onboarding
+  // confirmation enables it explicitly, and migrated installs keep it off
+  // so upgrades never silently change site behavior.
+  adTrackerProtection: { enabled: false, blockAds: true, blockTrackers: true },
   onlineServices: {
     enabled: true,
     hibp: true,
@@ -52,6 +56,9 @@ export function migrateSettings(local: Record<string, unknown>, sync: Record<str
     settings.onlineServices = { ...DEFAULT_SETTINGS.onlineServices, ...(current.onlineServices || {}) };
     settings.history = { ...DEFAULT_SETTINGS.history, ...(current.history || {}), retentionDays: HISTORY_RETENTION_DAYS };
     settings.desktop = { ...DEFAULT_SETTINGS.desktop, ...(current.desktop || {}) };
+    // Existing installs predate ad/tracker protection: normalize any stored
+    // value but keep blocking off unless the user explicitly enabled it.
+    settings.adTrackerProtection = normalizeAdTrackerProtection(current.adTrackerProtection);
     settings.sites = current.sites && typeof current.sites === 'object' ? current.sites : {};
   } else {
     const privacyMode = local.privacyMode ?? sync.privacyMode;
@@ -116,6 +123,17 @@ export async function getDisplaySettings(): Promise<DisplaySettings> {
   return {
     theme: isThemeKey(value?.theme) ? value.theme : 'system',
     compactPopup: value?.compactPopup === true
+  };
+}
+
+export function normalizeAdTrackerProtection(value: unknown): AdTrackerProtection {
+  const fallback = cloneDefaults().adTrackerProtection;
+  if (!value || typeof value !== 'object') return { ...fallback };
+  const candidate = value as Record<string, unknown>;
+  return {
+    enabled: typeof candidate.enabled === 'boolean' ? candidate.enabled : fallback.enabled,
+    blockAds: typeof candidate.blockAds === 'boolean' ? candidate.blockAds : fallback.blockAds,
+    blockTrackers: typeof candidate.blockTrackers === 'boolean' ? candidate.blockTrackers : fallback.blockTrackers,
   };
 }
 

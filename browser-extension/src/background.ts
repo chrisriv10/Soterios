@@ -1,7 +1,8 @@
 import {
-  ProtectionEvent, ProtectionVerdict, RuntimeRequest, SettingsV2, failure,
+  DISCLOSURE_VERSION, ProtectionEvent, ProtectionVerdict, RuntimeRequest, SettingsV2, failure,
   isRuntimeRequest, response
 } from './contracts';
+import { getAdblockState, syncAdblockRulesets } from './adblock';
 import { analyzePassword, checkAndRememberReuse, checkHibpPassword, generateCredential } from './credential';
 import { registrableDomain } from './domains';
 import { checkFeed, feedStatus } from './feed';
@@ -31,6 +32,9 @@ async function initialize(): Promise<void> {
   const { settings } = await initializeStorage();
   await chrome.alarms.create(FEED_ALARM, { periodInMinutes: 6 * 60 });
   await chrome.alarms.create(RETENTION_ALARM, { periodInMinutes: 24 * 60 });
+  // Reconcile static ad/tracker rulesets with stored settings. Never throws:
+  // syncAdblockRulesets reports failures instead so startup cannot crash.
+  await syncAdblockRulesets(settings);
   const hasSiteAccess = await chrome.permissions.contains({ origins: CONTENT_ORIGINS });
   if (settings.continuousAccess && hasSiteAccess) {
     await syncContentScriptRegistration(true);
@@ -189,10 +193,18 @@ async function updateSettingsFromPayload(payload: unknown): Promise<SettingsV2> 
   if (patch.desktop && typeof patch.desktop === 'object' && typeof (patch.desktop as Record<string, unknown>).sharingEnabled === 'boolean') {
     next.desktop.sharingEnabled = (patch.desktop as { sharingEnabled: boolean }).sharingEnabled;
   }
+  if (patch.adTrackerProtection && typeof patch.adTrackerProtection === 'object') {
+    const adPatch = patch.adTrackerProtection as Record<string, unknown>;
+    for (const key of ['enabled', 'blockAds', 'blockTrackers'] as const) {
+      if (typeof adPatch[key] === 'boolean') next.adTrackerProtection[key] = adPatch[key];
+    }
+  }
 
   // Persist the network gate before cancelling/removing permissions so alarms
   // and restarted workers observe the disabled state immediately.
   await setSettings(next);
+  // Keep static ad/tracker rulesets consistent with the new settings.
+  await syncAdblockRulesets(next);
   if (!next.onlineServices.enabled) {
     cancelAllProviders();
     await Promise.allSettled((Object.keys(PROVIDERS) as Array<keyof typeof PROVIDERS>).map(revokeProviderPermission));
@@ -235,6 +247,11 @@ async function handleRequest(request: RuntimeRequest, sender: chrome.runtime.Mes
         enabled: true, hibp: payload.hibp !== false, feed: payload.feed !== false,
         googleSafeBrowsing: payload.googleSafeBrowsing === true
       }, ...(typeof payload.continuousAccess === 'boolean' ? { continuousAccess: payload.continuousAccess } : {}) });
+      // Explicit onboarding acceptance enables local ad/tracker blocking under
+      // the v3 disclosure (migrated installs stay off until opted in).
+      next.adTrackerProtection.enabled = true;
+      await setSettings(next);
+      await syncAdblockRulesets(next);
       if (typeof payload.continuousAccess === 'boolean') {
         const granted = payload.continuousAccess && await chrome.permissions.contains({ origins: CONTENT_ORIGINS });
         next.continuousAccess = granted;
@@ -242,7 +259,7 @@ async function handleRequest(request: RuntimeRequest, sender: chrome.runtime.Mes
         await syncContentScriptRegistration(granted);
       }
       next.onboarding.confirmedAt = new Date().toISOString();
-      next.onboarding.disclosureVersion = 2;
+      next.onboarding.disclosureVersion = DISCLOSURE_VERSION;
       next.onboarding.reuseResetNoticePending = false;
       await setSettings(next);
       if (providerEnabled(next, 'feed')) void scheduledFeedUpdate(next);
@@ -342,6 +359,8 @@ async function handleRequest(request: RuntimeRequest, sender: chrome.runtime.Mes
       }
       return { reasons: findings.map(({ code }) => code) };
     }
+    case 'GET_ADBLOCK_STATE':
+      return getAdblockState(settings);
     case 'GET_CONTENT_STATE': {
       const location = await senderUrl(sender);
       const domain = (() => { try { return registrableDomain(new URL(location.url).hostname); } catch (_) { return ''; } })();
@@ -450,6 +469,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes[SETTINGS_KEY]) {
     const nextSettings = changes[SETTINGS_KEY].newValue as SettingsV2 | undefined;
     if (!nextSettings?.onlineServices.enabled) cancelAllProviders();
+    // Reconcile static ad/tracker rulesets; the sync diffs and no-ops when
+    // nothing changed, and never throws.
+    if (nextSettings) void syncAdblockRulesets(nextSettings);
     void chrome.tabs.query({}).then((tabs) => Promise.allSettled(tabs.filter((tab) => tab.id).map((tab) => chrome.tabs.sendMessage(tab.id!, { type: 'SETTINGS_CHANGED' }))));
   }
 });

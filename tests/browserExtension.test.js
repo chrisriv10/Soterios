@@ -12,9 +12,14 @@ const dist = path.join(__dirname, '..', 'browser-extension', 'dist', 'chromium')
 describe('Soterios extension 2.0 public and privacy contracts', () => {
   it('ships a least-privilege generated MV3 manifest', () => {
     const manifest = JSON.parse(fs.readFileSync(path.join(dist, 'manifest.json'), 'utf8'));
+    const permissions = manifest.permissions || [];
+    for (const banned of ['declarativeNetRequestFeedback', 'declarativeNetRequestWithHostAccess', 'webRequest', 'webRequestBlocking', 'tabs', 'cookies', 'browsingData']) {
+      assert.ok(!permissions.includes(banned), `forbidden permission present: ${banned}`);
+    }
+    assert.ok(!(manifest.host_permissions || []).includes('<all_urls>'));
     assert.equal(manifest.manifest_version, 3);
     assert.equal(manifest.version, '2.0.0');
-    assert.deepEqual(manifest.permissions, ['storage', 'alarms', 'activeTab', 'scripting']);
+    assert.deepEqual(manifest.permissions, ['storage', 'alarms', 'activeTab', 'scripting', 'declarativeNetRequest']);
     assert.deepEqual(manifest.optional_permissions, ['nativeMessaging']);
     assert.equal(manifest.content_scripts, undefined);
     assert.deepEqual(manifest.web_accessible_resources, [{ resources: ['icons/icon32.png'], matches: ['http://*/*', 'https://*/*'] }]);
@@ -28,6 +33,41 @@ describe('Soterios extension 2.0 public and privacy contracts', () => {
     const scripts = fs.readdirSync(dist).filter((name) => name.endsWith('.js')).map((name) => fs.readFileSync(path.join(dist, name), 'utf8')).join('\n');
     assert.doesNotMatch(scripts, /google-analytics|mixpanel|segment\.com|amplitude|posthog|sentry\.io/i);
     assert.doesNotMatch(scripts, /credential-leak:notify/);
+  });
+
+  it('registers exactly the two packaged ad/tracker static rulesets', () => {    const manifest = JSON.parse(fs.readFileSync(path.join(dist, 'manifest.json'), 'utf8'));
+    assert.deepEqual(manifest.declarative_net_request, {
+      rule_resources: [
+        { id: 'soterios-ads', enabled: false, path: 'rules/ads.json' },
+        { id: 'soterios-trackers', enabled: false, path: 'rules/trackers.json' },
+      ],
+    });
+    const seenIds = new Set();
+    let combined = 0;
+    for (const file of ['rules/ads.json', 'rules/trackers.json']) {
+      const rules = JSON.parse(fs.readFileSync(path.join(dist, file), 'utf8'));
+      assert.ok(Array.isArray(rules) && rules.length > 1000, `${file} must contain substantial packaged rules`);
+      for (const rule of rules) {
+        assert.ok(Number.isInteger(rule.id) && rule.id >= 1);
+        assert.ok(!seenIds.has(`${file}:${rule.id}`));
+        seenIds.add(`${file}:${rule.id}`);
+        assert.ok(rule.action.type === 'block' || rule.action.type === 'allow');
+      }
+      combined += rules.length;
+    }
+    assert.ok(combined <= 30000, `packaged static rules (${combined}) exceed the guaranteed budget`);
+    for (const provenance of ['rules/LICENSE.md', 'rules/SOURCES.json']) {
+      assert.ok(fs.existsSync(path.join(dist, provenance)), `${provenance} must ship with the rulesets`);
+    }
+  });
+
+  it('ships both static rulesets disabled so blocking is strictly opt-in', () => {
+    const manifest = JSON.parse(fs.readFileSync(path.join(dist, 'manifest.json'), 'utf8'));
+    const resources = manifest.declarative_net_request.rule_resources;
+    assert.equal(resources.length, 2);
+    for (const ruleset of resources) {
+      assert.equal(ruleset.enabled, false, `${ruleset.id} must ship disabled`);
+    }
   });
 
   it('validates the staged extension before desktop installation', () => {
