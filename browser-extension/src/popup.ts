@@ -1,5 +1,5 @@
 import { ProtectionEvent, ProtectionVerdict, ProviderDescriptor, SettingsV2 } from './contracts';
-import { AdblockState, adblockStatusPresentation, adblockViewState } from './adblock';
+import { AdblockSiteState, AdblockState, adblockStatusPresentation, adblockViewState } from './adblock';
 import { applyTheme, formatContact, reasonLabel, send, setText } from './ui';
 
 type PopupState = { settings: SettingsV2; display: { theme: any }; domain: string; verdict: ProtectionVerdict | null; providers: ProviderDescriptor[]; feed: { version: number; generatedAt: string; expiresAt: string; stale: boolean }; desktop: string };
@@ -69,6 +69,71 @@ async function updateAdblock(patch: { enabled?: boolean; blockAds?: boolean; blo
     adblockBusy = false;
   }
 }
+
+let adblockSiteHostname: string | null = null;
+
+function renderAdblockSite(state: AdblockSiteState | null): void {
+  const pill = document.getElementById('adblock-site-status')!;
+  const toggle = document.getElementById('adblock-site-toggle') as HTMLInputElement;
+  const host = document.getElementById('adblock-site-host')!;
+  const note = document.getElementById('adblock-site-note')!;
+  if (!state || !state.eligible || !state.hostname) {
+    pill.textContent = 'Unavailable';
+    pill.className = 'status degraded';
+    toggle.checked = false;
+    toggle.disabled = true;
+    host.textContent = '';
+    note.hidden = false;
+    note.textContent = 'Site control needs an HTTP(S) page with ad protection on.';
+    adblockSiteHostname = null;
+    return;
+  }
+  adblockSiteHostname = state.hostname;
+  host.textContent = state.hostname;
+  // Checked means protection applies (no exception); unchecking creates an
+  // exact-host exception for the displayed hostname only.
+  toggle.checked = !state.disabledByUser;
+  toggle.disabled = false;
+  note.hidden = true;
+  if (state.exceptionActive) {
+    pill.textContent = 'Off';
+    pill.className = 'status unknown';
+  } else if (state.protectionActive) {
+    pill.textContent = 'On';
+    pill.className = 'status healthy';
+  } else {
+    pill.textContent = 'Needs attention';
+    pill.className = 'status warn';
+  }
+  if (state.applyWarning) {
+    note.hidden = false;
+    note.textContent = 'Site state does not match yet. Try toggling again.';
+  }
+}
+
+async function loadAdblockSite(): Promise<void> {
+  try {
+    renderAdblockSite(await send<AdblockSiteState>('GET_ADBLOCK_SITE_STATE'));
+  } catch (_) {
+    renderAdblockSite(null);
+  }
+}
+
+async function updateAdblockSite(disabled: boolean): Promise<void> {
+  if (adblockBusy || !adblockSiteHostname) return;
+  adblockBusy = true;
+  try {
+    // The background returns the fresh authoritative site state.
+    renderAdblockSite(await send<AdblockSiteState>('SET_ADBLOCK_SITE_EXCEPTION', {
+      hostname: adblockSiteHostname,
+      disabled,
+    }));
+  } catch (_) {
+    await loadAdblockSite();
+  } finally {
+    adblockBusy = false;
+  }
+}
 async function loadActivity(): Promise<void> {
   const { events } = await send<{ events: ProtectionEvent[] }>('GET_HISTORY'); const container = document.getElementById('recent-activity')!; container.replaceChildren();
   if (!events.length) { const empty = document.createElement('div'); empty.className = 'empty'; empty.textContent = 'No findings recorded.'; container.appendChild(empty); return; }
@@ -86,6 +151,8 @@ document.getElementById('open-history')!.addEventListener('click', () => chrome.
 (document.getElementById('adblock-enabled') as HTMLInputElement).addEventListener('change', (event) => void updateAdblock({ enabled: (event.target as HTMLInputElement).checked }));
 (document.getElementById('adblock-ads') as HTMLInputElement).addEventListener('change', (event) => void updateAdblock({ blockAds: (event.target as HTMLInputElement).checked }));
 (document.getElementById('adblock-trackers') as HTMLInputElement).addEventListener('change', (event) => void updateAdblock({ blockTrackers: (event.target as HTMLInputElement).checked }));
+(document.getElementById('adblock-site-toggle') as HTMLInputElement).addEventListener('change', (event) => void updateAdblockSite(!(event.target as HTMLInputElement).checked));
 void loadAdblock();
+void loadAdblockSite();
 const generatorHeading = document.querySelector('#tools-view .card:nth-child(2) h2');
 if (generatorHeading) generatorHeading.textContent = 'Password/passphrase generator';

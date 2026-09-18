@@ -2,7 +2,7 @@ import {
   DISCLOSURE_VERSION, ProtectionEvent, ProtectionVerdict, RuntimeRequest, SettingsV2, failure,
   isRuntimeRequest, response
 } from './contracts';
-import { applyAdTrackerPatch, getAdblockState, syncAdblockRulesets } from './adblock';
+import { applyAdTrackerPatch, exceptionHostnameFromUrl, getAdblockSiteState, getAdblockState, normalizeExceptionHostname, reconcileAdblock, setSiteException } from './adblock';
 import { analyzePassword, checkAndRememberReuse, checkHibpPassword, generateCredential } from './credential';
 import { registrableDomain } from './domains';
 import { checkFeed, feedStatus } from './feed';
@@ -33,8 +33,8 @@ async function initialize(): Promise<void> {
   await chrome.alarms.create(FEED_ALARM, { periodInMinutes: 6 * 60 });
   await chrome.alarms.create(RETENTION_ALARM, { periodInMinutes: 24 * 60 });
   // Reconcile static ad/tracker rulesets with stored settings. Never throws:
-  // syncAdblockRulesets reports failures instead so startup cannot crash.
-  await syncAdblockRulesets(settings);
+  // reconcileAdblock reports failures instead so startup cannot crash.
+  await reconcileAdblock(settings);
   const hasSiteAccess = await chrome.permissions.contains({ origins: CONTENT_ORIGINS });
   if (settings.continuousAccess && hasSiteAccess) {
     await syncContentScriptRegistration(true);
@@ -200,8 +200,9 @@ async function updateSettingsFromPayload(payload: unknown): Promise<SettingsV2> 
   // Persist the network gate before cancelling/removing permissions so alarms
   // and restarted workers observe the disabled state immediately.
   await setSettings(next);
-  // Keep static ad/tracker rulesets consistent with the new settings.
-  await syncAdblockRulesets(next);
+  // Keep ad/tracker runtime state (static rulesets + site exceptions)
+  // consistent with the new settings through the single reconciler.
+  await reconcileAdblock(next);
   if (!next.onlineServices.enabled) {
     cancelAllProviders();
     await Promise.allSettled((Object.keys(PROVIDERS) as Array<keyof typeof PROVIDERS>).map(revokeProviderPermission));
@@ -248,7 +249,7 @@ async function handleRequest(request: RuntimeRequest, sender: chrome.runtime.Mes
       // the v3 disclosure (migrated installs stay off until opted in).
       next.adTrackerProtection.enabled = true;
       await setSettings(next);
-      await syncAdblockRulesets(next);
+      await reconcileAdblock(next);
       if (typeof payload.continuousAccess === 'boolean') {
         const granted = payload.continuousAccess && await chrome.permissions.contains({ origins: CONTENT_ORIGINS });
         next.continuousAccess = granted;
@@ -358,6 +359,45 @@ async function handleRequest(request: RuntimeRequest, sender: chrome.runtime.Mes
     }
     case 'GET_ADBLOCK_STATE':
       return getAdblockState(settings);
+    case 'GET_ADBLOCK_SITE_STATE': {
+      const location = await senderUrl(sender);
+      return getAdblockSiteState(location.url, settings, location.incognito);
+    }
+    case 'GET_ADBLOCK_SITE_EXCEPTIONS': {
+      const sites = settings.adTrackerProtection?.disabledSites;
+      const hosts = (sites && typeof sites === 'object' && !Array.isArray(sites)) ? sites : {};
+      return {
+        hosts: Object.keys(hosts).sort().map((hostname) => ({
+          hostname,
+          createdAt: typeof hosts[hostname]?.createdAt === 'string' ? hosts[hostname].createdAt : null,
+        })),
+      };
+    }
+    case 'SET_ADBLOCK_SITE_EXCEPTION': {
+      const payload = (request.payload || {}) as { hostname?: unknown; disabled?: unknown };
+      const disabled = payload.disabled === true;
+      const location = await senderUrl(sender);
+      // Incognito hostnames are never persisted.
+      if (location.incognito) throw Object.assign(new Error('Site exceptions are unavailable in incognito.'), { code: 'PERMISSION_REQUIRED' });
+      const normalized = normalizeExceptionHostname(payload.hostname);
+      if (!normalized) throw Object.assign(new Error('A valid hostname is required.'), { code: 'INVALID_MESSAGE' });
+      // When the request comes from a page tab, the exception must name that
+      // tab's exact host: the renderer may not invent arbitrary hostnames.
+      // The options page has no tab URL, so its removals rely on normalization.
+      if (location.url && sender.tab?.url) {
+        const tabHost = exceptionHostnameFromUrl(location.url);
+        if (tabHost !== normalized) {
+          throw Object.assign(new Error('Site exception does not match the current tab.'), { code: 'INVALID_MESSAGE' });
+        }
+      }
+      const applied = setSiteException(await getSettings(), normalized, disabled);
+      if ('error' in applied) throw Object.assign(new Error(applied.error), { code: 'INVALID_MESSAGE' });
+      const updated = applied.settings as SettingsV2;
+      await setSettings(updated);
+      await reconcileAdblock(updated);
+      const fresh = await getSettings();
+      return getAdblockSiteState(location.url || null, fresh, location.incognito);
+    }
     case 'GET_CONTENT_STATE': {
       const location = await senderUrl(sender);
       const domain = (() => { try { return registrableDomain(new URL(location.url).hostname); } catch (_) { return ''; } })();
@@ -466,9 +506,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes[SETTINGS_KEY]) {
     const nextSettings = changes[SETTINGS_KEY].newValue as SettingsV2 | undefined;
     if (!nextSettings?.onlineServices.enabled) cancelAllProviders();
-    // Reconcile static ad/tracker rulesets; the sync diffs and no-ops when
+    // Reconcile ad/tracker runtime state; the sync diffs and no-ops when
     // nothing changed, and never throws.
-    if (nextSettings) void syncAdblockRulesets(nextSettings);
+    if (nextSettings) void reconcileAdblock(nextSettings);
     void chrome.tabs.query({}).then((tabs) => Promise.allSettled(tabs.filter((tab) => tab.id).map((tab) => chrome.tabs.sendMessage(tab.id!, { type: 'SETTINGS_CHANGED' }))));
   }
 });

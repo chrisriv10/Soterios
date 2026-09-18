@@ -2,6 +2,7 @@ import {
   AdTrackerProtection, DISCLOSURE_VERSION, DisplaySettings, HISTORY_RETENTION_DAYS, SETTINGS_VERSION,
   SettingsV2, isThemeKey
 } from './contracts';
+import { normalizeDisabledSites, normalizeExceptionHostname } from './adblock';
 
 export const SETTINGS_KEY = 'settingsV2';
 export const DISPLAY_KEY = 'displaySettingsV2';
@@ -21,7 +22,7 @@ export const DEFAULT_SETTINGS: SettingsV2 = {
   // Fresh installs start with ad/tracker blocking off; onboarding
   // confirmation enables it explicitly, and migrated installs keep it off
   // so upgrades never silently change site behavior.
-  adTrackerProtection: { enabled: false, blockAds: true, blockTrackers: true },
+  adTrackerProtection: { enabled: false, blockAds: true, blockTrackers: true, disabledSites: {} },
   onlineServices: {
     enabled: true,
     hibp: true,
@@ -128,12 +129,15 @@ export async function getDisplaySettings(): Promise<DisplaySettings> {
 
 export function normalizeAdTrackerProtection(value: unknown): AdTrackerProtection {
   const fallback = cloneDefaults().adTrackerProtection;
-  if (!value || typeof value !== 'object') return { ...fallback };
+  if (!value || typeof value !== 'object') {
+    return { ...fallback, disabledSites: { ...fallback.disabledSites } };
+  }
   const candidate = value as Record<string, unknown>;
   return {
     enabled: typeof candidate.enabled === 'boolean' ? candidate.enabled : fallback.enabled,
     blockAds: typeof candidate.blockAds === 'boolean' ? candidate.blockAds : fallback.blockAds,
     blockTrackers: typeof candidate.blockTrackers === 'boolean' ? candidate.blockTrackers : fallback.blockTrackers,
+    disabledSites: normalizeDisabledSites(candidate.disabledSites),
   };
 }
 
