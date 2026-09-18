@@ -6,9 +6,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "excludedInitiatorDomains": [
         "gaytube.com",
         "pornhub.com",
@@ -37,9 +35,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "requestDomains": [
         "cloud.google.com",
         "experienceleague.adobe.com",
@@ -54,9 +50,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "requestDomains": [
         "cloud.mail.ru",
         "files.slack.com",
@@ -75,9 +69,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "requestDomains": [
         "megaxh.com",
         "open.video",
@@ -110,9 +102,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image",
         "xmlhttprequest"
@@ -127,9 +117,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image",
         "xmlhttprequest"
@@ -144,9 +132,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image",
         "xmlhttprequest"
@@ -161,9 +147,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -177,9 +161,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -193,9 +175,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -209,9 +189,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -225,9 +203,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -241,9 +217,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -257,9 +231,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -273,9 +245,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -289,9 +259,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -305,9 +273,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -321,9 +287,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -337,9 +301,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -353,9 +315,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -369,9 +329,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -385,9 +343,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -401,9 +357,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -417,9 +371,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -433,9 +385,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -449,9 +399,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -465,9 +413,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -481,9 +427,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -497,9 +441,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -513,9 +455,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -529,9 +469,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -545,9 +483,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -561,9 +497,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -577,9 +511,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -593,9 +525,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -609,9 +539,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -625,9 +553,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -641,9 +567,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -657,9 +581,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -673,9 +595,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -689,9 +609,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -705,9 +623,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -721,9 +637,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -737,9 +651,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -753,9 +665,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -769,9 +679,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -785,9 +693,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -801,9 +707,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -817,9 +721,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -833,9 +735,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -849,9 +749,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -865,9 +763,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -881,9 +777,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -897,9 +791,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -913,9 +805,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -929,9 +819,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -945,9 +833,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -961,9 +847,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -977,9 +861,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -993,9 +875,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -1009,9 +889,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "script",
         "stylesheet"
@@ -1026,9 +904,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "script"
       ],
@@ -1042,9 +918,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "script"
       ],
@@ -1058,9 +932,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "script"
       ],
@@ -1074,9 +946,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "script"
       ],
@@ -1090,9 +960,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "script"
       ],
@@ -1106,9 +974,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "script"
       ],
@@ -1122,9 +988,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "script"
       ],
@@ -1138,9 +1002,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "script"
       ],
@@ -1154,9 +1016,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "script"
       ],
@@ -1170,9 +1030,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "script"
       ],
@@ -1186,9 +1044,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "script"
       ],
@@ -1202,9 +1058,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "script"
       ],
@@ -1218,9 +1072,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "script"
       ],
@@ -1234,9 +1086,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "script"
       ],
@@ -1250,9 +1100,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "script"
       ],
@@ -1266,9 +1114,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "script"
       ],
@@ -1282,9 +1128,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "stylesheet"
       ],
@@ -1298,9 +1142,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "sub_frame"
       ],
@@ -1314,9 +1156,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "xmlhttprequest"
       ],
@@ -1330,9 +1170,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "xmlhttprequest"
       ],
@@ -1346,9 +1184,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "xmlhttprequest"
       ],
@@ -1362,9 +1198,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "xmlhttprequest"
       ],
@@ -1378,9 +1212,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "xmlhttprequest"
       ],
@@ -1394,9 +1226,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "xmlhttprequest"
       ],
@@ -1410,9 +1240,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "xmlhttprequest"
       ],
@@ -1426,9 +1254,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "xmlhttprequest"
       ],
@@ -1442,9 +1268,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "xmlhttprequest"
       ],
@@ -1458,9 +1282,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||2chmatome2.jp/images/sp/320x250.png"
     }
   },
@@ -1471,9 +1293,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||47news.jp/static/special/*/300x250_640x480.webp"
     }
   },
@@ -1484,9 +1304,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||abcnews.com/assets/js/prebid.min.js"
     }
   },
@@ -1497,9 +1315,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||about.smartnews.com/ja/wp-content/assets/img/advertisers/ad_"
     }
   },
@@ -1510,9 +1326,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||adfurikun.jp/adfurikun/images/"
     }
   },
@@ -1523,9 +1337,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||ads-i.org/images/ads3.jpg"
     }
   },
@@ -1536,9 +1348,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||api.adnetmedia.lt/api/"
     }
   },
@@ -1549,9 +1359,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||api.friends.ponta.jp/api/"
     }
   },
@@ -1562,9 +1370,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||app.hubspot.com/api/ads/"
     }
   },
@@ -1575,9 +1381,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||az.hp.transer.com/content/dam/isetan_mitsukoshi/advertise/"
     }
   },
@@ -1588,9 +1392,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||az.hpcn.transer-cn.com/content/dam/isetan_mitsukoshi/advertise/"
     }
   },
@@ -1601,9 +1403,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||bihoku-minpou.co.jp/img/ad_top.jpg"
     }
   },
@@ -1614,9 +1414,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||bitcoinbazis.hu/advertise-with-us/"
     }
   },
@@ -1627,9 +1425,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||bloominc.jp/adtool/"
     }
   },
@@ -1640,9 +1436,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||borneobulletin.com.bn/wp-content/banners/bblogo.jpg"
     }
   },
@@ -1653,9 +1447,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||catchapp.net/ad/img/"
     }
   },
@@ -1666,9 +1458,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||clients.plex.tv/api/v2/ads/"
     }
   },
@@ -1679,9 +1469,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||cvs.com/webcontent/images/weeklyad/adcontent/"
     }
   },
@@ -1692,9 +1480,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||dcdirtylaundry.com/cdn-cgi/challenge-platform/"
     }
   },
@@ -1705,9 +1491,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||f-droid.org/assets/Ads_"
     }
   },
@@ -1718,9 +1502,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||freeride.se/img/admarket/"
     }
   },
@@ -1731,9 +1513,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||friends.ponta.jp/app/assets/images/"
     }
   },
@@ -1744,9 +1524,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||gakushuin.ac.jp/ad/common/"
     }
   },
@@ -1757,9 +1535,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||gammaplus.takeshobo.co.jp/img/ad/"
     }
   },
@@ -1770,9 +1546,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||gitlab.com/api/v4/projects/"
     }
   },
@@ -1783,9 +1557,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||givingassistant.org/Advertisers/"
     }
   },
@@ -1796,9 +1568,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||gpt-worldwide.com/js/gpt.js"
     }
   },
@@ -1809,9 +1579,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||gumtree.co.za/my/ads.html"
     }
   },
@@ -1822,9 +1590,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||h1g.jp/img/ad/ad_heigu.html"
     }
   },
@@ -1835,9 +1601,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||ienohikari.net/ad/common/"
     }
   },
@@ -1848,9 +1612,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||ienohikari.net/ad/img/"
     }
   },
@@ -1861,9 +1623,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||iko-yo.net/system/ad_images/"
     }
   },
@@ -1874,9 +1634,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||img.cf.47news.jp/static/*/300x250"
     }
   },
@@ -1887,9 +1645,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||img.rakudaclub.com/adv/"
     }
   },
@@ -1900,9 +1656,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||infoworld.com/www/js/ads/gpt_includes.js"
     }
   },
@@ -1913,9 +1667,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||itv.com/itv/tserver/"
     }
   },
@@ -1926,9 +1678,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||jobs.bg/front_job_search.php"
     }
   },
@@ -1939,9 +1689,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||kabumap.com/servlets/kabumap/html/common/img/ad/"
     }
   },
@@ -1952,9 +1700,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||keibana.com/wp-content/uploads/*/300x250_"
     }
   },
@@ -1965,9 +1711,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||kotaku.com/x-kinja-static/assets/new-client/adManager."
     }
   },
@@ -1978,9 +1722,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||live.lequipe.fr/thirdparty/prebid.js"
     }
   },
@@ -1991,9 +1733,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||looker.com/api/internal/"
     }
   },
@@ -2004,9 +1744,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||makeuseof.com/public/build/images/bg-advert-with-us."
     }
   },
@@ -2017,9 +1755,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||manageengine.com/products/ad-manager/"
     }
   },
@@ -2030,9 +1766,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||microapp.bytedance.com/docs/page-data/"
     }
   },
@@ -2043,9 +1777,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||minigame.aeriagames.jp/*/ae-tpgs-"
     }
   },
@@ -2056,9 +1788,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||mistore.jp/content/dam/isetan_mitsukoshi/advertise/"
     }
   },
@@ -2069,9 +1799,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||mysmth.net/nForum/*/ADAgent_"
     }
   },
@@ -2082,9 +1810,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||nascar.com/wp-content/themes/ndms-2023/assets/js/inc/ads/prebid8."
     }
   },
@@ -2095,9 +1821,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||nintendo.co.jp/ring/*/adv"
     }
   },
@@ -2108,9 +1832,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||nizista.com/api/v1/adbanner"
     }
   },
@@ -2121,9 +1843,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||oishi-kenko.com/kenko/assets/v2/ads/"
     }
   },
@@ -2134,9 +1854,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||point.rakuten.co.jp/img/crossuse/top_ad/"
     }
   },
@@ -2147,9 +1865,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||popin.cc/popin_discovery/recommend?"
     }
   },
@@ -2160,9 +1876,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||portal.autotrader.co.uk/advert/"
     }
   },
@@ -2173,9 +1887,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||powersports.honda.com/js/*/Popup2.js"
     }
   },
@@ -2186,9 +1898,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||preromanbritain.com/maxymiser/"
     }
   },
@@ -2199,9 +1909,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||przegladpiaseczynski.pl/wp-content/plugins/wppas/"
     }
   },
@@ -2212,9 +1920,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||rakudaclub.com/img.php?url=https://img.rakudaclub.com/adv/"
     }
   },
@@ -2225,9 +1931,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||rakuten-bank.co.jp/rb/ams/img/ad/"
     }
   },
@@ -2238,9 +1942,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||sanyonews.jp/files/image/ad/okachoku.jpg"
     }
   },
@@ -2251,9 +1953,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||sdltutorials.com/Data/Ads/AppStateBanner.jpg"
     }
   },
@@ -2264,9 +1964,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||shikoku-np.co.jp/img/ad/"
     }
   },
@@ -2277,9 +1975,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||shreemaruticourier.com/banners/"
     }
   },
@@ -2290,9 +1986,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||so-net.ne.jp/access/hikari/minico/ad/images/"
     }
   },
@@ -2303,9 +1997,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||standard.co.uk/js/third-party/prebid8."
     }
   },
@@ -2316,9 +2008,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||tcbk.com/application/files/4316/7521/1922/Q1-23-CD-Promo-Banner-Ad.png^"
     }
   },
@@ -2329,9 +2019,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||thedailybeast.com/pf/resources/js/ads/arcads.js"
     }
   },
@@ -2342,9 +2030,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||thepiratebay.org/cdn-cgi/challenge-platform/"
     }
   },
@@ -2355,9 +2041,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||totalvene.fi/media/yendifvideoshare/adverts/"
     }
   },
@@ -2368,9 +2052,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||tractorshed.com/photoads/upload/"
     }
   },
@@ -2381,9 +2063,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||uze-ads.com/ads/"
     }
   },
@@ -2394,9 +2074,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||wrestlinginc.com/wp-content/themes/unified/js/prebid.js"
     }
   },
@@ -2407,9 +2085,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||youchien.net/ad/*/ad/img/"
     }
   },
@@ -2420,9 +2096,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||youchien.net/css/ad_side.css"
     }
   },
@@ -2433,9 +2107,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||yuru-mbti.com/static/css/adsense.css"
     }
   },
@@ -2446,9 +2118,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "initiatorDomains": [
         "jjazz.net",
         "lamusica.com"
@@ -2466,9 +2136,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "image"
       ],
@@ -2482,9 +2150,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script"
       ],
@@ -2498,9 +2164,7 @@
       "type": "allow"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "sub_frame"
       ],
@@ -7877,9 +7541,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "excludedInitiatorDomains": [
         "yandex.by",
         "yandex.com",
@@ -7900,9 +7562,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "requestDomains": [
         "anysex.com",
         "eporner.com",
@@ -7922,9 +7582,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "requestDomains": [
         "taxidrivermovie.com"
       ],
@@ -7940,9 +7598,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "image"
       ],
@@ -7956,9 +7612,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "script",
         "sub_frame"
@@ -7973,9 +7627,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "script"
       ],
@@ -7989,9 +7641,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "script"
       ],
@@ -8005,9 +7655,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "script"
       ],
@@ -8021,9 +7669,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "script"
       ],
@@ -8037,9 +7683,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "sub_frame"
       ],
@@ -8053,9 +7697,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "xmlhttprequest"
       ],
@@ -8069,9 +7711,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "xmlhttprequest"
       ],
@@ -8085,9 +7725,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "xmlhttprequest"
       ],
@@ -8101,9 +7739,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "resourceTypes": [
         "xmlhttprequest"
       ],
@@ -8117,9 +7753,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||adblock-tester.com/banners/"
     }
   },
@@ -8130,9 +7764,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "firstParty"
-      ],
+      "domainType": "firstParty",
       "urlFilter": "||youtube.com/get_video_info?*adunit"
     }
   },
@@ -8143,9 +7775,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "excludedInitiatorDomains": [
         "accuweather.com",
         "businessinsider.de",
@@ -8182,9 +7812,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "excludedInitiatorDomains": [
         "adv.asahi.com",
         "adv.bet",
@@ -8232,9 +7860,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "excludedInitiatorDomains": [
         "awempire.com"
       ],
@@ -8250,9 +7876,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "excludedInitiatorDomains": [
         "bannersnack.dev"
       ],
@@ -8269,9 +7893,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "excludedInitiatorDomains": [
         "buysellads.com"
       ],
@@ -8287,9 +7909,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "excludedInitiatorDomains": [
         "click2houston.com",
         "clickondetroit.com",
@@ -8315,9 +7935,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "excludedInitiatorDomains": [
         "edu",
         "gov"
@@ -8335,9 +7953,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "excludedInitiatorDomains": [
         "hs-exp.jp"
       ],
@@ -8351,9 +7967,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "excludedInitiatorDomains": [
         "imnude.com"
       ],
@@ -8372,9 +7986,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "excludedInitiatorDomains": [
         "iqbroker.co",
         "iqbroker.com",
@@ -8397,9 +8009,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "excludedInitiatorDomains": [
         "istripper.eu"
       ],
@@ -8415,9 +8025,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "excludedInitiatorDomains": [
         "mrskincdn.com"
       ],
@@ -8436,9 +8044,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "excludedInitiatorDomains": [
         "my-dirty-hobby.com",
         "mydirtyhobby.de"
@@ -8455,9 +8061,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "excludedInitiatorDomains": [
         "netaffiliation.com"
       ],
@@ -8473,9 +8077,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "excludedInitiatorDomains": [
         "nextmillennium.com"
       ],
@@ -8491,9 +8093,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "excludedInitiatorDomains": [
         "shmoop.com"
       ],
@@ -8509,9 +8109,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "excludedInitiatorDomains": [
         "toggo.de"
       ],
@@ -8528,9 +8126,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "initiatorDomains": [
         "bossip.com",
         "hiphopwired.com",
@@ -8548,9 +8144,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "requestDomains": [
         "123date.me",
         "152media.com",
@@ -9562,9 +9156,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "requestDomains": [
         "777partner.com",
         "adfoc.us",
@@ -9591,9 +9183,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "requestDomains": [
         "a2zapk.com",
         "redventures.io"
@@ -9612,9 +9202,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "requestDomains": [
         "bongacams.com",
         "bookingdragon.com",
@@ -9644,9 +9232,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "requestDomains": [
         "media.net"
       ],
@@ -9664,9 +9250,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "requestDomains": [
         "n2.clips4sale.com",
         "naiadexports.com",
@@ -10256,9 +9840,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "requestDomains": [
         "play-asia.com"
       ],
@@ -10275,9 +9857,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "requestDomains": [
         "publish0x.com"
       ],
@@ -10294,9 +9874,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "requestDomains": [
         "skimresources.com"
       ],
@@ -10313,9 +9891,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "image"
       ],
@@ -10329,9 +9905,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "media"
       ],
@@ -10345,9 +9919,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "other",
         "sub_frame"
@@ -10362,9 +9934,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "other",
         "sub_frame"
@@ -10379,9 +9949,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script",
         "sub_frame",
@@ -10397,9 +9965,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script",
         "sub_frame",
@@ -10415,9 +9981,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script",
         "sub_frame",
@@ -10433,9 +9997,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script",
         "xmlhttprequest"
@@ -10450,9 +10012,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script"
       ],
@@ -10466,9 +10026,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script"
       ],
@@ -10482,9 +10040,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script"
       ],
@@ -10498,9 +10054,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script"
       ],
@@ -10514,9 +10068,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script"
       ],
@@ -10530,9 +10082,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script"
       ],
@@ -10546,9 +10096,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script"
       ],
@@ -10562,9 +10110,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script"
       ],
@@ -10578,9 +10124,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script"
       ],
@@ -10594,9 +10138,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script"
       ],
@@ -10610,9 +10152,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script"
       ],
@@ -10626,9 +10166,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script"
       ],
@@ -10642,9 +10180,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script"
       ],
@@ -10658,9 +10194,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script"
       ],
@@ -10674,9 +10208,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script"
       ],
@@ -10690,9 +10222,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script"
       ],
@@ -10706,9 +10236,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script"
       ],
@@ -10722,9 +10250,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script"
       ],
@@ -10738,9 +10264,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script"
       ],
@@ -10754,9 +10278,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script"
       ],
@@ -10770,9 +10292,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "script"
       ],
@@ -10786,9 +10306,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "sub_frame"
       ],
@@ -10802,9 +10320,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "sub_frame"
       ],
@@ -10818,9 +10334,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "sub_frame"
       ],
@@ -10834,9 +10348,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "sub_frame"
       ],
@@ -10850,9 +10362,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "sub_frame"
       ],
@@ -10866,9 +10376,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "sub_frame"
       ],
@@ -10882,9 +10390,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "sub_frame"
       ],
@@ -10898,9 +10404,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "xmlhttprequest"
       ],
@@ -10914,9 +10418,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "xmlhttprequest"
       ],
@@ -10930,9 +10432,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "xmlhttprequest"
       ],
@@ -10946,9 +10446,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "xmlhttprequest"
       ],
@@ -10962,9 +10460,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "resourceTypes": [
         "xmlhttprequest"
       ],
@@ -10978,9 +10474,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "&rb=&uuid="
     }
   },
@@ -10991,9 +10485,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "&sadbl=1&abtg="
     }
   },
@@ -11004,9 +10496,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "&sadbl=1&chu="
     }
   },
@@ -11017,9 +10507,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".biz/?ce="
     }
   },
@@ -11030,9 +10518,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".biz/?re="
     }
   },
@@ -11043,9 +10529,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".biz/?te="
     }
   },
@@ -11056,9 +10540,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".cc/process.js?id="
     }
   },
@@ -11069,9 +10551,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".click/cuid/?"
     }
   },
@@ -11082,9 +10562,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".click/rf/"
     }
   },
@@ -11095,9 +10573,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".com/4/js/"
     }
   },
@@ -11108,9 +10584,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".com/api/posts?token="
     }
   },
@@ -11121,9 +10595,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".com/bn.js"
     }
   },
@@ -11134,9 +10606,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".com/in.js"
     }
   },
@@ -11147,9 +10617,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".com/on.js"
     }
   },
@@ -11160,9 +10628,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".com/script/a.js"
     }
   },
@@ -11173,9 +10639,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".com/script/asset.js"
     }
   },
@@ -11186,9 +10650,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".com/script/cdn.js"
     }
   },
@@ -11199,9 +10661,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".com/script/compatibility.js"
     }
   },
@@ -11212,9 +10672,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".com/script/document.js"
     }
   },
@@ -11225,9 +10683,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".com/script/file.js"
     }
   },
@@ -11238,9 +10694,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".com/script/foundation.js"
     }
   },
@@ -11251,9 +10705,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".com/script/frustration.js"
     }
   },
@@ -11264,9 +10716,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".com/script/image.js"
     }
   },
@@ -11277,9 +10727,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".com/script/mui.js"
     }
   },
@@ -11290,9 +10738,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".com/script/script.js"
     }
   },
@@ -11303,9 +10749,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".com/script/utils.js"
     }
   },
@@ -11316,9 +10760,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".com/script/xbox.js"
     }
   },
@@ -11329,9 +10771,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".com/smartpop/"
     }
   },
@@ -11342,9 +10782,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".com/src/ppu/"
     }
   },
@@ -11355,9 +10793,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".lol/js/pub.min.js"
     }
   },
@@ -11368,9 +10804,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".lol/sw.js"
     }
   },
@@ -11381,9 +10815,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".org/script/compatibility.js"
     }
   },
@@ -11394,9 +10826,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".shop/gd/"
     }
   },
@@ -11407,9 +10837,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".shop/tsk/"
     }
   },
@@ -11420,9 +10848,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".top/cuid/?"
     }
   },
@@ -11433,9 +10859,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": ".top/gd/*?md="
     }
   },
@@ -11446,9 +10870,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/a-ads."
     }
   },
@@ -11459,9 +10881,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/aas/r45d/vki/*"
     }
   },
@@ -11472,9 +10892,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/ads/ta_wppas/*"
     }
   },
@@ -11485,9 +10903,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/adv_out.js"
     }
   },
@@ -11498,9 +10914,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/asyncspc.php"
     }
   },
@@ -11511,9 +10925,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/bGFwb3N0ZS5uZXQ.js"
     }
   },
@@ -11524,9 +10936,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/bXlmb3JlY2FzdC5jb20.js"
     }
   },
@@ -11537,9 +10947,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/banner.asp?"
     }
   },
@@ -11550,9 +10958,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/btag.min.js"
     }
   },
@@ -11563,9 +10969,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/bultykh/ipp24/7/*"
     }
   },
@@ -11576,9 +10980,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/cGlja3MubXk.js"
     }
   },
@@ -11589,9 +10991,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/ceef/gdt3g0/tbt/*"
     }
   },
@@ -11602,9 +11002,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/dGhlZnJlZWJpZWd1eS5jb20.js"
     }
   },
@@ -11615,9 +11013,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/dfp.min.js"
     }
   },
@@ -11628,9 +11024,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/exports/tour/*"
     }
   },
@@ -11641,9 +11035,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/fyckld0t/ckp/fd3w4/*"
     }
   },
@@ -11654,9 +11046,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/gospel2Truth.js"
     }
   },
@@ -11667,9 +11057,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/in/?tour="
     }
   },
@@ -11680,9 +11068,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/in/show/?mid="
     }
   },
@@ -11693,9 +11079,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/in/show/?tag_ab="
     }
   },
@@ -11706,9 +11090,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/js/popunder.js"
     }
   },
@@ -11719,9 +11101,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/mw.min.js?z="
     }
   },
@@ -11732,9 +11112,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/pfe/current/*"
     }
   },
@@ -11745,9 +11123,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/pixel/puclc?"
     }
   },
@@ -11758,9 +11134,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/pixel/purs?"
     }
   },
@@ -11771,9 +11145,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/pixel/purst?"
     }
   },
@@ -11784,9 +11156,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/pixel/sbe?"
     }
   },
@@ -11797,9 +11167,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/pn07uscr/f/tr/zavbn/*"
     }
   },
@@ -11810,9 +11178,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/promo.php?c="
     }
   },
@@ -11823,9 +11189,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/push/p.js?"
     }
   },
@@ -11836,9 +11200,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/q/tdl/95/dnt/*"
     }
   },
@@ -11849,9 +11211,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/rdrr/renderer.js"
     }
   },
@@ -11862,9 +11222,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/redirect/?spot_id="
     }
   },
@@ -11875,9 +11233,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/sc4fr/rwff/f9ef/*"
     }
   },
@@ -11888,9 +11244,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/script/aclib.js"
     }
   },
@@ -11901,9 +11255,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/script/antd.js"
     }
   },
@@ -11914,9 +11266,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/script/app_settings.js"
     }
   },
@@ -11927,9 +11277,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/script/atg.js"
     }
   },
@@ -11940,9 +11288,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/script/atga.js"
     }
   },
@@ -11953,9 +11299,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/script/awesome.js"
     }
   },
@@ -11966,9 +11310,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/script/g0D.js"
     }
   },
@@ -11979,9 +11321,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/script/g0dL0vesads.js"
     }
   },
@@ -11992,9 +11332,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/script/intrf.js"
     }
   },
@@ -12005,9 +11343,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/script/ippg.js"
     }
   },
@@ -12018,9 +11354,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/script/jeSus.js"
     }
   },
@@ -12031,9 +11365,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/script/liB1.js"
     }
   },
@@ -12044,9 +11376,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/script/liB2.js"
     }
   },
@@ -12057,9 +11387,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/script/naN.js"
     }
   },
@@ -12070,9 +11398,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/script/native_render.js"
     }
   },
@@ -12083,9 +11409,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/script/native_server.js"
     }
   },
@@ -12096,9 +11420,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/script/npa2.min.js"
     }
   },
@@ -12109,9 +11431,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/script/nwsu.js"
     }
   },
@@ -12122,9 +11442,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/script/suv4r.js"
     }
   },
@@ -12135,9 +11453,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/script/thankYou.js"
     }
   },
@@ -12148,9 +11464,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/script/uBlock.js"
     }
   },
@@ -12161,9 +11475,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/script/xxAG1.js"
     }
   },
@@ -12174,9 +11486,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/sdk/push_web/?zid="
     }
   },
@@ -12187,9 +11497,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/ssp/req/*/?pb="
     }
   },
@@ -12200,9 +11508,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/suurl4.php?"
     }
   },
@@ -12213,9 +11519,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/suurl5.php"
     }
   },
@@ -12226,9 +11530,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/suv4.js"
     }
   },
@@ -12239,9 +11541,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/suv5.js"
     }
   },
@@ -12252,9 +11552,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/t/9/heis/svewg/*"
     }
   },
@@ -12265,9 +11563,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/tag.min.js?z="
     }
   },
@@ -12278,9 +11574,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/utx?cb="
     }
   },
@@ -12291,9 +11585,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/v2/a/push/js/*"
     }
   },
@@ -12304,9 +11596,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/v2/a/skm/*"
     }
   },
@@ -12317,9 +11607,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "/waWQiOjE*=eyJ.js^"
     }
   },
@@ -12330,9 +11618,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "://a.*/ad-provider.js"
     }
   },
@@ -12343,9 +11629,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "://affiliate."
     }
   },
@@ -12356,9 +11640,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "://affiliates."
     }
   },
@@ -12369,9 +11651,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "://affiliates2."
     }
   },
@@ -12382,9 +11662,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "://banner."
     }
   },
@@ -12395,9 +11673,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "://banners."
     }
   },
@@ -12408,9 +11684,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "://news-*/process.js?id="
     }
   },
@@ -12421,9 +11695,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "://news-*/v2-sw.js"
     }
   },
@@ -12434,9 +11706,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "://pt.*?psid="
     }
   },
@@ -12447,9 +11717,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "://s.*.com/venor.php"
     }
   },
@@ -12460,9 +11728,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "?cs=*&abt=0&red=1&sm="
     }
   },
@@ -12473,9 +11739,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "wss://loader.*.com/ws^"
     }
   },
@@ -12486,9 +11750,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "wss://www.*.xyz/ws^"
     }
   },
@@ -12499,9 +11761,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||4tube.com/iframe/"
     }
   },
@@ -12512,9 +11772,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||adultfriendfinder.com/go/"
     }
   },
@@ -12525,9 +11783,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||allprivatekeys.com/static/banners/"
     }
   },
@@ -12538,9 +11794,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||amarotic.com/Banner/"
     }
   },
@@ -12551,9 +11805,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||amateur.tv/freecam/"
     }
   },
@@ -12564,9 +11816,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||awin1.com/cawshow.php"
     }
   },
@@ -12577,9 +11827,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||awin1.com/cshow.php"
     }
   },
@@ -12590,9 +11838,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||bet365.com/favicon.ico"
     }
   },
@@ -12603,9 +11849,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||betclever.com/wp-admin/admin-ajax.php?action=coupons_widget_iframe&id="
     }
   },
@@ -12616,9 +11860,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||blogatus.com/images/banner/"
     }
   },
@@ -12629,9 +11871,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||blufm.de/pr/"
     }
   },
@@ -12642,9 +11882,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||caffeine.tv/embed/"
     }
   },
@@ -12655,9 +11893,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||cam-content.com/banner/"
     }
   },
@@ -12668,9 +11904,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||cams.com/go/"
     }
   },
@@ -12681,9 +11915,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||capital.com/widgets/"
     }
   },
@@ -12694,9 +11926,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||contentexchange.me/widget/"
     }
   },
@@ -12707,9 +11937,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||cpkshop.com/campaign/"
     }
   },
@@ -12720,9 +11948,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||ddownload.com/images/promo/"
     }
   },
@@ -12733,9 +11959,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||dscgirls.live/*/vast"
     }
   },
@@ -12746,9 +11970,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||easydmarc.com/tools/"
     }
   },
@@ -12759,9 +11981,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||facebook.com/audiencenetwork/"
     }
   },
@@ -12772,9 +11992,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||fc.lc/CustomTheme/img/ref"
     }
   },
@@ -12785,9 +12003,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||fileboom.me/images/i/"
     }
   },
@@ -12798,9 +12014,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||financeads.net/tb.php"
     }
   },
@@ -12811,9 +12025,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||flirt.com/landing/"
     }
   },
@@ -12824,9 +12036,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||free-btc.org/banner/"
     }
   },
@@ -12837,9 +12047,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||funniestpins.com/istripper-black-small.jpg"
     }
   },
@@ -12850,9 +12058,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||gammae.com/famedollars/"
     }
   },
@@ -12863,9 +12069,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||github.io/*/invoke.js"
     }
   },
@@ -12876,9 +12080,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||go2cdn.org/brand/"
     }
   },
@@ -12889,9 +12091,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||graph.org/file/"
     }
   },
@@ -12902,9 +12102,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||hosting24.com/images/banners/"
     }
   },
@@ -12915,9 +12113,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||hostmonster.com/src/js/"
     }
   },
@@ -12928,9 +12124,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||images.elenasmodels.com/Upload/"
     }
   },
@@ -12941,9 +12135,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||keep2share.cc/images/i/"
     }
   },
@@ -12954,9 +12146,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||kinguin.net/affiliatepluswidget/"
     }
   },
@@ -12967,9 +12157,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||lawdepot.com/affiliate/"
     }
   },
@@ -12980,9 +12168,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||legitonlinejobs.com/images/"
     }
   },
@@ -12993,9 +12179,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||libs.outbrain.com/video/"
     }
   },
@@ -13006,9 +12190,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||lifeselector.com/iframetool/"
     }
   },
@@ -13019,9 +12201,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||lovense.com/UploadFiles/Temp/"
     }
   },
@@ -13032,9 +12212,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||my-dirty-hobby.com/?sub="
     }
   },
@@ -13045,9 +12223,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||nude.hu/html/"
     }
   },
@@ -13058,9 +12234,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||pages.etoro.com/widgets/"
     }
   },
@@ -13071,9 +12245,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||paperstreetcash.com/banners/"
     }
   },
@@ -13084,9 +12256,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||pixel-vault.com/image/"
     }
   },
@@ -13097,9 +12267,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||plista.com/tiny/"
     }
   },
@@ -13110,9 +12278,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||privatejetfinder.com/skins/partners/"
     }
   },
@@ -13123,9 +12289,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||raw.githubusercontent.com/easylist/easylist/master/docs/2x2.png"
     }
   },
@@ -13136,9 +12300,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||remax-malta.com/widget_new/"
     }
   },
@@ -13149,9 +12311,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||saveit.us/img/"
     }
   },
@@ -13162,9 +12322,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||sexycams.com/exports/"
     }
   },
@@ -13175,9 +12333,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||shareasale.com/image/"
     }
   },
@@ -13188,9 +12344,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||sheeme.com/affiliates/"
     }
   },
@@ -13201,9 +12355,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||siteground.com/static/affiliate/"
     }
   },
@@ -13214,9 +12366,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||smartmovies.net/promo_"
     }
   },
@@ -13227,9 +12377,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||snrcash.com/profilerotator/"
     }
   },
@@ -13240,9 +12388,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||squaremouth.com/affiliates/"
     }
   },
@@ -13253,9 +12399,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||streamen.com/exports/"
     }
   },
@@ -13266,9 +12410,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||swarthid.github.io/*/invoke.js"
     }
   },
@@ -13279,9 +12421,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||takefile.link/promo/"
     }
   },
@@ -13292,9 +12432,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||teamskeetimages.com/st/banners/"
     }
   },
@@ -13305,9 +12443,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||theporndude.com/graphics/tpd-"
     }
   },
@@ -13318,9 +12454,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||tlavideo.com/affiliates/"
     }
   },
@@ -13331,9 +12465,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||uploaded.net/img/public/"
     }
   },
@@ -13344,9 +12476,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||uploadgig.com/static_/"
     }
   },
@@ -13357,9 +12487,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||upsellit.com/custom/"
     }
   },
@@ -13370,9 +12498,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||vidz.com/promo_banner/"
     }
   },
@@ -13383,9 +12509,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||visit-x.net/promo/"
     }
   },
@@ -13396,9 +12520,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||wowtcgloot.com/share/?d="
     }
   },
@@ -13409,9 +12531,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||ws.amazon.*/widgets/"
     }
   },
@@ -13422,9 +12542,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||xlgirls.com/banner/"
     }
   },
@@ -13435,9 +12553,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||zanox-affiliate.de/ppv/"
     }
   },
@@ -13448,9 +12564,7 @@
       "type": "block"
     },
     "condition": {
-      "domainType": [
-        "thirdParty"
-      ],
+      "domainType": "thirdParty",
       "urlFilter": "||zanox.com/ppv/"
     }
   },

@@ -76,6 +76,12 @@ if (JSON.stringify(declared) !== JSON.stringify(expectedRulesets)) {
         failures.push(`${ruleset.path} has a rule without urlFilter/requestDomains`); break;
       }
       if ('regexFilter' in condition) { failures.push(`${ruleset.path} must not use regexFilter`); break; }
+      // DNR domainType is a scalar enum; array form is silently dropped by
+      // Chrome at load, which would ship dead rules with no error.
+      if ('domainType' in condition
+        && condition.domainType !== 'firstParty' && condition.domainType !== 'thirdParty') {
+        failures.push(`${ruleset.path} has a rule with invalid domainType`); break;
+      }
       if (rule.action.redirect || rule.action.upgradeScheme || rule.action.allowAllRequests || rule.action.requestHeaders || rule.action.responseHeaders) {
         failures.push(`${ruleset.path} must not redirect or modify headers`); break;
       }

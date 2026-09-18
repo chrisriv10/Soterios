@@ -295,7 +295,11 @@ function compileNetworkFilter(text) {
 
   const condition = { urlFilter: pattern };
   if (resourceTypes.size) condition.resourceTypes = [...resourceTypes].sort();
-  if (domainType) condition.domainType = [domainType];
+  // DNR RuleCondition.domainType is a single 'firstParty'|'thirdParty'
+  // string, NOT an array: Chrome silently drops rules carrying any other
+  // shape, so array form would ship dead rules with no load-time error
+  // (proven with a live-engine probe, September 2026).
+  if (domainType) condition.domainType = domainType;
   if (initiatorInclude && initiatorInclude.length) {
     condition.initiatorDomains = [...initiatorInclude].sort();
   }
@@ -595,6 +599,13 @@ function validateRule(rule, seenIds) {
         throw new Error(`Generated rule ${rule.id} has a malformed ${key}.`);
       }
     }
+  }
+  // DNR domainType is a scalar enum. Anything else (notably a one-element
+  // array) is silently ignored by Chrome at load, shipping dead rules, so
+  // reject it at compile time.
+  if (condition.domainType !== undefined
+    && condition.domainType !== 'firstParty' && condition.domainType !== 'thirdParty') {
+    throw new Error(`Generated rule ${rule.id} has an invalid domainType.`);
   }
   if (!Number.isInteger(rule.priority) || rule.priority < 1) {
     throw new Error(`Generated rule ${rule.id} has an invalid priority.`);

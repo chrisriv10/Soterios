@@ -57,10 +57,13 @@ describe('filter compiler fixtures', () => {
     assert.deepEqual(rule.condition.resourceTypes, ['image', 'script']);
   });
 
-  it('maps third-party and first-party restrictions', () => {
-    assert.deepEqual(singleRule('||tracker.example^$third-party').condition.domainType, ['thirdParty']);
-    assert.deepEqual(singleRule('||tracker.example^$~third-party').condition.domainType, ['firstParty']);
-    assert.deepEqual(singleRule('||tracker.example^$first-party').condition.domainType, ['firstParty']);
+  it('maps third-party and first-party restrictions to the scalar DNR form', () => {
+    // DNR RuleCondition.domainType is a single string. Array form is
+    // silently ignored by Chrome at load (live-engine proof), so the
+    // compiler must never emit it.
+    assert.equal(singleRule('||tracker.example^$third-party').condition.domainType, 'thirdParty');
+    assert.equal(singleRule('||tracker.example^$~third-party').condition.domainType, 'firstParty');
+    assert.equal(singleRule('||asset.example^$first-party').condition.domainType, 'firstParty');
   });
 
   it('maps domain restrictions including exclusions', () => {
@@ -168,6 +171,11 @@ describe('filter compiler fixtures', () => {
       { id: 1, priority: 1, action: { type: 'block' }, condition: { urlFilter: 'x' } },
       { id: 1, priority: 1, action: { type: 'block' }, condition: { urlFilter: 'y' } },
     ]), /Duplicate generated rule id/);
+    // Array-form domainType is silently dropped by Chrome at load, so the
+    // compiler must reject it instead of writing dead rules.
+    assert.throws(() => compiler.validateRules([{ id: 1, priority: 1, action: { type: 'block' }, condition: { urlFilter: 'x', domainType: ['thirdParty'] } }]), /domainType/);
+    assert.throws(() => compiler.validateRules([{ id: 1, priority: 1, action: { type: 'block' }, condition: { urlFilter: 'x', domainType: 'fourthParty' } }]), /domainType/);
+    compiler.validateRules([{ id: 1, priority: 1, action: { type: 'block' }, condition: { urlFilter: 'x', domainType: 'thirdParty' } }]);
   });
 
   it('emits zero regex rules by policy', () => {
@@ -214,7 +222,7 @@ describe('filter compiler domain compaction', () => {
     assert.equal(compacted.grouped.length, 1);
     assert.deepEqual(compacted.grouped[0].condition.requestDomains, ['a.example', 'b.example']);
     assert.deepEqual(compacted.grouped[0].condition.resourceTypes, ['script']);
-    assert.deepEqual(compacted.grouped[0].condition.domainType, ['thirdParty']);
+    assert.equal(compacted.grouped[0].condition.domainType, 'thirdParty');
   });
 
   it('separates first-party from third-party conditions', () => {
@@ -393,5 +401,29 @@ describe('filter compiler real-list integration', () => {
     for (const entry of before) {
       assert.equal(fs.statSync(path.join(RULES_DIR, entry.name)).mtimeMs, entry.mtime, `${entry.name} must not be rewritten by --check`);
     }
+  });
+
+  it('ships zero non-scalar domainType conditions in the real artifacts', () => {
+    // Chrome silently drops rules whose domainType is not exactly
+    // 'firstParty'|'thirdParty' (notably the one-element arrays the
+    // compiler emitted before this fix), so the packaged rulesets are
+    // scanned directly: any invalid shape here is dead protection.
+    const counts = {};
+    for (const [name, key] of [['ads.json', 'ads'], ['trackers.json', 'trackers']]) {
+      const rules = JSON.parse(fs.readFileSync(path.join(RULES_DIR, name), 'utf8'));
+      assert.ok(Array.isArray(rules), `${name} must be a rule array`);
+      let scalar = 0;
+      const invalid = [];
+      for (const rule of rules) {
+        const domainType = rule && rule.condition ? rule.condition.domainType : undefined;
+        if (domainType === undefined) continue;
+        if (domainType === 'firstParty' || domainType === 'thirdParty') scalar += 1;
+        else if (invalid.length < 5) invalid.push(`id ${rule && rule.id}: ${JSON.stringify(domainType)}`);
+      }
+      counts[key] = scalar;
+      assert.equal(invalid.length, 0, `${name} has invalid domainType conditions: ${invalid.join('; ')}`);
+    }
+    assert.ok(counts.ads > 100 && counts.trackers > 100,
+      `expected a substantial domainType population, got ${JSON.stringify(counts)}`);
   });
 });

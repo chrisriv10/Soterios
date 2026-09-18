@@ -47,7 +47,7 @@
       "largestGroup": 47508,
       "chunks": 189,
       "outputFile": "browser-extension/rules/ads.json",
-      "outputBytes": 2202440
+      "outputBytes": 2194466
     },
     "easyprivacy": {
       "title": "EasyPrivacy",
@@ -84,7 +84,7 @@
       "largestGroup": 43064,
       "chunks": 214,
       "outputFile": "browser-extension/rules/trackers.json",
-      "outputBytes": 3042692
+      "outputBytes": 3034466
     }
   },
   "rulesets": {
