@@ -517,7 +517,9 @@ export function adblockViewState(state: AdblockState | null | undefined): Adbloc
   const blockAds = state?.blockAds === true;
   const blockTrackers = state?.blockTrackers === true;
   if (status === 'unavailable') {
-    return { status, controlsDisabled: true, globalChecked: false, adsChecked: false, trackersChecked: false, showApplyWarning: false };
+    // DNR itself is unreachable, so interaction stays disabled — but the
+    // stored preferences are still displayed instead of blanked controls.
+    return { status, controlsDisabled: true, globalChecked, adsChecked: blockAds, trackersChecked: blockTrackers, showApplyWarning: false };
   }
   if (status === 'off') {
     return { status, controlsDisabled: true, globalChecked, adsChecked: blockAds, trackersChecked: blockTrackers, showApplyWarning: false };

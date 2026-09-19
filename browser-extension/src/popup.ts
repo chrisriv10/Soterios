@@ -65,7 +65,10 @@ async function updateAdblock(patch: { enabled?: boolean; blockAds?: boolean; blo
     // Fall through to the authoritative refresh below so the UI reflects
     // actual state instead of the attempted change.
   } finally {
-    await loadAdblock();
+    // Refresh both authoritative states: a global/category change can alter
+    // per-site eligibility, so the site row must reload too instead of going
+    // stale until the popup reopens. Both loaders degrade internally.
+    await Promise.all([loadAdblock(), loadAdblockSite()]);
     adblockBusy = false;
   }
 }

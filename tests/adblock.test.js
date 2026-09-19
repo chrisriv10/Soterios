@@ -315,9 +315,15 @@ describe('adblock view state', () => {
     );
   });
 
-  it('shows unavailable with disabled controls when DNR is missing', () => {
+  it('shows unavailable with disabled controls but preserves stored prefs', () => {
+    // DNR unreachable: interaction stays off, yet the persisted preferences
+    // remain visibly represented instead of blanked controls.
     assert.deepEqual(
-      adblockViewState({ available: false, enabled: true, blockAds: true, blockTrackers: true, adsActive: false, trackersActive: false, enabledRulesets: [] }),
+      adblockViewState({ available: false, enabled: true, blockAds: true, blockTrackers: false, adsActive: false, trackersActive: false, enabledRulesets: [] }),
+      { status: 'unavailable', controlsDisabled: true, globalChecked: true, adsChecked: true, trackersChecked: false, showApplyWarning: false }
+    );
+    assert.deepEqual(
+      adblockViewState({ available: false, enabled: false, blockAds: false, blockTrackers: false, adsActive: false, trackersActive: false, enabledRulesets: [] }),
       { status: 'unavailable', controlsDisabled: true, globalChecked: false, adsChecked: false, trackersChecked: false, showApplyWarning: false }
     );
     assert.deepEqual(
@@ -818,5 +824,23 @@ describe('adblock renderer wiring', () => {
     assert.ok(popupTs.includes('GET_ADBLOCK_SITE_STATE'));
     assert.ok(popupTs.includes('SET_ADBLOCK_SITE_EXCEPTION'));
     assert.ok(!popupTs.includes('window.api.invoke'));
+  });
+
+  it('refreshes global and per-site state together after settings updates', () => {
+    // A global/category toggle can flip per-site eligibility, so the update
+    // path must reload both authoritative states — on success and on
+    // failure (the refresh lives in `finally`, and both loaders degrade
+    // internally instead of assuming the mutation worked).
+    const fs = require('fs');
+    const path = require('path');
+    const popupTs = fs.readFileSync(
+      path.join(__dirname, '..', 'browser-extension', 'src', 'popup.ts'), 'utf8');
+    const updateFn = popupTs.slice(popupTs.indexOf('async function updateAdblock'));
+    assert.ok(updateFn.includes('UPDATE_SETTINGS'), 'update path sends the settings patch');
+    const refreshAt = updateFn.indexOf('await Promise.all([loadAdblock(), loadAdblockSite()])');
+    assert.ok(refreshAt !== -1,
+      'update path refreshes global and per-site state together');
+    assert.ok(updateFn.indexOf('finally') !== -1 && updateFn.indexOf('finally') < refreshAt,
+      'refresh runs on success and on failure');
   });
 });
