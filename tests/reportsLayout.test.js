@@ -20,6 +20,9 @@ describe('reports section action alignment', () => {
     assert.equal((reportsSource.match(/class="report-section-chevron"/g) || []).length, 5);
     assert.equal((reportsSource.match(/report-section-toggle--single-action/g) || []).length, 3);
     assert.match(reportsStyles, /\.report-section-toggle\s*\{[\s\S]*display:\s*grid\s*!important;[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) 80px 168px 14px;/);
+    assert.match(reportsStyles, /\.report-browser\s*\{\s*container:\s*reports-browser \/ inline-size;/);
+    assert.match(reportsStyles, /@container reports-browser \(max-width:\s*520px\)/);
+    assert.match(reportsStyles, /\.report-section-toggle--single-action\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) 80px 14px;[\s\S]*grid-template-areas:\s*"label clear chevron";/);
     assert.match(reportsStyles, /\.report-section-toggle--single-action\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) 80px 0 14px;/);
     assert.match(reportsStyles, /\.report-clear-button\s*\{[\s\S]*width:\s*80px;/);
   });

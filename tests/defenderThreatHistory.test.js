@@ -803,15 +803,18 @@ describe('Defender history renderer filters', () => {
       assert.ok(!html.includes('<b>Evil</b>'));
       // Status pill text is present (not color-only).
       assert.ok(html.includes('defender.history.statusActive'));
-      // Empty-state path renders the empty title.
+      // Empty-state path renders the centered detail without a duplicate title.
       page._defenderDetections = [];
       page.renderDefenderHistory(container);
-      assert.ok(container._list.innerHTML.includes('defender.history.emptyTitle'));
-      // Error path renders the unavailable title without raw cmdlet text.
+      assert.ok(container._list.innerHTML.includes('defender.history.emptyDetail'));
+      assert.ok(!container._list.innerHTML.includes('defender.history.emptyTitle'));
+      assert.match(container._list.innerHTML, /class="empty-state defender-empty-state"/);
+      // Error path renders one centered error message without raw cmdlet text.
       global.window.soterios.defender.getThreatHistory = async () => ({ ok: false, code: 'unavailable' });
       await page.listDefenderHistory(container, true);
       const errorHtml = container._list.innerHTML;
-      assert.ok(errorHtml.includes('defender.history.unavailableTitle'));
+      assert.ok(errorHtml.includes('defender.history.errorUnavailable'));
+      assert.ok(!errorHtml.includes('defender.history.unavailableTitle'));
       assert.ok(!errorHtml.includes('Get-MpThreatDetection'));
     })();
   });
@@ -839,8 +842,8 @@ describe('Defender history renderer filters', () => {
     page._defenderDetections = [];
     page._defenderRendered = [];
     await page.listDefenderHistory(container, false);
-    assert.ok(container._list.innerHTML.includes('defender.history.unavailableTitle'));
     assert.ok(container._list.innerHTML.includes('defender.history.errorFailed'));
+    assert.ok(!container._list.innerHTML.includes('defender.history.unavailableTitle'));
   });
 
   it('shows a truncation notice without implying completeness', async () => {

@@ -1846,14 +1846,17 @@ body {
   user-select: none;
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) 80px 168px 14px;
+  grid-template-areas: "label clear extra chevron";
   align-items: center;
   column-gap: 12px;
 }
 .report-section-toggle--single-action {
   grid-template-columns: minmax(0, 1fr) 80px 0 14px;
+  grid-template-areas: "label clear extra chevron";
 }
 .report-section-toggle--spaced { margin-top: 18px; }
 .report-section-label {
+  grid-area: label;
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -1864,6 +1867,8 @@ body {
   justify-content: center;
   min-width: 0;
 }
+.report-section-clear-slot { grid-area: clear; }
+.report-section-extra-slot { grid-area: extra; }
 .report-clear-button {
   width: 80px;
   justify-content: center;
@@ -1875,6 +1880,7 @@ body {
   text-align: center;
 }
 .report-section-chevron {
+  grid-area: chevron;
   width: 14px;
   height: 14px;
   display: grid;
@@ -1890,6 +1896,7 @@ body {
 .report-section-toggle:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
 .report-section-toggle + [hidden] { display: none !important; }
 .reports-layout { display: grid; grid-template-columns: minmax(320px, 0.9fr) minmax(420px, 1.1fr); gap: 18px; align-items: start; }
+.report-browser { container: reports-browser / inline-size; }
 .report-browser, .report-viewer { min-height: 520px; }
 .report-content { display: flex; flex-direction: column; gap: 16px; }
 .report-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
@@ -1897,9 +1904,34 @@ body {
 .report-section pre { white-space: pre-wrap; word-break: break-word; color: var(--text-muted); font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 0.82rem; }
 .stat-value.small { font-size: 0.82rem; line-height: 1.3; }
 .compact-empty { min-height: 56px; padding: 12px; }
+.defender-empty-state { text-align: center; }
 @media (max-width: 1180px) {
   .reports-layout { grid-template-columns: 1fr; }
   .report-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* The browser panel can become narrow while the app window is still wide
+   enough to keep the two-column reports layout. Move its actions below the
+   label before the fixed action slots can squeeze the label into a column. */
+@container reports-browser (max-width: 520px) {
+  .report-section-toggle {
+    grid-template-columns: minmax(0, 1fr) 14px;
+    grid-template-areas:
+      "label chevron"
+      "clear extra";
+    row-gap: 8px;
+  }
+
+  .report-section-toggle--single-action {
+    grid-template-columns: minmax(0, 1fr) 80px 14px;
+    grid-template-areas: "label clear chevron";
+    column-gap: 8px;
+    row-gap: 0;
+  }
+
+  .report-section-toggle--single-action .report-section-extra-slot { display: none; }
+  .report-section-clear-slot { justify-content: flex-start; }
+  .report-section-extra-slot { justify-content: flex-end; }
 }
 
 /* Settings page */
@@ -1907,16 +1939,6 @@ body {
 .toggle-row:last-child { border-bottom: none; }
 .toggle-label { font-weight: 500; }
 .toggle-desc { font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; }
-.browser-ext-disclosure { margin-bottom: 10px; border: 1px solid var(--glass-border); border-radius: 8px; background: var(--panel-bg-alt, rgba(128,128,128,0.08)); }
-.browser-ext-disclosure > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; cursor: pointer; list-style: none; user-select: none; }
-.browser-ext-disclosure > summary::-webkit-details-marker { display: none; }
-.browser-ext-disclosure > summary:hover { background: var(--glass-bg, rgba(255,255,255,0.04)); }
-.browser-ext-disclosure[open] > summary { border-bottom: 1px solid var(--glass-border); }
-.browser-ext-disclosure-chevron { color: var(--text-muted); font-size: 0.7rem; transition: transform 0.15s ease; }
-.browser-ext-disclosure[open] .browser-ext-disclosure-chevron { transform: rotate(90deg); }
-.browser-ext-disclosure > .toggle-desc, .browser-ext-disclosure > label { padding: 0 12px 12px; }
-.browser-ext-disclosure > label { margin-top: 0; }
-[dir="rtl"] .browser-ext-disclosure[open] .browser-ext-disclosure-chevron { transform: rotate(-90deg); }
 .q-tabs .q-tab { border-color: var(--glass-border); background: var(--glass-bg, rgba(255,255,255,0.04)); color: inherit; }
 .q-tabs .q-tab-active { background: var(--accent-primary, #00c88c); border-color: var(--accent-primary, #00c88c); color: #fff; }
 .q-select {

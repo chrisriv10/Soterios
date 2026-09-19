@@ -183,11 +183,6 @@ window.Pages.settings = {
 
         <div class="card">
           <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.browserExtension.label'))}</div>
-          <details class="browser-ext-disclosure">
-            <summary><span class="toggle-label">${escapeHtml(t('settings.browserExtension.disclosureTitle'))}</span><span class="browser-ext-disclosure-chevron" aria-hidden="true">▸</span></summary>
-            <div class="toggle-desc">${escapeHtml(t('settings.browserExtension.disclosureText'))}</div>
-            <label style="display:flex; align-items:flex-start; gap:8px; margin-top:10px; font-size:0.85rem;"><input type="checkbox" id="browserExtDisclosureConfirm" style="margin-top:3px;"> <span>${escapeHtml(t('settings.browserExtension.disclosureConfirm'))}</span></label>
-          </details>
           <div class="toggle-desc" style="margin-bottom:12px;">${escapeHtml(t('settings.browserExtension.desc'))}</div>
           <div id="browserExtensionBody">${escapeHtml(t('settings.browserExtension.checking'))}</div>
         </div>

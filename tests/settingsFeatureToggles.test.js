@@ -40,4 +40,10 @@ describe('settings feature toggle grouping', () => {
     assert.ok(notificationsTitle >= 0 && networkToggle > notificationsTitle);
     assert.match(settingsSource, /#networkAlertsToggle'\)\.addEventListener\('change'/);
   });
+
+  it('does not render the non-functional browser extension privacy disclosure', () => {
+    assert.equal(settingsSource.includes('browser-ext-disclosure'), false);
+    assert.equal(settingsSource.includes('browserExtDisclosureConfirm'), false);
+    assert.match(settingsSource, /id="browserExtensionBody"/);
+  });
 });

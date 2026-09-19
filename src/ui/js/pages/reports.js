@@ -904,7 +904,7 @@ container.querySelector('#generateReport').addEventListener('click', () => this.
       const res = await this.defenderInvoke(refresh);
       if (!res || res.ok !== true) {
         if (el) {
-          el.innerHTML = `<div class="empty-state"><strong>${escapeHtml(t('defender.history.unavailableTitle'))}</strong><br>${escapeHtml(this.defenderErrorText(res && res.code))}</div>`;
+          el.innerHTML = `<div class="empty-state defender-empty-state">${escapeHtml(this.defenderErrorText(res && res.code))}</div>`;
         }
         this._defenderDetections = [];
         this._defenderRendered = [];
@@ -917,7 +917,7 @@ container.querySelector('#generateReport').addEventListener('click', () => this.
       this.renderDefenderHistory(container);
     } catch (_) {
       if (el) {
-        el.innerHTML = `<div class="empty-state"><strong>${escapeHtml(t('defender.history.unavailableTitle'))}</strong><br>${escapeHtml(t('defender.history.errorFailed'))}</div>`;
+        el.innerHTML = `<div class="empty-state defender-empty-state">${escapeHtml(t('defender.history.errorFailed'))}</div>`;
       }
       this._defenderDetections = [];
       this._defenderRendered = [];
@@ -931,12 +931,12 @@ container.querySelector('#generateReport').addEventListener('click', () => this.
     if (!el) return;
     const filtered = this.filterDefenderDetections(this._defenderDetections, this._defenderFilter);
     if (!this._defenderDetections.length) {
-      el.innerHTML = `<div class="empty-state"><strong>${escapeHtml(t('defender.history.emptyTitle'))}</strong><br>${escapeHtml(t('defender.history.emptyDetail'))}</div>`;
+      el.innerHTML = `<div class="empty-state defender-empty-state">${escapeHtml(t('defender.history.emptyDetail'))}</div>`;
       this._defenderRendered = [];
       return;
     }
     if (!filtered.length) {
-      el.innerHTML = `<div class="empty-state"><strong>${escapeHtml(t('defender.history.noMatchTitle'))}</strong><br>${escapeHtml(t('defender.history.noMatchDetail'))}</div>`;
+      el.innerHTML = `<div class="empty-state defender-empty-state">${escapeHtml(t('defender.history.noMatchDetail'))}</div>`;
       this._defenderRendered = [];
       return;
     }
