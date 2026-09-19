@@ -41,6 +41,9 @@ jobs:
           CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
 
+      - name: Package browser extension
+        run: npm run extension:package
+
       - name: Generate release checksums and dependency metadata
         shell: pwsh
         run: |
@@ -57,12 +60,14 @@ jobs:
             dist/SHA256SUMS.txt
             dist/soterios-node.cdx.json
             dist/soterios-rust-metadata.json
+            dist/extension/*.zip
+            dist/extension/*.sha256
           retention-days: 14
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          gh release create "${{ github.ref_name }}" dist/*.exe dist/SHA256SUMS.txt dist/soterios-node.cdx.json dist/soterios-rust-metadata.json \
+          gh release create "${{ github.ref_name }}" dist/*.exe dist/SHA256SUMS.txt dist/soterios-node.cdx.json dist/soterios-rust-metadata.json dist/extension/*.zip dist/extension/*.sha256 \
             --title "Soterios ${{ github.ref_name }}" \
             --generate-notes
         env:

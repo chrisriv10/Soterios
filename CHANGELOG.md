@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-19
+
 ### Added
 - Ad & Tracker Protection in the Soterios browser extension: block known advertising and tracking network requests locally using packaged filter rules (EasyList and EasyPrivacy compiled to static Manifest V3 rules at build time; no browsing-history upload), with independent ad and tracker controls and per-site exact-host protection exceptions
 - Windows Defender Threat History: read-only viewer for Microsoft Defender detections with correlated threat metadata in Reports (no remediation or Defender configuration changes)
