@@ -638,7 +638,7 @@ body.innerHTML = `
               const folder = body.querySelector('#browserExtFolder');
               if (folder) folder.textContent = result.extDir;
               if (steps) steps.style.display = 'block';
-              status.textContent = `Extension ${result.installedVersion || '2.0.0'} staged. Native host ${result.nativeHostOk ? 'registered' : 'registration needs attention'}.`;
+              status.textContent = `Extension ${result.installedVersion || '2.1.0'} staged. Native host ${result.nativeHostOk ? 'registered' : 'registration needs attention'}.`;
               // Don't re-render - keep the steps visible so user can follow them
             } catch (err) {
               status.textContent = err.message || String(err);

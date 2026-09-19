@@ -6,7 +6,7 @@ const { execFileSync, spawn } = require('child_process');
 
 const IS_WIN = process.platform === 'win32';
 const NATIVE_HOST_NAME = 'com.soterios.credential_safety';
-const EXPECTED_EXTENSION_VERSION = '2.0.0';
+const EXPECTED_EXTENSION_VERSION = '2.1.0';
 
 const BROWSERS = [
   { id: 'chrome', name: 'Google Chrome', exeCandidates: [path.join(process.env.PROGRAMFILES || 'C:\\Program Files', 'Google', 'Chrome', 'Application', 'chrome.exe'), path.join(process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)', 'Google', 'Chrome', 'Application', 'chrome.exe'), path.join(process.env.LOCALAPPDATA || '', 'Google', 'Chrome', 'Application', 'chrome.exe')], extensionsUrl: 'chrome://extensions', userDataCandidates: [path.join(process.env.LOCALAPPDATA || '', 'Google', 'Chrome', 'User Data')], nativeHive: 'HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts' },
