@@ -1,7 +1,7 @@
 {
   "name": "soterios",
   "productName": "Soterios",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "A local-first desktop suite for system maintenance, monitoring, and basic security checks.",
   "main": "src/main/main.js",
   "author": "Soterios",
