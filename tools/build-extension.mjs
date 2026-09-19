@@ -39,7 +39,7 @@ const manifest = {
   }],
   optional_host_permissions: [
     'http://*/*', 'https://*/*', 'https://api.pwnedpasswords.com/*',
-    'https://christopher-rivera.me/*', 'https://safebrowsing.googleapis.com/*'
+    'https://chrisriv10.github.io/*', 'https://safebrowsing.googleapis.com/*'
   ],
   incognito: 'split',
   content_security_policy: { extension_pages: "script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'" },
