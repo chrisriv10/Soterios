@@ -53,7 +53,7 @@ async function buildSecurityOverview(ctx) {
   if (updates.pendingCount !== null && updates.pendingCount !== undefined) {
     if (updates.pendingCount > 0) {
       const label = updates.lastUpdateTitle || `${updates.pendingCount} update(s) waiting to install`;
-      addIssue(issues, 'windows-updates-pending', 'warn', 'Windows updates are pending', label, Math.min(15, 5 + updates.pendingCount), 'settings');
+      addIssue(issues, 'windows-updates-pending', 'warn', 'Windows updates are pending', label, Math.min(15, 5 + updates.pendingCount), 'audit');
       score -= Math.min(15, 5 + updates.pendingCount);
     }
   }
