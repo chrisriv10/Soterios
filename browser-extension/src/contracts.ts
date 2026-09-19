@@ -1,5 +1,5 @@
 export const SETTINGS_VERSION = 2 as const;
-export const DISCLOSURE_VERSION = 2 as const;
+export const DISCLOSURE_VERSION = 3 as const;
 export const HISTORY_RETENTION_DAYS = 30 as const;
 export const MAX_RUNTIME_MESSAGE_BYTES = 64 * 1024;
 
@@ -13,15 +13,26 @@ export type ThemeKey = typeof THEME_KEYS[number];
 export type ProviderId = 'hibp' | 'feed' | 'googleSafeBrowsing';
 export type ProviderHealth = 'suspended' | 'ready' | 'healthy' | 'degraded' | 'permission_required' | 'error';
 
+// Phase 2A runtime controls for static ad/tracker rulesets, plus Phase 2C
+// exact-host exceptions. disabledSites maps a normalized exact hostname to
+// metadata; it never touches phishing/credential protection state.
+export interface AdTrackerProtection {
+  enabled: boolean;
+  blockAds: boolean;
+  blockTrackers: boolean;
+  disabledSites: Record<string, { createdAt: string }>;
+}
+
 export interface SettingsV2 {
   version: 2;
   onboarding: {
-    disclosureVersion: 2;
+    disclosureVersion: 3;
     confirmedAt: string | null;
     reuseResetNoticePending: boolean;
   };
   continuousAccess: boolean;
   credentialProtection: boolean;
+  adTrackerProtection: AdTrackerProtection;
   onlineServices: {
     enabled: boolean;
     hibp: boolean;
@@ -104,7 +115,8 @@ export const REQUEST_TYPES = new Set([
   'CHECK_PASSWORD', 'ANALYZE_PASSWORD', 'GENERATE_PASSWORD', 'CHECK_REUSE',
   'CHECK_SITE', 'CHECK_FORM_DESTINATION', 'PAUSE_SITE', 'RESUME_SITE', 'GET_HISTORY', 'CLEAR_HISTORY',
   'EXPORT_HISTORY', 'GET_PROVIDER_DESCRIPTORS', 'SET_GOOGLE_KEY',
-  'REPORT_FINDING', 'CONTINUE_ONCE', 'GET_CONTENT_STATE'
+  'REPORT_FINDING', 'CONTINUE_ONCE', 'GET_CONTENT_STATE', 'GET_ADBLOCK_STATE',
+  'GET_ADBLOCK_SITE_STATE', 'SET_ADBLOCK_SITE_EXCEPTION', 'GET_ADBLOCK_SITE_EXCEPTIONS'
 ]);
 
 export function isThemeKey(value: unknown): value is ThemeKey {

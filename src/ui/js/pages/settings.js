@@ -291,7 +291,7 @@ window.Pages.settings = {
         <div class="card">
           <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.about'))}</div>
           <div style="font-size:0.9rem; line-height:1.8;">
-            <div><strong>Soterios</strong> v${escapeHtml(appInfo.version || '1.3.0')}</div>
+            <div><strong>Soterios</strong> v${escapeHtml(appInfo.version || '1.4.0')}</div>
             <div style="color:var(--text-muted); margin-top:8px;">${escapeHtml(t('settings.aboutDesc'))}</div>
             <div style="margin-top:8px;">
               <a href="https://github.com/chrisriv10/Soterios" id="githubLink" style="color:var(--accent-primary); text-decoration:none;">${escapeHtml(t('settings.githubRepo'))}</a>
@@ -638,7 +638,7 @@ body.innerHTML = `
               const folder = body.querySelector('#browserExtFolder');
               if (folder) folder.textContent = result.extDir;
               if (steps) steps.style.display = 'block';
-              status.textContent = `Extension ${result.installedVersion || '2.0.0'} staged. Native host ${result.nativeHostOk ? 'registered' : 'registration needs attention'}.`;
+              status.textContent = `Extension ${result.installedVersion || '2.1.0'} staged. Native host ${result.nativeHostOk ? 'registered' : 'registration needs attention'}.`;
               // Don't re-render - keep the steps visible so user can follow them
             } catch (err) {
               status.textContent = err.message || String(err);
