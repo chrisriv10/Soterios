@@ -54,6 +54,7 @@ const { registerIpcHandlers } = require('./ipcHandlers');
 const serviceRegistry = require('./serviceRegistry');
 const { MaintenanceScheduler } = require('./maintenanceScheduler');
 const ToolRunManager = require('./toolRunManager');
+const { createQuitCoordinator } = require('./quitCoordinator');
 const { MaintenanceSafetyVault } = require('./maintenanceSafetyVault');
 const { PersistenceMonitor } = require('./persistenceMonitor');
 const { ProcessReputationService } = require('./processReputationService');
@@ -78,6 +79,9 @@ let currentUiTheme = 'dark';
 let startupLocale = 'en'; // set from peekUiLanguage() before the DB is ready,
 // so the earliest splash messages respect the saved language
 let isQuitting = false;
+// Bounded tool-run drain budget during ordered shutdown. The drain never
+// blocks quit beyond this; see quitCoordinator.
+const TOOLRUN_SHUTDOWN_TIMEOUT_MS = 5000;
 const lifecycleRefs = {
   maintenanceScheduler: null,
   maintenanceSafetyVault: null,
@@ -847,6 +851,7 @@ app.whenReady().then(async () => {
     })
   });
   services.toolRunManager = toolRunManager;
+  lifecycleRefs.toolRunManager = toolRunManager;
 
   const maintenanceSafetyVault = new MaintenanceSafetyVault({
     db: services.db,
@@ -1202,19 +1207,31 @@ process.on('unhandledRejection', (err) => {
   logLine('fatal', 'Unhandled rejection', { message: err && err.message ? err.message : String(err), stack: err && err.stack });
 });
 
-app.on('before-quit', () => {
-  isQuitting = true;
-  lifecycleRefs.maintenanceScheduler?.stop();
-  lifecycleRefs.maintenanceSafetyVault?.stop();
-  lifecycleRefs.persistenceMonitor?.stop();
-  lifecycleRefs.extensionBridge?.stop();
-  lifecycleRefs.processService?.stop().catch(() => {});
-  lifecycleRefs.trayController?.dispose();
-  if (lifecycleRefs.networkStatsTimer) clearInterval(lifecycleRefs.networkStatsTimer);
-  if (lifecycleRefs.pruneTimer) clearInterval(lifecycleRefs.pruneTimer);
-  try {
+const quitCoordinator = createQuitCoordinator({
+  app,
+  // Ordered teardown: synchronous service stops first (unchanged behavior),
+  // then the bounded tool-run drain, then exactly one database close.
+  stopSyncServices: () => {
+    lifecycleRefs.maintenanceScheduler?.stop();
+    lifecycleRefs.maintenanceSafetyVault?.stop();
+    lifecycleRefs.persistenceMonitor?.stop();
+    lifecycleRefs.extensionBridge?.stop();
+    lifecycleRefs.processService?.stop().catch(() => {});
+    lifecycleRefs.trayController?.dispose();
+    if (lifecycleRefs.networkStatsTimer) clearInterval(lifecycleRefs.networkStatsTimer);
+    if (lifecycleRefs.pruneTimer) clearInterval(lifecycleRefs.pruneTimer);
+  },
+  drainToolRuns: (timeoutMs) => lifecycleRefs.toolRunManager?.shutdown(timeoutMs)
+    ?? Promise.resolve({ settled: true, pending: 0 }),
+  closeDatabase: () => {
     if (dbRef?.db && typeof dbRef.db.close === 'function') dbRef.db.close();
-  } catch (_) {}
+  },
+  drainTimeoutMs: TOOLRUN_SHUTDOWN_TIMEOUT_MS,
+});
+
+app.on('before-quit', (event) => {
+  isQuitting = true;
+  quitCoordinator.handleBeforeQuit(event);
 });
 
 app.on('window-all-closed', () => {

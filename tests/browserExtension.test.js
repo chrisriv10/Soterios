@@ -18,7 +18,7 @@ describe('Soterios extension 2.0 public and privacy contracts', () => {
     }
     assert.ok(!(manifest.host_permissions || []).includes('<all_urls>'));
     assert.equal(manifest.manifest_version, 3);
-    assert.equal(manifest.version, '2.1.0');
+    assert.equal(manifest.version, '2.1.1');
     assert.deepEqual(manifest.permissions, ['storage', 'alarms', 'activeTab', 'scripting', 'declarativeNetRequest']);
     assert.deepEqual(manifest.optional_permissions, ['nativeMessaging']);
     assert.equal(manifest.content_scripts, undefined);
@@ -72,7 +72,7 @@ describe('Soterios extension 2.0 public and privacy contracts', () => {
 
   it('validates the staged extension before desktop installation', () => {
     const manifest = installer.validateExtensionDirectory(dist);
-    assert.equal(manifest.version, '2.1.0');
+    assert.equal(manifest.version, '2.1.1');
     assert.match(installer.predictExtensionId(installer.getNativeHostDir()), /^[a-p]{32}$/);
   });
 

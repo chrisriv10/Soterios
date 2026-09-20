@@ -9,6 +9,9 @@ const extensionRoot = path.join(repoRoot, 'browser-extension');
 const sourceRoot = path.join(extensionRoot, 'src');
 const outputRoot = path.join(extensionRoot, 'dist', 'chromium');
 const extensionPackage = JSON.parse(await readFile(path.join(extensionRoot, 'package.json'), 'utf8'));
+// Single source of truth for the extension version inside bundled code
+// (manifest.version is generated from the same value below).
+const versionDefine = { SOTERIOS_EXTENSION_VERSION: JSON.stringify(extensionPackage.version) };
 
 const manifest = {
   manifest_version: 3,
@@ -54,7 +57,7 @@ execFileSync(process.execPath, [path.join(repoRoot, 'node_modules', 'typescript'
 await build({
   entryPoints: { background: path.join(sourceRoot, 'background.ts') },
   outdir: outputRoot, bundle: true, format: 'esm', platform: 'browser', target: 'chrome120',
-  legalComments: 'none', minify: false, sourcemap: false, charset: 'utf8'
+  legalComments: 'none', minify: false, sourcemap: false, charset: 'utf8', define: versionDefine
 });
 await build({
   entryPoints: {
@@ -63,7 +66,7 @@ await build({
     activity: path.join(sourceRoot, 'activity.ts')
   },
   outdir: outputRoot, bundle: true, format: 'iife', platform: 'browser', target: 'chrome120',
-  legalComments: 'none', minify: false, sourcemap: false, charset: 'utf8'
+  legalComments: 'none', minify: false, sourcemap: false, charset: 'utf8', define: versionDefine
 });
 
 for (const file of ['popup.html', 'options.html', 'onboarding.html', 'activity.html']) {
@@ -84,8 +87,8 @@ await writeFile(path.join(outputRoot, 'manifest.json'), `${JSON.stringify(manife
 const testRoot = path.join(extensionRoot, 'dist', 'test');
 await rm(testRoot, { recursive: true, force: true });
 await build({
-  entryPoints: ['contracts', 'settings', 'domains', 'credential', 'heuristics', 'history', 'feed', 'adblock'].map((name) => path.join(sourceRoot, `${name}.ts`)),
-  outdir: testRoot, bundle: true, format: 'cjs', platform: 'node', target: 'node20', legalComments: 'none', sourcemap: false
+  entryPoints: ['contracts', 'settings', 'domains', 'credential', 'heuristics', 'history', 'feed', 'adblock', 'providers'].map((name) => path.join(sourceRoot, `${name}.ts`)),
+  outdir: testRoot, bundle: true, format: 'cjs', platform: 'node', target: 'node20', legalComments: 'none', sourcemap: false, define: versionDefine
 });
 
 console.log(`Built Soterios browser extension ${extensionPackage.version} at ${outputRoot}`);

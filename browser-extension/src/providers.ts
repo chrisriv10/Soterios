@@ -2,6 +2,11 @@ import { ProviderDescriptor, ProviderId, SettingsV2 } from './contracts';
 import { FEED_ORIGIN, updateFeed } from './feed';
 import { PROVIDER_SECRETS_KEY, PROVIDER_STATE_KEY, providerEnabled } from './settings';
 
+// Injected by the build from browser-extension/package.json (the same source
+// as manifest.version), so the wire version can never drift from a stale
+// hand-maintained literal again.
+declare const SOTERIOS_EXTENSION_VERSION: string;
+
 export const PROVIDERS = {
   hibp: {
     id: 'hibp', name: 'Have I Been Pwned — Pwned Passwords',
@@ -113,7 +118,7 @@ export async function checkGoogleUrl(url: string, signal?: AbortSignal): Promise
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        client: { clientId: 'soterios', clientVersion: '2.0.0' },
+        client: { clientId: 'soterios', clientVersion: SOTERIOS_EXTENSION_VERSION },
         threatInfo: {
           threatTypes: ['MALWARE', 'SOCIAL_ENGINEERING', 'UNWANTED_SOFTWARE'],
           platformTypes: ['ANY_PLATFORM'], threatEntryTypes: ['URL'], threatEntries: [{ url }]

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-09-19
+
+### Fixed
+- Corrected the browser extension's Safe Browsing client version reporting so it follows the packaged extension version (extension 2.1.1)
+- Prevented quarantine storage collisions when different files with the same basename are quarantined at the same time
+- Improved application shutdown so active tool runs are canceled/drained with a bounded timeout before database teardown, preventing late history writes during shutdown
+- Refreshed version-dependent README download/install documentation
+
 ## [1.4.0] - 2026-09-19
 
 ### Added

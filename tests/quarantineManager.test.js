@@ -121,4 +121,43 @@ describe('QuarantineManager workflow', () => {
     assert.equal(result.success, false);
     assert.equal(db.isHashTrusted('trustedhash2'), false);
   });
+
+  it('keeps distinct quarantine copies for same-basename files quarantined in the same millisecond', async () => {
+    const dirA = path.join(tmpRoot, 'dirA');
+    const dirB = path.join(tmpRoot, 'dirB');
+    fs.mkdirSync(dirA, { recursive: true });
+    fs.mkdirSync(dirB, { recursive: true });
+    const fileA = path.join(dirA, 'setup.exe');
+    const fileB = path.join(dirB, 'setup.exe');
+    fs.writeFileSync(fileA, 'payload-A-bytes');
+    fs.writeFileSync(fileB, 'payload-B-bytes-different');
+    const realNow = Date.now;
+    Date.now = () => 1789785600000;
+    let first;
+    let second;
+    try {
+      first = await manager.quarantine(fileA, 'hashA', 'test', 'ThreatA', 'collision');
+      second = await manager.quarantine(fileB, 'hashB', 'test', 'ThreatB', 'collision');
+    } finally {
+      Date.now = realNow;
+    }
+    assert.equal(first.success, true);
+    assert.equal(second.success, true);
+    const rowA = db.db.prepare('SELECT quarantine_path FROM quarantine WHERE id = ?').get(first.id);
+    const rowB = db.db.prepare('SELECT quarantine_path FROM quarantine WHERE id = ?').get(second.id);
+    assert.notEqual(rowA.quarantine_path, rowB.quarantine_path);
+    const readBack = (row) => {
+      const data = fs.readFileSync(row.quarantine_path);
+      for (let i = 0; i < data.length; i += 1) data[i] ^= 0x55;
+      return data.toString('utf8');
+    };
+    assert.equal(readBack(rowA), 'payload-A-bytes');
+    assert.equal(readBack(rowB), 'payload-B-bytes-different');
+    const restoredA = await manager.restore(first.id);
+    const restoredB = await manager.restore(second.id);
+    assert.equal(restoredA.success, true);
+    assert.equal(restoredB.success, true);
+    assert.equal(fs.readFileSync(fileA, 'utf8'), 'payload-A-bytes');
+    assert.equal(fs.readFileSync(fileB, 'utf8'), 'payload-B-bytes-different');
+  });
 });

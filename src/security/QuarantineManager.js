@@ -1,12 +1,32 @@
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const crypto = require('crypto');
 const logger = require('../utils/logger');
 
 // XOR key used to obfuscate quarantined files. This is not cryptographic
 // security — it's just enough to prevent accidental double-click execution.
 // Both quarantine() and restore() must use the same value.
 const QUARANTINE_XOR_KEY = 0x55;
+
+/**
+ * Allocate a quarantine destination that can never overwrite an existing
+ * copy. The basename stays human-readable; the random suffix makes
+ * same-millisecond same-basename collisions impossible in practice, and the
+ * existence check closes the residual race instead of silently aliasing two
+ * records to one file. Suffix characters are hex/underscore only, safe on
+ * Windows. Throws after bounded retries rather than overwriting.
+ */
+function allocateQuarantinePath(quarantineDir, fileName) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const candidate = path.join(
+      quarantineDir,
+      `${Date.now()}_${crypto.randomUUID().slice(0, 8)}_${fileName}.encrypted`
+    );
+    if (!fs.existsSync(candidate)) return candidate;
+  }
+  throw new Error('Unable to allocate a quarantine path without overwriting an existing copy.');
+}
 
 /**
  * QuarantineManager — isolates detected threat files by XOR-encrypting
@@ -26,7 +46,6 @@ class QuarantineManager {
       fs.mkdirSync(this.quarantineDir, { recursive: true });
     }
   }
-
   /**
    * XOR-encrypt a threat file into quarantine, record it, then remove the original.
    * @param {string} originalPath
@@ -40,8 +59,7 @@ class QuarantineManager {
     let quarantinePath = null;
     try {
       const fileName = path.basename(originalPath);
-      const safeName = `${Date.now()}_${fileName}.encrypted`;
-      quarantinePath = path.join(this.quarantineDir, safeName);
+      quarantinePath = allocateQuarantinePath(this.quarantineDir, fileName);
 
       // Basic XOR encryption to prevent accidental execution
       const data = fs.readFileSync(originalPath);
