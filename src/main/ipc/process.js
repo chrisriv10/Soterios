@@ -22,6 +22,13 @@ function validQuery(value) {
 function register(mainWindow, { processService, processInspector, processReputation }) {
   const service = processService || processInspector;
   if (!service) throw new Error('ProcessService is required.');
+  // Persistent lifecycle history rides on the service-owned recorder, so
+  // reads respect the same availability gate as recording.
+  const historyStore = () => {
+    const store = service.processHistory;
+    if (!store) throw new Error('Process history is unavailable.');
+    return store;
+  };
 
   // Compatibility endpoints for network/firewall consumers during migration.
   ipcMain.handle('process:list', () => service.getProcesses());
@@ -102,6 +109,26 @@ function register(mainWindow, { processService, processInspector, processReputat
     });
     if (save.canceled || !save.filePath) return { success: false, canceled: true };
     return service.saveDiagnosticBundle(save.filePath);
+  });
+
+  // Persistent process lifecycle history (Issue #122). Query arguments are
+  // validated and parameterized inside DatabaseService.queryProcessHistory;
+  // the renderer can never inject SQL, sort fields, or unbounded pages.
+  ipcMain.handle('process:history:query', (_event, filters) => {
+    const request = filters == null ? {} : asObject(filters, 'history query');
+    return historyStore().query(request);
+  });
+
+  ipcMain.handle('process:history:retention:get', () => ({ days: historyStore().getRetentionDays() }));
+
+  ipcMain.handle('process:history:retention:set', (_event, days) => {
+    historyStore().setRetentionDays(Number(days));
+    return { days: historyStore().getRetentionDays() };
+  });
+
+  ipcMain.handle('process:history:clear', () => {
+    const result = historyStore().clear();
+    return { success: true, deleted: Number(result?.changes) || 0 };
   });
 }
 

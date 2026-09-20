@@ -233,6 +233,45 @@ class DatabaseService {
       CREATE INDEX IF NOT EXISTS idx_network_stats_recorded_at
       ON network_stats(recorded_at)
     `);
+
+    // Persistent process lifecycle history (Issue #122). This is NOT the
+    // short-term high-frequency telemetry in ProcessService.histories (a
+    // 15-minute in-memory ring for the live view and trace export). Each row
+    // is one process lifecycle keyed by pid + process creation time, so PID
+    // reuse produces separate records. Only lifecycle/forensic metadata is
+    // stored: never command lines, arguments, environment, usernames, or
+    // full executable paths (exe_basename only).
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS process_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        process_key TEXT NOT NULL UNIQUE,
+        pid INTEGER NOT NULL,
+        started_at TEXT,
+        process_name TEXT NOT NULL,
+        exe_basename TEXT,
+        parent_pid INTEGER,
+        publisher TEXT,
+        signature_status TEXT,
+        risk_score INTEGER,
+        risk_level TEXT,
+        first_seen TEXT NOT NULL,
+        last_seen TEXT NOT NULL,
+        exit_time TEXT,
+        terminated_by_user INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_process_history_last_seen
+      ON process_history(last_seen DESC)
+    `);
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_process_history_name
+      ON process_history(process_name)
+    `);
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_process_history_risk
+      ON process_history(risk_score DESC)
+    `);
   }
 
   // --- Scan History API ---
@@ -801,6 +840,261 @@ class DatabaseService {
   pruneNetworkStats(retentionDays = 7) {
     const cutoff = new Date(Date.now() - Number(retentionDays) * 86400 * 1000).toISOString();
     return this.db.prepare('DELETE FROM network_stats WHERE recorded_at < ?').run(cutoff);
+  }
+
+  // --- Process History API (Issue #122) ---
+  //
+  // Retention and bounds. Retention days live in settings (a numeric DB
+  // setting, never a boolean feature flag). MAX rows is a secondary bound so
+  // storage cannot grow indefinitely even if time cleanup fails.
+  static processHistoryDefaults() {
+    return {
+      retentionDays: 7,
+      maxRows: 100000,
+      defaultLimit: 100,
+      maxLimit: 200,
+    };
+  }
+
+  getProcessHistoryRetentionDays() {
+    const raw = this.getSetting('processHistoryRetentionDays', 7);
+    const days = Number(raw);
+    if (!Number.isInteger(days) || days < 1 || days > 365) return 7;
+    return days;
+  }
+
+  setProcessHistoryRetentionDays(days) {
+    const value = Number(days);
+    if (!Number.isInteger(value) || value < 1 || value > 365) {
+      throw new Error('Retention must be a whole number of days between 1 and 365.');
+    }
+    return this.setSetting('processHistoryRetentionDays', value);
+  }
+
+  upsertProcessHistory(record) {
+    if (!record || typeof record.processKey !== 'string' || !record.processKey) {
+      throw new Error('A process lifecycle key is required.');
+    }
+    return this.db.prepare(`
+      INSERT INTO process_history (
+        process_key, pid, started_at, process_name, exe_basename, parent_pid,
+        publisher, signature_status, risk_score, risk_level, first_seen, last_seen
+      ) VALUES (
+        @processKey, @pid, @startedAt, @processName, @exeBasename, @parentPid,
+        @publisher, @signatureStatus, @riskScore, @riskLevel, @firstSeen, @lastSeen
+      )
+      ON CONFLICT(process_key) DO UPDATE SET
+        last_seen = excluded.last_seen,
+        process_name = excluded.process_name,
+        exe_basename = excluded.exe_basename,
+        parent_pid = excluded.parent_pid,
+        publisher = COALESCE(excluded.publisher, process_history.publisher),
+        signature_status = COALESCE(excluded.signature_status, process_history.signature_status),
+        risk_score = COALESCE(excluded.risk_score, process_history.risk_score),
+        risk_level = COALESCE(excluded.risk_level, process_history.risk_level)
+    `).run({
+      processKey: record.processKey,
+      pid: record.pid ?? null,
+      startedAt: record.startedAt ?? null,
+      processName: record.processName ?? 'unknown',
+      exeBasename: record.exeBasename ?? null,
+      parentPid: record.parentPid ?? null,
+      publisher: record.publisher ?? null,
+      signatureStatus: record.signatureStatus ?? null,
+      riskScore: record.riskScore ?? null,
+      riskLevel: record.riskLevel ?? null,
+      firstSeen: record.firstSeen,
+      lastSeen: record.lastSeen,
+    });
+  }
+
+  // First exit wins: a closed lifecycle row is frozen except for
+  // terminated_by_user escalation, so duplicate exit events cannot rewrite
+  // history. Reopening after a transient omission is explicit via
+  // reopenProcessHistory, never implicit.
+  markProcessHistoryExit(processKey, { exitTime, lastSeen, riskScore, riskLevel, terminatedByUser } = {}) {
+    return this.db.prepare(`
+      UPDATE process_history SET
+        exit_time = COALESCE(exit_time, @exitTime),
+        last_seen = CASE WHEN exit_time IS NULL THEN COALESCE(@lastSeen, last_seen) ELSE last_seen END,
+        risk_score = CASE WHEN exit_time IS NULL THEN COALESCE(@riskScore, risk_score) ELSE risk_score END,
+        risk_level = CASE WHEN exit_time IS NULL THEN COALESCE(@riskLevel, risk_level) ELSE risk_level END,
+        terminated_by_user = CASE WHEN @terminatedByUser = 1 THEN 1 ELSE terminated_by_user END
+      WHERE process_key = @processKey
+    `).run({
+      processKey,
+      exitTime: exitTime ?? null,
+      lastSeen: lastSeen ?? null,
+      riskScore: riskScore ?? null,
+      riskLevel: riskLevel ?? null,
+      terminatedByUser: terminatedByUser ? 1 : 0,
+    });
+  }
+
+  updateProcessHistoryEnrichment(processKey, { publisher, signatureStatus, riskScore, riskLevel, lastSeen } = {}) {
+    return this.db.prepare(`
+      UPDATE process_history SET
+        publisher = COALESCE(@publisher, publisher),
+        signature_status = COALESCE(@signatureStatus, signature_status),
+        risk_score = COALESCE(@riskScore, risk_score),
+        risk_level = COALESCE(@riskLevel, risk_level),
+        last_seen = COALESCE(@lastSeen, last_seen)
+      WHERE process_key = @processKey
+    `).run({
+      processKey,
+      publisher: publisher ?? null,
+      signatureStatus: signatureStatus ?? null,
+      riskScore: riskScore ?? null,
+      riskLevel: riskLevel ?? null,
+      lastSeen: lastSeen ?? null,
+    });
+  }
+
+  // Reopens a lifecycle row closed by a transient collector omission: same
+  // precise identity observed alive again proves the recorded exit never
+  // happened, so the exit mark (and its termination attribution) is cleared.
+  // Only callers with a precise (non-empty startedAt) identity may reopen;
+  // imprecise keys cannot prove re-observation and keep first-wins.
+  reopenProcessHistory(processKey, lastSeen = null) {
+    return this.db.prepare(`
+      UPDATE process_history SET
+        exit_time = NULL,
+        terminated_by_user = 0,
+        last_seen = COALESCE(@lastSeen, last_seen)
+      WHERE process_key = @processKey AND exit_time IS NOT NULL
+    `).run({ processKey, lastSeen: lastSeen ?? null });
+  }
+
+  // Runs fn inside a single better-sqlite3 transaction so per-sample
+  // lifecycle batches commit once instead of once per row. Nested-safe: if
+  // already inside a transaction the callback runs directly.
+  runInTransaction(fn) {
+    if (typeof fn !== 'function') throw new Error('A transaction callback is required.');
+    if (this.db.inTransaction) return fn();
+    return this.db.transaction(fn)();
+  }
+
+  getProcessHistoryRow(processKey) {
+    return this.db.prepare('SELECT * FROM process_history WHERE process_key = ?').get(processKey) || null;
+  }
+
+  // Finds the most recently observed still-open lifecycle for a pid whose
+  // creation time is unknown (imprecise `pid@` identity). Lets a running
+  // unidentifiable process continue its row across restarts instead of
+  // fragmenting or colliding with a closed row for a different process.
+  findOpenImpreciseProcessRow(pid) {
+    if (!Number.isInteger(Number(pid))) return null;
+    return this.db.prepare(`
+      SELECT * FROM process_history
+      WHERE pid = ? AND (started_at IS NULL OR started_at = '') AND exit_time IS NULL
+      ORDER BY last_seen DESC, id DESC LIMIT 1
+    `).get(Number(pid)) || null;
+  }
+
+  // Bounded, parameterized history queries. All inputs are validated here so
+  // IPC and service callers share one gate; the renderer can never inject
+  // SQL, sort fields, or unbounded pages.
+  queryProcessHistory(filters = {}) {
+    const { maxLimit, defaultLimit } = DatabaseService.processHistoryDefaults();
+    const allowedSort = new Map([
+      ['last_seen_desc', 'last_seen DESC, id DESC'],
+      ['last_seen_asc', 'last_seen ASC, id ASC'],
+      ['first_seen_desc', 'first_seen DESC, id DESC'],
+      ['first_seen_asc', 'first_seen ASC, id ASC'],
+      ['name_asc', 'process_name ASC, id ASC'],
+      ['name_desc', 'process_name DESC, id DESC'],
+      ['risk_desc', 'risk_score DESC, id DESC'],
+      ['risk_asc', 'risk_score ASC, id ASC'],
+    ]);
+    const allowedRisk = new Set(['high-concern', 'review-recommended', 'unverified', 'no-concerns']);
+    const request = filters && typeof filters === 'object' ? filters : {};
+    const limit = Math.max(1, Math.min(Number(request.limit) || defaultLimit, maxLimit));
+    const offset = Math.max(0, Math.floor(Number(request.offset) || 0));
+    const orderBy = allowedSort.get(request.sort) || allowedSort.get('last_seen_desc');
+    const clauses = [];
+    const params = [];
+    if (request.search != null && String(request.search).trim() !== '') {
+      const search = String(request.search).trim().slice(0, 200);
+      if (/[\r\n\0]/.test(search)) throw new Error('Invalid search text.');
+      const escaped = search.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+      clauses.push("(process_name LIKE ? ESCAPE '\\' OR exe_basename LIKE ? ESCAPE '\\' OR publisher LIKE ? ESCAPE '\\')");
+      params.push(`%${escaped}%`, `%${escaped}%`, `%${escaped}%`);
+    }
+    if (Array.isArray(request.riskLevels) && request.riskLevels.length) {
+      const levels = [...new Set(request.riskLevels.map(String))].slice(0, 4);
+      for (const level of levels) if (!allowedRisk.has(level)) throw new Error('Unsupported risk filter.');
+      clauses.push(`risk_level IN (${levels.map(() => '?').join(', ')})`);
+      params.push(...levels);
+    }
+    if (request.status === 'exited') clauses.push('exit_time IS NOT NULL');
+    else if (request.status === 'unknown-exit') clauses.push('exit_time IS NULL');
+    else if (request.status != null && request.status !== 'all') throw new Error('Unsupported status filter.');
+    if (request.publisher != null && String(request.publisher).trim() !== '') {
+      const publisher = String(request.publisher).trim().slice(0, 200);
+      if (/[\r\n\0]/.test(publisher)) throw new Error('Invalid publisher filter.');
+      clauses.push("publisher LIKE ? ESCAPE '\\'");
+      params.push(`%${publisher.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`);
+    }
+    if (request.signatureStatus != null && String(request.signatureStatus).trim() !== '') {
+      const status = String(request.signatureStatus).trim().slice(0, 64);
+      if (/[\r\n\0]/.test(status)) throw new Error('Invalid signature filter.');
+      clauses.push('signature_status = ?');
+      params.push(status);
+    }
+    for (const [field, column] of [['from', 'last_seen'], ['to', 'last_seen']]) {
+      if (request[field] == null || String(request[field]).trim() === '') continue;
+      const time = Date.parse(String(request[field]).trim());
+      if (!Number.isFinite(time)) throw new Error('Invalid date range.');
+      clauses.push(field === 'from' ? `${column} >= ?` : `${column} <= ?`);
+      params.push(new Date(time).toISOString());
+    }
+    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    const total = this.db.prepare(`SELECT COUNT(*) AS total FROM process_history ${where}`).get(...params).total;
+    const rows = this.db.prepare(`SELECT * FROM process_history ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`).all(...params, limit, offset);
+    return { rows: rows.map((row) => this._mapProcessHistoryRow(row)), total, limit, offset };
+  }
+
+  _mapProcessHistoryRow(row) {
+    return {
+      id: row.id,
+      processKey: row.process_key,
+      pid: row.pid,
+      startedAt: row.started_at,
+      processName: row.process_name,
+      exeBasename: row.exe_basename,
+      parentPid: row.parent_pid,
+      publisher: row.publisher,
+      signatureStatus: row.signature_status,
+      riskScore: row.risk_score,
+      riskLevel: row.risk_level,
+      firstSeen: row.first_seen,
+      lastSeen: row.last_seen,
+      exitTime: row.exit_time,
+      terminatedByUser: row.terminated_by_user === 1,
+    };
+  }
+
+  pruneProcessHistory(retentionDays, maxRows) {
+    const defaults = DatabaseService.processHistoryDefaults();
+    const days = retentionDays == null ? this.getProcessHistoryRetentionDays() : Number(retentionDays);
+    const validDays = Number.isInteger(days) && days >= 1 && days <= 365 ? days : defaults.retentionDays;
+    const cap = Number.isInteger(Number(maxRows)) && Number(maxRows) > 0 ? Number(maxRows) : defaults.maxRows;
+    const cutoff = new Date(Date.now() - validDays * 86400 * 1000).toISOString();
+    const timeDeleted = this.db.prepare('DELETE FROM process_history WHERE last_seen < ?').run(cutoff);
+    const count = this.db.prepare('SELECT COUNT(*) AS total FROM process_history').get().total;
+    let rowDeleted = { changes: 0 };
+    if (count > cap) {
+      rowDeleted = this.db.prepare(`
+        DELETE FROM process_history WHERE id IN (
+          SELECT id FROM process_history ORDER BY last_seen ASC, id ASC LIMIT ?
+        )
+      `).run(count - cap);
+    }
+    return { timeDeleted: timeDeleted.changes, rowDeleted: rowDeleted.changes, retentionDays: validDays, maxRows: cap };
+  }
+
+  clearProcessHistory() {
+    return this.db.prepare('DELETE FROM process_history').run();
   }
 }
 
