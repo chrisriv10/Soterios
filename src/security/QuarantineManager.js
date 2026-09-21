@@ -3,6 +3,7 @@ const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
 const logger = require('../utils/logger');
+const { hasReparseAncestor } = require('../core/pathSafety');
 
 // XOR key used to obfuscate quarantined files. This is not cryptographic
 // security — it's just enough to prevent accidental double-click execution.
@@ -119,7 +120,19 @@ class QuarantineManager {
       }
 
       const destDir = path.dirname(record.original_path);
+      // An ancestor may have become a link or junction since quarantine
+      // (reparse redirection). Check before creating directories and again
+      // afterwards: mkdirSync is a no-op over a planted junction, so only
+      // the second check observes the redirection. Deliberately no
+      // maintenance-root policy here: quarantine must restore to its
+      // recorded location wherever that legitimately is.
+      if (hasReparseAncestor(destDir) || hasReparseAncestor(record.original_path)) {
+        return { success: false, error: 'The original location passes through a link or junction and cannot be restored safely.' };
+      }
       fs.mkdirSync(destDir, { recursive: true });
+      if (hasReparseAncestor(destDir) || hasReparseAncestor(record.original_path)) {
+        return { success: false, error: 'The original location changed during restore; refusing to write through a link or junction.' };
+      }
       if (fs.existsSync(record.original_path)) {
         return { success: false, error: 'A file already exists at the original location.' };
       }

@@ -656,10 +656,18 @@ function handleThreatDetectedDeepLink(url) {
     logLine('warn', 'Deep link received before database ready', { url });
     return;
   }
+  let threatDomain = '';
+  let threatType = '';
   try {
     const parsed = new URL(url.replace('soterios:', 'soterios://'));
-    const domain = parsed.searchParams.get('domain') || '';
-    const threatType = parsed.searchParams.get('threatType') || '';
+    threatDomain = parsed.searchParams.get('domain') || '';
+    threatType = parsed.searchParams.get('threatType') || '';
+  } catch (e) {
+    logLine('warn', 'Failed to parse deep link URL:', { url, error: e.message });
+    return;
+  }
+  try {
+    const domain = threatDomain;
     dbRef.addAlert({
       level: 'warning',
       source: 'Browser Extension',
@@ -671,7 +679,7 @@ function handleThreatDetectedDeepLink(url) {
     });
     if (eventBus) eventBus.emit('alert:new', { level: 'warning', source: 'Browser Extension' });
   } catch (e) {
-    logLine('warn', 'Failed to parse deep link URL:', { url, error: e.message });
+    logLine('warn', 'Failed to store deep link alert:', { url, error: e.message });
   }
 }
 
@@ -681,10 +689,19 @@ function handleCredentialLeakDeepLink(url) {
     logLine('warn', 'Deep link received before database ready', { url });
     return;
   }
+  let leakCount = 1;
+  let leakDomain = '';
   try {
     const parsed = new URL(url.replace('soterios:', 'soterios://'));
-    const count = parseInt(parsed.searchParams.get('count') || '1', 10);
-    const domain = parsed.searchParams.get('domain') || '';
+    leakCount = parseInt(parsed.searchParams.get('count') || '1', 10);
+    leakDomain = parsed.searchParams.get('domain') || '';
+  } catch (e) {
+    logLine('warn', 'Failed to parse deep link URL:', { url, error: e.message });
+    return;
+  }
+  try {
+    const count = leakCount;
+    const domain = leakDomain;
     const domainSuffix = domain ? ` on ${domain}` : '';
     dbRef.addAlert({
       level: 'danger',
@@ -697,7 +714,7 @@ function handleCredentialLeakDeepLink(url) {
     });
     if (eventBus) eventBus.emit('alert:new', { level: 'danger', source: 'Browser Extension' });
   } catch (e) {
-    logLine('warn', 'Failed to parse deep link URL:', { url, error: e.message });
+    logLine('warn', 'Failed to store deep link alert:', { url, error: e.message });
   }
 }
 
