@@ -454,9 +454,36 @@ class DatabaseService {
   }
 
   // --- Alerts API ---
-  addAlert(severity, message) {
+  // Accepts the historical positional form addAlert(severity, message) as
+  // well as the rich-object form produced by the browser-extension bridge
+  // and deep-link handlers. Objects are mapped into the existing
+  // (severity, message) schema: title/message/detail are composed into the
+  // stored message so no meaningful content is dropped. Unusable values
+  // throw instead of persisting garbage rows.
+  addAlert(severityOrRecord, message) {
+    if (severityOrRecord && typeof severityOrRecord === 'object' && !Array.isArray(severityOrRecord)) {
+      const record = severityOrRecord;
+      const severity = record.severity ?? record.level ?? 'info';
+      const text = [record.title, record.message, record.detail]
+        .filter((part) => typeof part === 'string' && part.trim() !== '')
+        .map((part) => part.trim())
+        .join(' — ')
+        .slice(0, 2000);
+      if (!text) throw new Error('Alert object must include a message, title, or detail.');
+      return this._insertAlert(severity, text);
+    }
+    return this._insertAlert(severityOrRecord, message);
+  }
+
+  _insertAlert(severity, message) {
+    if (typeof severity !== 'string' || severity.trim() === '' || severity.length > 64 || /[\r\n\0]/.test(severity)) {
+      throw new Error('Invalid alert severity.');
+    }
+    if (typeof message !== 'string' || message.trim() === '' || /[\0]/.test(message)) {
+      throw new Error('Invalid alert message.');
+    }
     const stmt = this.db.prepare('INSERT INTO alerts (severity, message) VALUES (?, ?)');
-    return stmt.run(severity, message);
+    return stmt.run(severity.trim(), message);
   }
 
   getUnreadAlerts() {

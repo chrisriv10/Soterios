@@ -160,4 +160,59 @@ describe('QuarantineManager workflow', () => {
     assert.equal(fs.readFileSync(fileA, 'utf8'), 'payload-A-bytes');
     assert.equal(fs.readFileSync(fileB, 'utf8'), 'payload-B-bytes-different');
   });
+
+  it('refuses to overwrite an existing file on restore', async () => {
+    const created = await manager.quarantine(originalPath, 'hash-overwrite', 'test', 'Threat', 'overwrite-test');
+    fs.writeFileSync(originalPath, 'innocent replacement');
+    const result = await manager.restore(created.id);
+    assert.equal(result.success, false);
+    assert.match(String(result.error), /already exists/i);
+    assert.equal(fs.readFileSync(originalPath, 'utf8'), 'innocent replacement');
+    const row = db.db.prepare('SELECT status, quarantine_path FROM quarantine WHERE id = ?').get(created.id);
+    assert.equal(row.status, 'quarantined');
+    assert.equal(fs.existsSync(row.quarantine_path), true);
+  });
+
+  it('fails closed when a junction ancestor redirects the restore destination', { skip: process.platform !== 'win32' && 'requires Windows junctions (mklink /J)' }, async () => {
+    const { execFileSync } = require('child_process');
+    const outerDir = path.join(tmpRoot, 'victim');
+    const innerDir = path.join(outerDir, 'sub');
+    fs.mkdirSync(innerDir, { recursive: true });
+    const victimFile = path.join(innerDir, 'evil.exe');
+    fs.writeFileSync(victimFile, 'threat-payload');
+    const created = await manager.quarantine(victimFile, 'hash-junction', 'test', 'Threat', 'junction-test');
+    assert.equal(created.success, true);
+    const redirectDir = path.join(tmpRoot, 'redirect-target');
+    fs.mkdirSync(redirectDir, { recursive: true });
+    fs.rmSync(innerDir, { recursive: true, force: true });
+    execFileSync('cmd.exe', ['/c', 'mklink', '/J', innerDir, redirectDir], { windowsHide: true });
+    const before = db.db.prepare('SELECT status, quarantine_path FROM quarantine WHERE id = ?').get(created.id);
+    const result = await manager.restore(created.id);
+    assert.equal(result.success, false);
+    assert.match(String(result.error), /link|junction|reparse| safely/i);
+    // Nothing was written through the redirected path.
+    assert.equal(fs.existsSync(path.join(redirectDir, 'evil.exe')), false);
+    // The quarantine copy remains intact and the row stays quarantined.
+    assert.equal(fs.existsSync(before.quarantine_path), true);
+    const after = db.db.prepare('SELECT status FROM quarantine WHERE id = ?').get(created.id);
+    assert.equal(after.status, 'quarantined');
+  });
+
+  it('restores outside maintenance-only roots without imposing a root policy', async () => {
+    // A sibling of the OS temp dir is outside defaultMutationRoots and is
+    // not protected: restore must still succeed there.
+    const outsideRoot = path.join(path.dirname(os.tmpdir()), `soterios-qroot-${Date.now()}`);
+    const outsideFile = path.join(outsideRoot, 'note.txt');
+    fs.mkdirSync(outsideRoot, { recursive: true });
+    try {
+      fs.writeFileSync(outsideFile, 'outside-payload');
+      const created = await manager.quarantine(outsideFile, 'hash-outside', 'test', 'Threat', 'outside-test');
+      assert.equal(created.success, true);
+      const result = await manager.restore(created.id);
+      assert.equal(result.success, true);
+      assert.equal(fs.readFileSync(outsideFile, 'utf8'), 'outside-payload');
+    } finally {
+      fs.rmSync(outsideRoot, { recursive: true, force: true });
+    }
+  });
 });
