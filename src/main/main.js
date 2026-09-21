@@ -1179,6 +1179,10 @@ app.whenReady().then(async () => {
       try {
         db.pruneNetworkStats(7);
         db.pruneMaintenanceRuns(100);
+        // Persistent process history: hourly retention + row-count bound.
+        // Reads the processHistoryRetentionDays setting internally and never
+        // throws outward; failures must not disturb the prune loop.
+        try { db.pruneProcessHistory(); } catch (_) {}
       } catch (_) {}
     }, 60 * 60_000);
     if (typeof pruneTimer.unref === 'function') pruneTimer.unref();

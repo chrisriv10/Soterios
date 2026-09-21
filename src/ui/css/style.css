@@ -1103,6 +1103,19 @@ body {
   gap: 8px;
 }
 
+/* Persistent history view (Issue #122) reuses the live toolbar/list/detail
+   language. Explicit [hidden] rules are required because the UA hidden style
+   loses to these display declarations. */
+.pi-history { display: flex; flex-direction: column; gap: 14px; }
+.pi-stats[hidden],
+.pi-workspace[hidden],
+.pi-history[hidden] { display: none; }
+.pi-retention-wrap { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: .75rem; }
+.pi-detail-body h3 { font-size: .78rem; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); margin: 14px 0 8px; }
+.pi-detail-body h3:first-child { margin-top: 0; }
+#phMore { display: block; margin: 10px auto 4px; }
+#phMore[hidden] { display: none; }
+
 .pi-header {
   justify-content: space-between;
   align-items: flex-start;

@@ -5,6 +5,7 @@ window.Pages = window.Pages || {};
 window.Pages.processes = {
   _container: null,
   _mode: 'simple',
+  _view: 'live',
   _processes: new Map(),
   _snapshot: null,
   _unsubscribers: [],
@@ -21,6 +22,20 @@ window.Pages.processes = {
   _iconCache: new Map(),
   _renderQueued: false,
   _detailEditing: false,
+  // Persistent history (Issue #122) state. History rows come from the
+  // bounded SQLite lifecycle store via IPC; the live subscription keeps
+  // running underneath so switching views never restarts ProcessService.
+  _history: [],
+  _historyTotal: 0,
+  _historyLoading: false,
+  _historyDirty: false,
+  _historyRequestId: 0,
+  _historyQuery: '',
+  _historyRisk: 'all',
+  _historyStatus: 'all',
+  _historyRange: 'any',
+  _historyRetention: 7,
+  _historySelected: null,
 
   t(key, vars) { return window.I18n?.t(key, vars) ?? key; },
   esc(value) { return window.escapeHtml ? window.escapeHtml(String(value ?? '')) : String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]); },
@@ -54,6 +69,16 @@ window.Pages.processes = {
     this._selectedKey = null;
     this._selectedDetails = null;
     this._paused = false;
+    this._view = 'live';
+    this._history = [];
+    this._historyTotal = 0;
+    this._historySelected = null;
+    this._historyLoading = false;
+    this._historyDirty = false;
+    this._historyQuery = '';
+    this._historyRisk = 'all';
+    this._historyStatus = 'all';
+    this._historyRange = 'any';
     try { this._mode = localStorage.getItem('soterios.processMode') || 'simple'; } catch (_) { this._mode = 'simple'; }
     if (!['simple', 'technical'].includes(this._mode)) this._mode = 'simple';
     this._sortBy = this._mode === 'technical' ? 'tree' : 'risk';
@@ -67,6 +92,10 @@ window.Pages.processes = {
             <p class="page-subtitle">${this.esc(this.t('processes.commercialSubtitle'))}</p>
           </div>
           <div class="pi-header-actions">
+            <div class="pi-mode-toggle" role="group" aria-label="${this.esc(this.t('processes.historyView'))}">
+              <button class="pi-mode-btn ${this._view === 'live' ? 'active' : ''}" data-view="live">${this.esc(this.t('processes.liveView'))}</button>
+              <button class="pi-mode-btn ${this._view === 'history' ? 'active' : ''}" data-view="history">${this.esc(this.t('processes.historyView'))}</button>
+            </div>
             <div class="pi-mode-toggle" role="group" aria-label="${this.esc(this.t('processes.viewMode'))}">
               <button class="pi-mode-btn ${this._mode === 'simple' ? 'active' : ''}" data-mode="simple">${this.esc(this.t('processes.simpleMode'))}</button>
               <button class="pi-mode-btn ${this._mode === 'technical' ? 'active' : ''}" data-mode="technical">${this.esc(this.t('processes.technicalMode'))}</button>
@@ -79,7 +108,7 @@ window.Pages.processes = {
 
         <div id="piProviderNotice" class="pi-provider-notice" hidden></div>
 
-        <div class="pi-stats" aria-label="${this.esc(this.t('processes.systemResources'))}">
+        <div id="piLiveStats" class="pi-stats" aria-label="${this.esc(this.t('processes.systemResources'))}">
           ${this._statCard('cpu', this.t('processes.statCpu'))}
           ${this._statCard('memory', this.t('processes.statMemory'))}
           ${this._statCard('disk', this.t('processes.statDisk'))}
@@ -87,7 +116,7 @@ window.Pages.processes = {
           ${this._statCard('gpu', this.t('processes.statGpu'))}
         </div>
 
-        <div class="pi-toolbar">
+        <div id="piLiveToolbar" class="pi-toolbar">
           <label class="pi-search-wrap">
             <span class="sr-only">${this.esc(this.t('processes.searchLabel'))}</span>
             <input id="piSearch" type="search" autocomplete="off" placeholder="${this.esc(this.t('processes.searchPlaceholder'))}">
@@ -105,7 +134,7 @@ window.Pages.processes = {
           <span id="piCount" class="pi-count" aria-live="polite"></span>
         </div>
 
-        <div class="pi-workspace">
+        <div id="piLiveWorkspace" class="pi-workspace">
           <div class="pi-list-panel">
             <div id="piColumnHeader" class="pi-column-header"></div>
             <div id="piViewport" class="pi-viewport" tabindex="0" role="table" aria-label="${this.esc(this.t('processes.title'))}">
@@ -114,6 +143,55 @@ window.Pages.processes = {
             </div>
           </div>
           <aside id="piDetails" class="pi-details" aria-label="${this.esc(this.t('processes.details'))}" hidden></aside>
+        </div>
+
+        <div id="piHistoryView" class="pi-history" hidden>
+        <div class="pi-toolbar">
+          <label class="pi-search-wrap">
+              <span class="sr-only">${this.esc(this.t('processes.historySearchPlaceholder'))}</span>
+              <input id="phSearch" type="search" autocomplete="off" placeholder="${this.esc(this.t('processes.historySearchPlaceholder'))}">
+            </label>
+            <select id="phRisk" class="pi-select" aria-label="${this.esc(this.t('processes.historyRiskLabel'))}">
+              <option value="all">${this.esc(this.t('processes.riskFilterAll'))}</option>
+              <option value="high-concern">${this.esc(this.t('processes.statusHigh'))}</option>
+              <option value="review-recommended">${this.esc(this.t('processes.statusReview'))}</option>
+              <option value="unverified">${this.esc(this.t('processes.statusUnverified'))}</option>
+              <option value="no-concerns">${this.esc(this.t('processes.statusNoConcerns'))}</option>
+            </select>
+            <select id="phStatus" class="pi-select" aria-label="${this.esc(this.t('processes.historyStatusLabel'))}">
+              <option value="all">${this.esc(this.t('processes.historyStatusAll'))}</option>
+              <option value="exited">${this.esc(this.t('processes.historyStatusExited'))}</option>
+              <option value="unknown-exit">${this.esc(this.t('processes.historyStatusActive'))}</option>
+            </select>
+            <select id="phRange" class="pi-select" aria-label="${this.esc(this.t('processes.historyRangeLabel'))}">
+              <option value="any">${this.esc(this.t('processes.historyRangeAny'))}</option>
+              <option value="24h">${this.esc(this.t('processes.historyRange24h'))}</option>
+              <option value="7d">${this.esc(this.t('processes.historyRange7d'))}</option>
+              <option value="30d">${this.esc(this.t('processes.historyRange30d'))}</option>
+            </select>
+            <label class="pi-retention-wrap"><span>${this.esc(this.t('processes.historyRetentionLabel'))}</span>
+              <select id="phRetention" class="pi-select compact" aria-label="${this.esc(this.t('processes.historyRetentionLabel'))}">
+                <option value="1">${this.esc(this.t('processes.retention1d'))}</option>
+                <option value="7" selected>${this.esc(this.t('processes.retention7d'))}</option>
+                <option value="30">${this.esc(this.t('processes.retention30d'))}</option>
+                <option value="90">${this.esc(this.t('processes.retention90d'))}</option>
+              </select>
+            </label>
+            <button class="btn btn-sm" id="phRefresh">${this.esc(this.t('processes.historyRefresh'))}</button>
+            <button class="btn btn-sm danger" id="phClear">${this.esc(this.t('processes.historyClear'))}</button>
+            <span id="phCount" class="pi-count" aria-live="polite"></span>
+          </div>
+          <div id="piHistoryNotice" class="pi-provider-notice" hidden></div>
+          <div class="pi-workspace">
+          <div class="pi-list-panel">
+            <div id="phColumnHeader" class="pi-column-header"></div>
+            <div id="phViewport" class="pi-viewport" tabindex="0" role="table" aria-label="${this.esc(this.t('processes.historyView'))}">
+              <div id="phRows" class="pi-rows"><div class="empty-state">${this.esc(this.t('processes.historyEmpty'))}</div></div>
+            </div>
+            <button class="btn btn-sm" id="phMore" hidden>${this.esc(this.t('processes.historyLoadMore'))}</button>
+          </div>
+          <aside id="phDetails" class="pi-details" aria-label="${this.esc(this.t('processes.details'))}" hidden></aside>
+          </div>
         </div>
       </section>`;
 
@@ -153,6 +231,24 @@ window.Pages.processes = {
       } catch (error) { alert(error.message || String(error)); }
     });
     container.querySelector('#piRunTask').addEventListener('click', () => this._showRunTaskDialog());
+    container.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => this._setView(button.dataset.view)));
+    let historyDebounce;
+    container.querySelector('#phSearch').addEventListener('input', (event) => {
+      clearTimeout(historyDebounce);
+      historyDebounce = setTimeout(() => { this._historyQuery = event.target.value.trim(); this._requestHistoryReload(); }, 200);
+    });
+    container.querySelector('#phRisk').addEventListener('change', (event) => { this._historyRisk = event.target.value; this._requestHistoryReload(); });
+    container.querySelector('#phStatus').addEventListener('change', (event) => { this._historyStatus = event.target.value; this._requestHistoryReload(); });
+    container.querySelector('#phRange').addEventListener('change', (event) => { this._historyRange = event.target.value; this._requestHistoryReload(); });
+    container.querySelector('#phRetention').addEventListener('change', (event) => this._setHistoryRetention(Number(event.target.value)));
+    container.querySelector('#phRefresh').addEventListener('click', () => this._loadHistory(true));
+    container.querySelector('#phClear').addEventListener('click', () => this._clearHistory());
+    container.querySelector('#phMore').addEventListener('click', () => this._loadHistory(false));
+    container.querySelector('#phViewport').addEventListener('click', (event) => {
+      const row = event.target.closest('.pi-row[data-history-id]');
+      if (row) this._openHistoryDetails(Number(row.dataset.historyId));
+    });
+    container.querySelector('#phViewport').addEventListener('keydown', (event) => this._handleHistoryKeyboard(event));
     const viewport = container.querySelector('#piViewport');
     viewport.addEventListener('scroll', () => this._renderVirtualRows());
     viewport.addEventListener('keydown', (event) => this._handleKeyboard(event));
@@ -243,6 +339,10 @@ window.Pages.processes = {
     this._renderColumnHeader();
     this._scheduleRender(true);
     if (this._selectedKey) this._renderDetails();
+    if (this._view === 'history') {
+      this._renderHistoryColumnHeader();
+      this._renderHistoryRows();
+    }
   },
 
   _renderSortOptions() {
@@ -757,6 +857,296 @@ window.Pages.processes = {
     this._snapshot = null;
     this._selectedKey = null;
     this._selectedDetails = null;
+    this._history = [];
+    this._historyTotal = 0;
+    this._historySelected = null;
     this._visible = [];
+  },
+
+  // ---- Persistent history view (Issue #122) ----
+
+  _setView(view) {
+    if (!['live', 'history'].includes(view)) return;
+    this._view = view;
+    this._container?.querySelectorAll('[data-view]').forEach((button) => button.classList.toggle('active', button.dataset.view === view));
+    // The live subscription keeps running underneath; only rendering target
+    // changes, so ProcessService is never restarted by view switches.
+    for (const id of ['#piLiveStats', '#piLiveToolbar', '#piLiveWorkspace']) {
+      const node = this._container?.querySelector(id);
+      if (node) node.hidden = view !== 'live';
+    }
+    const historyView = this._container?.querySelector('#piHistoryView');
+    if (historyView) historyView.hidden = view !== 'history';
+    if (view === 'history') {
+      this._closeDetails();
+      this._renderHistoryColumnHeader();
+      this._checkHistoryPrivacy();
+      this._loadHistoryRetention();
+      this._loadHistory(true);
+    } else {
+      this._historySelected = null;
+      const historyPanel = this._container?.querySelector('#phDetails');
+      if (historyPanel) { historyPanel.hidden = true; historyPanel.innerHTML = ''; }
+      const panel = this._container?.querySelector('#piDetails');
+      if (panel) { panel.hidden = true; panel.innerHTML = ''; }
+      this._scheduleRender(true);
+    }
+  },
+
+  _historyFilters(offset) {
+    const filters = { limit: 100, offset };
+    if (this._historyQuery) filters.search = this._historyQuery;
+    if (this._historyRisk !== 'all') filters.riskLevels = [this._historyRisk];
+    if (this._historyStatus !== 'all') filters.status = this._historyStatus;
+    if (this._historyRange !== 'any') {
+      const hours = { '24h': 24, '7d': 24 * 7, '30d': 24 * 30 }[this._historyRange];
+      if (hours) filters.from = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+    }
+    return filters;
+  },
+
+  _requestHistoryReload() {
+    // Filter changes during an active request must not be dropped: mark dirty
+    // so the in-flight load triggers a follow-up with the latest filters.
+    this._historyDirty = true;
+    this._loadHistory(true);
+  },
+
+  async _loadHistory(reset) {
+    if (this._view !== 'history' || this._historyLoading) return;
+    this._historyLoading = true;
+    this._historyDirty = false;
+    const requestId = (this._historyRequestId = (this._historyRequestId || 0) + 1);
+    const rows = this._container?.querySelector('#phRows');
+    try {
+      if (reset) {
+        this._history = [];
+        this._historySelected = null;
+        const panel = this._container?.querySelector('#phDetails');
+        if (panel) { panel.hidden = true; panel.innerHTML = ''; }
+        if (rows) rows.innerHTML = `<div class="empty-state"><span class="spinner"></span>&nbsp;${this.esc(this.t('processes.loading'))}</div>`;
+      }
+      const result = await window.soterios.process.queryHistory(this._historyFilters(reset ? 0 : this._history.length));
+      // A newer request started while this one was in flight: its results
+      // would render stale filters, so discard them.
+      if (requestId !== this._historyRequestId || this._view !== 'history') return;
+      const list = Array.isArray(result?.rows) ? result.rows : [];
+      this._history = reset ? list : [...this._history, ...list];
+      this._historyTotal = Number(result?.total) || this._history.length;
+      this._renderHistoryRows();
+    } catch (error) {
+      if (requestId !== this._historyRequestId || this._view !== 'history') return;
+      if (rows) rows.innerHTML = `<div class="empty-state pi-inline-error">${this.esc(error.message || String(error))}</div>`;
+    } finally {
+      this._historyLoading = false;
+      if (this._historyDirty && this._view === 'history') this._loadHistory(true);
+    }
+  },
+
+  async _loadHistoryRetention() {
+    try {
+      const result = await window.soterios.process.getHistoryRetention();
+      const days = Number(result?.days);
+      if ([1, 7, 30, 90].includes(days)) {
+        this._historyRetention = days;
+        const select = this._container?.querySelector('#phRetention');
+        if (select) select.value = String(days);
+      }
+    } catch (_) {}
+  },
+
+  async _setHistoryRetention(days) {
+    try {
+      const result = await window.soterios.process.setHistoryRetention(days);
+      const value = Number(result?.days);
+      if ([1, 7, 30, 90].includes(value)) {
+        this._historyRetention = value;
+        const select = this._container?.querySelector('#phRetention');
+        if (select) select.value = String(value);
+      }
+    } catch (error) {
+      alert(error.message || String(error));
+      const select = this._container?.querySelector('#phRetention');
+      if (select) select.value = String(this._historyRetention);
+    }
+  },
+
+  async _clearHistory() {
+    if (!window.confirm(this.t('processes.historyClearConfirm'))) return;
+    try {
+      const result = await window.soterios.process.clearHistory();
+      alert(this.t('processes.historyCleared', { count: Number(result?.deleted) || 0 }));
+      this._historySelected = null;
+      const panel = this._container?.querySelector('#phDetails');
+      if (panel) { panel.hidden = true; panel.innerHTML = ''; }
+      await this._loadHistory(true);
+    } catch (error) {
+      alert(error.message || String(error));
+    }
+  },
+
+  async _checkHistoryPrivacy() {
+    try {
+      const privacyOn = await window.api.invoke('db:getSetting', 'feature.privacyMode', false);
+      const notice = this._container?.querySelector('#piHistoryNotice');
+      if (!notice) return;
+      notice.hidden = privacyOn !== true;
+      if (privacyOn === true) {
+        notice.innerHTML = `<strong>${this.esc(this.t('processes.historyView'))}</strong><span>${this.esc(this.t('processes.historyPrivacyPaused'))}</span>`;
+      }
+    } catch (_) {}
+  },
+
+  _renderHistoryColumnHeader() {
+    const header = this._container?.querySelector('#phColumnHeader');
+    if (!header) return;
+    header.className = `pi-column-header ${this._mode}`;
+    header.innerHTML = this._mode === 'technical'
+      ? `<span>${this.esc(this.t('processes.columnProcess'))}</span><span>PID</span><span>${this.esc(this.t('processes.columnRisk'))}</span><span>${this.esc(this.t('processes.historyColWhen'))}</span><span>${this.esc(this.t('processes.historyColDuration'))}</span>`
+      : `<span>${this.esc(this.t('processes.columnApplication'))}</span><span>${this.esc(this.t('processes.columnRisk'))}</span><span>${this.esc(this.t('processes.historyColWhen'))}</span><span>${this.esc(this.t('processes.historyColDuration'))}</span>`;
+  },
+
+  _handleHistoryKeyboard(event) {
+    if (!['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) return;
+    const rows = [...(this._container?.querySelectorAll('#phRows .pi-row[data-history-id]') || [])];
+    if (!rows.length) return;
+    if (event.key === 'Enter') {
+      const id = Number(event.target.closest('.pi-row')?.dataset.historyId ?? NaN);
+      if (Number.isInteger(id)) this._openHistoryDetails(id);
+      return;
+    }
+    event.preventDefault();
+    const current = rows.indexOf(event.target.closest('.pi-row'));
+    const next = rows[Math.max(0, Math.min(rows.length - 1, current + (event.key === 'ArrowDown' ? 1 : -1)))];
+    if (next) next.focus();
+  },
+
+  _historyRiskFor(row) {
+    const severity = row.riskLevel || 'no-concerns';
+    const labels = {
+      'high-concern': this.t('processes.statusHigh'),
+      'review-recommended': this.t('processes.statusReview'),
+      unverified: this.t('processes.statusUnverified'),
+    };
+    return { severity, score: row.riskScore || 0, statusLabel: labels[severity] || this.t('processes.statusNoConcerns') };
+  },
+
+  _historyWhenText(row) {
+    const stamp = row.exitTime || row.lastSeen;
+    if (!stamp) return this.t('processes.notAvailable');
+    const date = new Date(stamp);
+    return Number.isNaN(date.getTime()) ? this.t('processes.notAvailable') : date.toLocaleString();
+  },
+
+  _historyStatusText(row) {
+    if (row.exitTime) return this.t('processes.historyStatusExited');
+    // Match by computed live identity, not the stored row key: synthetic
+    // lifecycle rows (`pid@unknown-…`) belong to the live `pid@` process.
+    if (row.pid != null && this._processes.has(this.keyOf(row))) return this.t('processes.historyRunningNow');
+    return this.t('processes.historyStatusActive');
+  },
+
+  _historyDurationMs(row) {
+    const start = Date.parse(row.firstSeen);
+    const end = Date.parse(row.exitTime || row.lastSeen);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null;
+    return end - start;
+  },
+
+  _formatDuration(ms) {
+    if (ms == null) return this.t('processes.notAvailable');
+    const seconds = Math.floor(ms / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 48) return `${hours}h`;
+    return `${Math.floor(hours / 24)}d`;
+  },
+
+  _historyRowSimple(row, index) {
+    const subtitle = row.publisher || row.signatureStatus || row.exeBasename || this.t('processes.unverifiedPublisher');
+    return `<div class="pi-row simple ${this._historySelected === row.id ? 'selected' : ''}" role="row" data-history-id="${row.id}" data-index="${index}" tabindex="-1">
+      <div class="pi-process-cell"><span><strong>${this.esc(row.processName || 'unknown')}</strong><small>${this.esc(subtitle)}</small></span></div>
+      <div>${this._riskPill(this._historyRiskFor(row))}</div>
+      <div class="pi-metric">${this.esc(this._historyWhenText(row))}</div>
+      <div class="pi-metric">${this.esc(this._historyStatusText(row))} · ${this.esc(this._formatDuration(this._historyDurationMs(row)))}${row.exitTime ? '' : ` (${this.esc(this.t('processes.historyUnknownExit'))})`}</div>
+    </div>`;
+  },
+
+  _historyRowTechnical(row, index) {
+    return `<div class="pi-row technical ${this._historySelected === row.id ? 'selected' : ''}" role="row" data-history-id="${row.id}" data-index="${index}" tabindex="-1">
+      <div class="pi-process-cell"><span><strong>${this.esc(row.processName || 'unknown')}</strong><small title="${this.esc(row.exeBasename || '')}">${this.esc(row.exeBasename || this.t('processes.notAvailable'))}</small></span></div>
+      <div class="pi-metric">${this.esc(row.pid ?? '')}</div><div>${this._riskPill(this._historyRiskFor(row))}</div>
+      <div class="pi-metric">${this.esc(this._historyWhenText(row))}</div>
+      <div class="pi-metric">${this.esc(this._historyStatusText(row))} · ${this.esc(this._formatDuration(this._historyDurationMs(row)))}</div>
+    </div>`;
+  },
+
+  _renderHistoryRows() {
+    const rows = this._container?.querySelector('#phRows');
+    const count = this._container?.querySelector('#phCount');
+    const more = this._container?.querySelector('#phMore');
+    if (count) count.textContent = this.t('processes.historyCount', { count: this._historyTotal });
+    if (more) more.hidden = this._history.length >= this._historyTotal;
+    if (!rows) return;
+    if (!this._history.length) {
+      rows.innerHTML = `<div class="empty-state">${this.esc(this.t('processes.historyEmpty'))}</div>`;
+      return;
+    }
+    rows.innerHTML = this._history.map((row, index) => this._mode === 'technical'
+      ? this._historyRowTechnical(row, index)
+      : this._historyRowSimple(row, index)).join('');
+  },
+
+  _openHistoryDetails(id) {
+    const row = this._history.find((item) => item.id === id);
+    if (!row) return;
+    this._closeDetails();
+    this._historySelected = id;
+    this._renderHistoryRows();
+    this._renderHistoryDetails(row);
+  },
+
+  _renderHistoryDetails(row) {
+    const panel = this._container?.querySelector('#phDetails');
+    if (!panel || this._historySelected == null) return;
+    const duration = this._historyDurationMs(row);
+    panel.hidden = false;
+    panel.innerHTML = `<div class="pi-detail-header"><div><h2>${this.esc(row.processName || 'unknown')}</h2><span>PID ${this.esc(row.pid ?? '')} · ${this.esc(this._historyStatusText(row))}</span></div><button id="piCloseDetails" class="pi-close" aria-label="${this.esc(this.t('common.close'))}">×</button></div>
+      <div class="pi-detail-body">
+        <p class="pi-capability-note">${this.esc(this.t('processes.historyDataNote'))}</p>
+        <h3>${this.esc(this.t('processes.tab.overview'))}</h3>
+        <dl class="pi-detail-grid">
+          ${this._detailPair(this.t('processes.historyFieldPid'), row.pid)}
+          ${this._detailPair(this.t('processes.historyFieldParent'), row.parentPid)}
+          ${this._detailPair(this.t('processes.historyFieldExe'), row.exeBasename)}
+          ${this._detailPair(this.t('processes.historyFieldStarted'), this._formatDateTime(row.startedAt))}
+          ${this._detailPair(this.t('processes.historyFieldPublisher'), row.publisher)}
+          ${this._detailPair(this.t('processes.historyFieldSignature'), row.signatureStatus)}
+        </dl>
+        <h3>${this.esc(this.t('processes.historyFieldTimeline'))}</h3>
+        <dl class="pi-detail-grid">
+          ${this._detailPair(this.t('processes.historyFieldFirstSeen'), this._formatDateTime(row.firstSeen))}
+          ${this._detailPair(this.t('processes.historyFieldLastSeen'), this._formatDateTime(row.lastSeen))}
+          ${this._detailPair(this.t('processes.historyFieldExit'), this._formatDateTime(row.exitTime))}
+          ${this._detailPair(this.t('processes.historyFieldDuration'), `${this._formatDuration(duration)}${row.exitTime || duration == null ? '' : ` (${this.t('processes.historyUnknownExit')})`}`)}
+          ${this._detailPair(this.t('processes.historyFieldTerminated'), row.terminatedByUser ? this.t('common.yes') : this.t('common.no'))}
+        </dl>
+        <h3>${this.esc(this.t('processes.tab.security'))}</h3>
+        <div class="pi-security-summary">${this._riskPill(this._historyRiskFor(row))}<strong>${this.esc(`${row.riskScore || 0}/100`)}</strong></div>
+      </div>`;
+    panel.querySelector('#piCloseDetails').addEventListener('click', () => {
+      this._historySelected = null;
+      panel.hidden = true;
+      panel.innerHTML = '';
+      this._renderHistoryRows();
+    });
+  },
+
+  _formatDateTime(value) {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date.toLocaleString();
   },
 };
