@@ -173,7 +173,7 @@ describe('QuarantineManager workflow', () => {
     assert.equal(fs.existsSync(row.quarantine_path), true);
   });
 
-  it('fails closed when a junction ancestor redirects the restore destination', async () => {
+  it('fails closed when a junction ancestor redirects the restore destination', { skip: process.platform !== 'win32' && 'requires Windows junctions (mklink /J)' }, async () => {
     const { execFileSync } = require('child_process');
     const outerDir = path.join(tmpRoot, 'victim');
     const innerDir = path.join(outerDir, 'sub');
