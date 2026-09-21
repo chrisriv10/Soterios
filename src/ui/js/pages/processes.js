@@ -1040,7 +1040,9 @@ window.Pages.processes = {
 
   _historyStatusText(row) {
     if (row.exitTime) return this.t('processes.historyStatusExited');
-    if (row.processKey && this._processes.has(row.processKey)) return this.t('processes.historyRunningNow');
+    // Match by computed live identity, not the stored row key: synthetic
+    // lifecycle rows (`pid@unknown-…`) belong to the live `pid@` process.
+    if (row.pid != null && this._processes.has(this.keyOf(row))) return this.t('processes.historyRunningNow');
     return this.t('processes.historyStatusActive');
   },
 

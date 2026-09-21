@@ -890,8 +890,9 @@ describe('process history IPC and UI surface', () => {
       assert.equal(strings['processes.historyStatusActive'], 'Exit unknown', file);
     }
     const ui = fs.readFileSync(path.join(__dirname, '..', 'src', 'ui', 'js', 'pages', 'processes.js'), 'utf8');
-    // "Running now" is only reachable behind an independent live-identity check.
-    assert.match(ui, /if \(row\.processKey && this\._processes\.has\(row\.processKey\)\) return this\.t\('processes\.historyRunningNow'\)/);
+    // "Running now" is only reachable behind an independent live-identity check,
+    // matched by computed identity so synthetic lifecycle rows resolve too.
+    assert.match(ui, /if \(row\.pid != null && this\._processes\.has\(this\.keyOf\(row\)\)\) return this\.t\('processes\.historyRunningNow'\)/);
     // Exit-unknown rows are explicitly marked as such in both row modes.
     assert.ok((ui.match(/historyUnknownExit/g) || []).length >= 2);
   });
