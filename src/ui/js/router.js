@@ -95,5 +95,12 @@
     window.api.on('navigate-to-tools', () => {
       navigate('tools');
     });
+    window.api.on('navigate-to-removable-scan', () => {
+      navigate('scanner');
+      window.api.invoke('removableDrive:scanPending').then((result) => {
+        if (result && result.queued) return;
+        if (result && !result.ok) alert(result.error || 'Removable drive scan unavailable.');
+      }).catch((error) => alert(error.message || String(error)));
+    });
   }
 })();

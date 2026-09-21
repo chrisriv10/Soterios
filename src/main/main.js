@@ -54,6 +54,7 @@ const { registerIpcHandlers } = require('./ipcHandlers');
 const serviceRegistry = require('./serviceRegistry');
 const { MaintenanceScheduler } = require('./maintenanceScheduler');
 const ToolRunManager = require('./toolRunManager');
+const { RemovableDriveCoordinator } = require('./removableDriveCoordinator');
 const { createQuitCoordinator } = require('./quitCoordinator');
 const { MaintenanceSafetyVault } = require('./maintenanceSafetyVault');
 const { PersistenceMonitor } = require('./persistenceMonitor');
@@ -215,7 +216,7 @@ function toastHtml(title, body, level, themeName, iconOverride = null, openText 
   const iconPaths = iconOverride || TOAST_ICONS[level] || TOAST_ICONS.info;
   const markDataUri = getToastMarkDataUri();
   const wordmarkDataUri = getToastWordmarkDataUri();
-  const hasAction = action === 'scanner' || action === 'tools';
+  const hasAction = action === 'scanner' || action === 'tools' || action === 'removable-scan';
   return `<!doctype html>
 <html><head><meta charset="utf-8"><style>
   html, body { margin:0; padding:0; background:transparent; overflow:hidden; user-select:none; }
@@ -870,6 +871,21 @@ app.whenReady().then(async () => {
   services.toolRunManager = toolRunManager;
   lifecycleRefs.toolRunManager = toolRunManager;
 
+  // Removable-drive detection + scan coordination (issue #124). Detection
+  // state is seeded silently on start; arrivals prompt (or auto-scan when
+  // the user opted in) through the existing custom-scan pipeline.
+  const removableDriveCoordinator = new RemovableDriveCoordinator({
+    db: services.db,
+    scanEngine: services.scanEngine,
+    eventBus,
+    showNotification: (title, body, level, iconOverride, action) => showNotification(title, body, level, iconOverride, action),
+    t,
+    logger: { warn: (message, meta) => logLine('warn', message, meta) },
+  });
+  services.removableDriveCoordinator = removableDriveCoordinator;
+  lifecycleRefs.removableDriveCoordinator = removableDriveCoordinator;
+  removableDriveCoordinator.start();
+
   const maintenanceSafetyVault = new MaintenanceSafetyVault({
     db: services.db,
     rootPath: path.join(app.getPath('userData'), 'MaintenanceVault'),
@@ -1237,6 +1253,7 @@ const quitCoordinator = createQuitCoordinator({
     lifecycleRefs.maintenanceSafetyVault?.stop();
     lifecycleRefs.persistenceMonitor?.stop();
     lifecycleRefs.extensionBridge?.stop();
+    try { lifecycleRefs.removableDriveCoordinator?.dispose(); } catch (_) {}
     lifecycleRefs.processService?.stop().catch(() => {});
     lifecycleRefs.trayController?.dispose();
     if (lifecycleRefs.networkStatsTimer) clearInterval(lifecycleRefs.networkStatsTimer);

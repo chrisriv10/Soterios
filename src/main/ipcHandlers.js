@@ -13,6 +13,7 @@ function registerIpcHandlers(mainWindow, services) {
     clamEngine: services.clamEngine,
     scanEngine: services.scanEngine,
     reputationEngine: services.reputationEngine,
+    removableDriveCoordinator: services.removableDriveCoordinator,
   };
 
   const servicesForQuarantine = {

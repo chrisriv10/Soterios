@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Opt-in removable-drive scanning: newly connected removable volumes show a scan prompt (or auto-scan when explicitly enabled), reusing the existing custom-scan pipeline with revalidation, bounded queueing, and truthful removal handling
+
 ## [1.4.1] - 2026-09-19
 
 ### Fixed

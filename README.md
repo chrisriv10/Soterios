@@ -35,7 +35,7 @@ Releases also include a versioned `soterios-extension-<version>.zip`, a Chromium
 
 ## Features
 
-- **Malware protection** — quick, full, and custom scans powered by ClamAV with definition updates, scheduled scans, live progress metrics, cancellation, and saved reports (PDF/CSV export); quarantine with restore (optionally trusting the file's hash for future scans) or permanent delete; Windows Defender controls including real-time monitoring toggle with state verification and a read-only Defender threat-history viewer; folder watching with automatic scanning of new files; one-click Emergency Lockdown with an interface/service/IP allowlist
+- **Malware protection** — quick, full, and custom scans powered by ClamAV with definition updates, scheduled scans, live progress metrics, cancellation, and saved reports (PDF/CSV export); quarantine with restore (optionally trusting the file's hash for future scans) or permanent delete; Windows Defender controls including real-time monitoring toggle with state verification and a read-only Defender threat-history viewer; folder watching with automatic scanning of new files; opt-in removable-drive detection with scan prompts and optional auto-scan; one-click Emergency Lockdown with an interface/service/IP allowlist
 - **System visibility** — Rust-backed Process Inspector with risk scoring and reputation checks, Task Manager-style actions (terminate, restart, suspend/resume, priority, affinity, memory dumps), detection of Office/PDF-spawned script hosts and processes with an unexpected parent, and persistent process history with configurable retention; Windows Security Audit (Defender, UAC, Windows Update, BitLocker, PowerShell policy, Secure Boot) with per-section management actions; in-app scan and system reports
 - **Network & firewall** — firewall profile status, rule summaries, multi-select bulk rule actions, and rule import/export, plus an endpoint activity radar for live connections; active connections, interface activity, an adaptive geo activity map with selectable history ranges, suspicious-connection alerts, and domain/IP blocklists; VPN on/off control with tray toggle, auto-connect, and guided provider setup
 - **Privacy & credential safety** — local password generator and strength checker, HIBP k-anonymity password leak checks, and XposedOrNot email breach checks; one-toggle Privacy Mode (desktop app and browser extension) that disables external lookups and history/data-sharing features and restores them when turned off
@@ -178,7 +178,6 @@ build/ installer resources
 
 These areas are under consideration for future updates. There is no fixed release order, and scope may change based on feedback. Linked issues track active discussion.
 
-- USB/removable-drive scanning ([#124](https://github.com/chrisriv10/Soterios/issues/124))
 - System Restore point management ([#125](https://github.com/chrisriv10/Soterios/issues/125))
 - Disk SMART health monitoring and alerts ([#121](https://github.com/chrisriv10/Soterios/issues/121))
 - CPU/GPU temperature monitoring ([#120](https://github.com/chrisriv10/Soterios/issues/120))
