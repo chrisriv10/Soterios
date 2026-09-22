@@ -97,9 +97,11 @@ describe('GPU normalization', () => {
     assert.deepEqual(normalizeGpus(null), []);
     assert.deepEqual(normalizeGpus(undefined), []);
     assert.deepEqual(normalizeGpus({ controllers: null }), []);
+    // No model/vendor yields an empty name so the dashboard can apply its
+    // localized `thermal.unknownGpu` fallback; the main process never
+    // hardcodes display text.
     const [nameless, vendorOnly] = normalizeGpus({ controllers: [{ temperatureGpu: 40 }, { vendor: 'AMD', temperatureGpu: 41 }] });
-    assert.equal(typeof nameless.name, 'string');
-    assert.ok(nameless.name.length > 0);
+    assert.equal(nameless.name, '');
     assert.equal(vendorOnly.name, 'AMD');
     // Non-object entries are skipped, never crash.
     assert.equal(normalizeGpus({ controllers: [null, 'x', 42, { model: 'G', temperatureGpu: 43 }] }).length, 1);
@@ -225,6 +227,17 @@ describe('thermal dashboard UI', () => {
     assert.match(ui, /thermal\.cpu/);
     assert.match(ui, /thermal\.gpu/);
     assert.match(ui, /thermal\.unknownGpu/);
+  });
+
+  it('clears stale GPU readings when a refresh fails', () => {
+    // The catch branch must reset both targets: otherwise a failed refresh
+    // would leave the previous GPU temperatures visible as if current.
+    const refreshFn = ui.slice(ui.indexOf('async function refreshThermal'));
+    const catchAt = refreshFn.indexOf('} catch (_) {');
+    assert.ok(catchAt >= 0, 'refreshThermal has a catch branch');
+    const catchBlock = refreshFn.slice(catchAt, catchAt + 700);
+    assert.match(catchBlock, /#thermalCpu/);
+    assert.match(catchBlock, /#thermalGpus/);
   });
 
   it('introduces no threshold or health classification', () => {

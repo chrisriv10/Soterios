@@ -50,7 +50,7 @@ function normalizeGpus(raw) {
       const model = typeof controller.model === 'string' ? controller.model.trim().slice(0, 128) : '';
       const vendor = typeof controller.vendor === 'string' ? controller.vendor.trim().slice(0, 128) : '';
       return {
-        name: model || vendor || 'Unknown GPU',
+        name: model || vendor,
         available: temperatureC !== null,
         temperatureC,
       };

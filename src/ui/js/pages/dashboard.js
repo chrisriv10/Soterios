@@ -942,9 +942,13 @@ async function loadWarnings() {
         }
       } catch (_) {
         // Thermal telemetry is optional: failures render as unavailable.
+        // Both CPU and GPU targets are cleared so a failed refresh never
+        // leaves stale readings visible.
         if (!hasView()) return;
         const cpuEl = container.querySelector('#thermalCpu');
+        const gpusEl = container.querySelector('#thermalGpus');
         if (cpuEl) cpuEl.textContent = `${t('thermal.cpu')}: ${t('thermal.unavailable')}`;
+        if (gpusEl) gpusEl.textContent = `${t('thermal.gpu')}: ${t('thermal.unavailable')}`;
       } finally {
         if (hasView()) {
           thermalTimer = setTimeout(refreshThermal, THERMAL_REFRESH_MS);
@@ -954,7 +958,8 @@ async function loadWarnings() {
     this.cleanups.push(() => { if (thermalTimer) clearTimeout(thermalTimer); thermalTimer = null; });
     refreshThermal();
 
-    if (btnRefreshWarnings) btnRefreshWarnings.addEventListener('click', async () => {      const originalLabel = btnRefreshWarnings.textContent;
+    if (btnRefreshWarnings) btnRefreshWarnings.addEventListener('click', async () => {
+      const originalLabel = btnRefreshWarnings.textContent;
       btnRefreshWarnings.disabled = true;
       btnRefreshWarnings.textContent = t('common.loading');
       try {
