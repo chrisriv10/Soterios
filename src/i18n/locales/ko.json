@@ -1878,5 +1878,10 @@
   "removableDrive.removedBody": "The drive was removed before its scan finished — scan incomplete.",
   "removableDrive.unavailable": "The removable drive is no longer available.",
   "removableDrive.noPendingDrive": "There is no pending removable drive to scan.",
-  "removableDrive.queueFull": "Too many removable drives are waiting to scan."
+  "removableDrive.queueFull": "Too many removable drives are waiting to scan.",
+  "thermal.title": "System Temperatures",
+  "thermal.cpu": "CPU Temperature",
+  "thermal.gpu": "GPU Temperature",
+  "thermal.unavailable": "Unavailable",
+  "thermal.unknownGpu": "Unknown GPU"
 }

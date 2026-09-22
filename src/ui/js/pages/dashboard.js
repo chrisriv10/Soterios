@@ -272,6 +272,26 @@ window.Pages['dashboard'] = {
             <div class="page-subtitle" style="margin-top:8px; font-size:0.75rem; color:var(--accent-primary);">${escapeHtml(t('dashboard.healthClickDetails'))}</div>
           </div>
 
+          <div class="card" id="thermalCard">
+            <div class="status-card">
+              <div class="status-icon info">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M12 2v20"/>
+  <path d="M8 6l-3 3"/>
+  <path d="M16 6l3 3"/>
+  <path d="M5 13a7 7 0 0 0 14 0"/>
+  <path d="M12 13v5"/>
+</svg>
+              </div>
+              <div class="status-info">
+                <h3>${escapeHtml(t('thermal.title'))}</h3>
+                <div class="value" id="thermalCpu">${escapeHtml(t('common.loading'))}</div>
+              </div>
+            </div>
+            <div id="thermalGpus" class="page-subtitle" style="margin-top:12px; font-size:0.85rem;"></div>
+          </div>
+
 <!-- Device Cleanup -->
           <div class="card dashboard-device-cleanup">
             <div class="status-card">
@@ -882,6 +902,61 @@ async function loadWarnings() {
         // Status query must never break dashboard rendering.
       }
     }
+
+    // Thermal sensors (issue #120): display-only readings refreshed on a
+    // slow page-owned interval. Recursive setTimeout (not setInterval)
+    // guarantees no overlapping backend calls even if a sample is slow; the
+    // timer handle is registered for cleanup so navigation never leaks it.
+    const THERMAL_REFRESH_MS = 15000;
+    let thermalTimer = null;
+    const formatTempC = (value) => `${value.toFixed(1)}°C`;
+    async function refreshThermal() {
+      if (!hasView()) return;
+      try {
+        const snapshot = await window.api.invoke('system:thermalSnapshot');
+        if (!hasView()) return;
+        const cpuEl = container.querySelector('#thermalCpu');
+        const gpusEl = container.querySelector('#thermalGpus');
+        const cpu = snapshot?.cpu;
+        const cpuText = cpu?.available && typeof cpu.mainC === 'number'
+          ? `${t('thermal.cpu')}: ${formatTempC(cpu.mainC)}`
+          : `${t('thermal.cpu')}: ${t('thermal.unavailable')}`;
+        if (cpuEl) cpuEl.textContent = cpuText;
+        if (gpusEl) {
+          gpusEl.textContent = '';
+          const gpus = Array.isArray(snapshot?.gpus) ? snapshot.gpus : [];
+          if (!gpus.length) {
+            gpusEl.textContent = `${t('thermal.gpu')}: ${t('thermal.unavailable')}`;
+          } else {
+            for (const gpu of gpus) {
+              const row = document.createElement('div');
+              const label = document.createElement('strong');
+              label.textContent = typeof gpu?.name === 'string' && gpu.name ? gpu.name : t('thermal.unknownGpu');
+              const reading = document.createElement('span');
+              reading.textContent = ` — ${gpu?.available && typeof gpu.temperatureC === 'number' ? formatTempC(gpu.temperatureC) : t('thermal.unavailable')}`;
+              row.appendChild(label);
+              row.appendChild(reading);
+              gpusEl.appendChild(row);
+            }
+          }
+        }
+      } catch (_) {
+        // Thermal telemetry is optional: failures render as unavailable.
+        // Both CPU and GPU targets are cleared so a failed refresh never
+        // leaves stale readings visible.
+        if (!hasView()) return;
+        const cpuEl = container.querySelector('#thermalCpu');
+        const gpusEl = container.querySelector('#thermalGpus');
+        if (cpuEl) cpuEl.textContent = `${t('thermal.cpu')}: ${t('thermal.unavailable')}`;
+        if (gpusEl) gpusEl.textContent = `${t('thermal.gpu')}: ${t('thermal.unavailable')}`;
+      } finally {
+        if (hasView()) {
+          thermalTimer = setTimeout(refreshThermal, THERMAL_REFRESH_MS);
+        }
+      }
+    }
+    this.cleanups.push(() => { if (thermalTimer) clearTimeout(thermalTimer); thermalTimer = null; });
+    refreshThermal();
 
     if (btnRefreshWarnings) btnRefreshWarnings.addEventListener('click', async () => {
       const originalLabel = btnRefreshWarnings.textContent;

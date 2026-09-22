@@ -23,6 +23,12 @@ const {
 } = require('../maintenanceScheduler');
 const performanceModes = require('../performanceModes');
 const { loadRegistry } = require('../../scripts/scriptRunner');
+const { createThermalSampler } = require('../thermal');
+const thermalLogger = require('../../utils/logger');
+
+// Read-only thermal snapshot (issue #120). No arguments are accepted or
+// needed; the sampler never throws, so the page can always render.
+const sampleThermal = createThermalSampler({ logger: thermalLogger });
 const i18n = require('../../i18n');
 const { requestText } = require('./_shared');
 const {
@@ -104,6 +110,9 @@ function register(mainWindow, {
   ipcMain.handle('folderwatch:status', async () => {
     return (folderWatcher && folderWatcher.getStatus()) || { running: false };
   });
+
+  // -- Thermal sensors (read-only) --
+  ipcMain.handle('system:thermalSnapshot', () => sampleThermal());
 
   ipcMain.handle('folderwatch:toggle', async (_event, enable) => {
     if (!folderWatcher) return { running: false };
