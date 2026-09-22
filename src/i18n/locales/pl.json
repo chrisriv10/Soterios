@@ -1869,5 +1869,14 @@
   "processes.historyFieldDuration": "Duration",
   "processes.historyFieldTerminated": "Ended by user",
   "processes.historyDataNote": "Historical record. Reputation and signature state reflect the time of observation and are not re-checked.",
-  "processes.historyPrivacyPaused": "Recording is paused while Privacy Mode is on. Existing history remains readable."
+  "processes.historyPrivacyPaused": "Recording is paused while Privacy Mode is on. Existing history remains readable.",
+  "settings.autoScanRemovableDrives.label": "Automatically scan removable drives",
+  "settings.autoScanRemovableDrives.desc": "Start a malware scan when a newly connected removable drive is detected. Turning this off still shows a scan prompt.",
+  "removableDrive.promptTitle": "Removable drive detected ({drive})",
+  "removableDrive.promptBody": "Choose Scan to check it for threats, or dismiss this notification.",
+  "removableDrive.removedTitle": "Drive removed ({drive})",
+  "removableDrive.removedBody": "The drive was removed before its scan finished — scan incomplete.",
+  "removableDrive.unavailable": "The removable drive is no longer available.",
+  "removableDrive.noPendingDrive": "There is no pending removable drive to scan.",
+  "removableDrive.queueFull": "Too many removable drives are waiting to scan."
 }

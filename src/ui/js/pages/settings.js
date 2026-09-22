@@ -75,6 +75,14 @@ window.Pages.settings = {
 
           <div class="toggle-row">
             <div>
+              <div class="toggle-label">${escapeHtml(t('settings.autoScanRemovableDrives.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.autoScanRemovableDrives.desc'))}</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="autoScanRemovableDrivesToggle" ${settings.features.autoScanRemovableDrives === true ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+          </div>
+
+          <div class="toggle-row">
+            <div>
               <div class="toggle-label">${escapeHtml(t('settings.emergencyLockdown.label'))}</div>
               <div class="toggle-desc">${escapeHtml(t('settings.emergencyLockdown.desc'))}</div>
             </div>
@@ -438,6 +446,7 @@ window.Pages.settings = {
 
     container.querySelector('#rtpToggle').addEventListener('change', (event) => saveFeature('realtimeProtection', event.target.checked, event.target));
     container.querySelector('#folderWatchToggle').addEventListener('change', (event) => saveFeature('folderWatch', event.target.checked, event.target));
+    container.querySelector('#autoScanRemovableDrivesToggle').addEventListener('change', (event) => saveFeature('autoScanRemovableDrives', event.target.checked, event.target));
     container.querySelector('#networkAlertsToggle').addEventListener('change', (event) => saveFeature('networkAlerts', event.target.checked, event.target));
     container.querySelector('#networkTrafficHistoryToggle').addEventListener('change', (event) => saveFeature('networkTrafficHistory', event.target.checked, event.target));
     container.querySelector('#aiAssistantToggle').addEventListener('change', (event) => saveFeature('aiAssistant', event.target.checked, event.target));
