@@ -152,6 +152,10 @@ class RemovableDriveCoordinator {
     if (!this.scanEngine || typeof this.scanEngine.runCustomScan !== 'function') {
       return { ok: false, error: this.t('removableDrive.unavailable') };
     }
+    // A concurrent start for another mount must not steal ownership: if this
+    // call does not actually start a scan, the previous target is restored
+    // so a later removal still cancels the scan that is really running.
+    const previousTarget = this._activeTarget;
     this._activeTarget = mount;
     if (this._pending?.mount === mount) this._pending = null;
     this._queue.delete(mount);
@@ -159,11 +163,11 @@ class RemovableDriveCoordinator {
     try {
       result = await this.scanEngine.runCustomScan([mount]);
     } catch (error) {
-      this._activeTarget = null;
+      if (this._activeTarget === mount) this._activeTarget = previousTarget;
       return { ok: false, error: error?.message || String(error) };
     }
     if (result?.error) {
-      this._activeTarget = null;
+      if (this._activeTarget === mount) this._activeTarget = previousTarget;
       // Lost a start race after revalidation: fall back to the queue rather
       // than failing an eligible drive.
       if (/already in progress/i.test(String(result.error))) {

@@ -313,6 +313,23 @@ describe('removable drive integration through the scan engine', () => {  it('ent
     assert.equal(h.scans.length, 1);
     h.coordinator.dispose();
   });
+
+  it('a failed concurrent start does not steal ownership of the running scan', async () => {
+    const h = harness({ eligible: ['E:\\', 'F:\\'] });
+    // The engine never reports busy, so both overlapping starts reach the
+    // engine; only the first one actually starts a scan.
+    let calls = 0;
+    h.scanEngine.runCustomScan = async (paths) => {
+      calls += 1;
+      h.scans.push(paths);
+      if (calls === 1) return { ok: true };
+      return { error: 'boom' };
+    };
+    h.coordinator.start();
+    await Promise.all([h.coordinator._startScan('E:\\'), h.coordinator._startScan('F:\\')]);
+    assert.equal(h.coordinator.getStatus().activeTarget, 'E:\\');
+    h.coordinator.dispose();
+  });
 });
 
 describe('removable drive UI wiring', () => {
