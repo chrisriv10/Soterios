@@ -18,6 +18,8 @@ jobs:
           node-version: 26
           cache: npm
       - run: npm ci
+      - name: Build native host test artifact
+        run: npm run native-host:build
       - run: npm run test:coverage
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
