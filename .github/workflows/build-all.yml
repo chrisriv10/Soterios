@@ -24,6 +24,14 @@ jobs:
       - name: Build native host test artifact
         run: npm run native-host:build
       - run: npm test
+      - name: Generate coverage reports
+        run: npm run test:coverage
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage-node/lcov.info,./coverage-jest/lcov.info
+          fail_ci_if_error: false
       - run: npm run dist:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
