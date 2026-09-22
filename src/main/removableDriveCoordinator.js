@@ -2,16 +2,17 @@
 
 // Removable-drive scan coordination for issue #124.
 //
-// Owns everything the detector must not: the user prompt, the pending
-// arrival, the bounded scan queue, and entry into the EXISTING custom-scan
-// pipeline (ScanEngine.runCustomScan). No second ClamAV runner, no special
-// quarantine/report path, no renderer-provided paths: the main process
-// revalidates every mount against live enumeration before scanning.
+// Owns everything the detector must not: user prompts, the bounded FIFO
+// of pending arrivals, the bounded scan queue, and entry into the EXISTING
+// custom-scan pipeline (ScanEngine.runCustomScan). No second ClamAV runner,
+// no special quarantine/report path, no renderer-provided paths: the main
+// process revalidates every mount against live enumeration before scanning.
 
 const { RemovableDriveMonitor, canonicalMountRoot } = require('./removableDriveMonitor');
 
 const SETTING_KEY = 'scan.autoScanRemovableDrives';
 const MAX_QUEUE_SIZE = 8;
+const MAX_PENDING_SIZE = 8;
 
 class RemovableDriveCoordinator {
   constructor(options = {}) {
@@ -29,7 +30,7 @@ class RemovableDriveCoordinator {
       logger: this.logger,
     });
     this._queue = new Map();
-    this._pending = null;
+    this._pendingQueue = [];
     this._activeTarget = null;
     this._unsubscribeComplete = null;
     this._disposed = false;
@@ -49,7 +50,8 @@ class RemovableDriveCoordinator {
     return {
       running: this.monitor.isRunning(),
       autoScan: this.autoScanEnabled(),
-      pending: this._pending ? { ...this._pending } : null,
+      pending: this._pendingQueue.length ? { ...this._pendingQueue[0] } : null,
+      pendingCount: this._pendingQueue.length,
       queued: [...this._queue.keys()],
       activeTarget: this._activeTarget,
     };
@@ -74,8 +76,28 @@ class RemovableDriveCoordinator {
       this._unsubscribeComplete = null;
     }
     this._queue.clear();
-    this._pending = null;
+    this._pendingQueue = [];
     this._activeTarget = null;
+  }
+
+  _pushPending(mount) {
+    // Bounded FIFO: every prompt-mode arrival stays actionable in order, so
+    // no arrival is silently lost when several drives appear in succession.
+    // The toast action carries no mount (renderer must never supply paths),
+    // so Scan always consumes the oldest pending arrival.
+    if (!this._pendingQueue.some((entry) => entry.mount === mount)) {
+      if (this._pendingQueue.length >= MAX_PENDING_SIZE) {
+        try { this.logger?.warn('Removable drive pending queue is full; dropping oldest arrival', { mount }); } catch (_) {}
+        this._pendingQueue.shift();
+      }
+      this._pendingQueue.push({ mount, arrivedAt: new Date().toISOString() });
+    }
+  }
+
+  _dropPending(mount) {
+    const before = this._pendingQueue.length;
+    this._pendingQueue = this._pendingQueue.filter((entry) => entry.mount !== mount);
+    return this._pendingQueue.length !== before;
   }
 
   async _onArrival(mount) {
@@ -84,7 +106,7 @@ class RemovableDriveCoordinator {
       await this._requestScan(mount, { automatic: true });
       return;
     }
-    this._pending = { mount, arrivedAt: new Date().toISOString() };
+    this._pushPending(mount);
     try {
       this.showNotification?.(
         this.t('removableDrive.promptTitle', { drive: mount }),
@@ -98,7 +120,7 @@ class RemovableDriveCoordinator {
 
   _onRemoval(mount) {
     this._queue.delete(mount);
-    if (this._pending?.mount === mount) this._pending = null;
+    this._dropPending(mount);
     if (this._activeTarget === mount) {
       this._activeTarget = null;
       // Cancel only OUR scan: the active user scan is this removable scan
@@ -122,7 +144,7 @@ class RemovableDriveCoordinator {
   // mount comes from main-process pending state and is revalidated live.
   async scanPending() {
     if (this._disposed) return { ok: false, error: 'Removable drive scanning is unavailable.' };
-    const mount = this._pending?.mount;
+    const mount = this._pendingQueue.length ? this._pendingQueue[0].mount : null;
     if (!mount) return { ok: false, error: this.t('removableDrive.noPendingDrive') };
     return this._requestScan(mount, { automatic: false });
   }
@@ -131,7 +153,7 @@ class RemovableDriveCoordinator {
     const canonical = canonicalMountRoot(mount);
     if (!canonical) return { ok: false, error: this.t('removableDrive.unavailable') };
     if (!(await this._revalidate(canonical))) {
-      if (this._pending?.mount === canonical) this._pending = null;
+      this._dropPending(canonical);
       this._queue.delete(canonical);
       return { ok: false, error: this.t('removableDrive.unavailable') };
     }
@@ -157,7 +179,7 @@ class RemovableDriveCoordinator {
     // so a later removal still cancels the scan that is really running.
     const previousTarget = this._activeTarget;
     this._activeTarget = mount;
-    if (this._pending?.mount === mount) this._pending = null;
+    this._dropPending(mount);
     this._queue.delete(mount);
     let result;
     try {
@@ -188,7 +210,16 @@ class RemovableDriveCoordinator {
       return this._onScanSettled();
     }
     if (this._isBusy()) return;
-    await this._startScan(next);
+    // A failed start must not stall the rest of the queue: nothing is
+    // scanning, so no future completion will drain it. Continue only when
+    // the failed entry actually left the queue (each step then removes one
+    // entry and this always terminates); a re-enqueued entry waits for the
+    // scan that is really running.
+    const result = await this._startScan(next);
+    if (!result?.ok && !this._queue.has(next) && !this._isBusy()) {
+      return this._onScanSettled();
+    }
+    return result;
   }
 
   async _revalidate(mount) {

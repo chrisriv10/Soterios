@@ -114,6 +114,47 @@ describe('removable drive prompt path', () => {
     assert.equal(result.ok, false);
     h.coordinator.dispose();
   });
+
+  it('preserves every prompt-mode arrival in order instead of replacing', async () => {
+    const h = harness({ eligible: ['E:\\', 'F:\\'] });
+    h.coordinator.start();
+    await h.coordinator._onArrival('E:\\');
+    await h.coordinator._onArrival('F:\\');
+    assert.equal(h.notifications.length, 2);
+    assert.equal(h.scans.length, 0);
+    const first = await h.coordinator.scanPending();
+    assert.equal(first.ok, true);
+    assert.deepEqual(h.scans, [['E:\\']]);
+    h.scanEngine.isScanning = false;
+    const second = await h.coordinator.scanPending();
+    assert.equal(second.ok, true);
+    assert.deepEqual(h.scans, [['E:\\'], ['F:\\']]);
+    h.coordinator.dispose();
+  });
+
+  it('removal drops only its own pending arrival', async () => {
+    const h = harness({ eligible: ['E:\\', 'F:\\'] });
+    h.coordinator.start();
+    await h.coordinator._onArrival('E:\\');
+    await h.coordinator._onArrival('F:\\');
+    h.coordinator._onRemoval('E:\\');
+    const result = await h.coordinator.scanPending();
+    assert.equal(result.ok, true);
+    assert.deepEqual(h.scans, [['F:\\']]);
+    h.coordinator.dispose();
+  });
+
+  it('bounds the pending queue and drops the oldest arrival first', async () => {
+    const eligible = [];
+    for (let i = 0; i < 10; i += 1) eligible.push(`${String.fromCharCode(68 + i)}:\\`);
+    const h = harness({ eligible });
+    h.coordinator.start();
+    for (const mount of eligible) await h.coordinator._onArrival(mount);
+    const status = h.coordinator.getStatus();
+    assert.equal(status.pendingCount, 8);
+    assert.equal(status.pending.mount, 'F:\\');
+    h.coordinator.dispose();
+  });
 });
 
 describe('removable drive auto-scan path', () => {
@@ -171,6 +212,29 @@ describe('removable drive busy scanner', () => {
     h.scanEngine.isScanning = false;
     await h.emittedHandlers['scan:complete']();
     assert.equal(h.scans.length, 0);
+    h.coordinator.dispose();
+  });
+
+  it('continues draining after a failed queued start instead of stalling', async () => {
+    const h = harness({ eligible: ['E:\\', 'F:\\'], settings: { [REMOVABLE_DRIVE_SETTING_KEY]: true } });
+    h.scanEngine.isScanning = true;
+    h.coordinator.start();
+    await h.coordinator._onArrival('E:\\');
+    await h.coordinator._onArrival('F:\\');
+    let calls = 0;
+    h.scanEngine.runCustomScan = async (paths) => {
+      calls += 1;
+      h.scans.push(paths);
+      if (calls === 1) return { error: 'boom' };
+      return { ok: true };
+    };
+    h.scanEngine.isScanning = false;
+    await h.emittedHandlers['scan:complete']();
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(h.scans, [['E:\\'], ['F:\\']]);
+    assert.deepEqual(h.coordinator.getStatus().queued, []);
     h.coordinator.dispose();
   });
 
