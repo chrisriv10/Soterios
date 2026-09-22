@@ -21,3 +21,6 @@ assets/clamav/
 tools/extension-key.pem
 tests/fixtures/screenshots/*.png
 *.zip
+coverage/
+coverage-node/
+coverage-jest/
