@@ -1883,5 +1883,20 @@
   "thermal.cpu": "CPU Temperature",
   "thermal.gpu": "GPU Temperature",
   "thermal.unavailable": "Unavailable",
-  "thermal.unknownGpu": "Unknown GPU"
+  "thermal.unknownGpu": "Unknown GPU",
+  "diskHealth.title": "Disk Health",
+  "diskHealth.smart": "SMART",
+  "diskHealth.healthy": "Healthy",
+  "diskHealth.warning": "Warning",
+  "diskHealth.warningDetail": "SMART reports failure",
+  "diskHealth.unknown": "Unknown",
+  "diskHealth.temperature": "Temperature",
+  "diskHealth.unavailable": "Unavailable",
+  "diskHealth.rawData": "View raw SMART data",
+  "diskHealth.rawTruncated": "Raw SMART data truncated for display",
+  "diskHealth.rawUnavailable": "Raw SMART data unavailable",
+  "diskHealth.queryUnavailable": "Disk health unavailable",
+  "diskHealth.noDisks": "No physical disks detected",
+  "diskHealth.unknownDisk": "Unknown disk",
+  "diskHealth.diskCount": "{count} disk(s)"
 }
