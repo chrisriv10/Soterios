@@ -29,6 +29,11 @@ const thermalLogger = require('../../utils/logger');
 // Read-only thermal snapshot (issue #120). No arguments are accepted or
 // needed; the sampler never throws, so the page can always render.
 const sampleThermal = createThermalSampler({ logger: thermalLogger });
+
+// Read-only disk health snapshot (issue #121). TTL-cached in main so
+// repeated navigation does not re-query WMI; never throws.
+const { createDiskHealthSampler } = require('../diskHealth');
+const sampleDiskHealth = createDiskHealthSampler({ logger: thermalLogger });
 const i18n = require('../../i18n');
 const { requestText } = require('./_shared');
 const {
@@ -113,6 +118,9 @@ function register(mainWindow, {
 
   // -- Thermal sensors (read-only) --
   ipcMain.handle('system:thermalSnapshot', () => sampleThermal());
+
+  // -- Disk SMART health (read-only) --
+  ipcMain.handle('system:diskHealthSnapshot', () => sampleDiskHealth());
 
   ipcMain.handle('folderwatch:toggle', async (_event, enable) => {
     if (!folderWatcher) return { running: false };
