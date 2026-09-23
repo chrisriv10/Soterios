@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-Soterios should **not** display Low/Medium/High startup-impact ratings today. Microsoft documents what Task Manager's Startup impact *means* (CPU time and disk I/O consumed by each startup app, with explicit thresholds), but Microsoft does **not** expose that measurement through any supported public API. The underlying data lives in undocumented per-boot trace artifacts that were absent on the investigated machine, the Diagnostics-Performance event log denied read access to a standard user, and every live-queryable alternative (process timestamps, cumulative CPU/I/O counters, `Win32_StartupCommand`) measures registration or wall-clock facts — never causal boot-path delay. A defensible rating would additionally require stable attribution from measurement back to Soterios's persistence entries (Run values, `.lnk` files, tasks, services), which breaks on wrapper launchers, script hosts, and child processes. The honest product surface is **Unknown or no impact column**. A separate opt-in boot-trace workflow (WPR/ETW, reboot, elevation, ADK analysis tooling) is the only evidence-backed future path and is sketched below without being implemented.
+Soterios should **not** display Low/Medium/High startup-impact ratings today. Microsoft documents what Task Manager's Startup impact *means* (CPU time and disk I/O consumed by each startup app, with explicit thresholds), but Microsoft does **not** expose that measurement through any supported public API. The underlying data lives in undocumented per-boot trace artifacts (`Bootckcl.etl` confirmed absent here; the `WDI\LogFiles` directory itself is access-denied without elevation), the Diagnostics-Performance event log denied read access without elevation, and every live-queryable alternative (process timestamps, cumulative CPU/I/O counters, `Win32_StartupCommand`) measures registration or wall-clock facts — never causal boot-path delay. A defensible rating would additionally require stable attribution from measurement back to Soterios's persistence entries (Run values, `.lnk` files, tasks, services), which breaks on wrapper launchers, script hosts, and child processes. The honest product surface is **Unknown or no impact column**. A separate opt-in boot-trace workflow (WPR/ETW, reboot, elevation, ADK analysis tooling) is the only evidence-backed future path and is sketched below without being implemented.
 
 ## Existing Soterios Startup Model
 
@@ -50,7 +50,7 @@ A Low/Medium/High rating is viable only with all of: (1) a measurable quantity, 
 Provides: `Name`, `Command`, `Location`, `User` (+ `Caption`, `Description`, `SettingID`, `UserSID`) — registration data from Run keys and startup folders. Provides no duration, CPU, I/O, score, or timestamp fields (verified against the documented MOF in MicrosoftDocs/win32). Standard-user readable; live probe returned 17 entries on the development machine. Verdict: registration enumerator, **not a performance source**. (Soterios already collects a superset including tasks and services.)
 
 ### Boot-related WMI/CIM
-`Win32_BootConfiguration` describes boot configuration (scratch directory), not performance. No CIM class exposes per-application boot cost; `Win32_Process` exposes only live-process properties. Verdict: **no per-entry metric exists** in this family.
+`Win32_BootConfiguration` describes boot configuration (scratch directory), not performance. No documented WMI/CIM class identified in this investigation exposes per-application boot cost; `Win32_Process` exposes only live-process properties. Verdict: **no per-entry metric exists** in this family.
 
 ### Process creation timestamps
 `Win32_Process.CreationDate` (and Soterios's own `startedAt` identity) is trivially readable and gives launch order. It does not measure cost; processes that exited before Soterios started are invisible; services predate logon; launchers spawn children whose cost belongs ambiguously to the parent. Verdict: **timing fact, not impact** — cannot support a rating alone.
@@ -59,7 +59,7 @@ Provides: `Name`, `Command`, `Location`, `User` (+ `Caption`, `Description`, `Se
 Cumulative per-process CPU time and I/O counters (`Win32_Process`, `GetProcessTimes`, `GetProcessIoCounters`) describe lifetime totals observable only while the process runs. They cannot reconstruct the boot window after the fact, do not survive process exit, and cannot isolate logon initialization from later activity. Disk activity alone does not establish critical-path delay. Verdict: **counters without a window are not impact**.
 
 ### Windows Diagnostics-Performance Event Log
-`Microsoft-Windows-Diagnostics-Performance/Operational` event 100 records aggregate boot duration and degradation signals — a whole-boot verdict, not per-application attribution, and its detailed payload schema is not officially documented as a stable contract. Decisively: **on the investigated machine, reading this log as a standard user failed with `UnauthorizedAccessException`**. A data source requiring elevation merely to *read* cannot back a routine dashboard metric. Verdict: **unsuitable** (aggregate-only, undocumented schema, admin-gated reads).
+`Microsoft-Windows-Diagnostics-Performance/Operational` event 100 records aggregate boot duration and degradation signals — a whole-boot verdict, not per-application attribution, and its detailed payload schema is not officially documented as a stable contract. Decisively: **on the investigated machine, reading this log without elevation failed with `UnauthorizedAccessException`**. A data source requiring elevation merely to *read* cannot back a routine dashboard metric. Verdict: **unsuitable** (aggregate-only, undocumented schema, elevation-gated reads).
 
 ### ETW
 The kernel logger and provider model (max 64 sessions; Global/NT Kernel Logger specials) can in principle capture process, disk-I/O, and scheduling data. But: a useful measurement requires tracing *during* boot/logon, i.e. before Soterios itself is running; kernel-provider sessions require elevated controllers with explicit profile grants (`SystemTraceProvider`); continuous tracing costs non-paged pool, disk, and analysis complexity. Soterios starting after login cannot retroactively observe the boot window. Verdict: **technically expressive, operationally unsuitable** for passive monitoring — viable only inside an explicit opt-in trace workflow.
@@ -91,8 +91,8 @@ System boot (kernel/services), user logon (Explorer/shell), Run-key app launch, 
 | `Win32_StartupCommand`, process timestamps/counters | Standard user | None (already used patterns) |
 | Diagnostics-Performance log reads | **Elevation required** (read denied without it, proven live) | None |
 | WDI trace artifacts | Read access where present (`Bootckcl.etl` absent here; `LogFiles` access-denied) | None, but undocumented |
-| ETW kernel/boot tracing | **Administrator** + profile grants | Inbox APIs, complex session lifecycle |
-| WPR boot recording | **Administrator** + reboot | Inbox `wpr.exe`; WPA needs ADK install |
+| ETW kernel/boot tracing | **Elevated controller** + profile grants | Inbox APIs, complex session lifecycle |
+| WPR boot recording | **Elevated privileges** + reboot | Inbox `wpr.exe`; WPA needs ADK install |
 | Task Manager feed | N/A (no API) | N/A |
 
 Soterios must not silently elevate for a cosmetic rating; elevation here would buy, at best, aggregate boot data with no per-entry attribution.
@@ -115,7 +115,7 @@ Executable size, framework/runtime (Electron/Java/Python/.NET), child-process co
 | CPU/I/O counters | Lifetime totals | No | Live only | Ambiguous | Yes | **Yes (required)** | No | Yes | No |
 | Diagnostics-Performance log | Whole-boot verdict | Yes | No | No | **No (elevation)** | No | No | Schema undocumented | No |
 | ETW (passive) | Nothing retroactively | No | — | — | No | **Yes** | Complex | Yes | No |
-| WPR boot trace | Full boot resource profile | Via reboot | Yes | Partially | No (admin+reboot) | **Yes (trace first)** | ADK for WPA | Yes | Only as opt-in diagnostic |
+| WPR boot trace | Full boot resource profile | Via reboot | Yes | Partially | No (elevated+reboot) | **Yes (trace first)** | ADK for WPA | Yes | Only as opt-in diagnostic |
 | WPA/xperf | Analysis of ETL | Via trace | Yes | Partially | — | Via trace | ADK install | Yes | Analysis only |
 | Task Manager feed | Per-app CPU+disk at startup | Via WDI files | Yes | Run-key subset | Dir access-denied here | No (OS traces) | No | **Undocumented** | No |
 | Packaged StartupTask | Registration | N/A | N/A | Packaged only | Yes | No | No | Yes | No |
@@ -127,7 +127,7 @@ Read-only probes on one development machine (no elevation, no mutations): `Win32
 
 ## Conclusion
 
-**C — No defensible supported per-entry metric exists for ordinary Soterios operation.** The only documented per-app measurement (Task Manager's CPU+disk windows) has no public feed; the closest on-disk artifacts are undocumented and were absent; the event log is admin-gated and aggregate-only; live counters cannot reconstruct the boot window; and attribution from any measurement back to Soterios's four persistence sources is unreliable by construction.
+**C — No defensible supported per-entry metric exists for ordinary Soterios operation.** Task Manager documents a per-app CPU/disk startup-impact classification, but this investigation found no supported public API exposing those per-app values for ordinary Soterios operation. Microsoft's documented ADK/WPR/WPA tooling can measure startup performance through explicit trace/assessment workflows instead — but that tooling is not equivalent to a passive runtime API. The closest on-disk artifacts are undocumented (`Bootckcl.etl` absent here; `WDI\LogFiles` access-denied); the event log is elevation-gated and aggregate-only; live counters cannot reconstruct the boot window; and attribution from any measurement back to Soterios's four persistence sources is unreliable by construction.
 
 ## Product Recommendation
 
@@ -146,6 +146,7 @@ Accessed 2026-09-23. Preference given to Microsoft Learn/official docs; communit
 - Microsoft Learn, "Desktop Startup apps — Compatibility Cookbook" (impact definition + High/Medium/Low thresholds; ADK assessment path): https://learn.microsoft.com/en-us/windows/compatibility/startup-apps
 - Microsoft Learn, "Delivering a great startup and shutdown experience" (Fast Startup, boot-path guidance): https://learn.microsoft.com/en-us/windows-hardware/test/weg/delivering-a-great-startup-and-shutdown-experience
 - Microsoft Learn, "Windows Performance Recorder" / "Introduction to WPR" (inbox wpr.exe, ADK inclusion, profiles): https://learn.microsoft.com/en-us/windows-hardware/test/wpt/windows-performance-recorder
+- Microsoft Learn, "Introduction to WPR" (WPR extends ETW with recording profiles; trace/analysis tooling, not a passive per-app API): https://learn.microsoft.com/en-us/windows-hardware/test/wpt/introduction-to-wpr
 - Microsoft Learn, "WPR Command-Line Options" (`-addboot`/`-startboot`, on/off scenarios): https://learn.microsoft.com/en-us/windows-hardware/test/wpt/wpr-command-line-options
 - Microsoft Learn, "Windows Performance Toolkit" (WPR+WPA composition; Xperf collection still supported, Xperfview dead): https://learn.microsoft.com/en-us/windows-hardware/test/wpt
 - Microsoft Learn, "Event Tracing Sessions" (64-session cap; Global/NT Kernel Logger specials): https://learn.microsoft.com/en-us/windows/win32/etw/event-tracing-sessions
