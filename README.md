@@ -179,7 +179,7 @@ build/ installer resources
 These areas are under consideration for future updates. There is no fixed release order, and scope may change based on feedback. Linked issues track active discussion.
 
 - System Restore point management ([#125](https://github.com/chrisriv10/Soterios/issues/125))
-- Startup impact analysis ([#123](https://github.com/chrisriv10/Soterios/issues/123))
+- Startup impact analysis ([#123](https://github.com/chrisriv10/Soterios/issues/123)) — investigation complete, see [design findings](docs/design/startup-impact.md)
 - Additional ideas: secure local credential vault, further cleanup and optimization tools, UI polish
 
 Longer-term ideas that would need significant architectural work:
