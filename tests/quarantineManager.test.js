@@ -485,6 +485,11 @@ describe('QuarantineManager restore atomicity (#163)', () => {
     fs.closeSync = (fd, ...rest) => {
       if (fd === destFd) {
         closeAttempts += 1;
+        // Release the descriptor before reporting the failure, mirroring
+        // real close-error semantics (the fd is gone even when close
+        // reports an error). Otherwise rollback would unlink a file that
+        // is still open, which some platforms block.
+        realClose(fd, ...rest);
         throw new Error('EBADF: bad file descriptor, close');
       }
       return realClose(fd, ...rest);
