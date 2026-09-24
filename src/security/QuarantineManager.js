@@ -165,7 +165,15 @@ class QuarantineManager {
         writeError = err;
       } finally {
         if (fd !== null) {
-          try { fs.closeSync(fd); } catch (_) { /* close failure follows the write-failure path */ }
+          try {
+            fs.closeSync(fd);
+          } catch (closeErr) {
+            // A failed close means finalization was never confirmed: the
+            // descriptor may not have been flushed or released, so this
+            // follows the write-failure path (compensate the destination,
+            // keep the quarantine source) instead of reporting success.
+            if (!writeError) writeError = closeErr;
+          }
         }
       }
       if (writeError) {
@@ -237,7 +245,7 @@ class QuarantineManager {
    * restored, and add its hash to the trusted (false-positive) whitelist so
    * future scans skip it.
    * @param {number} id - Quarantine row id.
-   * @returns {Promise<{success:boolean, error?:string}>}
+   * @returns {Promise<{success:boolean, error?:string, warning?:string}>}
    */
   async restoreAndTrust(id) {
     const res = await this.restore(id);
@@ -252,7 +260,9 @@ class QuarantineManager {
       // Restoring succeeded; whitelist failure should not undo the restore.
       logger.error('Failed to trust hash after restore', { error: err.message || String(err) });
     }
-    return { success: true };
+    // Preserve a non-fatal restore warning (e.g. leftover quarantine copy):
+    // the UI only branches on success, so the extra field is safe to carry.
+    return res.warning ? { success: true, warning: res.warning } : { success: true };
   }
 
   /**

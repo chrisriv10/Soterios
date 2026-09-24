@@ -467,4 +467,65 @@ describe('QuarantineManager restore atomicity (#163)', () => {
     assert.equal(fs.existsSync(qPath), true);
     assert.equal(rowOf(id).status, 'quarantined');
   });
+
+  it('treats descriptor-close failure as a write failure and compensates', async () => {
+    const id = await quarantineSample();
+    const qPath = rowOf(id).quarantine_path;
+    // Target only the restore destination descriptor: readFileSync uses
+    // closeSync internally, so a blanket patch would break the read path.
+    const realOpen = fs.openSync;
+    const realClose = fs.closeSync;
+    let destFd = null;
+    let closeAttempts = 0;
+    fs.openSync = (p, flags, mode) => {
+      const fd = realOpen(p, flags, mode);
+      if (p === originalPath && String(flags) === 'wx') destFd = fd;
+      return fd;
+    };
+    fs.closeSync = (fd, ...rest) => {
+      if (fd === destFd) {
+        closeAttempts += 1;
+        throw new Error('EBADF: bad file descriptor, close');
+      }
+      return realClose(fd, ...rest);
+    };
+    let result;
+    try {
+      result = await manager.restore(id);
+    } finally {
+      fs.openSync = realOpen;
+      fs.closeSync = realClose;
+    }
+    assert.ok(destFd !== null, 'restore must open the destination exclusively');
+    assert.equal(closeAttempts, 1, 'restore must attempt exactly one destination close');
+    assert.equal(result.success, false);
+    assert.match(String(result.error), /write/i);
+    // Unconfirmed destination is rolled back; source and row stay recoverable.
+    assert.equal(fs.existsSync(originalPath), false);
+    assert.equal(fs.existsSync(qPath), true);
+    assert.equal(rowOf(id).status, 'quarantined');
+    const retried = await manager.restore(id);
+    assert.equal(retried.success, true);
+    assert.equal(fs.readFileSync(originalPath, 'utf8'), 'hello-quarantine-payload');
+  });
+
+  it('restoreAndTrust preserves a non-fatal cleanup warning', async () => {
+    const id = await quarantineSample('trustedhash-warn-passthrough');
+    const qPath = rowOf(id).quarantine_path;
+    const realUnlink = fs.unlinkSync;
+    fs.unlinkSync = (p) => {
+      if (p === qPath) throw new Error('EPERM: operation not permitted');
+      return realUnlink(p);
+    };
+    let result;
+    try {
+      result = await manager.restoreAndTrust(id);
+    } finally {
+      fs.unlinkSync = realUnlink;
+    }
+    assert.equal(result.success, true);
+    assert.ok(result.warning, 'warning must survive restoreAndTrust');
+    assert.equal(db.isHashTrusted('trustedhash-warn-passthrough'), true);
+    assert.equal(rowOf(id).status, 'restored');
+  });
 });
