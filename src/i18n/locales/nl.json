@@ -1898,5 +1898,21 @@
   "diskHealth.queryUnavailable": "Disk health unavailable",
   "diskHealth.noDisks": "No physical disks detected",
   "diskHealth.unknownDisk": "Unknown disk",
-  "diskHealth.diskCount": "{count} disk(s)"
+  "diskHealth.diskCount": "{count} disk(s)",
+  "systemRestore.title": "System Restore",
+  "systemRestore.desc": "View Windows restore points and create a new one before risky changes. Listing is read-only; creation always asks first.",
+  "systemRestore.refresh": "Refresh",
+  "systemRestore.create": "Create restore point",
+  "systemRestore.creating": "Creating...",
+  "systemRestore.descriptionLabel": "Description",
+  "systemRestore.defaultDescription": "Soterios maintenance",
+  "systemRestore.loading": "Loading restore points...",
+  "systemRestore.showingOf": "Showing {shown} of {total}",
+  "systemRestore.empty": "No restore points to show.",
+  "systemRestore.createdOk": "Restore point created and verified.",
+  "systemRestore.confirmTitle": "Create a system restore point?",
+  "systemRestore.confirmMessage": "Windows will record a restore point with the description below. This can take a few minutes, and Windows allows only one restore point per day.",
+  "systemRestore.needDescription": "Enter a description first.",
+  "systemRestore.createFailed": "Could not create the restore point.",
+  "systemRestore.loadFailed": "Could not load restore points."
 }
