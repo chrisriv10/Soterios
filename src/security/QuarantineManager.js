@@ -100,8 +100,19 @@ class QuarantineManager {
 
   /**
    * Decrypt a quarantined file back to its original path and mark the record restored.
+   *
+   * Ordering (issue #163): the filesystem and the SQLite database are not one
+   * shared transaction, so safety comes from ordering plus compensation —
+   * never from claiming cross-resource atomicity:
+   * 1. exclusively create the destination (`wx`, fails closed with EEXIST);
+   * 2. record the `restored` DB state and require that one row changed;
+   * 3. only then delete the quarantine source copy.
+   * If the DB transition fails, the destination created by this attempt is
+   * rolled back and the quarantine source is left intact, so a retry stays
+   * possible. A post-commit source-cleanup failure keeps success=true with a
+   * non-breaking warning: the file IS restored and the DB says so.
    * @param {number} id - Quarantine row id.
-   * @returns {Promise<{success:boolean, error?:string}>}
+   * @returns {Promise<{success:boolean, error?:string, warning?:string}>}
    */
   async restore(id) {
     try {
@@ -133,13 +144,96 @@ class QuarantineManager {
       if (hasReparseAncestor(destDir) || hasReparseAncestor(record.original_path)) {
         return { success: false, error: 'The original location changed during restore; refusing to write through a link or junction.' };
       }
+      // Fast-path UX check only. The safety boundary is the exclusive
+      // creation below: a file appearing after this check still fails
+      // closed with EEXIST instead of being overwritten.
       if (fs.existsSync(record.original_path)) {
         return { success: false, error: 'A file already exists at the original location.' };
       }
-      fs.writeFileSync(record.original_path, data);
-      fs.unlinkSync(record.quarantine_path);
 
-      this.db.updateQuarantineStatus(id, 'restored');
+      // Exclusive creation: the filesystem itself enforces the collision
+      // check. createdByUs is true only after openSync succeeds, so cleanup
+      // below can never remove a pre-existing or unrelated file.
+      let fd = null;
+      let createdByUs = false;
+      let writeError = null;
+      try {
+        fd = fs.openSync(record.original_path, 'wx');
+        createdByUs = true;
+        fs.writeFileSync(fd, data);
+      } catch (err) {
+        writeError = err;
+      } finally {
+        if (fd !== null) {
+          try {
+            fs.closeSync(fd);
+          } catch (closeErr) {
+            // A failed close means finalization was never confirmed: the
+            // descriptor may not have been flushed or released, so this
+            // follows the write-failure path (compensate the destination,
+            // keep the quarantine source) instead of reporting success.
+            if (!writeError) writeError = closeErr;
+          }
+        }
+      }
+      if (writeError) {
+        if (createdByUs) {
+          try { fs.unlinkSync(record.original_path); } catch (_) { /* partial remains; reported below */ }
+        } else if (writeError && writeError.code === 'EEXIST') {
+          return { success: false, error: 'A file already exists at the original location.' };
+        }
+        if (createdByUs && fs.existsSync(record.original_path)) {
+          logger.error('Restore destination could not be rolled back and may need manual attention', {
+            error: writeError.message || String(writeError)
+          });
+          return { success: false, error: 'Could not write the restored file, and the partial destination could not be removed and may need manual attention.' };
+        }
+        return { success: false, error: 'Could not write the restored file.' };
+      }
+
+      // Record the restored state BEFORE touching the quarantine source.
+      // Require exactly one row changed: changes === 0 means the intended
+      // record was not updated and must not be treated as success.
+      let statusResult = null;
+      let statusError = null;
+      try {
+        statusResult = this.db.updateQuarantineStatus(id, 'restored');
+      } catch (err) {
+        statusError = err;
+      }
+      if (statusError || !statusResult || statusResult.changes !== 1) {
+        if (statusError) {
+          logger.error('Failed to record quarantine restore in database', { error: statusError.message || String(statusError) });
+        } else {
+          logger.error('Quarantine restore status update changed no rows', { id });
+        }
+        let rolledBack = false;
+        try {
+          fs.unlinkSync(record.original_path);
+          rolledBack = !fs.existsSync(record.original_path);
+        } catch (_) {
+          rolledBack = false;
+        }
+        if (!rolledBack) {
+          logger.error('Restore destination could not be rolled back and may need manual attention', {
+            error: (statusError && (statusError.message || String(statusError))) || 'status update changed no rows'
+          });
+          return { success: false, error: 'Could not record the restore in the database, and the restored destination could not be removed and may need manual attention. The quarantined copy was kept.' };
+        }
+        return { success: false, error: 'Could not record the restore in the database. The restored destination was removed and the quarantined copy was kept.' };
+      }
+
+      // Post-commit source cleanup is best-effort: the file is restored and
+      // the database says restored. A leftover encrypted copy is a storage
+      // problem, never grounds to report failure (a retry could not rerun).
+      try {
+        fs.unlinkSync(record.quarantine_path);
+      } catch (err) {
+        logger.warn('Restored file is in place but the quarantined copy could not be removed', {
+          error: err.message || String(err)
+        });
+        return { success: true, warning: 'The file was restored, but the quarantined copy could not be removed.' };
+      }
       return { success: true };
     } catch (err) {
       return { success: false, error: err.message };
@@ -151,7 +245,7 @@ class QuarantineManager {
    * restored, and add its hash to the trusted (false-positive) whitelist so
    * future scans skip it.
    * @param {number} id - Quarantine row id.
-   * @returns {Promise<{success:boolean, error?:string}>}
+   * @returns {Promise<{success:boolean, error?:string, warning?:string}>}
    */
   async restoreAndTrust(id) {
     const res = await this.restore(id);
@@ -166,7 +260,9 @@ class QuarantineManager {
       // Restoring succeeded; whitelist failure should not undo the restore.
       logger.error('Failed to trust hash after restore', { error: err.message || String(err) });
     }
-    return { success: true };
+    // Preserve a non-fatal restore warning (e.g. leftover quarantine copy):
+    // the UI only branches on success, so the extra field is safe to carry.
+    return res.warning ? { success: true, warning: res.warning } : { success: true };
   }
 
   /**
