@@ -9,6 +9,7 @@ const {
   SystemRestoreManager,
   validateDescription,
   normalizeRestorePoint,
+  restorePointTypeLabel,
   classifyRestoreError,
   parseListOutput,
   createLaunch,
@@ -135,6 +136,8 @@ describe('normalizeRestorePoint', () => {
       createdAtMs: Date.parse('2026-09-23T12:00:00.000Z'),
       description: 'Test',
       restorePointType: 12,
+      restorePointTypeKey: 'systemRestore.type.modifySettings',
+      restorePointTypeLabel: 'Settings modification',
       eventType: 100,
     });
   });
@@ -921,5 +924,116 @@ describe('Tools-page error visibility (review #177)', () => {
     const renderStart = TOOLS_SOURCE.indexOf('_renderSystemRestoreSection()');
     const alertAt = TOOLS_SOURCE.indexOf('role="alert"');
     assert.ok(renderStart !== -1 && alertAt > renderStart, 'alert must render inside the SR section');
+  });
+});
+
+describe('restore-point type labels', () => {
+  it('maps documented known types to stable labels with i18n keys', () => {
+    assert.deepEqual(restorePointTypeLabel(0), { key: 'systemRestore.type.applicationInstall', label: 'Application install' });
+    assert.deepEqual(restorePointTypeLabel(1), { key: 'systemRestore.type.applicationUninstall', label: 'Application uninstall' });
+    assert.deepEqual(restorePointTypeLabel(10), { key: 'systemRestore.type.deviceDriverInstall', label: 'Device driver install' });
+    assert.deepEqual(restorePointTypeLabel(13), { key: 'systemRestore.type.cancelledOperation', label: 'Cancelled operation' });
+  });
+
+  it('maps MODIFY_SETTINGS correctly', () => {
+    assert.deepEqual(restorePointTypeLabel(12), { key: 'systemRestore.type.modifySettings', label: 'Settings modification' });
+  });
+
+  it('degrades unknown integers safely without guessing', () => {
+    assert.deepEqual(restorePointTypeLabel(99), { key: 'systemRestore.type.unknown', label: 'Unknown type (99)' });
+    assert.deepEqual(restorePointTypeLabel(-1), { key: 'systemRestore.type.unknown', label: 'Unknown type (-1)' });
+    assert.deepEqual(restorePointTypeLabel(2), { key: 'systemRestore.type.unknown', label: 'Unknown type (2)' });
+  });
+
+  it('returns Unknown for missing/malformed input without throwing', () => {
+    for (const value of [null, undefined, NaN, 'abc', '', '   ', {}, [], true]) {
+      assert.deepEqual(restorePointTypeLabel(value), { key: 'systemRestore.type.unknownValue', label: 'Unknown' }, JSON.stringify(value));
+    }
+  });
+
+  it('accepts numeric strings but never stringifies raw input', () => {
+    assert.deepEqual(restorePointTypeLabel('12'), { key: 'systemRestore.type.modifySettings', label: 'Settings modification' });
+    for (const value of [{ toString: () => 'pwned' }, ['12'], 'NaN']) {
+      const result = restorePointTypeLabel(value);
+      assert.ok(!JSON.stringify(result).includes('pwned'), 'raw input must never leak into the label');
+      assert.equal(result.label, 'Unknown');
+    }
+  });
+
+  it('normalize preserves the numeric type and includes the readable label', () => {
+    const point = normalizeRestorePoint({
+      sequenceNumber: 7,
+      creationTime: '2026-09-23T12:00:00.000Z',
+      description: 'Test',
+      restorePointType: 12,
+      eventType: 100,
+    });
+    assert.equal(point.restorePointType, 12);
+    assert.equal(point.restorePointTypeKey, 'systemRestore.type.modifySettings');
+    assert.equal(point.restorePointTypeLabel, 'Settings modification');
+  });
+
+  it('unknown type does not invalidate an otherwise valid point', () => {
+    const point = normalizeRestorePoint({
+      sequenceNumber: 7,
+      creationTime: '2026-09-23T12:00:00.000Z',
+      description: 'Test',
+      restorePointType: 99,
+      eventType: 100,
+    });
+    assert.ok(point, 'point must survive unknown type');
+    assert.equal(point.restorePointType, 99);
+    assert.equal(point.restorePointTypeLabel, 'Unknown type (99)');
+    const malformed = normalizeRestorePoint({
+      sequenceNumber: 7,
+      creationTime: '2026-09-23T12:00:00.000Z',
+      description: 'Test',
+      restorePointType: 'bogus',
+      eventType: 100,
+    });
+    assert.ok(malformed, 'point must survive malformed type');
+    assert.equal(malformed.restorePointType, null);
+    assert.equal(malformed.restorePointTypeLabel, 'Unknown');
+  });
+
+  it('type does not participate in creation verification', () => {
+    const start = MODULE_SOURCE.indexOf('async _verifyNewPoint(');
+    const end = MODULE_SOURCE.indexOf('}\n}', start);
+    assert.ok(start !== -1 && end !== -1);
+    const body = MODULE_SOURCE.slice(start, end);
+    assert.ok(!body.includes('restorePointType'), 'verification must ignore the display-only type');
+    assert.ok(body.includes('point.sequenceNumber > beforeMax'));
+    assert.ok(body.includes('point.description === description'));
+  });
+
+  it('UI row renders the escaped type label without duplicating the mapping', () => {
+    const toolsPath = path.join(__dirname, '..', 'src', 'ui', 'js', 'pages', 'tools.js');
+    const toolsSource = fs.readFileSync(toolsPath, 'utf8');
+    assert.ok(toolsSource.includes('_srTypeLabel(point)'), 'row must resolve the label through the helper');
+    assert.ok(toolsSource.includes('restorePointTypeKey'), 'helper must use the normalized key');
+    assert.ok(toolsSource.includes('restorePointTypeLabel'), 'helper must use the normalized label');
+    const rowStart = toolsSource.indexOf('_renderSystemRestoreSection()');
+    assert.ok(rowStart !== -1);
+    const section = toolsSource.slice(rowStart, rowStart + 12000);
+    assert.ok(section.includes('this.e(typeLabel)'), 'type label must be escaped');
+    assert.ok(!section.includes('APPLICATION_INSTALL'), 'no numeric mapping duplicated in renderer');
+    assert.ok(!section.includes('DEVICE_DRIVER_INSTALL'), 'no numeric mapping duplicated in renderer');
+    assert.ok(!section.includes('MODIFY_SETTINGS'), 'no numeric mapping duplicated in renderer');
+  });
+
+  it('locale catalogs carry the type keys with parity', () => {
+    const en = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'src', 'i18n', 'locales', 'en.json'), 'utf8'));
+    for (const key of [
+      'systemRestore.type.applicationInstall',
+      'systemRestore.type.applicationUninstall',
+      'systemRestore.type.deviceDriverInstall',
+      'systemRestore.type.modifySettings',
+      'systemRestore.type.cancelledOperation',
+      'systemRestore.type.unknown',
+      'systemRestore.type.unknownValue',
+    ]) {
+      assert.equal(typeof en[key], 'string', `missing en key ${key}`);
+    }
+    assert.equal(en['systemRestore.type.modifySettings'], 'Settings modification');
   });
 });

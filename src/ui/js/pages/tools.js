@@ -319,6 +319,14 @@
       </section>`;
     },
 
+    _srTypeLabel(point) {
+      const key = point && point.restorePointTypeKey;
+      const fallback = (point && point.restorePointTypeLabel) || 'Unknown';
+      if (!key) return fallback;
+      const translated = this.t(key, fallback, { n: point.restorePointType });
+      return String(translated).replace('{n}', String(Number.isInteger(point.restorePointType) ? point.restorePointType : ''));
+    },
+
     _renderSystemRestoreSection() {
       const state = this._systemRestore;
       const draft = state.draft ?? this.t('systemRestore.defaultDescription', 'Soterios maintenance');
@@ -331,9 +339,10 @@
         const shown = state.points.slice(0, 10);
         const rows = shown.map((point) => {
           const when = Number.isFinite(Date.parse(point.createdAt)) ? new Date(point.createdAt).toLocaleString() : point.createdAt;
+          const typeLabel = this._srTypeLabel(point);
           return `<div style="display:grid; grid-template-columns:64px minmax(0,1fr) 170px; gap:8px; padding:6px 0; border-bottom:1px solid var(--border, #e5e5e5);">
             <span style="color:var(--text-muted);">#${this.e(point.sequenceNumber)}</span>
-            <span>${this.e(point.description || '—')}</span>
+            <span><span style="display:block;">${this.e(point.description || '—')}</span><span style="display:block; color:var(--text-muted); font-size:0.8rem;">${this.e(typeLabel)}</span></span>
             <span style="color:var(--text-muted); font-size:0.85rem;">${this.e(when)}</span>
           </div>`;
         }).join('');
