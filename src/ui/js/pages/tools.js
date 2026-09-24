@@ -53,6 +53,7 @@
     _maintenanceConfig: null,
     _maintenanceScripts: [],
     _maintenanceBrowserOptions: [],
+    _systemRestore: { state: 'idle', status: null, points: [], count: 0, message: null, error: null, creating: false, draft: null, lastCreated: null },
 
     e(value) {
       return String(value ?? '')
@@ -207,6 +208,7 @@
       if (!root) return;
       root.innerHTML = this._selectedToolId ? this._renderDetail(this._selectedToolId) : this._renderHub();
       this._wire(root);
+      if (!this._selectedToolId && this._systemRestore.state === 'idle') this._refreshSystemRestore();
     },
 
     _renderHub() {
@@ -225,7 +227,8 @@
           </section>`;
         }).join('')}
       </div>
-      ${this._renderMaintenanceSection()}`;
+      ${this._renderMaintenanceSection()}
+      ${this._renderSystemRestoreSection()}`;
     },
 
     _renderMaintenanceSection() {
@@ -314,6 +317,112 @@
         <div id="maintenanceStatus" style="margin-top:8px; font-size:0.85rem; color:var(--text-muted);">${statusText}</div>
         </div>
       </section>`;
+    },
+
+    _renderSystemRestoreSection() {
+      const state = this._systemRestore;
+      const draft = state.draft ?? this.t('systemRestore.defaultDescription', 'Soterios maintenance');
+      let body = '';
+      if (state.state === 'idle' || state.state === 'loading') {
+        body = `<span style="color:var(--text-muted);"><span class="spinner" style="width:14px;height:14px;"></span> ${this.e(this.t('systemRestore.loading', 'Loading restore points…'))}</span>`;
+      } else if (state.state === 'error') {
+        body = `<span style="color:var(--danger, #c0392b);">${this.e(state.error)}</span>`;
+      } else {
+        const shown = state.points.slice(0, 10);
+        const rows = shown.map((point) => {
+          const when = Number.isFinite(Date.parse(point.createdAt)) ? new Date(point.createdAt).toLocaleString() : point.createdAt;
+          return `<div style="display:grid; grid-template-columns:64px minmax(0,1fr) 170px; gap:8px; padding:6px 0; border-bottom:1px solid var(--border, #e5e5e5);">
+            <span style="color:var(--text-muted);">#${this.e(point.sequenceNumber)}</span>
+            <span>${this.e(point.description || '—')}</span>
+            <span style="color:var(--text-muted); font-size:0.85rem;">${this.e(when)}</span>
+          </div>`;
+        }).join('');
+        const countLine = this.t('systemRestore.showingOf', 'Showing {shown} of {total}')
+          .replace('{shown}', String(shown.length)).replace('{total}', String(state.count));
+        body = `${state.message ? `<p style="color:var(--text-muted); font-size:0.9rem;">${this.e(state.message)}</p>` : ''}
+        ${state.lastCreated ? `<p style="color:var(--success, #1e7e34); font-size:0.9rem;">${this.e(state.lastCreated)}</p>` : ''}
+        <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:4px;">${this.e(countLine)}</div>
+        <div>${rows || `<span style="color:var(--text-muted);">${this.e(this.t('systemRestore.empty', 'No restore points to show.'))}</span>`}</div>`;
+      }
+      const busy = state.state === 'loading' || state.creating;
+      return `<section class="card" id="systemRestoreSection" style="margin-top:24px;" aria-labelledby="systemRestoreTitle">
+        <div class="panel-title" style="margin-bottom:8px;" id="systemRestoreTitle">${this.e(this.t('systemRestore.title', 'System Restore'))}</div>
+        <p class="page-subtitle" style="font-size:0.85rem;">${this.e(this.t('systemRestore.desc', 'View Windows restore points and create a new one before risky changes. Listing is read-only; creation always asks first.'))}</p>
+        <div id="systemRestoreBody" style="margin-top:8px;">${body}</div>
+        <div class="field" style="margin-top:12px;">
+          <label class="field-label" for="srDescription">${this.e(this.t('systemRestore.descriptionLabel', 'Description'))}</label>
+          <input type="text" class="field-input" id="srDescription" maxlength="100" value="${this.e(draft)}" ${busy ? 'disabled' : ''} />
+        </div>
+        <div style="margin-top:12px;">
+          <button class="btn btn-primary" data-action="sr-create" ${busy ? 'disabled' : ''}>${this.e(state.creating ? this.t('systemRestore.creating', 'Creating…') : this.t('systemRestore.create', 'Create restore point'))}</button>
+          <button class="btn btn-secondary" data-action="sr-refresh" style="margin-left:8px;" ${busy ? 'disabled' : ''}>${this.e(this.t('systemRestore.refresh', 'Refresh'))}</button>
+        </div>
+      </section>`;
+    },
+
+    _paintSystemRestore() {
+      const section = this._container?.querySelector('#systemRestoreSection');
+      if (section) section.outerHTML = this._renderSystemRestoreSection();
+    },
+
+    async _refreshSystemRestore() {
+      const state = this._systemRestore;
+      if (state.state === 'loading') return;
+      state.state = 'loading';
+      state.error = null;
+      this._paintSystemRestore();
+      try {
+        const result = await window.api.invoke('systemRestore:list');
+        if (result && result.ok) {
+          state.state = 'ready';
+          state.status = result.status || 'available';
+          state.points = Array.isArray(result.points) ? result.points : [];
+          state.count = Number.isInteger(result.count) ? result.count : state.points.length;
+          state.message = result.message || null;
+          state.error = null;
+        } else {
+          state.state = 'error';
+          state.error = (result && result.message) || this.t('systemRestore.loadFailed', 'Could not load restore points.');
+        }
+      } catch (error) {
+        state.state = 'error';
+        state.error = error?.message || String(error);
+      }
+      this._paintSystemRestore();
+    },
+
+    async _createSystemRestorePoint() {
+      const state = this._systemRestore;
+      if (state.creating) return;
+      const input = this._container?.querySelector('#srDescription');
+      const description = (input?.value ?? state.draft ?? '').trim();
+      if (!description) {
+        this._setNotice(this.t('systemRestore.needDescription', 'Enter a description first.'), 'error');
+        return;
+      }
+      const confirmed = await this._confirm({
+        title: this.t('systemRestore.confirmTitle', 'Create a system restore point?'),
+        message: `${this.t('systemRestore.confirmMessage', 'Windows will record a restore point with the description below. This can take a few minutes, and Windows allows only one restore point per day.')}\n\n“${description}”`,
+        confirmLabel: this.t('systemRestore.create', 'Create restore point'),
+      });
+      if (!confirmed) return;
+      state.creating = true;
+      state.lastCreated = null;
+      this._paintSystemRestore();
+      try {
+        const result = await window.api.invoke('systemRestore:create', { description });
+        if (result && result.ok) {
+          state.lastCreated = this.t('systemRestore.createdOk', 'Restore point created and verified.');
+          state.draft = null;
+        } else {
+          this._setNotice((result && result.message) || this.t('systemRestore.createFailed', 'Could not create the restore point.'), 'error');
+        }
+      } catch (error) {
+        this._setNotice(error?.message || String(error), 'error');
+      } finally {
+        state.creating = false;
+      }
+      await this._refreshSystemRestore();
     },
 
     _maintenanceArgRow(scriptId, args) {
@@ -630,6 +739,8 @@
           if (result && this._results['uninstaller-report']) result.innerHTML = this._renderSoftware(this._results['uninstaller-report']);
         } else if (event.target.id === 'leftoverAppName') {
           this._leftoverAppName = event.target.value;
+        } else if (event.target.id === 'srDescription') {
+          this._systemRestore.draft = event.target.value;
         }
       };
     },
@@ -646,6 +757,8 @@
       }
       if (action === 'back-hub') { this._selectedToolId = null; this._notice = null; this._renderView(); return; }
       if (action === 'run-tool') { await this._runSelectedTool(); return; }
+      if (action === 'sr-refresh') { await this._refreshSystemRestore(); return; }
+      if (action === 'sr-create') { await this._createSystemRestorePoint(); return; }
       if (action === 'cancel-run') { await Api.cancelTool(target.dataset.runId); return; }
       if (action === 'delete-tool-run') {
         const runId = target.dataset.runId;

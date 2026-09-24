@@ -4,6 +4,7 @@ const { register: registerProcess } = require('./ipc/process');
 const { register: registerFirewall } = require('./ipc/firewall');
 const { register: registerNetwork } = require('./ipc/network');
 const { register: registerSystem } = require('./ipc/system');
+const { register: registerSystemRestore } = require('./ipc/systemRestore');
 const { register: registerAi } = require('./ipc/ai');
 
 function registerIpcHandlers(mainWindow, services) {
@@ -81,6 +82,7 @@ function registerIpcHandlers(mainWindow, services) {
   registerFirewall(mainWindow, servicesForFirewall);
   registerNetwork(mainWindow, servicesForNetwork);
   registerSystem(mainWindow, servicesForSystem);
+  registerSystemRestore(mainWindow, { systemRestoreManager: services.systemRestoreManager });
   registerAi(mainWindow, servicesForAi);
 }
 

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- System Restore point management ([#125](https://github.com/chrisriv10/Soterios/issues/125)): read-only restore-point listing plus explicit user-confirmed manual checkpoint creation (`MODIFY_SETTINGS`) on the Tools page, with fixed PowerShell scripts, verified-before-claimed results, and honest unconfirmed/unavailable states (no restore, delete, scheduling, or protection-policy changes)
 - Opt-in removable-drive scanning: newly connected removable volumes show a scan prompt (or auto-scan when explicitly enabled), reusing the existing custom-scan pipeline with revalidation, bounded queueing, and truthful removal handling
 - CPU/GPU temperature monitoring on the dashboard with graceful unavailable states for unsupported sensors
 - Disk SMART health monitoring on the dashboard with strict status mapping (Healthy/Warning/Unknown) and on-demand raw data inspection
