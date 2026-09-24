@@ -53,7 +53,7 @@
     _maintenanceConfig: null,
     _maintenanceScripts: [],
     _maintenanceBrowserOptions: [],
-    _systemRestore: { state: 'idle', status: null, points: [], count: 0, message: null, error: null, creating: false, draft: null, lastCreated: null },
+    _systemRestore: { state: 'idle', status: null, points: [], count: 0, message: null, error: null, creating: false, draft: null, lastCreated: null, createError: null },
 
     e(value) {
       return String(value ?? '')
@@ -349,6 +349,7 @@
         <div class="panel-title" style="margin-bottom:8px;" id="systemRestoreTitle">${this.e(this.t('systemRestore.title', 'System Restore'))}</div>
         <p class="page-subtitle" style="font-size:0.85rem;">${this.e(this.t('systemRestore.desc', 'View Windows restore points and create a new one before risky changes. Listing is read-only; creation always asks first.'))}</p>
         <div id="systemRestoreBody" style="margin-top:8px;">${body}</div>
+        ${state.createError ? `<p role="alert" style="color:var(--danger, #c0392b); font-size:0.9rem; margin-top:8px;">${this.e(state.createError)}</p>` : ''}
         <div class="field" style="margin-top:12px;">
           <label class="field-label" for="srDescription">${this.e(this.t('systemRestore.descriptionLabel', 'Description'))}</label>
           <input type="text" class="field-input" id="srDescription" maxlength="100" value="${this.e(draft)}" ${busy ? 'disabled' : ''} />
@@ -397,7 +398,8 @@
       const input = this._container?.querySelector('#srDescription');
       const description = (input?.value ?? state.draft ?? '').trim();
       if (!description) {
-        this._setNotice(this.t('systemRestore.needDescription', 'Enter a description first.'), 'error');
+        state.createError = this.t('systemRestore.needDescription', 'Enter a description first.');
+        this._paintSystemRestore();
         return;
       }
       const confirmed = await this._confirm({
@@ -408,6 +410,7 @@
       if (!confirmed) return;
       state.creating = true;
       state.lastCreated = null;
+      state.createError = null;
       this._paintSystemRestore();
       try {
         const result = await window.api.invoke('systemRestore:create', { description });
@@ -415,10 +418,10 @@
           state.lastCreated = this.t('systemRestore.createdOk', 'Restore point created and verified.');
           state.draft = null;
         } else {
-          this._setNotice((result && result.message) || this.t('systemRestore.createFailed', 'Could not create the restore point.'), 'error');
+          state.createError = (result && result.message) || this.t('systemRestore.createFailed', 'Could not create the restore point.');
         }
       } catch (error) {
-        this._setNotice(error?.message || String(error), 'error');
+        state.createError = error?.message || String(error);
       } finally {
         state.creating = false;
       }

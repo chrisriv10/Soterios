@@ -228,6 +228,11 @@ describe('classifyRestoreError', () => {
       classifyRestoreError({ stderr: 'Cannot create a new restore point: a restore point has already been created within the past 24 hours.' }),
       'frequency_limited'
     );
+    // Authentic PowerShell 5.1 warning text, as re-thrown by CREATE_SCRIPT.
+    assert.equal(
+      classifyRestoreError({ stderr: 'SOTERIOS_RESTORE_WARNING: A new system restore point cannot be created because one has already been created within the past 1440 minutes' }),
+      'frequency_limited'
+    );
   });
 
   it('falls back to failed', () => {
@@ -434,13 +439,25 @@ describe('createRestorePoint', () => {
     const cancelled = new Error('failed');
     cancelled.code = 1;
     cancelled.stderr = 'The operation was canceled by the user';
+    // Authentic Windows text: the fixed create script converts the
+    // Checkpoint-Computer 24-hour warning into a terminating error, so the
+    // failure surfaces here (exit non-zero) rather than as exit 0.
     const limited = new Error('failed');
     limited.code = 1;
-    limited.stderr = 'a restore point has already been created within the past 24 hours';
+    limited.stderr = 'SOTERIOS_RESTORE_WARNING: A new system restore point cannot be created because one has already been created within the past 1440 minutes';
     const first = managerWithScript([{ stdout: before, stderr: '' }, cancelled]);
     assert.equal((await first.mgr.createRestorePoint('Soterios maintenance')).code, 'cancelled');
     const second = managerWithScript([{ stdout: before, stderr: '' }, limited]);
     assert.equal((await second.mgr.createRestorePoint('Soterios maintenance')).code, 'frequency_limited');
+  });
+
+  it('captures Checkpoint-Computer warnings and converts them into terminating errors', () => {
+    assert.ok(CREATE_SCRIPT.includes('-WarningVariable srWarnings'), 'warnings must be captured');
+    assert.ok(CREATE_SCRIPT.includes('-WarningAction SilentlyContinue'), 'warnings must not leak to output');
+    assert.ok(CREATE_SCRIPT.includes('SOTERIOS_RESTORE_WARNING'), 'warning text must reach the classifier');
+    assert.ok(CREATE_SCRIPT.includes(`Write-Output '${CREATE_SUCCESS_MARKER}'`), 'marker still gates the success path');
+    const warningLine = CREATE_SCRIPT.split('\n').find((line) => line.includes('SOTERIOS_RESTORE_WARNING'));
+    assert.ok(warningLine && warningLine.includes('throw'), 'warning must terminate, not warn-and-continue');
   });
 
   it('passes the description via environment, never via argv', async () => {
@@ -879,5 +896,30 @@ describe('malformed renderer payloads (audit #5)', () => {
     assert.ok(calls.length > 0, 'valid description proceeds');
     assert.equal(calls[1].env[DESCRIPTION_ENV_VAR], 'ok');
     assert.ok(!('script' in calls[1]) && !('timeout' in calls[1]), 'extra payload fields must not reach the runner');
+  });
+});
+
+describe('Tools-page error visibility (review #177)', () => {
+  const TOOLS_PATH = path.join(__dirname, '..', 'src', 'ui', 'js', 'pages', 'tools.js');
+  const TOOLS_SOURCE = fs.readFileSync(TOOLS_PATH, 'utf8');
+  function createFlowSource() {
+    const start = TOOLS_SOURCE.indexOf('_createSystemRestorePoint()');
+    const end = TOOLS_SOURCE.indexOf('_maintenanceArgRow(scriptId', start);
+    assert.ok(start !== -1 && end !== -1 && end > start);
+    return TOOLS_SOURCE.slice(start, end);
+  }
+
+  it('stores create errors in section state instead of the invisible hub notice', () => {
+    const flow = createFlowSource();
+    assert.ok(!flow.includes('_setNotice'), 'hub view never renders _notice; SR errors must not use it');
+    assert.ok(flow.includes('state.createError'), 'errors must be stored in section state');
+  });
+
+  it('renders the section error escaped with an alert role', () => {
+    assert.ok(TOOLS_SOURCE.includes('state.createError'), 'section state carries the error');
+    assert.ok(TOOLS_SOURCE.includes('role="alert"'), 'error must be announced');
+    const renderStart = TOOLS_SOURCE.indexOf('_renderSystemRestoreSection()');
+    const alertAt = TOOLS_SOURCE.indexOf('role="alert"');
+    assert.ok(renderStart !== -1 && alertAt > renderStart, 'alert must render inside the SR section');
   });
 });

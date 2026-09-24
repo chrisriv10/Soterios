@@ -60,11 +60,17 @@ const LIST_SCRIPT = [
 
 // Fixed create script. The description arrives via the child environment, so
 // no caller-controlled text ever appears in this source or on argv.
+// Checkpoint-Computer reports the one-point-per-day limit as a *warning*
+// (exit code stays 0), which -ErrorAction Stop does not intercept — so
+// warnings are captured and converted into a terminating error carrying the
+// warning text. The classifier then reports the honest frequency_limited
+// state instead of a misleading not_confirmed.
 const CREATE_SCRIPT = [
   "$ErrorActionPreference = 'Stop'",
   `$description = $env:${DESCRIPTION_ENV_VAR}`,
   "if ([string]::IsNullOrWhiteSpace($description)) { throw 'SOTERIOS_RESTORE_MISSING_DESCRIPTION' }",
-  `Checkpoint-Computer -Description $description -RestorePointType ${RESTORE_POINT_TYPE_MODIFY_SETTINGS} -ErrorAction Stop`,
+  `Checkpoint-Computer -Description $description -RestorePointType ${RESTORE_POINT_TYPE_MODIFY_SETTINGS} -ErrorAction Stop -WarningAction SilentlyContinue -WarningVariable srWarnings`,
+  "if ($srWarnings) { throw ('SOTERIOS_RESTORE_WARNING: ' + (($srWarnings | ForEach-Object { $_.Message }) -join ' ')) }",
   `Write-Output '${CREATE_SUCCESS_MARKER}'`,
 ].join('\n');
 
