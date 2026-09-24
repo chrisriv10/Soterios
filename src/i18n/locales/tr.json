@@ -1914,5 +1914,12 @@
   "systemRestore.confirmMessage": "Windows will record a restore point with the description below. This can take a few minutes, and Windows allows only one restore point per day.",
   "systemRestore.needDescription": "Enter a description first.",
   "systemRestore.createFailed": "Could not create the restore point.",
-  "systemRestore.loadFailed": "Could not load restore points."
+  "systemRestore.loadFailed": "Could not load restore points.",
+  "systemRestore.type.applicationInstall": "Application install",
+  "systemRestore.type.applicationUninstall": "Application uninstall",
+  "systemRestore.type.deviceDriverInstall": "Device driver install",
+  "systemRestore.type.modifySettings": "Settings modification",
+  "systemRestore.type.cancelledOperation": "Cancelled operation",
+  "systemRestore.type.unknown": "Unknown type ({n})",
+  "systemRestore.type.unknownValue": "Unknown"
 }

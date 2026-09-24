@@ -172,8 +172,41 @@ function validateDescription(input) {
 }
 
 /**
+ * Documented System Restore restore-point types (dwRestorePtType), per
+ * Microsoft's RESTOREPOINTINFOA reference. Only these values are mapped;
+ * anything else degrades to an explicit unknown label (never guessed).
+ * The renderer localizes via restorePointTypeKey; the label is the stable
+ * English fallback. Pure display metadata — never throws, never affects
+ * point validity or creation verification.
+ */
+const RESTORE_POINT_TYPE_LABELS = {
+  0: { key: 'systemRestore.type.applicationInstall', label: 'Application install' },
+  1: { key: 'systemRestore.type.applicationUninstall', label: 'Application uninstall' },
+  10: { key: 'systemRestore.type.deviceDriverInstall', label: 'Device driver install' },
+  12: { key: 'systemRestore.type.modifySettings', label: 'Settings modification' },
+  13: { key: 'systemRestore.type.cancelledOperation', label: 'Cancelled operation' },
+};
+
+function restorePointTypeLabel(type) {
+  let numeric = null;
+  if (typeof type === 'number') {
+    numeric = type;
+  } else if (typeof type === 'string' && type.trim() !== '') {
+    numeric = Number(type.trim());
+  }
+  if (numeric === null || !Number.isInteger(numeric)) {
+    return { key: 'systemRestore.type.unknownValue', label: 'Unknown' };
+  }
+  const known = RESTORE_POINT_TYPE_LABELS[numeric];
+  if (known) return known;
+  return { key: 'systemRestore.type.unknown', label: `Unknown type (${numeric})` };
+}
+
+/**
  * Normalize one raw row into the public point shape. Returns null when the
  * row lacks a usable sequence number or creation time (never throws).
+ * The restore-point type is display metadata only: an unknown or malformed
+ * type never invalidates the point and never participates in verification.
  */
 function normalizeRestorePoint(raw) {
   if (!raw || typeof raw !== 'object') return null;
@@ -183,12 +216,15 @@ function normalizeRestorePoint(raw) {
   if (Number.isNaN(parsed)) return null;
   const restorePointType = Number(raw.restorePointType);
   const eventType = Number(raw.eventType);
+  const typeInfo = restorePointTypeLabel(raw.restorePointType);
   return {
     sequenceNumber,
     createdAt: new Date(parsed).toISOString(),
     createdAtMs: parsed,
     description: typeof raw.description === 'string' ? raw.description : '',
     restorePointType: Number.isInteger(restorePointType) ? restorePointType : null,
+    restorePointTypeKey: typeInfo.key,
+    restorePointTypeLabel: typeInfo.label,
     eventType: Number.isInteger(eventType) ? eventType : null,
   };
 }
@@ -405,6 +441,7 @@ module.exports = {
   SystemRestoreManager,
   validateDescription,
   normalizeRestorePoint,
+  restorePointTypeLabel,
   classifyRestoreError,
   parseListOutput,
   createLaunch,
