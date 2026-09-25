@@ -61,8 +61,8 @@ class RemovableDriveCoordinator {
     if (this._disposed) return { running: false };
     this.monitor.start();
     if (this.eventBus && !this._unsubscribeComplete) {
-      this._unsubscribeComplete = this.eventBus.on('scan:complete', () => {
-        this._onScanSettled().catch(() => {});
+      this._unsubscribeComplete = this.eventBus.on('scan:complete', (completion) => {
+        this._onScanSettled(completion).catch(() => {});
       });
     }
     return { running: true };
@@ -100,13 +100,7 @@ class RemovableDriveCoordinator {
     return this._pendingQueue.length !== before;
   }
 
-  async _onArrival(mount) {
-    if (this._disposed) return;
-    if (this.autoScanEnabled()) {
-      await this._requestScan(mount, { automatic: true });
-      return;
-    }
-    this._pushPending(mount);
+  _notifyPrompt(mount) {
     try {
       this.showNotification?.(
         this.t('removableDrive.promptTitle', { drive: mount }),
@@ -116,6 +110,24 @@ class RemovableDriveCoordinator {
         'removable-scan'
       );
     } catch (_) {}
+  }
+
+  async _onArrival(mount) {
+    if (this._disposed) return;
+    if (this.autoScanEnabled()) {
+      const result = await this._requestScan(mount, { automatic: true });
+      // A failed automatic scan must stay actionable: downgrade to prompt
+      // mode so the user can retry from the notification instead of the
+      // arrival disappearing silently. Queued results are already tracked;
+      // revalidate so a vanished drive gains no stale pending entry.
+      if (result && !result.ok && !result.queued && (await this._revalidate(mount))) {
+        this._pushPending(mount);
+        this._notifyPrompt(mount);
+      }
+      return;
+    }
+    this._pushPending(mount);
+    this._notifyPrompt(mount);
   }
 
   _onRemoval(mount) {
@@ -200,8 +212,22 @@ class RemovableDriveCoordinator {
     return { ok: true };
   }
 
-  async _onScanSettled() {
+  // A scan:complete event settles removable ownership only when it belongs
+  // to the tracked scan. ScanEngine broadcasts completions for every scan
+  // type (folder-watch, manual, definitions updates), so an unfiltered
+  // listener would clear _activeTarget mid-scan and break removal-abort.
+  // No owned target (or a legacy payload-less emitter) preserves the
+  // previous drain behavior.
+  _completionSettlesActive(completion) {
+    if (this._activeTarget == null) return true;
+    if (!completion || typeof completion !== 'object') return true;
+    const targets = Array.isArray(completion.targetPaths) ? completion.targetPaths : [];
+    return targets.includes(this._activeTarget);
+  }
+
+  async _onScanSettled(completion) {
     if (this._disposed) return;
+    if (!this._completionSettlesActive(completion)) return;
     this._activeTarget = null;
     if (!this._queue.size) return;
     const next = [...this._queue.keys()][0];

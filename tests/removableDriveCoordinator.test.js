@@ -435,3 +435,140 @@ describe('removable drive UI wiring', () => {
     }
   });
 });
+
+describe('removable drive auto-scan failure stays actionable (#180 H1)', () => {
+  function autoHarness(extra = {}) {
+    return harness({
+      eligible: ['E:\\'],
+      settings: { [REMOVABLE_DRIVE_SETTING_KEY]: true },
+      ...extra,
+    });
+  }
+
+  it('failed automatic scan becomes a pending prompt instead of disappearing', async () => {
+    const h = autoHarness({ scanError: 'ClamAV virus definitions are not available' });
+    h.coordinator.start();
+    await h.coordinator._onArrival('E:\\');
+    assert.deepEqual(h.scans, [['E:\\']], 'engine must have been attempted');
+    const status = h.coordinator.getStatus();
+    assert.equal(status.pending?.mount, 'E:\\');
+    assert.equal(status.pendingCount, 1);
+    assert.equal(status.activeTarget, null);
+    assert.equal(h.notifications.length, 1);
+    assert.equal(h.notifications[0].action, 'removable-scan');
+    assert.ok(String(h.notifications[0].title).startsWith('removableDrive.promptTitle'));
+    h.coordinator.dispose();
+  });
+
+  it('pending retry after engine recovery scans successfully', async () => {
+    const h = autoHarness({ scanError: 'ClamAV virus definitions are not available' });
+    h.coordinator.start();
+    await h.coordinator._onArrival('E:\\');
+    assert.equal(h.coordinator.getStatus().pending?.mount, 'E:\\');
+    h.scanEngine.runCustomScan = async (paths) => {
+      h.scans.push(paths);
+      h.scanEngine.isScanning = true;
+      return { ok: true };
+    };
+    const retry = await h.coordinator.scanPending();
+    assert.equal(retry.ok, true);
+    assert.deepEqual(h.scans, [['E:\\'], ['E:\\']]);
+    assert.equal(h.coordinator.getStatus().pending, null);
+    assert.equal(h.coordinator.getStatus().activeTarget, 'E:\\');
+    h.coordinator.dispose();
+  });
+
+  it('vanished drive gains no stale pending entry on auto failure', async () => {
+    const h = autoHarness({ scanError: 'engine exploded' });
+    h.coordinator.start();
+    h.eligible.delete('E:\\');
+    await h.coordinator._onArrival('E:\\');
+    assert.equal(h.scans.length, 0);
+    assert.equal(h.coordinator.getStatus().pending, null);
+    assert.equal(h.notifications.length, 0);
+    h.coordinator.dispose();
+  });
+
+  it('queued auto arrival still tracks the queue without prompting', async () => {
+    const h = autoHarness();
+    h.scanEngine.isScanning = true;
+    h.coordinator.start();
+    await h.coordinator._onArrival('E:\\');
+    assert.deepEqual(h.coordinator.getStatus().queued, ['E:\\']);
+    assert.equal(h.coordinator.getStatus().pending, null);
+    assert.equal(h.notifications.length, 0);
+    h.coordinator.dispose();
+  });
+});
+
+describe('removable scan ownership filtering (#180 H2)', () => {
+  function activeHarness() {
+    const h = harness({
+      eligible: ['E:\\', 'F:\\'],
+      settings: { [REMOVABLE_DRIVE_SETTING_KEY]: true },
+    });
+    h.coordinator.start();
+    return h;
+  }
+
+  async function startActiveScan(h, mount = 'E:\\') {
+    await h.coordinator._onArrival(mount);
+    assert.equal(h.coordinator.getStatus().activeTarget, mount);
+  }
+
+  it('foreign folder-watch completion preserves ownership and removal still aborts', async () => {
+    const h = activeHarness();
+    await startActiveScan(h);
+    await h.emittedHandlers['scan:complete']({ scanType: 'folderwatch', targetPaths: ['C:\\Watched'], status: 'completed' });
+    assert.equal(h.coordinator.getStatus().activeTarget, 'E:\\');
+    h.coordinator._onRemoval('E:\\');
+    assert.equal(h.aborts.length, 1);
+    assert.equal(h.coordinator.getStatus().activeTarget, null);
+    h.coordinator.dispose();
+  });
+
+  it('definitions completion without target paths is ignored while active', async () => {
+    const h = activeHarness();
+    await startActiveScan(h);
+    await h.emittedHandlers['scan:complete']({ scanType: 'definitions', status: 'completed' });
+    assert.equal(h.coordinator.getStatus().activeTarget, 'E:\\');
+    h.coordinator.dispose();
+  });
+
+  it('matching completion settles ownership and drains the queue', async () => {
+    const h = activeHarness();
+    await startActiveScan(h);
+    await h.coordinator._onArrival('F:\\');
+    assert.deepEqual(h.coordinator.getStatus().queued, ['F:\\']);
+    h.scanEngine.isScanning = false;
+    await h.emittedHandlers['scan:complete']({ scanType: 'custom', targetPaths: ['E:\\'], status: 'completed' });
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(h.coordinator.getStatus().activeTarget, 'F:\\');
+    assert.deepEqual(h.scans, [['E:\\'], ['F:\\']]);
+    assert.deepEqual(h.coordinator.getStatus().queued, []);
+    h.coordinator.dispose();
+  });
+
+  it('idle foreign completion still drains the queue', async () => {
+    const h = activeHarness();
+    h.scanEngine.isScanning = true;
+    await h.coordinator._onArrival('E:\\');
+    assert.deepEqual(h.coordinator.getStatus().queued, ['E:\\']);
+    h.scanEngine.isScanning = false;
+    await h.emittedHandlers['scan:complete']({ scanType: 'full', targetPaths: ['C:\\'], status: 'completed' });
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(h.scans, [['E:\\']]);
+    assert.deepEqual(h.coordinator.getStatus().queued, []);
+    h.coordinator.dispose();
+  });
+
+  it('legacy payload-less completion preserves previous settle behavior', async () => {
+    const h = activeHarness();
+    await startActiveScan(h);
+    await h.emittedHandlers['scan:complete']();
+    assert.equal(h.coordinator.getStatus().activeTarget, null);
+    h.coordinator.dispose();
+  });
+});
