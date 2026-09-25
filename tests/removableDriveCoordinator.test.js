@@ -750,4 +750,87 @@ describe('removable scan ownership filtering (#180 H2)', () => {
     assert.equal(h.coordinator.getStatus().pending, null);
     assert.equal(h.notifications.length, 0);
   });
+
+  it('disposal during _requestScan revalidation enqueues nothing', async () => {
+    const h = harness({
+      eligible: ['E:\\'],
+      settings: { [REMOVABLE_DRIVE_SETTING_KEY]: true },
+    });
+    h.scanEngine.isScanning = true;
+    h.coordinator.start();
+    let enteredResolve;
+    const entered = new Promise((resolve) => { enteredResolve = resolve; });
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const realEligible = h.monitor.isCurrentlyEligible;
+    h.monitor.isCurrentlyEligible = async (mount) => {
+      enteredResolve();
+      await gate;
+      return realEligible(mount);
+    };
+    const request = h.coordinator._requestScan('E:\\', { automatic: true });
+    await entered;
+    h.coordinator.dispose();
+    release();
+    const result = await request;
+    assert.equal(result.ok, false);
+    assert.deepEqual(h.coordinator.getStatus().queued, []);
+    assert.equal(h.coordinator.getStatus().pending, null);
+    assert.equal(h.coordinator.getStatus().activeTarget, null);
+    assert.deepEqual(h.scans, []);
+    assert.equal(h.notifications.length, 0);
+  });
+
+  it('disposal after _requestScan rejects immediately without state', async () => {
+    const h = harness({
+      eligible: ['E:\\'],
+      settings: { [REMOVABLE_DRIVE_SETTING_KEY]: true },
+    });
+    h.scanEngine.isScanning = true;
+    h.coordinator.start();
+    h.coordinator.dispose();
+    const result = await h.coordinator._requestScan('E:\\', { automatic: true });
+    assert.equal(result.ok, false);
+    assert.deepEqual(h.scans, []);
+    assert.deepEqual(h.coordinator.getStatus().queued, []);
+    assert.equal(h.coordinator.getStatus().pending, null);
+  });
+
+  it('disposal during scanPending fallback revalidation resurrects nothing', async () => {
+    const h = harness({ eligible: ['E:\\'] });
+    h.coordinator.start();
+    await h.coordinator._onArrival('E:\\');
+    const before = h.notifications.length;
+    assert.equal(h.coordinator.getStatus().pending?.mount, 'E:\\');
+    h.scanEngine.runCustomScan = async (paths) => {
+      h.scans.push(paths);
+      return { error: 'engine unavailable' };
+    };
+    let enteredResolve;
+    const entered = new Promise((resolve) => { enteredResolve = resolve; });
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    let calls = 0;
+    const realEligible = h.monitor.isCurrentlyEligible;
+    h.monitor.isCurrentlyEligible = async (mount) => {
+      calls += 1;
+      // First call serves _requestScan inside scanPending; the second serves
+      // the retry fallback and must pause for disposal.
+      if (calls > 1) {
+        enteredResolve();
+        await gate;
+      }
+      return realEligible(mount);
+    };
+    const retry = h.coordinator.scanPending();
+    await entered;
+    h.coordinator.dispose();
+    release();
+    const result = await retry;
+    assert.equal(result.ok, false);
+    assert.equal(h.coordinator.getStatus().pending, null);
+    assert.deepEqual(h.coordinator.getStatus().queued, []);
+    assert.equal(h.coordinator.getStatus().activeTarget, null);
+    assert.equal(h.notifications.length, before);
+  });
 });

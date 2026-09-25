@@ -163,18 +163,33 @@ class RemovableDriveCoordinator {
     const result = await this._requestScan(mount, { automatic: false });
     // A failed non-queued retry must not consume the user's only Scan
     // action: _startScan drops the pending entry before the engine runs, so
-    // restore it (revalidated, undisposed) to keep the drive retryable.
+    // restore it to keep the drive retryable. Sequential checks: disposal
+    // during the fallback revalidation must not resurrect pending state.
     // The caller already surfaces the failure itself, so no new toast here.
-    if (result && !result.ok && !result.queued && !this._disposed && (await this._revalidate(mount))) {
-      this._pushPending(mount);
+    if (result && !result.ok && !result.queued && !this._disposed) {
+      const stillEligible = await this._revalidate(mount);
+      if (!this._disposed && stillEligible) {
+        this._pushPending(mount);
+      }
     }
     return result;
   }
 
   async _requestScan(mount, { automatic } = {}) {
+    // Entry guard: reject new requests after disposal, including the
+    // "already in progress" recursive retry path below.
+    if (this._disposed) {
+      return { ok: false, error: this.t('removableDrive.unavailable') };
+    }
     const canonical = canonicalMountRoot(mount);
     if (!canonical) return { ok: false, error: this.t('removableDrive.unavailable') };
-    if (!(await this._revalidate(canonical))) {
+    // Post-await guard: disposal during live eligibility enumeration must
+    // leave queue/pending state untouched — the continuation goes inert.
+    const eligible = await this._revalidate(canonical);
+    if (this._disposed) {
+      return { ok: false, error: this.t('removableDrive.unavailable') };
+    }
+    if (!eligible) {
       this._dropPending(canonical);
       this._queue.delete(canonical);
       return { ok: false, error: this.t('removableDrive.unavailable') };
