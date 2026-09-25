@@ -478,6 +478,26 @@ describe('removable drive auto-scan failure stays actionable (#180 H1)', () => {
     h.coordinator.dispose();
   });
 
+  it('failed user retry restores the pending entry for another attempt', async () => {
+    const h = autoHarness({ scanError: 'ClamAV virus definitions are not available' });
+    h.coordinator.start();
+    await h.coordinator._onArrival('E:\\');
+    assert.equal(h.coordinator.getStatus().pending?.mount, 'E:\\');
+    const retry = await h.coordinator.scanPending();
+    assert.equal(retry.ok, false);
+    // _startScan consumed the entry before the engine failed: it must come back.
+    assert.equal(h.coordinator.getStatus().pending?.mount, 'E:\\');
+    h.scanEngine.runCustomScan = async (paths) => {
+      h.scans.push(paths);
+      h.scanEngine.isScanning = true;
+      return { ok: true };
+    };
+    const recovery = await h.coordinator.scanPending();
+    assert.equal(recovery.ok, true);
+    assert.equal(h.coordinator.getStatus().activeTarget, 'E:\\');
+    h.coordinator.dispose();
+  });
+
   it('vanished drive gains no stale pending entry on auto failure', async () => {
     const h = autoHarness({ scanError: 'engine exploded' });
     h.coordinator.start();

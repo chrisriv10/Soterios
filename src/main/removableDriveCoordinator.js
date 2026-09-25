@@ -160,7 +160,15 @@ class RemovableDriveCoordinator {
     if (this._disposed) return { ok: false, error: 'Removable drive scanning is unavailable.' };
     const mount = this._pendingQueue.length ? this._pendingQueue[0].mount : null;
     if (!mount) return { ok: false, error: this.t('removableDrive.noPendingDrive') };
-    return this._requestScan(mount, { automatic: false });
+    const result = await this._requestScan(mount, { automatic: false });
+    // A failed non-queued retry must not consume the user's only Scan
+    // action: _startScan drops the pending entry before the engine runs, so
+    // restore it (revalidated, undisposed) to keep the drive retryable.
+    // The caller already surfaces the failure itself, so no new toast here.
+    if (result && !result.ok && !result.queued && !this._disposed && (await this._revalidate(mount))) {
+      this._pushPending(mount);
+    }
+    return result;
   }
 
   async _requestScan(mount, { automatic } = {}) {
