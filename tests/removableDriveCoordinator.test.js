@@ -571,4 +571,71 @@ describe('removable scan ownership filtering (#180 H2)', () => {
     assert.equal(h.coordinator.getStatus().activeTarget, null);
     h.coordinator.dispose();
   });
+
+  it('failed queued automatic start falls back to a pending prompt', async () => {
+    const h = activeHarness();
+    h.scanEngine.isScanning = true;
+    await h.coordinator._onArrival('E:\\');
+    assert.deepEqual(h.coordinator.getStatus().queued, ['E:\\']);
+    h.scanEngine.runCustomScan = async (paths) => {
+      h.scans.push(paths);
+      return { error: 'engine unavailable' };
+    };
+    h.scanEngine.isScanning = false;
+    await h.emittedHandlers['scan:complete']();
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    const status = h.coordinator.getStatus();
+    assert.equal(status.pending?.mount, 'E:\\');
+    assert.equal(h.notifications.length, 1);
+    assert.equal(h.notifications[0].action, 'removable-scan');
+    h.coordinator.dispose();
+  });
+
+  it('failed queued manual start restores its pending prompt', async () => {
+    // Prompt mode never auto-queues: the user clicks Scan first, and only
+    // then does a busy engine queue the request.
+    const h = harness({ eligible: ['E:\\'] });
+    h.scanEngine.isScanning = true;
+    h.coordinator.start();
+    await h.coordinator._onArrival('E:\\');
+    assert.equal(h.coordinator.getStatus().pending?.mount, 'E:\\');
+    const queued = await h.coordinator.scanPending();
+    assert.equal(queued.queued, true);
+    assert.deepEqual(h.coordinator.getStatus().queued, ['E:\\']);
+    h.scanEngine.runCustomScan = async (paths) => {
+      h.scans.push(paths);
+      return { error: 'engine unavailable' };
+    };
+    h.scanEngine.isScanning = false;
+    await h.emittedHandlers['scan:complete']();
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(h.coordinator.getStatus().pending?.mount, 'E:\\');
+    assert.ok(h.notifications.length >= 2, 'user must be told the requested scan did not run');
+    assert.equal(h.notifications[h.notifications.length - 1].action, 'removable-scan');
+    h.coordinator.dispose();
+  });
+
+  it('no prompt is created when disposal lands mid-request', async () => {
+    const h = harness({
+      eligible: ['E:\\'],
+      settings: { [REMOVABLE_DRIVE_SETTING_KEY]: true },
+    });
+    let releaseScan;
+    const gate = new Promise((resolve) => { releaseScan = resolve; });
+    h.scanEngine.runCustomScan = async (paths) => {
+      h.scans.push(paths);
+      await gate;
+      return { error: 'engine unavailable' };
+    };
+    h.coordinator.start();
+    const arrival = h.coordinator._onArrival('E:\\');
+    await new Promise((resolve) => setImmediate(resolve));
+    h.coordinator.dispose();
+    releaseScan();
+    await arrival;
+    assert.equal(h.coordinator.getStatus().pending, null);
+    assert.equal(h.notifications.length, 0);
+  });
 });

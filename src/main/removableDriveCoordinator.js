@@ -119,8 +119,10 @@ class RemovableDriveCoordinator {
       // A failed automatic scan must stay actionable: downgrade to prompt
       // mode so the user can retry from the notification instead of the
       // arrival disappearing silently. Queued results are already tracked;
-      // revalidate so a vanished drive gains no stale pending entry.
+      // revalidate so a vanished drive gains no stale pending entry. Recheck
+      // disposal: a quit during the awaits must not create a dead prompt.
       if (result && !result.ok && !result.queued && (await this._revalidate(mount))) {
+        if (this._disposed) return;
         this._pushPending(mount);
         this._notifyPrompt(mount);
       }
@@ -240,9 +242,17 @@ class RemovableDriveCoordinator {
     // scanning, so no future completion will drain it. Continue only when
     // the failed entry actually left the queue (each step then removes one
     // entry and this always terminates); a re-enqueued entry waits for the
-    // scan that is really running.
+    // scan that is really running. A failed automatic (or pending-backed)
+    // entry stays actionable through the same revalidated prompt fallback
+    // as a failed direct automatic scan — never silently dropped.
+    const queuedEntry = this._queue.get(next);
+    const hadPending = this._pendingQueue.some((entry) => entry.mount === next);
     const result = await this._startScan(next);
     if (!result?.ok && !this._queue.has(next) && !this._isBusy()) {
+      if ((queuedEntry?.automatic || hadPending) && !this._disposed && (await this._revalidate(next))) {
+        this._pushPending(next);
+        this._notifyPrompt(next);
+      }
       return this._onScanSettled();
     }
     return result;
