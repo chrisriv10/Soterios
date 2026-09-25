@@ -185,6 +185,12 @@ class RemovableDriveCoordinator {
   }
 
   async _startScan(mount) {
+    // Defense in depth: caller-side disposal checks own the sequencing, but
+    // a scan must never begin on a disposed coordinator even if a caller
+    // races disposal.
+    if (this._disposed) {
+      return { ok: false, error: this.t('removableDrive.unavailable') };
+    }
     if (!this.scanEngine || typeof this.scanEngine.runCustomScan !== 'function') {
       return { ok: false, error: this.t('removableDrive.unavailable') };
     }
@@ -218,13 +224,17 @@ class RemovableDriveCoordinator {
   // to the tracked scan. ScanEngine broadcasts completions for every scan
   // type (folder-watch, manual, definitions updates), so an unfiltered
   // listener would clear _activeTarget mid-scan and break removal-abort.
-  // No owned target (or a legacy payload-less emitter) preserves the
-  // previous drain behavior.
+  // While a removable target is active the rule fails CLOSED: only a
+  // custom scan whose single target canonicalizes to the active mount
+  // settles ownership. Malformed, foreign, or payload-less completions are
+  // ignored. With no active target, any completion may wake queued work.
   _completionSettlesActive(completion) {
     if (this._activeTarget == null) return true;
-    if (!completion || typeof completion !== 'object') return true;
-    const targets = Array.isArray(completion.targetPaths) ? completion.targetPaths : [];
-    return targets.includes(this._activeTarget);
+    if (!completion || typeof completion !== 'object') return false;
+    if (completion.scanType !== 'custom') return false;
+    const targets = Array.isArray(completion.targetPaths) ? completion.targetPaths : null;
+    if (!targets || targets.length !== 1) return false;
+    return canonicalMountRoot(targets[0]) === this._activeTarget;
   }
 
   async _onScanSettled(completion) {
@@ -233,7 +243,11 @@ class RemovableDriveCoordinator {
     this._activeTarget = null;
     if (!this._queue.size) return;
     const next = [...this._queue.keys()][0];
-    if (!(await this._revalidate(next))) {
+    // Disposal during any await below must stop the continuation: no scan
+    // may start and no prompt may appear after dispose().
+    const eligible = await this._revalidate(next);
+    if (this._disposed) return;
+    if (!eligible) {
       this._queue.delete(next);
       return this._onScanSettled();
     }
@@ -248,8 +262,11 @@ class RemovableDriveCoordinator {
     const queuedEntry = this._queue.get(next);
     const hadPending = this._pendingQueue.some((entry) => entry.mount === next);
     const result = await this._startScan(next);
+    if (this._disposed) return;
     if (!result?.ok && !this._queue.has(next) && !this._isBusy()) {
-      if ((queuedEntry?.automatic || hadPending) && !this._disposed && (await this._revalidate(next))) {
+      const stillEligible = await this._revalidate(next);
+      if (this._disposed) return;
+      if ((queuedEntry?.automatic || hadPending) && stillEligible) {
         this._pushPending(next);
         this._notifyPrompt(next);
       }

@@ -541,7 +541,8 @@ describe('removable scan ownership filtering (#180 H2)', () => {
     await h.coordinator._onArrival('F:\\');
     assert.deepEqual(h.coordinator.getStatus().queued, ['F:\\']);
     h.scanEngine.isScanning = false;
-    await h.emittedHandlers['scan:complete']({ scanType: 'custom', targetPaths: ['E:\\'], status: 'completed' });
+    // Equivalent non-canonical form proves canonical target matching.
+    await h.emittedHandlers['scan:complete']({ scanType: 'custom', targetPaths: ['e:'], status: 'completed' });
     await new Promise((resolve) => setImmediate(resolve));
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(h.coordinator.getStatus().activeTarget, 'F:\\');
@@ -564,12 +565,103 @@ describe('removable scan ownership filtering (#180 H2)', () => {
     h.coordinator.dispose();
   });
 
-  it('legacy payload-less completion preserves previous settle behavior', async () => {
+  it('payload-less completion cannot settle active removable ownership', async () => {
     const h = activeHarness();
     await startActiveScan(h);
+    await h.coordinator._onArrival('F:\\');
     await h.emittedHandlers['scan:complete']();
+    await h.emittedHandlers['scan:complete'](null);
+    assert.equal(h.coordinator.getStatus().activeTarget, 'E:\\');
+    assert.deepEqual(h.coordinator.getStatus().queued, ['F:\\']);
+    h.coordinator._onRemoval('E:\\');
+    assert.equal(h.aborts.length, 1);
     assert.equal(h.coordinator.getStatus().activeTarget, null);
     h.coordinator.dispose();
+  });
+
+  it('malformed and foreign completions never settle the active target', async () => {
+    const cases = [
+      ['undefined', undefined],
+      ['null', null],
+      ['empty object', {}],
+      ['missing targets', { scanType: 'custom' }],
+      ['string targets', { scanType: 'custom', targetPaths: 'E:\\' }],
+      ['empty targets', { scanType: 'custom', targetPaths: [] }],
+      ['multi targets', { scanType: 'custom', targetPaths: ['E:\\', 'F:\\'] }],
+      ['folderwatch same mount', { scanType: 'folderwatch', targetPaths: ['E:\\'] }],
+      ['quick same mount', { scanType: 'quick', targetPaths: ['E:\\'] }],
+      ['full same mount', { scanType: 'full', targetPaths: ['E:\\'] }],
+      ['definitions', { scanType: 'definitions' }],
+      ['custom other mount', { scanType: 'custom', targetPaths: ['F:\\'] }],
+      ['custom non-string target', { scanType: 'custom', targetPaths: [12345] }],
+    ];
+    for (const [name, payload] of cases) {
+      const h = activeHarness();
+      await startActiveScan(h);
+      await h.emittedHandlers['scan:complete'](payload);
+      assert.equal(h.coordinator.getStatus().activeTarget, 'E:\\', name);
+      assert.deepEqual(h.scans, [['E:\\']], `${name} must not start extra work`);
+      h.coordinator.dispose();
+    }
+  });
+
+  it('disposal during queued revalidation starts no scan', async () => {
+    const h = activeHarness();
+    h.scanEngine.isScanning = true;
+    await h.coordinator._onArrival('E:\\');
+    assert.deepEqual(h.coordinator.getStatus().queued, ['E:\\']);
+    let releaseEligible;
+    const gate = new Promise((resolve) => { releaseEligible = resolve; });
+    const realEligible = h.monitor.isCurrentlyEligible;
+    h.monitor.isCurrentlyEligible = async (mount) => {
+      await gate;
+      return realEligible(mount);
+    };
+    h.scanEngine.isScanning = false;
+    const settled = h.emittedHandlers['scan:complete']();
+    await new Promise((resolve) => setImmediate(resolve));
+    h.coordinator.dispose();
+    releaseEligible();
+    await settled;
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(h.scans, [], 'no scan may start after disposal');
+    assert.equal(h.coordinator.getStatus().activeTarget, null);
+    assert.deepEqual(h.coordinator.getStatus().queued, []);
+    assert.equal(h.coordinator.getStatus().pending, null);
+    assert.equal(h.notifications.length, 0);
+  });
+
+  it('disposal during fallback revalidation creates no prompt', async () => {
+    const h = activeHarness();
+    h.scanEngine.isScanning = true;
+    await h.coordinator._onArrival('E:\\');
+    let releaseEligible;
+    const gate = new Promise((resolve) => { releaseEligible = resolve; });
+    let calls = 0;
+    const realEligible = h.monitor.isCurrentlyEligible;
+    h.monitor.isCurrentlyEligible = async (mount) => {
+      calls += 1;
+      if (calls > 1) await gate;
+      return realEligible(mount);
+    };
+    h.scanEngine.runCustomScan = async (paths) => {
+      h.scans.push(paths);
+      return { error: 'engine unavailable' };
+    };
+    h.scanEngine.isScanning = false;
+    const settled = h.emittedHandlers['scan:complete']();
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    h.coordinator.dispose();
+    releaseEligible();
+    await settled;
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(h.coordinator.getStatus().pending, null);
+    assert.equal(h.notifications.length, 0);
+    assert.deepEqual(h.coordinator.getStatus().queued, []);
+    assert.equal(h.coordinator.getStatus().activeTarget, null);
   });
 
   it('failed queued automatic start falls back to a pending prompt', async () => {
