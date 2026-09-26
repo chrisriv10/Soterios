@@ -43,7 +43,7 @@ const {
   openWindowsUtility
 } = require('../shellLaunchers');
 const featureFlags = require('../../core/featureFlags');
-const { validateRendererSetting } = require('../rendererWritableSettings');
+const { writeRendererSetting } = require('../rendererWritableSettings');
 const privacyMode = require('../../core/privacyMode');
 const { DefenderThreatHistory } = require('../../security/DefenderThreatHistory');
 
@@ -154,15 +154,7 @@ function register(mainWindow, {
     // feature.* keys and internal main-process keys — throw instead of
     // falling through to a raw database write. Trusted main-process code
     // keeps calling db.setSetting() directly and is unaffected.
-    const validated = validateRendererSetting(key, value);
-    const result = db.setSetting(validated.key, validated.value);
-    if (validated.key === 'ui.theme') {
-      try {
-        const themePath = path.join(app.getPath('userData'), 'theme.json');
-        fs.writeFileSync(themePath, JSON.stringify({ theme: validated.value }, null, 2), 'utf8');
-      } catch (_) { }
-    }
-    return result;
+    return writeRendererSetting({ db, app, fs, path }, key, value);
   });
   // -- Internationalization --
   ipcMain.handle('i18n:getCatalog', (_event, locale) => i18n.loadCatalog(locale));

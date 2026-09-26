@@ -193,10 +193,31 @@ function validateRendererSetting(key, value) {
   return { key, value: result.value };
 }
 
+/**
+ * Execute a renderer settings write: the exact logic owned by the
+ * `db:setSetting` IPC handler, factored for direct testing. Dependencies are
+ * injected so tests exercise this path without Electron.
+ * @returns {*} the database write result.
+ * @throws {Error} when the key/value is not allowlisted/valid. Nothing is
+ * written (neither DB nor theme.json) in that case.
+ */
+function writeRendererSetting(deps, key, value) {
+  const validated = validateRendererSetting(key, value);
+  const result = deps.db.setSetting(validated.key, validated.value);
+  if (validated.key === 'ui.theme') {
+    try {
+      const themePath = deps.path.join(deps.app.getPath('userData'), 'theme.json');
+      deps.fs.writeFileSync(themePath, JSON.stringify({ theme: validated.value }, null, 2), 'utf8');
+    } catch (_) { }
+  }
+  return result;
+}
+
 module.exports = {
   RENDERER_WRITABLE_SETTINGS,
   isRendererWritableSetting,
   validateRendererSetting,
+  writeRendererSetting,
   CANONICAL_THEMES,
   THEME_ALIASES,
   PROCESS_MODES,

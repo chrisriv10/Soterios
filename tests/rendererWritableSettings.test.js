@@ -342,23 +342,94 @@ describe('tools.hostsBaseline.v1 validation', () => {
 });
 
 describe('handler integration (static)', () => {
-  it('db:setSetting delegates to the schema validator with no raw fallback', () => {
+  it('db:setSetting delegates to the schema writer with no raw fallback', () => {
     const start = IPC_SYSTEM_SOURCE.indexOf("ipcMain.handle('db:setSetting'");
     assert.ok(start !== -1);
     const end = IPC_SYSTEM_SOURCE.indexOf('});', start);
     const block = IPC_SYSTEM_SOURCE.slice(start, end);
-    assert.ok(block.includes('validateRendererSetting(key, value)'), 'handler must validate first');
+    assert.ok(block.includes('writeRendererSetting('), 'handler must validate first');
     assert.ok(!block.includes('setFlag'), 'featureFlags fallback must not bypass the schema');
     assert.ok(!block.includes('startsWith('), 'no prefix-based admission');
-    assert.ok(block.includes('validated.key') && block.includes('validated.value'), 'only validated data reaches the DB');
+    assert.ok(!block.includes('db.setSetting(key'), 'raw key must never reach the DB');
   });
 
-  it('theme.json mirroring uses only the validated theme value', () => {
-    assert.ok(IPC_SYSTEM_SOURCE.includes('JSON.stringify({ theme: validated.value }'), 'mirror must use the validated value');
+  it('theme.json mirroring lives behind validation in the writer', () => {
+    const helperPath = path.join(__dirname, '..', 'src', 'main', 'rendererWritableSettings.js');
+    const helperSource = fs.readFileSync(helperPath, 'utf8');
+    assert.ok(helperSource.includes('JSON.stringify({ theme: validated.value }'), 'mirror must use the validated value');
   });
 
   it('featureFlags module is untouched for reads and other consumers', () => {
     assert.ok(IPC_SYSTEM_SOURCE.includes('featureFlags.getFlag(db, key, def)'), 'db:getSetting behavior preserved');
+  });
+});
+
+describe('handler write path (behavioral)', () => {
+  const { writeRendererSetting } = require('../src/main/rendererWritableSettings');
+  const DatabaseService = require('../src/core/database');
+
+  function testDeps() {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'soterios-settings-ipc-'));
+    const userData = path.join(dir, 'userData');
+    fs.mkdirSync(userData, { recursive: true });
+    const db = new DatabaseService(path.join(dir, 'test.db'));
+    const deps = {
+      db,
+      app: { getPath: (name) => (name === 'userData' ? userData : dir) },
+      fs,
+      path,
+    };
+    const cleanup = () => {
+      try { db.db.close(); } catch (_) {}
+      fs.rmSync(dir, { recursive: true, force: true });
+    };
+    return { deps, db, userData, cleanup };
+  }
+
+  it('rejects disallowed keys with nothing persisted', () => {
+    const { deps, db, cleanup } = testDeps();
+    try {
+      for (const [key, value] of [
+        ['totally.fake.key', true],
+        ['feature.someFutureUnknownFlag', true],
+        ['tools.disabledStartupItems.v1', { planted: true }],
+        ['__proto__', true],
+      ]) {
+        assert.throws(() => writeRendererSetting(deps, key, value), /Setting is not writable from the renderer\./);
+        assert.equal(db.getSetting(key, 'absent'), 'absent', `row leaked for ${key}`);
+      }
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('rejects invalid values with nothing persisted and no theme.json', () => {
+    const { deps, db, userData, cleanup } = testDeps();
+    try {
+      assert.throws(() => writeRendererSetting(deps, 'feature.autoReports', 'false'), /Invalid value for setting/);
+      assert.equal(db.getSetting('feature.autoReports', 'absent'), 'absent');
+      assert.throws(() => writeRendererSetting(deps, 'ui.theme', '../../evil'), /Invalid value for setting/);
+      assert.equal(db.getSetting('ui.theme', 'absent'), 'absent');
+      assert.equal(fs.existsSync(path.join(userData, 'theme.json')), false);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('persists valid writes and mirrors canonical themes', () => {
+    const { deps, db, userData, cleanup } = testDeps();
+    try {
+      writeRendererSetting(deps, 'feature.autoReports', true);
+      assert.equal(db.getSetting('feature.autoReports'), true);
+      writeRendererSetting(deps, 'ui.theme', 'black-red');
+      assert.equal(db.getSetting('ui.theme'), 'crimson');
+      assert.deepEqual(
+        JSON.parse(fs.readFileSync(path.join(userData, 'theme.json'), 'utf8')),
+        { theme: 'crimson' }
+      );
+    } finally {
+      cleanup();
+    }
   });
 });
 
