@@ -147,6 +147,46 @@ describe('FolderWatcher', () => {
     assert.deepEqual(status.watched, [tmp]);
     canonical.stop();
   });
+  it('bounds the scan queue and counts dropped jobs during a burst', () => {
+  watcher.start();
+  watcher.scanEngine.isScanning = true;
+
+  for (let i = 0; i < 1000; i++) {
+    const filePath = path.join(tmp, `burst-${i}.bin`);
+    fs.writeFileSync(filePath, 'x');
+    watcher._enqueue(filePath);
+  }
+
+  assert.equal(watcher.getStatus().queued, 256);
+  assert.equal(watcher.getStatus().dropped, 744);
+  });
+
+  it('expires old recent-scan entries', () => {
+  const oldTime = Date.now() - 61_000;
+  const recentTime = Date.now();
+
+  watcher._scannedRecently.set(
+    path.join(tmp, 'old.bin'),
+    oldTime
+  );
+
+  watcher._scannedRecently.set(
+    path.join(tmp, 'recent.bin'),
+    recentTime
+  );
+
+  watcher._pruneRecentScans();
+
+  assert.equal(
+    watcher._scannedRecently.has(path.join(tmp, 'old.bin')),
+    false
+  );
+
+  assert.equal(
+    watcher._scannedRecently.has(path.join(tmp, 'recent.bin')),
+    true
+  );
+  });
 
   it('skips a directory when its canonical path cannot be resolved', () => {
     let watchCalls = 0;
