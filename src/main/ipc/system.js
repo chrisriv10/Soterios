@@ -43,6 +43,7 @@ const {
   openWindowsUtility
 } = require('../shellLaunchers');
 const featureFlags = require('../../core/featureFlags');
+const { validateRendererSetting } = require('../rendererWritableSettings');
 const privacyMode = require('../../core/privacyMode');
 const { DefenderThreatHistory } = require('../../security/DefenderThreatHistory');
 
@@ -148,19 +149,17 @@ function register(mainWindow, {
   });
 
   ipcMain.handle('db:setSetting', (_event, key, value) => {
-    if (typeof key === 'string' && key.startsWith('feature.')) {
-      try {
-        return featureFlags.setFlag(db, key, value);
-      } catch (_) {
-        // Unknown feature flag; fall through to raw DB write
-        return db.setSetting(key, value);
-      }
-    }
-    const result = db.setSetting(key, value);
-    if (key === 'ui.theme') {
+    // Renderer writes are restricted to the explicit allowlist with
+    // per-setting validation (issue #182). Unknown keys — including unknown
+    // feature.* keys and internal main-process keys — throw instead of
+    // falling through to a raw database write. Trusted main-process code
+    // keeps calling db.setSetting() directly and is unaffected.
+    const validated = validateRendererSetting(key, value);
+    const result = db.setSetting(validated.key, validated.value);
+    if (validated.key === 'ui.theme') {
       try {
         const themePath = path.join(app.getPath('userData'), 'theme.json');
-        fs.writeFileSync(themePath, JSON.stringify({ theme: value }, null, 2), 'utf8');
+        fs.writeFileSync(themePath, JSON.stringify({ theme: validated.value }, null, 2), 'utf8');
       } catch (_) { }
     }
     return result;
