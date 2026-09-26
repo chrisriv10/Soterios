@@ -61,8 +61,8 @@ class RemovableDriveCoordinator {
     if (this._disposed) return { running: false };
     this.monitor.start();
     if (this.eventBus && !this._unsubscribeComplete) {
-      this._unsubscribeComplete = this.eventBus.on('scan:complete', () => {
-        this._onScanSettled().catch(() => {});
+      this._unsubscribeComplete = this.eventBus.on('scan:complete', (completion) => {
+        this._onScanSettled(completion).catch(() => {});
       });
     }
     return { running: true };
@@ -100,13 +100,7 @@ class RemovableDriveCoordinator {
     return this._pendingQueue.length !== before;
   }
 
-  async _onArrival(mount) {
-    if (this._disposed) return;
-    if (this.autoScanEnabled()) {
-      await this._requestScan(mount, { automatic: true });
-      return;
-    }
-    this._pushPending(mount);
+  _notifyPrompt(mount) {
     try {
       this.showNotification?.(
         this.t('removableDrive.promptTitle', { drive: mount }),
@@ -116,6 +110,26 @@ class RemovableDriveCoordinator {
         'removable-scan'
       );
     } catch (_) {}
+  }
+
+  async _onArrival(mount) {
+    if (this._disposed) return;
+    if (this.autoScanEnabled()) {
+      const result = await this._requestScan(mount, { automatic: true });
+      // A failed automatic scan must stay actionable: downgrade to prompt
+      // mode so the user can retry from the notification instead of the
+      // arrival disappearing silently. Queued results are already tracked;
+      // revalidate so a vanished drive gains no stale pending entry. Recheck
+      // disposal: a quit during the awaits must not create a dead prompt.
+      if (result && !result.ok && !result.queued && (await this._revalidate(mount))) {
+        if (this._disposed) return;
+        this._pushPending(mount);
+        this._notifyPrompt(mount);
+      }
+      return;
+    }
+    this._pushPending(mount);
+    this._notifyPrompt(mount);
   }
 
   _onRemoval(mount) {
@@ -146,13 +160,36 @@ class RemovableDriveCoordinator {
     if (this._disposed) return { ok: false, error: 'Removable drive scanning is unavailable.' };
     const mount = this._pendingQueue.length ? this._pendingQueue[0].mount : null;
     if (!mount) return { ok: false, error: this.t('removableDrive.noPendingDrive') };
-    return this._requestScan(mount, { automatic: false });
+    const result = await this._requestScan(mount, { automatic: false });
+    // A failed non-queued retry must not consume the user's only Scan
+    // action: _startScan drops the pending entry before the engine runs, so
+    // restore it to keep the drive retryable. Sequential checks: disposal
+    // during the fallback revalidation must not resurrect pending state.
+    // The caller already surfaces the failure itself, so no new toast here.
+    if (result && !result.ok && !result.queued && !this._disposed) {
+      const stillEligible = await this._revalidate(mount);
+      if (!this._disposed && stillEligible) {
+        this._pushPending(mount);
+      }
+    }
+    return result;
   }
 
   async _requestScan(mount, { automatic } = {}) {
+    // Entry guard: reject new requests after disposal, including the
+    // "already in progress" recursive retry path below.
+    if (this._disposed) {
+      return { ok: false, error: this.t('removableDrive.unavailable') };
+    }
     const canonical = canonicalMountRoot(mount);
     if (!canonical) return { ok: false, error: this.t('removableDrive.unavailable') };
-    if (!(await this._revalidate(canonical))) {
+    // Post-await guard: disposal during live eligibility enumeration must
+    // leave queue/pending state untouched — the continuation goes inert.
+    const eligible = await this._revalidate(canonical);
+    if (this._disposed) {
+      return { ok: false, error: this.t('removableDrive.unavailable') };
+    }
+    if (!eligible) {
       this._dropPending(canonical);
       this._queue.delete(canonical);
       return { ok: false, error: this.t('removableDrive.unavailable') };
@@ -171,6 +208,12 @@ class RemovableDriveCoordinator {
   }
 
   async _startScan(mount) {
+    // Defense in depth: caller-side disposal checks own the sequencing, but
+    // a scan must never begin on a disposed coordinator even if a caller
+    // races disposal.
+    if (this._disposed) {
+      return { ok: false, error: this.t('removableDrive.unavailable') };
+    }
     if (!this.scanEngine || typeof this.scanEngine.runCustomScan !== 'function') {
       return { ok: false, error: this.t('removableDrive.unavailable') };
     }
@@ -200,12 +243,34 @@ class RemovableDriveCoordinator {
     return { ok: true };
   }
 
-  async _onScanSettled() {
+  // A scan:complete event settles removable ownership only when it belongs
+  // to the tracked scan. ScanEngine broadcasts completions for every scan
+  // type (folder-watch, manual, definitions updates), so an unfiltered
+  // listener would clear _activeTarget mid-scan and break removal-abort.
+  // While a removable target is active the rule fails CLOSED: only a
+  // custom scan whose single target canonicalizes to the active mount
+  // settles ownership. Malformed, foreign, or payload-less completions are
+  // ignored. With no active target, any completion may wake queued work.
+  _completionSettlesActive(completion) {
+    if (this._activeTarget == null) return true;
+    if (!completion || typeof completion !== 'object') return false;
+    if (completion.scanType !== 'custom') return false;
+    const targets = Array.isArray(completion.targetPaths) ? completion.targetPaths : null;
+    if (!targets || targets.length !== 1) return false;
+    return canonicalMountRoot(targets[0]) === this._activeTarget;
+  }
+
+  async _onScanSettled(completion) {
     if (this._disposed) return;
+    if (!this._completionSettlesActive(completion)) return;
     this._activeTarget = null;
     if (!this._queue.size) return;
     const next = [...this._queue.keys()][0];
-    if (!(await this._revalidate(next))) {
+    // Disposal during any await below must stop the continuation: no scan
+    // may start and no prompt may appear after dispose().
+    const eligible = await this._revalidate(next);
+    if (this._disposed) return;
+    if (!eligible) {
       this._queue.delete(next);
       return this._onScanSettled();
     }
@@ -214,9 +279,20 @@ class RemovableDriveCoordinator {
     // scanning, so no future completion will drain it. Continue only when
     // the failed entry actually left the queue (each step then removes one
     // entry and this always terminates); a re-enqueued entry waits for the
-    // scan that is really running.
+    // scan that is really running. A failed automatic (or pending-backed)
+    // entry stays actionable through the same revalidated prompt fallback
+    // as a failed direct automatic scan — never silently dropped.
+    const queuedEntry = this._queue.get(next);
+    const hadPending = this._pendingQueue.some((entry) => entry.mount === next);
     const result = await this._startScan(next);
+    if (this._disposed) return;
     if (!result?.ok && !this._queue.has(next) && !this._isBusy()) {
+      const stillEligible = await this._revalidate(next);
+      if (this._disposed) return;
+      if ((queuedEntry?.automatic || hadPending) && stillEligible) {
+        this._pushPending(next);
+        this._notifyPrompt(next);
+      }
       return this._onScanSettled();
     }
     return result;
