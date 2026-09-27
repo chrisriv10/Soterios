@@ -588,16 +588,24 @@ describe('FolderWatcher', () => {
   });
 
   it('user-scan preemption preserves overflow for later retry', async () => {
+    // Exact race from review: the recovery returns an explicit user-preempt
+    // reason while scanEngine.isScanning is STILL false (the takeover has
+    // not flipped the user-scan flag yet). The reason alone must settle it.
     let releaseRecovery;
     const recoveryGate = new Promise((resolve) => { releaseRecovery = resolve; });
     let recoveryStartedResolve;
     const recoveryStarted = new Promise((resolve) => { recoveryStartedResolve = resolve; });
+    let recoveries = 0;
     watcher.scanEngine.runScan = async (scanType, paths) => {
       const isRoot = paths.length === 1 && !paths[0].endsWith('.bin');
       if (isRoot) {
-        recoveryStartedResolve();
-        await recoveryGate;
-        return { canceled: true };
+        recoveries += 1;
+        if (recoveries === 1) {
+          recoveryStartedResolve();
+          await recoveryGate;
+          return { canceled: true, cancellationReason: 'user-preempt' };
+        }
+        return { success: true, threatsFound: 0, threats: [] };
       }
       scanned.push({ scanType, paths });
       return { success: true, threatsFound: 0, threats: [] };
@@ -612,18 +620,107 @@ describe('FolderWatcher', () => {
     watcher.scanEngine.isScanning = false;
     const drainPromise = watcher._drain();
     await recoveryStarted;
-    // Simulate the user scan taking priority while recovery is in flight.
-    watcher.scanEngine.isScanning = true;
+    // isScanning deliberately stays false here: the regression condition.
+    assert.equal(watcher.scanEngine.isScanning, false);
     releaseRecovery();
     await drainPromise;
-    // The explicit call above returns at once when another loop owns
-    // draining; wait for the owning loop to settle the recovery first.
     const deadline = Date.now() + 8000;
-    while (watcher._draining && Date.now() < deadline) {
+    while ((watcher._draining || watcher.getStatus().overflowPending !== 0 || watcher.getStatus().queued !== 0) && Date.now() < deadline) {
+      watcher._drain();
       await new Promise((r) => setTimeout(r, 10));
     }
-    assert.equal(watcher.getStatus().overflowPending, 1, 'preempted recovery stays pending');
-    assert.equal(watcher.scanEngine.isScanning, true, 'user scan left alone');
+    // Restored by reason, then automatically retried once idle: exactly two
+    // recovery generations, no hot-loop, no user-scan interference.
+    assert.equal(recoveries, 2);
+    assert.equal(watcher.getStatus().overflowPending, 0);
+    assert.equal(watcher.getStatus().queued, 0);
+  });
+
+  it('per-file preemption preserves the queue and covers the in-flight file', async () => {
+    let releaseFirst;
+    const firstGate = new Promise((resolve) => { releaseFirst = resolve; });
+    let firstStartedResolve;
+    const firstStarted = new Promise((resolve) => { firstStartedResolve = resolve; });
+    let fileScans = 0;
+    let queueLenAtCancel = null;
+    watcher.scanEngine.runScan = async (scanType, paths) => {
+      const isRoot = paths.length === 1 && !paths[0].endsWith('.bin');
+      if (isRoot) return { success: true, threatsFound: 0, threats: [] };
+      fileScans += 1;
+      if (fileScans === 1) {
+        firstStartedResolve();
+        await firstGate;
+        queueLenAtCancel = watcher._queue.length;
+        // Explicit reason while NO user scan is visible: the exact race.
+        return { canceled: true, cancellationReason: 'user-preempt' };
+      }
+      scanned.push({ scanType, paths });
+      return { success: true, threatsFound: 0, threats: [] };
+    };
+    watcher.scanEngine.isScanning = true;
+    watcher.start();
+    for (let i = 0; i < 257; i++) {
+      const filePath = path.join(tmp, `pp-${i}.bin`);
+      fs.writeFileSync(filePath, 'x');
+      watcher._enqueue(filePath);
+    }
+    watcher.scanEngine.isScanning = false;
+    const drainPromise = watcher._drain();
+    await firstStarted;
+    releaseFirst();
+    await drainPromise;
+    // Remaining queue was NOT wiped (255 files still pending at cancel).
+    assert.equal(queueLenAtCancel, 255);
+    const deadline = Date.now() + 10000;
+    while ((watcher._draining || watcher.getStatus().queued !== 0 || watcher.getStatus().overflowPending !== 0) && Date.now() < deadline) {
+      watcher._drain();
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.equal(watcher.getStatus().queued, 0);
+    assert.equal(watcher.getStatus().overflowPending, 0);
+    // 255 individually scanned + the preempted file covered by root recovery.
+    assert.equal(scanned.length, 255);
+    assert.equal(watcher.getStatus().dropped, 1);
+    // The preempted file kept its dedup marker (coverage moved to the
+    // pinned root instead), so a duplicate event cannot double-queue it.
+    assert.equal(watcher._scannedRecently.has(path.join(tmp, 'pp-0.bin')), true);
+  });
+
+  it('unknown cancellation with no user scan keeps legacy abort behavior', async () => {
+    watcher.scanEngine.runScan = async (scanType, paths) => {
+      const isRoot = paths.length === 1 && !paths[0].endsWith('.bin');
+      if (isRoot) return { canceled: true };
+      scanned.push({ scanType, paths });
+      return { success: true, threatsFound: 0, threats: [] };
+    };
+    watcher.scanEngine.isScanning = true;
+    watcher.start();
+    for (let i = 0; i < 257; i++) {
+      const filePath = path.join(tmp, `unk-${i}.bin`);
+      fs.writeFileSync(filePath, 'x');
+      watcher._enqueue(filePath);
+    }
+    watcher.scanEngine.isScanning = false;
+    const deadline = Date.now() + 8000;
+    while ((watcher._draining || watcher.getStatus().queued !== 0) && Date.now() < deadline) {
+      watcher._drain();
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    // Unknown reason + idle engine: legacy explicit-abort semantics win,
+    // nothing is silently reinterpreted as preemption.
+    assert.equal(watcher.getStatus().queued, 0);
+    assert.equal(watcher.getStatus().overflowPending, 0);
+  });
+
+  it('classifies cancellation causes without timing inference', () => {
+    assert.equal(watcher._classifyCancellation({ canceled: true, cancellationReason: 'user-preempt' }), 'preempted');
+    assert.equal(watcher._classifyCancellation({ canceled: true, cancellationReason: 'explicit-abort' }), 'aborted');
+    watcher.scanEngine.isScanning = true;
+    assert.equal(watcher._classifyCancellation({ canceled: true }), 'preempted');
+    assert.equal(watcher._classifyCancellation({ canceled: true, cancellationReason: null }), 'preempted');
+    watcher.scanEngine.isScanning = false;
+    assert.equal(watcher._classifyCancellation({ canceled: true }), 'aborted');
+    assert.equal(watcher._classifyCancellation({ canceled: true, cancellationReason: 'bogus' }), 'aborted');
   });
 
   it('explicit abort with no user scan clears overflow without restart', async () => {

@@ -233,9 +233,78 @@ describe('ScanEngine', () => {
     assert.equal(result.success, true);
     assert.equal(result.status, 'completed');
 
-    await folderwatchPromise;
+    const folderwatchResult = await folderwatchPromise;
     assert.equal(engine.isFolderWatchScanning, false);
     assert.equal(engine.isScanning, false);
+    // The takeover marks its cause explicitly so consumers never infer it.
+    assert.equal(folderwatchResult.canceled, true);
+    assert.equal(folderwatchResult.cancellationReason, 'user-preempt');
+  });
+
+  it('runScan aborted through abortScan reports an explicit-abort reason', async () => {
+    const pending = [];
+    const clam = {
+      isReady: true,
+      abortCurrentScan: () => true,
+      scanFile: async () => {
+        return new Promise((resolve) => pending.push(resolve));
+      }
+    };
+    const engine = new ScanEngine(
+      mockDb,
+      mockEventBus,
+      clam,
+      mockHeuristicEngine,
+      mockReputationEngine,
+      mockQuarantineManager
+    );
+
+    const scanPromise = engine.runScan('folderwatch', [tmp], 'Starting...');
+    await waitFor(() => engine.isFolderWatchScanning);
+    assert.equal(pending.length, 1);
+    engine.abortScan();
+    pending.shift()({ success: false, canceled: true, error: 'Scan canceled', threatsFound: 0, filesScanned: 0, output: '' });
+
+    const result = await scanPromise;
+    assert.equal(result.canceled, true);
+    assert.equal(result.cancellationReason, 'explicit-abort');
+    assert.equal(engine.isFolderWatchScanning, false);
+  });
+
+  it('runScan never leaks a cancellation reason into a later scan', async () => {
+    const pending = [];
+    const clam = {
+      isReady: true,
+      abortCurrentScan: () => true,
+      scanFile: async () => {
+        return new Promise((resolve) => pending.push(resolve));
+      }
+    };
+    const engine = new ScanEngine(
+      mockDb,
+      mockEventBus,
+      clam,
+      mockHeuristicEngine,
+      mockReputationEngine,
+      mockQuarantineManager
+    );
+
+    const first = engine.runScan('folderwatch', [tmp], 'Starting...');
+    await waitFor(() => engine.isFolderWatchScanning);
+    engine.abortScan();
+    pending.shift()({ success: false, canceled: true, error: 'Scan canceled', threatsFound: 0, filesScanned: 0, output: '' });
+    const aborted = await first;
+    assert.equal(aborted.canceled, true);
+    assert.equal(aborted.cancellationReason, 'explicit-abort');
+
+    pending.length = 0;
+    const second = engine.runScan('folderwatch', [tmp], 'Starting...');
+    await waitFor(() => pending.length === 1);
+    pending.shift()({ success: true, threatsFound: 0, filesScanned: 1, threats: [], output: '' });
+    const completed = await second;
+    assert.equal(completed.canceled, false);
+    assert.equal(completed.cancellationReason, null);
+    assert.equal(engine.folderWatchScan.cancelReason, null);
   });
 
   it('runScan completes successfully with no threats', async () => {

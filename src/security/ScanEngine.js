@@ -95,6 +95,10 @@ class ScanEngine {
     this.userScan = {
       abortController: null,
       isScanning: false,
+      // Why the active scan was canceled: null | 'user-preempt' |
+      // 'explicit-abort'. Reset at every runScan start and captured into the
+      // canceled result (then cleared) so reasons never leak between scans.
+      cancelReason: null,
       currentScan: null,
       notes: [],
       progress: 0,
@@ -113,6 +117,8 @@ class ScanEngine {
     this.folderWatchScan = {
       abortController: null,
       isScanning: false,
+      // Same cancellation-reason contract as userScan above.
+      cancelReason: null,
       currentScan: null,
       notes: [],
       progress: 0,
@@ -177,6 +183,9 @@ class ScanEngine {
   async runScan(scanType, paths, startMessage) {
     const isFolderWatch = scanType === 'folderwatch';
     const scanState = isFolderWatch ? this.folderWatchScan : this.userScan;
+    // A new scan always starts with a clean reason, even if it exits early
+    // below without scanning.
+    scanState.cancelReason = null;
     
     if (isFolderWatch) {
       if (scanState.isScanning) return { error: 'Folder watch scan already in progress' };
@@ -224,6 +233,7 @@ class ScanEngine {
     const errors = [];
     const completedTargets = [];
     let wasCanceled = false;
+    let cancellationReason = null;
 
     // Progress must never move backward within a single scan. Previously,
     // each target path computed its own fresh, lower "basePct" and emitted
@@ -436,6 +446,11 @@ class ScanEngine {
       scanState.isScanning = false;
       const durationMs = Date.now() - startTime;
       const status = wasCanceled ? 'canceled' : (errors.length === 0 ? 'completed' : 'failed');
+      // Snapshot the cancellation cause into the result, then clear it so a
+      // later scan never inherits a stale reason. Non-canceled results
+      // consistently carry null.
+      cancellationReason = wasCanceled ? (scanState.cancelReason || null) : null;
+      scanState.cancelReason = null;
       const finalFilesScanned = Math.max(totalFilesScanned, cumulativeFiles);
       const reportPayload = {
         scanType,
@@ -515,6 +530,7 @@ class ScanEngine {
     return {
       success: !wasCanceled && errors.length === 0,
       canceled: wasCanceled,
+      cancellationReason,
       status: wasCanceled ? 'canceled' : (errors.length === 0 ? 'completed' : 'failed'),
       filesScanned: Math.max(totalFilesScanned, cumulativeFiles),
       threatsFound: totalThreatsFound,
@@ -537,6 +553,10 @@ class ScanEngine {
     if (!target) {
       return { success: false, canceled: false, error: 'No scan in progress' };
     }
+    // User-facing explicit cancellation: record the cause on the selected
+    // scan before aborting. This is distinct from foreground-takeover
+    // preemption ('user-preempt').
+    target.cancelReason = 'explicit-abort';
     if (target.abortController) target.abortController.abort();
     if (this.clamEngine && typeof this.clamEngine.abortCurrentScan === 'function') {
       this.clamEngine.abortCurrentScan();
@@ -562,6 +582,9 @@ class ScanEngine {
   }
 
   _cancelFolderWatchScan() {
+    // Called only from foreground-scan takeover: record the cause so the
+    // canceled folder-watch result carries it explicitly.
+    this.folderWatchScan.cancelReason = 'user-preempt';
     if (this.folderWatchScan.abortController) this.folderWatchScan.abortController.abort();
     if (this.clamEngine && typeof this.clamEngine.abortCurrentScan === 'function') {
       this.clamEngine.abortCurrentScan();

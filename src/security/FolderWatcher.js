@@ -270,10 +270,19 @@ class FolderWatcher {
               : await this.scanEngine.runCustomScan([filePath]);
             if (result && (result.error || result.canceled)) {
               if (result.canceled) {
-                // The background scan was canceled (e.g. via scan:abort); drop
+                if (this._classifyCancellation(result) === 'preempted') {
+                  // Foreground takeover, proven or inferred: preserve bounded
+                  // pending work (including this file's coverage) and let the
+                  // loop wait out the user scan via the guards above, then
+                  // resume automatically. Never hot-loops: every path below
+                  // either waits or exits the loop.
+                  this._restorePreemptedFile(filePath);
+                  continue;
+                }
+                // Explicit background abort (proven or legacy default): drop
                 // the remaining queue so it can't immediately restart.
                 this._queue = [];
-                if (!this._userScanActive()) this._overflowRoots.clear();
+                this._overflowRoots.clear();
                 break;
               }
               continue;
@@ -291,9 +300,12 @@ class FolderWatcher {
           continue;
         }
         // Normal queue drained with overflow pending: one coalesced recovery
-        // scan. A non-recovered outcome stops this pass; later events or the
-        // maintenance tick trigger the next attempt. Never hot-loops here.
+        // scan. A preempted recovery continues the loop (the guards above
+        // wait out the user scan, then retry automatically); failed or
+        // aborted recoveries stop this pass and rely on later triggers.
+        // Never hot-loops here: every outcome either waits or exits.
         const outcome = await this._recoverOverflow();
+        if (outcome === 'preempted') continue;
         if (outcome !== 'recovered') break;
       }
     } finally {
@@ -309,10 +321,46 @@ class FolderWatcher {
     }
   }
 
+  // Classify a canceled scan result for FolderWatcher state handling.
+  // Returns 'preempted' when bounded pending work must be preserved and
+  // 'aborted' when it must be stopped. The explicit ScanEngine reason is
+  // authoritative: timing inference alone cannot distinguish a user-scan
+  // takeover (which clears folderWatchScan.isScanning BEFORE userScan
+  // becomes active) from an explicit background abort. Unknown reasons fall
+  // back to the live-state check, and unknown-but-idle keeps the legacy
+  // explicit-abort behavior rather than inventing preemption.
+  _classifyCancellation(result) {
+    if (result && result.cancellationReason === 'user-preempt') return 'preempted';
+    if (result && result.cancellationReason === 'explicit-abort') return 'aborted';
+    return this._userScanActive() ? 'preempted' : 'aborted';
+  }
+
+  // Restore coverage for a normal-queue file whose scan was preempted. The
+  // file was already shifted off the queue; pin its owning root for
+  // coalesced recovery (bounded by watch roots) so it is covered without
+  // requeueing paths. Only when no root owns it, requeue boundedly; only
+  // when even that is impossible, drop the recent marker so a future event
+  // can retry, and count the loss honestly. The marker is otherwise kept so
+  // the covered file is not scanned twice.
+  _restorePreemptedFile(filePath) {
+    const owner = this._ownerWatchRoot(filePath);
+    if (owner) {
+      this._overflowRoots.add(owner);
+      return;
+    }
+    if (this._queue.length < MAX_QUEUE_SIZE && !this._queue.includes(filePath)) {
+      this._queue.unshift(filePath);
+      return;
+    }
+    this._scannedRecently.delete(filePath);
+    this._droppedQueueJobs++;
+  }
+
   // Scan the pending overflow roots as one coalesced background folderwatch
   // scan. Generation-safe: snapshot roots are removed BEFORE the scan, so
   // overflow arriving mid-scan re-adds and survives completion. Returns
-  // 'recovered', 'deferred' (failed/preempted, still pending), or 'aborted'.
+  // 'recovered', 'preempted' (restored: caller waits and retries),
+  // 'deferred' (failed: caller stops, future triggers retry), or 'aborted'.
   async _recoverOverflow() {
     const snapshot = [...this._overflowRoots];
     if (!snapshot.length) return 'recovered';
@@ -326,10 +374,11 @@ class FolderWatcher {
       result = { error: 'overflow recovery scan failed' };
     }
     if (result && result.canceled) {
-      if (this._userScanActive()) {
-        // Preempted by a user scan: restore for a later retry.
+      if (this._classifyCancellation(result) === 'preempted') {
+        // Preempted by a user scan: restore for the caller's automatic
+        // retry once the user scan finishes.
         for (const root of snapshot) this._overflowRoots.add(root);
-        return 'deferred';
+        return 'preempted';
       }
       // Explicit background abort with nothing else running: honor the
       // user's intent, do not restart this work automatically.
