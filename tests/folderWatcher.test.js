@@ -443,6 +443,14 @@ describe('FolderWatcher', () => {
     const dirB = path.join(tmp, 'rootB');
     const dirC = path.join(tmp, 'rootC');
     for (const dir of [dirA, dirB, dirC]) fs.mkdirSync(dir, { recursive: true });
+    // Production registers canonical (realpath-resolved) roots; tmp itself
+    // may use 8.3 short names on CI, so resolve expectations the same way.
+    const realpath = typeof fs.realpathSync.native === 'function'
+      ? fs.realpathSync.native
+      : fs.realpathSync;
+    const canonicalA = realpath(dirA);
+    const canonicalB = realpath(dirB);
+    const canonicalC = realpath(dirC);
     const multi = new FolderWatcher({
       watchDirs: [dirA, dirB, dirC],
       debounceMs: 50,
@@ -481,8 +489,8 @@ describe('FolderWatcher', () => {
       assert.equal(multi.getStatus().queued, 0);
       assert.equal(multi.getStatus().overflowPending, 0);
       assert.equal(recoveryRoots.length, 1, 'one coalesced recovery scan');
-      assert.deepEqual([...recoveryRoots[0]].sort(), [dirA, dirB].sort());
-      assert.ok(!recoveryRoots[0].includes(dirC), 'unaffected root must not be scanned');
+      assert.deepEqual([...recoveryRoots[0]].sort(), [canonicalA, canonicalB].sort());
+      assert.ok(!recoveryRoots[0].includes(canonicalC), 'unaffected root must not be scanned');
     } finally {
       multi.stop();
     }
