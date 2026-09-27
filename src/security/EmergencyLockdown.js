@@ -18,10 +18,15 @@ class EmergencyLockdown {
    */
   static SETTINGS_KEY = 'security.emergencyLockdown.allowlist';
 
-  constructor(db, eventBus, notify) {
+  constructor(db, eventBus, notify, options = {}) {
     this.db = db;
     this.eventBus = eventBus;
     this.notify = notify;
+    // Internal command-execution seam for deterministic unit tests. Defaults
+    // preserve production behavior exactly; never exposed through IPC, so the
+    // renderer cannot replace the command runner.
+    this._execAsync = options.execAsync || execAsync;
+    this._execFileSync = options.execFileSync || execFileSync;
     this.isLockedDown = false;
     this.savedNetworkState = null;
     this.savedServicesState = null;
@@ -172,7 +177,7 @@ class EmergencyLockdown {
    */
   async getNetworkInterfaces() {
     try {
-      const { stdout } = await execAsync('netsh interface show interface', { timeout: 5000 });
+      const { stdout } = await this._execAsync('netsh interface show interface', { timeout: 5000 });
       return EmergencyLockdown.parseNetworkInterfaces(stdout);
     } catch (err) {
       throw new Error(`Failed to get network interfaces: ${err.message}`);
@@ -184,7 +189,7 @@ class EmergencyLockdown {
    */
   async disableInterface(interfaceName) {
     try {
-      execFileSync('netsh', ['interface', 'set', 'interface', interfaceName, 'admin=disable'], { timeout: 10000 });
+      this._execFileSync('netsh', ['interface', 'set', 'interface', interfaceName, 'admin=disable'], { timeout: 10000 });
       return { success: true, interface: interfaceName };
     } catch (err) {
       throw new Error(`Failed to disable ${interfaceName}: ${err.message}`);
@@ -196,7 +201,7 @@ class EmergencyLockdown {
    */
   async enableInterface(interfaceName) {
     try {
-      execFileSync('netsh', ['interface', 'set', 'interface', interfaceName, 'admin=enable'], { timeout: 10000 });
+      this._execFileSync('netsh', ['interface', 'set', 'interface', interfaceName, 'admin=enable'], { timeout: 10000 });
       return { success: true, interface: interfaceName };
     } catch (err) {
       throw new Error(`Failed to enable ${interfaceName}: ${err.message}`);
@@ -256,7 +261,7 @@ class EmergencyLockdown {
    */
   async getNonEssentialServices() {
     try {
-      const { stdout } = await execAsync('sc query type= service state= all', { timeout: 10000 });
+      const { stdout } = await this._execAsync('sc query type= service state= all', { timeout: 10000 });
       return EmergencyLockdown.parseScQueryServices(stdout);
     } catch (err) {
       throw new Error(`Failed to get services: ${err.message}`);
@@ -268,7 +273,7 @@ class EmergencyLockdown {
    */
   async stopService(serviceName) {
     try {
-      execFileSync('sc', ['stop', serviceName], { timeout: 15000 });
+      this._execFileSync('sc', ['stop', serviceName], { timeout: 15000 });
       return { success: true, service: serviceName };
     } catch (err) {
       throw new Error(`Failed to stop ${serviceName}: ${err.message}`);
@@ -280,7 +285,7 @@ class EmergencyLockdown {
    */
   async startService(serviceName) {
     try {
-      execFileSync('sc', ['start', serviceName], { timeout: 15000 });
+      this._execFileSync('sc', ['start', serviceName], { timeout: 15000 });
       return { success: true, service: serviceName };
     } catch (err) {
       throw new Error(`Failed to start ${serviceName}: ${err.message}`);
