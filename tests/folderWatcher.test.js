@@ -591,6 +591,8 @@ describe('FolderWatcher', () => {
     // Exact race from review: the recovery returns an explicit user-preempt
     // reason while scanEngine.isScanning is STILL false (the takeover has
     // not flipped the user-scan flag yet). The reason alone must settle it.
+    // Takeover-pending is then modeled explicitly to prove no immediate
+    // second recovery starts during the handoff gap.
     let releaseRecovery;
     const recoveryGate = new Promise((resolve) => { releaseRecovery = resolve; });
     let recoveryStartedResolve;
@@ -620,20 +622,99 @@ describe('FolderWatcher', () => {
     watcher.scanEngine.isScanning = false;
     const drainPromise = watcher._drain();
     await recoveryStarted;
-    // isScanning deliberately stays false here: the regression condition.
-    assert.equal(watcher.scanEngine.isScanning, false);
+    // Model the production handoff gap BEFORE releasing: takeover claimed,
+    // user scan not yet active.
+    watcher.scanEngine.isUserScanTakeoverPending = true;
     releaseRecovery();
     await drainPromise;
     const deadline = Date.now() + 8000;
-    while ((watcher._draining || watcher.getStatus().overflowPending !== 0 || watcher.getStatus().queued !== 0) && Date.now() < deadline) {
+    while ((watcher.getStatus().overflowPending !== 1) && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    // Restored by reason, and NO second recovery starts while takeover is
+    // pending — the loop must observe foreground ownership and wait.
+    assert.equal(watcher.getStatus().overflowPending, 1);
+    assert.equal(recoveries, 1);
+    await new Promise((r) => setTimeout(r, 120));
+    assert.equal(recoveries, 1, 'no immediate retry during the takeover gap');
+    // Foreground ownership transfer: still no background retry.
+    watcher.scanEngine.isUserScanTakeoverPending = false;
+    watcher.scanEngine.isScanning = true;
+    await new Promise((r) => setTimeout(r, 120));
+    assert.equal(recoveries, 1, 'no retry while the user scan is active');
+    // Foreground scan finishes: the existing loop resumes and recovers.
+    watcher.scanEngine.isScanning = false;
+    const deadline2 = Date.now() + 8000;
+    while ((watcher._draining || watcher.getStatus().overflowPending !== 0 || watcher.getStatus().queued !== 0) && Date.now() < deadline2) {
       watcher._drain();
       await new Promise((r) => setTimeout(r, 10));
     }
-    // Restored by reason, then automatically retried once idle: exactly two
-    // recovery generations, no hot-loop, no user-scan interference.
     assert.equal(recoveries, 2);
     assert.equal(watcher.getStatus().overflowPending, 0);
     assert.equal(watcher.getStatus().queued, 0);
+    delete watcher.scanEngine.isUserScanTakeoverPending;
+  });
+
+  it('new enqueue during takeover cannot start a background scan', async () => {
+    let releaseRecovery;
+    const recoveryGate = new Promise((resolve) => { releaseRecovery = resolve; });
+    let recoveryStartedResolve;
+    const recoveryStarted = new Promise((resolve) => { recoveryStartedResolve = resolve; });
+    let runScans = 0;
+    watcher.scanEngine.runScan = async (scanType, paths) => {
+      const isRoot = paths.length === 1 && !paths[0].endsWith('.bin');
+      if (isRoot) {
+        recoveryStartedResolve();
+        await recoveryGate;
+        return { canceled: true, cancellationReason: 'user-preempt' };
+      }
+      scanned.push({ scanType, paths });
+      return { success: true, threatsFound: 0, threats: [] };
+    };
+    watcher.scanEngine.isScanning = true;
+    watcher.start();
+    for (let i = 0; i < 257; i++) {
+      const filePath = path.join(tmp, `re-${i}.bin`);
+      fs.writeFileSync(filePath, 'x');
+      watcher._enqueue(filePath);
+    }
+    watcher.scanEngine.isScanning = false;
+    watcher._drain();
+    await recoveryStarted;
+    watcher.scanEngine.isUserScanTakeoverPending = true;
+    releaseRecovery();
+    const deadline = Date.now() + 8000;
+    while (watcher.getStatus().overflowPending !== 1 && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.equal(watcher.getStatus().overflowPending, 1);
+    // A new filesystem event arrives mid-gap: it must queue boundedly
+    // without starting any background scan.
+    const lateFile = path.join(tmp, 're-late.bin');
+    fs.writeFileSync(lateFile, 'x');
+    watcher._enqueue(lateFile);
+    runScans = scanned.length;
+    await new Promise((r) => setTimeout(r, 150));
+    assert.equal(scanned.length, runScans, 'no background scan during takeover');
+    assert.equal(watcher.getStatus().queued, 1, 'late file stays queued and bounded');
+    // Transfer, then finish, the foreground scan: pending work resumes.
+    watcher.scanEngine.isUserScanTakeoverPending = false;
+    watcher.scanEngine.isScanning = true;
+    await new Promise((r) => setTimeout(r, 120));
+    assert.equal(scanned.length, runScans, 'no background scan while user scan active');
+    watcher.scanEngine.isScanning = false;
+    watcher.scanEngine.runScan = async (scanType, paths) => {
+      scanned.push({ scanType, paths });
+      return { success: true, threatsFound: 0, threats: [] };
+    };
+    const deadline2 = Date.now() + 8000;
+    while ((watcher._draining || watcher.getStatus().queued !== 0 || watcher.getStatus().overflowPending !== 0) && Date.now() < deadline2) {
+      watcher._drain();
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.equal(watcher.getStatus().queued, 0);
+    assert.equal(watcher.getStatus().overflowPending, 0);
+    delete watcher.scanEngine.isUserScanTakeoverPending;
   });
 
   it('per-file preemption preserves the queue and covers the in-flight file', async () => {
@@ -667,10 +748,30 @@ describe('FolderWatcher', () => {
     watcher.scanEngine.isScanning = false;
     const drainPromise = watcher._drain();
     await firstStarted;
+    // Model the handoff gap: takeover claimed while the user scan is not
+    // yet active. The restored root must wait, not retry or scan.
+    watcher.scanEngine.isUserScanTakeoverPending = true;
     releaseFirst();
     await drainPromise;
     // Remaining queue was NOT wiped (255 files still pending at cancel).
     assert.equal(queueLenAtCancel, 255);
+    const restored = Date.now() + 8000;
+    while (watcher.getStatus().overflowPending !== 1 && Date.now() < restored) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.equal(watcher.getStatus().overflowPending, 1, 'in-flight file covered by the pinned root');
+    assert.equal(fileScans, 1, 'no second file scan starts during the takeover gap');
+    assert.equal(watcher.getStatus().queued, 255, 'queue preserved, not cleared, during the gap');
+    await new Promise((r) => setTimeout(r, 150));
+    assert.equal(fileScans, 1, 'gap holds: still no background file scan');
+    // Foreground ownership transfer: still no background file scan.
+    watcher.scanEngine.isUserScanTakeoverPending = false;
+    watcher.scanEngine.isScanning = true;
+    await new Promise((r) => setTimeout(r, 120));
+    assert.equal(fileScans, 1, 'no background file scan while the user scan is active');
+    // Foreground scan finishes: per-file work plus the pinned root resume.
+    watcher.scanEngine.isScanning = false;
+    delete watcher.scanEngine.isUserScanTakeoverPending;
     const deadline = Date.now() + 10000;
     while ((watcher._draining || watcher.getStatus().queued !== 0 || watcher.getStatus().overflowPending !== 0) && Date.now() < deadline) {
       watcher._drain();
@@ -721,12 +822,19 @@ describe('FolderWatcher', () => {
     watcher.scanEngine.isScanning = false;
     assert.equal(watcher._classifyCancellation({ canceled: true }), 'aborted');
     assert.equal(watcher._classifyCancellation({ canceled: true, cancellationReason: 'bogus' }), 'aborted');
+    // Takeover-pending is foreground ownership too: an unknown cancellation
+    // during the handoff gap reads as preemption, never as explicit abort.
+    watcher.scanEngine.isUserScanTakeoverPending = true;
+    assert.equal(watcher._classifyCancellation({ canceled: true }), 'preempted');
+    assert.equal(watcher._classifyCancellation({ canceled: true, cancellationReason: null }), 'preempted');
+    delete watcher.scanEngine.isUserScanTakeoverPending;
+    assert.equal(watcher._classifyCancellation({ canceled: true }), 'aborted');
   });
 
   it('explicit abort with no user scan clears overflow without restart', async () => {
     watcher.scanEngine.runScan = async (scanType, paths) => {
       const isRoot = paths.length === 1 && !paths[0].endsWith('.bin');
-      if (isRoot) return { canceled: true };
+      if (isRoot) return { canceled: true, cancellationReason: 'explicit-abort' };
       scanned.push({ scanType, paths });
       return { success: true, threatsFound: 0, threats: [] };
     };

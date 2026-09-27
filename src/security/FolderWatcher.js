@@ -252,8 +252,10 @@ class FolderWatcher {
           await new Promise((r) => setTimeout(r, 500));
           continue;
         }
-        // Only wait if a user scan is in progress - folder watch should not block user scans
-        if (this.scanEngine && this.scanEngine.isScanning) {
+        // Only wait if a user scan is in progress - folder watch should not block user scans.
+        // The takeover-pending flag is included so no background scan can
+        // start in the handoff gap before userScan.isScanning flips true.
+        if (this._foregroundBusy()) {
           await new Promise((r) => setTimeout(r, 500));
           continue;
         }
@@ -313,12 +315,17 @@ class FolderWatcher {
     }
   }
 
-  _userScanActive() {
+  // Foreground ownership for scheduling: true while a user scan is active
+  // OR a user scan has claimed takeover priority but is still waiting for
+  // the folder-watch scan to release. Missing getters (older engines,
+  // test doubles) read as falsy, preserving legacy behavior. Never true
+  // for folderwatch-busy alone: that has its own separate guard.
+  _foregroundBusy() {
     try {
-      return !!(this.scanEngine && this.scanEngine.isScanning);
-    } catch (_) {
-      return false;
-    }
+      if (this.scanEngine && this.scanEngine.isScanning) return true;
+      if (this.scanEngine && this.scanEngine.isUserScanTakeoverPending) return true;
+    } catch (_) {}
+    return false;
   }
 
   // Classify a canceled scan result for FolderWatcher state handling.
@@ -332,7 +339,7 @@ class FolderWatcher {
   _classifyCancellation(result) {
     if (result && result.cancellationReason === 'user-preempt') return 'preempted';
     if (result && result.cancellationReason === 'explicit-abort') return 'aborted';
-    return this._userScanActive() ? 'preempted' : 'aborted';
+    return this._foregroundBusy() ? 'preempted' : 'aborted';
   }
 
   // Restore coverage for a normal-queue file whose scan was preempted. The

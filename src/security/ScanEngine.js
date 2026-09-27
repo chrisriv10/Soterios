@@ -133,6 +133,11 @@ class ScanEngine {
       progressEstimated: false,
       lastResult: null
     };
+    // True while a foreground scan has claimed priority and is waiting for
+    // an active folder-watch scan to release, but BEFORE userScan.isScanning
+    // flips true. Lets in-process consumers observe the handoff gap without
+    // timing inference. Never persisted, never emitted, never IPC-exposed.
+    this._userScanTakeoverPending = false;
   }
 
   // Compat getters: FolderWatcher and other callers historically read these
@@ -144,6 +149,10 @@ class ScanEngine {
 
   get isFolderWatchScanning() {
     return this.folderWatchScan.isScanning;
+  }
+
+  get isUserScanTakeoverPending() {
+    return this._userScanTakeoverPending === true;
   }
 
   async runQuickScan() {
@@ -192,21 +201,36 @@ class ScanEngine {
       // A user scan takes priority over the ClamAV process; folder-watch defers.
       if (this.userScan.isScanning) return { error: 'Scan already in progress' };
     } else {
-      if (scanState.isScanning) return { error: 'Scan already in progress' };
+      // A second foreground request during takeover sees pending (not just
+      // active) state, so two user scans can never enter takeover
+      // concurrently.
+      if (scanState.isScanning || this._userScanTakeoverPending) return { error: 'Scan already in progress' };
       // A user scan always takes priority: cancel any running folder-watch
       // scan so it never blocks the user, then wait for it to release the
       // ClamAV process before spawning our own clamscan.
       if (this.folderWatchScan.isScanning) {
-        this._cancelFolderWatchScan();
-        const deadline = Date.now() + FOLDER_WATCH_TAKEOVER_TIMEOUT_MS;
-        while (this.folderWatchScan.isScanning && Date.now() < deadline) {
-          await new Promise((r) => setTimeout(r, 25));
+        // Establish the pending signal BEFORE canceling: from here until
+        // userScan.isScanning flips true there is no observable gap where
+        // both are false.
+        this._userScanTakeoverPending = true;
+        try {
+          this._cancelFolderWatchScan();
+          const deadline = Date.now() + FOLDER_WATCH_TAKEOVER_TIMEOUT_MS;
+          while (this.folderWatchScan.isScanning && Date.now() < deadline) {
+            await new Promise((r) => setTimeout(r, 25));
+          }
+        } catch (err) {
+          this._userScanTakeoverPending = false;
+          throw err;
         }
       }
     }
-    
+
     scanState.isScanning = true;
     scanState.abortController = new AbortController();
+    // Ownership transfer completes here: active before pending clears, so
+    // observers never see both false mid-handoff.
+    this._userScanTakeoverPending = false;
     scanState.currentScan = {
       scanType,
       paths,
@@ -555,8 +579,10 @@ class ScanEngine {
     }
     // User-facing explicit cancellation: record the cause on the selected
     // scan before aborting. This is distinct from foreground-takeover
-    // preemption ('user-preempt').
-    target.cancelReason = 'explicit-abort';
+    // preemption ('user-preempt'). Never overwrite a reason already recorded
+    // (e.g. a takeover racing an explicit abort): the physically operative
+    // cause wins, keeping coverage fail-safe.
+    if (!target.cancelReason) target.cancelReason = 'explicit-abort';
     if (target.abortController) target.abortController.abort();
     if (this.clamEngine && typeof this.clamEngine.abortCurrentScan === 'function') {
       this.clamEngine.abortCurrentScan();
