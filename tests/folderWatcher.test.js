@@ -388,12 +388,18 @@ describe('FolderWatcher', () => {
       scanEngine: { async runCustomScan() { return {}; } }
     });
     try {
-      aliased._watchers.set(realDir, { close() {} });
+      // Production registers canonical (realpath-resolved) roots in
+      // _watchDir; mirror that here so the test exercises the real shape.
+      const realpath = typeof fs.realpathSync.native === 'function'
+        ? fs.realpathSync.native
+        : fs.realpathSync;
+      const canonicalReal = realpath(realDir);
+      aliased._watchers.set(canonicalReal, { close() {} });
       // Textually different (junction path) but identical on disk: the
       // owning canonical root must still be found so overflow coalesces
       // instead of degrading to per-path accounting.
-      assert.equal(aliased._ownerWatchRoot(probeFile), realDir);
-      assert.equal(aliased._ownerWatchRoot(path.join(realDir, 'alias.bin')), realDir);
+      assert.equal(aliased._ownerWatchRoot(probeFile), canonicalReal);
+      assert.equal(aliased._ownerWatchRoot(path.join(canonicalReal, 'alias.bin')), canonicalReal);
     } finally {
       aliased.stop();
     }
