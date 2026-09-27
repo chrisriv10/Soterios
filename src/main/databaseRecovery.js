@@ -66,12 +66,13 @@ function formatRecoveryId(date = new Date()) {
 
 function isPreservableFile(fsModule, filePath) {
   try {
-    return fsModule.existsSync(filePath) && fsModule.statSync(filePath).isFile();
+    // statSync is the single authoritative existence/type check. existsSync
+    // reports only a boolean and can suppress inspection failures as false,
+    // which would omit an existing sidecar and leave a stale WAL beside the
+    // fresh database. Only ENOENT means absent; anything else propagates so
+    // recovery stops before moving anything.
+    return fsModule.statSync(filePath).isFile();
   } catch (error) {
-    // A missing file simply has nothing to preserve. Any other inspection
-    // failure must not masquerade as absence: silently omitting an existing
-    // sidecar would leave a stale WAL beside the fresh database, letting
-    // SQLite apply foreign frames to it. Fail closed instead.
     if (error && error.code === 'ENOENT') return false;
     throw error;
   }

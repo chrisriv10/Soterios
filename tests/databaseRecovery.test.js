@@ -257,6 +257,70 @@ describe('database recovery helper: garbage database', () => {
     }
   });
 
+  it('inspects the family through statSync even when existsSync lies', () => {
+    const dir = tempDir();
+    try {
+      const dbPath = dbPathIn(dir);
+      writeGarbageDb(dbPath, 'garbage-main');
+      fs.writeFileSync(`${dbPath}-wal`, 'wal-bytes');
+      const noExistsSync = {
+        existsSync() {
+          throw new Error('existsSync must not be used for family inspection');
+        },
+        statSync: (...args) => fs.statSync(...args),
+        renameSync: (...args) => fs.renameSync(...args),
+      };
+      assert.deepEqual(collectFamilySources(noExistsSync, dbPath), [dbPath, `${dbPath}-wal`]);
+    } finally {
+      rmDir(dir);
+    }
+  });
+
+  it('recovers fully while existsSync refuses source inspection', () => {
+    const dir = tempDir();
+    try {
+      const dbPath = dbPathIn(dir);
+      writeGarbageDb(dbPath, 'garbage-main');
+      fs.writeFileSync(`${dbPath}-wal`, 'wal-bytes');
+      // existsSync throws for source candidates (proving inspection does not
+      // depend on it) but behaves normally for `.corrupt-` destination
+      // collision checks, which legitimately keep using it.
+      const discriminatingFs = {
+        existsSync: (target, ...rest) => {
+          if (!String(target).includes('.corrupt-')) {
+            throw new Error('existsSync must not be used for family inspection');
+          }
+          return fs.existsSync(target, ...rest);
+        },
+        statSync: (...args) => fs.statSync(...args),
+        renameSync: (...args) => fs.renameSync(...args),
+      };
+      let calls = 0;
+      const { db, recovery } = openApplicationDatabaseWithRecovery({
+        dbPath,
+        openDatabase: (targetPath) => {
+          calls += 1;
+          if (calls === 1) throw Object.assign(new Error('file is not a database'), { code: 'SQLITE_NOTADB' });
+          return new DatabaseService(targetPath);
+        },
+        fsModule: discriminatingFs,
+        now: () => FIXED_DATE,
+      });
+      try {
+        assert.deepEqual(recovery.preservedFiles, [
+          `${dbPath}.corrupt-${FIXED_ID}`,
+          `${dbPath}-wal.corrupt-${FIXED_ID}`,
+        ]);
+        assert.equal(fs.readFileSync(`${dbPath}.corrupt-${FIXED_ID}`, 'utf8'), 'garbage-main');
+        db.setSetting('k', 'v');
+      } finally {
+        db.db.close();
+      }
+    } finally {
+      rmDir(dir);
+    }
+  });
+
   it('refuses to omit a sidecar whose inspection fails (stale-WAL protection)', () => {
     const dir = tempDir();
     try {
