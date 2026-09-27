@@ -321,11 +321,25 @@ class DatabaseService {
     });
   }
 
+  // Parse one scan_reports JSON column. Mirrors the getSetting corrupt-value
+  // convention: log the row id and field name only (never the raw stored
+  // value), fall back, never throw, and never rewrite the stored row.
+  _parseReportField(row, field, fallback) {
+    const value = row ? row[field] : null;
+    if (!value) return fallback;
+    try {
+      return JSON.parse(value);
+    } catch (_) {
+      console.warn(`Malformed JSON for scan report ${row.id} field '${field}', using fallback.`);
+      return fallback;
+    }
+  }
+
   getScanReports(limit = 25) {
     return this.db.prepare('SELECT * FROM scan_reports ORDER BY timestamp DESC LIMIT ?').all(limit).map((row) => ({
       ...row,
-      target_paths: JSON.parse(row.target_paths || '[]'),
-      details: JSON.parse(row.details || '{}')
+      target_paths: this._parseReportField(row, 'target_paths', []),
+      details: this._parseReportField(row, 'details', {})
     }));
   }
 
@@ -334,8 +348,8 @@ class DatabaseService {
     if (!row) return null;
     return {
       ...row,
-      target_paths: JSON.parse(row.target_paths || '[]'),
-      details: JSON.parse(row.details || '{}')
+      target_paths: this._parseReportField(row, 'target_paths', []),
+      details: this._parseReportField(row, 'details', {})
     };
   }
 

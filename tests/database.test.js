@@ -511,3 +511,146 @@ describe('DatabaseService addAlert contract (BUG-1)', () => {
     assert.match(mainSource, /Failed to parse deep link URL/);
   });
 });
+
+describe('DatabaseService scan_reports malformed JSON', () => {
+  const tempDbs = [];
+
+  afterEach(() => {
+    while (tempDbs.length) {
+      const p = tempDbs.pop();
+      try { fs.rmSync(p, { force: true }); } catch (_) {}
+      try { fs.rmSync(p + '-wal', { force: true }); } catch (_) {}
+      try { fs.rmSync(p + '-shm', { force: true }); } catch (_) {}
+    }
+  });
+
+  function tempDbPath() {
+    const p = path.join(os.tmpdir(), `soterios-db-scanrep-${Date.now()}-${Math.random().toString(16).slice(2)}.db`);
+    tempDbs.push(p);
+    return p;
+  }
+
+  // Insert directly so the test bypasses addScanReport(), which would
+  // serialize valid JSON. Raw strings land in the columns verbatim.
+  // Explicit timestamps keep latest-row ordering deterministic: SQLite
+  // CURRENT_TIMESTAMP has one-second resolution, so rapid inserts would
+  // otherwise tie and make ORDER BY timestamp DESC ambiguous.
+  let reportSeq = 0;
+  function insertRaw(service, { target_paths = null, details = null, scan_type = 'quick', status = 'completed' } = {}) {
+    reportSeq += 1;
+    const timestamp = `2026-01-01 00:00:${String(reportSeq).padStart(2, '0')}`;
+    service.db.prepare(`
+      INSERT INTO scan_reports (scan_type, status, target_paths, files_scanned, threats_found, duration_ms, details, timestamp)
+      VALUES (?, ?, ?, 0, 0, 0, ?, ?)
+    `).run(scan_type, status, target_paths, details, timestamp);
+  }
+
+  it('getScanReports falls back to [] for malformed target_paths', () => {
+    const service = new DatabaseService(tempDbPath());
+    try {
+      insertRaw(service, { target_paths: '{truncated', details: JSON.stringify({ threats: [] }) });
+      const rows = service.getScanReports();
+      assert.equal(rows.length, 1);
+      assert.deepEqual(rows[0].target_paths, []);
+      assert.deepEqual(rows[0].details, { threats: [] });
+    } finally {
+      service.db.close();
+    }
+  });
+
+  it('getScanReports falls back to {} for malformed details', () => {
+    const service = new DatabaseService(tempDbPath());
+    try {
+      insertRaw(service, { target_paths: JSON.stringify(['C:\\x']), details: '[broken' });
+      const rows = service.getScanReports();
+      assert.equal(rows.length, 1);
+      assert.deepEqual(rows[0].target_paths, ['C:\\x']);
+      assert.deepEqual(rows[0].details, {});
+    } finally {
+      service.db.close();
+    }
+  });
+
+  it('getScanReports parses valid rows unchanged', () => {
+    const service = new DatabaseService(tempDbPath());
+    try {
+      insertRaw(service, { target_paths: JSON.stringify(['C:\\a', 'C:\\b']), details: JSON.stringify({ threats: [{ name: 'Eicar' }] }) });
+      const rows = service.getScanReports();
+      assert.equal(rows.length, 1);
+      assert.deepEqual(rows[0].target_paths, ['C:\\a', 'C:\\b']);
+      assert.deepEqual(rows[0].details, { threats: [{ name: 'Eicar' }] });
+    } finally {
+      service.db.close();
+    }
+  });
+
+  it('getScanReports isolates one corrupt row among valid neighbors', () => {
+    const service = new DatabaseService(tempDbPath());
+    try {
+      insertRaw(service, { target_paths: JSON.stringify(['C:\\one']), details: JSON.stringify({ n: 1 }) });
+      insertRaw(service, { target_paths: 'nope{', details: 'also nope[' });
+      insertRaw(service, { target_paths: JSON.stringify(['C:\\three']), details: JSON.stringify({ n: 3 }) });
+      const rows = service.getScanReports(10);
+      assert.equal(rows.length, 3);
+      const corrupt = rows.find((r) => Array.isArray(r.target_paths) && r.target_paths.length === 0 && Object.keys(r.details).length === 0);
+      assert.ok(corrupt, 'corrupt row is returned with fallbacks');
+      const valid = rows.filter((r) => r.id !== corrupt.id);
+      assert.equal(valid.length, 2);
+      for (const row of valid) {
+        assert.equal(row.target_paths.length, 1);
+        assert.ok(row.target_paths[0].startsWith('C:\\'));
+      }
+    } finally {
+      service.db.close();
+    }
+  });
+
+  it('getLatestScanReport falls back for malformed target_paths on the latest row', () => {
+    const service = new DatabaseService(tempDbPath());
+    try {
+      insertRaw(service, { target_paths: JSON.stringify(['C:\\old']), details: JSON.stringify({ old: true }) });
+      insertRaw(service, { target_paths: '{"oops"', details: JSON.stringify({ latest: true }) });
+      const latest = service.getLatestScanReport();
+      assert.ok(latest);
+      assert.deepEqual(latest.target_paths, []);
+      assert.deepEqual(latest.details, { latest: true });
+    } finally {
+      service.db.close();
+    }
+  });
+
+  it('getLatestScanReport falls back for malformed details on the latest row', () => {
+    const service = new DatabaseService(tempDbPath());
+    try {
+      insertRaw(service, { target_paths: JSON.stringify(['C:\\latest']), details: '###' });
+      const latest = service.getLatestScanReport();
+      assert.ok(latest);
+      assert.deepEqual(latest.target_paths, ['C:\\latest']);
+      assert.deepEqual(latest.details, {});
+    } finally {
+      service.db.close();
+    }
+  });
+
+  it('getLatestScanReport parses a valid latest row unchanged', () => {
+    const service = new DatabaseService(tempDbPath());
+    try {
+      insertRaw(service, { target_paths: JSON.stringify(['C:\\v']), details: JSON.stringify({ ok: 1 }) });
+      const latest = service.getLatestScanReport();
+      assert.ok(latest);
+      assert.deepEqual(latest.target_paths, ['C:\\v']);
+      assert.deepEqual(latest.details, { ok: 1 });
+    } finally {
+      service.db.close();
+    }
+  });
+
+  it('getLatestScanReport returns null when no reports exist', () => {
+    const service = new DatabaseService(tempDbPath());
+    try {
+      assert.equal(service.getLatestScanReport(), null);
+    } finally {
+      service.db.close();
+    }
+  });
+});
