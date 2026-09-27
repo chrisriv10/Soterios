@@ -11,6 +11,9 @@ permissions:
 jobs:
   coverage:
     runs-on: windows-latest
+    # Far above normal suite runtime, but a hung Windows subprocess must not
+    # hold this required check indefinitely.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
