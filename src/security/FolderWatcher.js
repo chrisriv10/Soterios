@@ -59,6 +59,12 @@ class FolderWatcher {
     // recovery scan can cover them after the normal queue drains. Bounded by
     // active watch-directory count, not by file-event count.
     this._overflowRoots = new Set();
+    // Lifecycle generation (O(1) scalar): incremented on every real
+    // stop/start transition. Async drain/recovery passes capture the
+    // generation they belong to and must not write pending work (queue,
+    // overflow roots) after it changes, so an in-flight result can never
+    // repopulate state cleared by stop() or leak into a restarted watcher.
+    this._lifecycleGeneration = 0;
   }
 
   static defaultWatchDirs() {
@@ -86,6 +92,10 @@ class FolderWatcher {
   start() {
     if (this._running) return this.getStatus();
     this._running = true;
+    // A real lifecycle transition: invalidate every in-flight async pass
+    // from the previous generation. Idempotent restarts return above and
+    // never manufacture a new generation.
+    this._lifecycleGeneration += 1;
     for (const dir of this.watchDirs) {
       this._watchDir(dir);
     }
@@ -98,7 +108,11 @@ class FolderWatcher {
     if (!this._recentScanCleanupTimer) {
       this._recentScanCleanupTimer = setInterval(() => {
         this._pruneRecentScans();
-        if (this._running && this._overflowRoots.size) this._drain();
+        // Wake EITHER bounded pending kind. A generation-B enqueue can call
+        // _drain() while a stale generation-A pass still owns the single
+        // drain guard; once generation A releases it, this tick provides the
+        // bounded later trigger so generation-B work is never stranded.
+        if (this._running && (this._queue.length || this._overflowRoots.size)) this._drain();
       }, this.recentScanCleanupIntervalMs);
       if (typeof this._recentScanCleanupTimer.unref === 'function') {
         this._recentScanCleanupTimer.unref();
@@ -109,6 +123,11 @@ class FolderWatcher {
 
   stop() {
     this._running = false;
+    // Invalidate the current lifecycle BEFORE clearing: every in-flight
+    // async pass captured the old generation and must discard its outcome
+    // instead of restoring queue/overflow state into a stopped or
+    // restarted watcher.
+    this._lifecycleGeneration += 1;
     for (const [, watcher] of this._watchers) {
       try { watcher.close(); } catch (_) {}
     }
@@ -246,8 +265,19 @@ class FolderWatcher {
   async _drain() {
     if (this._draining) return;
     this._draining = true;
+    // Lifecycle generation owned by this pass. Post-await audit: every
+    // await below that precedes a watcher-state write rechecks it.
+    // - per-file scan await: stale outcome breaks BEFORE _restorePreemptedFile
+    //   (queue/overflow write), BEFORE the explicit-abort queue/overflow
+    //   clear, and before result handling. A genuinely completed scan's
+    //   threat findings have no watcher-state writes and still surface.
+    // - _recoverOverflow() await: the callee guards its own snapshot
+    //   restoration and returns 'stale'; this caller breaks on it.
+    // - 500ms scheduling waits: no state writes follow; the loop-top
+    //   condition rechecks the generation.
+    const generation = this._lifecycleGeneration;
     try {
-      while (this._running && (this._queue.length || this._overflowRoots.size)) {
+      while (this._running && this._lifecycleGeneration === generation && (this._queue.length || this._overflowRoots.size)) {
         if (this.clamEngine && !this.clamEngine.isReady) {
           await new Promise((r) => setTimeout(r, 500));
           continue;
@@ -270,6 +300,10 @@ class FolderWatcher {
             const result = typeof this.scanEngine.runScan === 'function'
               ? await this.scanEngine.runScan('folderwatch', [filePath], 'Folder watch scan starting...')
               : await this.scanEngine.runCustomScan([filePath]);
+            // Old lifecycle (stop, or stop/start since this scan began):
+            // discard the outcome entirely. It must neither restore work
+            // into a stopped watcher nor clear/repopulate a new generation.
+            if (this._lifecycleGeneration !== generation) break;
             if (result && (result.error || result.canceled)) {
               if (result.canceled) {
                 if (this._classifyCancellation(result) === 'preempted') {
@@ -307,6 +341,7 @@ class FolderWatcher {
         // aborted recoveries stop this pass and rely on later triggers.
         // Never hot-loops here: every outcome either waits or exits.
         const outcome = await this._recoverOverflow();
+        if (outcome === 'stale') break;
         if (outcome === 'preempted') continue;
         if (outcome !== 'recovered') break;
       }
@@ -367,8 +402,15 @@ class FolderWatcher {
   // scan. Generation-safe: snapshot roots are removed BEFORE the scan, so
   // overflow arriving mid-scan re-adds and survives completion. Returns
   // 'recovered', 'preempted' (restored: caller waits and retries),
-  // 'deferred' (failed: caller stops, future triggers retry), or 'aborted'.
+  // 'deferred' (failed: caller stops, future triggers retry), 'aborted', or
+  // 'stale' (lifecycle changed mid-scan: nothing restored, caller stops).
+  // Lifecycle audit: the snapshot-restore writes in the canceled and error
+  // paths below are skipped on a stale generation; the success path's
+  // threat surfacing writes no watcher state and still runs.
   async _recoverOverflow() {
+    // Equals the caller's captured generation (no await can interleave
+    // between the caller's check and this line), so either capture agrees.
+    const generation = this._lifecycleGeneration;
     const snapshot = [...this._overflowRoots];
     if (!snapshot.length) return 'recovered';
     for (const root of snapshot) this._overflowRoots.delete(root);
@@ -380,6 +422,9 @@ class FolderWatcher {
     } catch (_) {
       result = { error: 'overflow recovery scan failed' };
     }
+    // Old lifecycle: never restore or defer snapshot roots into a stopped
+    // watcher or a new generation.
+    if (this._lifecycleGeneration !== generation) return 'stale';
     if (result && result.canceled) {
       if (this._classifyCancellation(result) === 'preempted') {
         // Preempted by a user scan: restore for the caller's automatic

@@ -281,8 +281,10 @@ describe('ScanEngine', () => {
     pending.shift()({ success: true, threatsFound: 0, filesScanned: 1, threats: [], output: '' });
     const userResult = await userPromise;
     assert.equal(userResult.success, true);
+    assert.equal(userResult.canceled, false);
     assert.equal(engine.isScanning, false);
     assert.equal(engine.isUserScanTakeoverPending, false);
+    assert.equal(engine._pendingUserScanCancelRequested, false);
   });
 
   it('second foreground scan during takeover is rejected, not concurrent', async () => {
@@ -309,6 +311,10 @@ describe('ScanEngine', () => {
     assert.equal(engine.isUserScanTakeoverPending, true);
     const rejected = await engine.runScan('full', ['C:\\'], 'Starting...');
     assert.equal(rejected.error, 'Scan already in progress');
+    // The rejected call mutates nothing owned by the accepted request.
+    assert.equal(engine._pendingUserScanCancelRequested, false);
+    assert.equal(engine.folderWatchScan.cancelReason, 'user-preempt');
+    assert.equal(engine.isUserScanTakeoverPending, true);
 
     pending.shift()({ success: false, canceled: true, error: 'Scan canceled', threatsFound: 0, filesScanned: 0, output: '' });
     await folderwatchPromise;
@@ -320,12 +326,14 @@ describe('ScanEngine', () => {
     assert.equal(engine.isUserScanTakeoverPending, false);
   });
 
-  it('abort during takeover keeps the preemption reason', async () => {
+  it('abort during takeover cancels the pending foreground request', async () => {
     const pending = [];
+    let scanFileCalls = 0;
     const clam = {
       isReady: true,
       abortCurrentScan: () => true,
       scanFile: async () => {
+        scanFileCalls += 1;
         return new Promise((resolve) => pending.push(resolve));
       }
     };
@@ -342,21 +350,32 @@ describe('ScanEngine', () => {
     await waitFor(() => engine.isFolderWatchScanning);
     const userPromise = engine.runScan('quick', [tmp], 'Starting...');
     await waitFor(() => engine.isUserScanTakeoverPending);
-    // Explicit abort racing the takeover must not rewrite the operative
-    // preemption cause into a misleading explicit-abort.
-    engine.abortScan();
+    assert.equal(engine.isScanning, false);
+    // Cancel during the handoff gap targets the PENDING foreground request,
+    // not the already-preempted folder-watch scan.
+    const abortResult = engine.abortScan();
+    assert.equal(abortResult.success, true);
+    assert.equal(abortResult.canceled, true);
+    // Release the folder-watch Clam call as canceled.
     pending.shift()({ success: false, canceled: true, error: 'Scan canceled', threatsFound: 0, filesScanned: 0, output: '' });
     const folderwatchResult = await folderwatchPromise;
     assert.equal(folderwatchResult.canceled, true);
     assert.equal(folderwatchResult.cancellationReason, 'user-preempt');
-    // Cleanup: let the orphaned user scan finish so no handles leak.
-    await waitFor(() => engine.isScanning, 5000).catch(() => {});
-    if (engine.isScanning) {
-      await waitFor(() => pending.length === 1, 5000).catch(() => {});
-      if (pending.length) pending.shift()({ success: true, threatsFound: 0, filesScanned: 1, threats: [], output: '' });
-      await userPromise.catch(() => {});
-    }
+    // The foreground request resolves WITHOUT any second Clam invocation:
+    // userPromise settles only after the takeover decision point, so a
+    // resolved promise with no new scanFile call proves Clam never started.
+    const userResult = await userPromise;
+    assert.equal(pending.length, 0);
+    assert.equal(scanFileCalls, 1);
+    assert.equal(userResult.canceled, true);
+    assert.equal(userResult.cancellationReason, 'explicit-abort');
+    assert.equal(userResult.status, 'canceled');
+    assert.equal(userResult.success, false);
+    assert.equal(userResult.filesScanned, 0);
+    assert.equal(engine.isScanning, false);
     assert.equal(engine.isUserScanTakeoverPending, false);
+    assert.equal(engine._pendingUserScanCancelRequested, false);
+    assert.equal(engine.userScan.lastResult, null);
   });
 
   it('runScan aborted through abortScan reports an explicit-abort reason', async () => {
@@ -387,6 +406,76 @@ describe('ScanEngine', () => {
     assert.equal(result.canceled, true);
     assert.equal(result.cancellationReason, 'explicit-abort');
     assert.equal(engine.isFolderWatchScanning, false);
+  });
+
+  it('rejected folder-watch call preserves the active explicit-abort reason', async () => {
+    const pending = [];
+    const clam = {
+      isReady: true,
+      abortCurrentScan: () => true,
+      scanFile: async () => {
+        return new Promise((resolve) => pending.push(resolve));
+      }
+    };
+    const engine = new ScanEngine(
+      mockDb,
+      mockEventBus,
+      clam,
+      mockHeuristicEngine,
+      mockReputationEngine,
+      mockQuarantineManager
+    );
+
+    const scanPromise = engine.runScan('folderwatch', [tmp], 'Starting...');
+    await waitFor(() => engine.isFolderWatchScanning);
+    engine.abortScan();
+    assert.equal(engine.folderWatchScan.cancelReason, 'explicit-abort');
+    // A second folder-watch call is rejected and must not erase the reason
+    // recorded on the still-active scan.
+    const rejected = await engine.runScan('folderwatch', [tmp], 'Starting...');
+    assert.equal(rejected.error, 'Folder watch scan already in progress');
+    assert.equal(engine.folderWatchScan.cancelReason, 'explicit-abort');
+    pending.shift()({ success: false, canceled: true, error: 'Scan canceled', threatsFound: 0, filesScanned: 0, output: '' });
+
+    const result = await scanPromise;
+    assert.equal(result.canceled, true);
+    assert.equal(result.cancellationReason, 'explicit-abort');
+    assert.equal(engine.folderWatchScan.cancelReason, null);
+  });
+
+  it('rejected user call preserves the active explicit-abort reason', async () => {
+    const pending = [];
+    const clam = {
+      isReady: true,
+      abortCurrentScan: () => true,
+      scanFile: async () => {
+        return new Promise((resolve) => pending.push(resolve));
+      }
+    };
+    const engine = new ScanEngine(
+      mockDb,
+      mockEventBus,
+      clam,
+      mockHeuristicEngine,
+      mockReputationEngine,
+      mockQuarantineManager
+    );
+
+    const scanPromise = engine.runScan('quick', [tmp], 'Starting...');
+    await waitFor(() => engine.isScanning);
+    engine.abortScan();
+    assert.equal(engine.userScan.cancelReason, 'explicit-abort');
+    // A second user call is rejected and must not erase the reason recorded
+    // on the still-active scan.
+    const rejected = await engine.runScan('full', ['C:\\'], 'Starting...');
+    assert.equal(rejected.error, 'Scan already in progress');
+    assert.equal(engine.userScan.cancelReason, 'explicit-abort');
+    pending.shift()({ success: false, canceled: true, error: 'Scan canceled', threatsFound: 0, filesScanned: 0, output: '' });
+
+    const result = await scanPromise;
+    assert.equal(result.canceled, true);
+    assert.equal(result.cancellationReason, 'explicit-abort');
+    assert.equal(engine.userScan.cancelReason, null);
   });
 
   it('runScan never leaks a cancellation reason into a later scan', async () => {
@@ -425,6 +514,7 @@ describe('ScanEngine', () => {
     assert.equal(completed.cancellationReason, null);
     assert.equal(engine.folderWatchScan.cancelReason, null);
     assert.equal(engine.isUserScanTakeoverPending, false);
+    assert.equal(engine._pendingUserScanCancelRequested, false);
   });
 
   it('runScan completes successfully with no threats', async () => {

@@ -857,4 +857,240 @@ describe('FolderWatcher', () => {
     await new Promise((r) => setTimeout(r, 100));
     assert.equal(scanned.length, scansAfterAbort, 'no automatic restart after explicit abort');
   });
+
+  it('stop during in-flight per-file preemption restores nothing', async () => {
+    let releaseScan;
+    const scanGate = new Promise((resolve) => { releaseScan = resolve; });
+    let startedResolve;
+    const started = new Promise((resolve) => { startedResolve = resolve; });
+    watcher.scanEngine.runScan = async (scanType, paths) => {
+      startedResolve();
+      await scanGate;
+      return { canceled: true, cancellationReason: 'user-preempt' };
+    };
+    watcher.start();
+    const filePath = path.join(tmp, 'stop-race.bin');
+    fs.writeFileSync(filePath, 'x');
+    watcher._enqueue(filePath);
+    await started;
+    const generation = watcher._lifecycleGeneration;
+    watcher.stop();
+    assert.equal(watcher._lifecycleGeneration, generation + 1);
+    releaseScan();
+    const deadline = Date.now() + 8000;
+    while (watcher._draining && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    // The stale preempted result is discarded: no requeue, no pinned root.
+    assert.equal(watcher._draining, false);
+    assert.equal(watcher.getStatus().queued, 0);
+    assert.equal(watcher.getStatus().overflowPending, 0);
+    assert.equal(watcher.getStatus().running, false);
+  });
+
+  it('fast stop/start isolates the old per-file result from the new lifecycle', async () => {
+    // Short maintenance tick: generation B's stranded work must be picked
+    // up by the timer once generation A releases the single drain guard,
+    // with no further enqueue or manual drain call from the test.
+    const gen = new FolderWatcher({
+      watchDirs: [tmp],
+      debounceMs: 50,
+      recentScanCleanupIntervalMs: 25,
+      clamEngine: { isReady: true },
+      watchFactory() {
+        return { on() { return this; }, close() {} };
+      },
+      scanEngine: {
+        isScanning: false,
+        async runScan(scanType, paths) {
+          calls += 1;
+          if (calls === 1) {
+            startedResolve();
+            await scanGate;
+            return { canceled: true, cancellationReason: 'user-preempt' };
+          }
+          scanned.push({ scanType, paths });
+          return { success: true, threatsFound: 0, threats: [] };
+        },
+        async runCustomScan(paths) {
+          scanned.push({ scanType: 'custom', paths });
+          return { success: true, threatsFound: 0, threats: [] };
+        }
+      }
+    });
+    let releaseScan;
+    const scanGate = new Promise((resolve) => { releaseScan = resolve; });
+    let startedResolve;
+    const started = new Promise((resolve) => { startedResolve = resolve; });
+    let calls = 0;
+    try {
+      gen.start();
+      const oldFile = path.join(tmp, 'gen-a.bin');
+      fs.writeFileSync(oldFile, 'x');
+      gen._enqueue(oldFile);
+      await started;
+      gen.stop();
+      gen.start();
+      const freshFile = path.join(tmp, 'gen-b.bin');
+      fs.writeFileSync(freshFile, 'x');
+      gen._enqueue(freshFile);
+      // Generation B's enqueue hit _drain() while generation A still owned
+      // the guard, so it queued without scanning. Release generation A:
+      // its stale result must not restore the old file, pin a root, or
+      // disturb generation B's pending work.
+      releaseScan();
+      const deadline = Date.now() + 10000;
+      while (gen.getStatus().queued !== 0 && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      assert.equal(gen.getStatus().queued, 0);
+      assert.equal(gen.getStatus().overflowPending, 0);
+      // Exactly one successful scan ran (generation B's fresh file, woken by
+      // the maintenance tick after generation A released the guard); the
+      // old file was never requeued or covered by a stale root recovery.
+      assert.equal(scanned.length, 1);
+      assert.deepEqual(scanned[0].paths, [freshFile]);
+      assert.equal(calls, 2);
+    } finally {
+      gen.stop();
+    }
+  });
+
+  it('stop during overflow preemption restores no snapshot roots', async () => {
+    let releaseRecovery;
+    const recoveryGate = new Promise((resolve) => { releaseRecovery = resolve; });
+    let recoveryStartedResolve;
+    const recoveryStarted = new Promise((resolve) => { recoveryStartedResolve = resolve; });
+    let recoveries = 0;
+    watcher.scanEngine.runScan = async (scanType, paths) => {
+      const isRoot = paths.length === 1 && !paths[0].endsWith('.bin');
+      if (isRoot) {
+        recoveries += 1;
+        recoveryStartedResolve();
+        await recoveryGate;
+        return { canceled: true, cancellationReason: 'user-preempt' };
+      }
+      scanned.push({ scanType, paths });
+      return { success: true, threatsFound: 0, threats: [] };
+    };
+    watcher.scanEngine.isScanning = true;
+    watcher.start();
+    for (let i = 0; i < 257; i++) {
+      const filePath = path.join(tmp, `stop-ov-${i}.bin`);
+      fs.writeFileSync(filePath, 'x');
+      watcher._enqueue(filePath);
+    }
+    watcher.scanEngine.isScanning = false;
+    watcher._drain();
+    await recoveryStarted;
+    watcher.stop();
+    releaseRecovery();
+    const deadline = Date.now() + 8000;
+    while (watcher._draining && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    // Stale preempted recovery discarded: snapshot not restored, no retry.
+    assert.equal(watcher._draining, false);
+    assert.equal(watcher.getStatus().overflowPending, 0);
+    assert.equal(watcher.getStatus().queued, 0);
+    assert.equal(recoveries, 1);
+  });
+
+  it('stop during overflow failure defers nothing into the stopped watcher', async () => {
+    let releaseRecovery;
+    const recoveryGate = new Promise((resolve) => { releaseRecovery = resolve; });
+    let recoveryStartedResolve;
+    const recoveryStarted = new Promise((resolve) => { recoveryStartedResolve = resolve; });
+    let recoveries = 0;
+    watcher.scanEngine.runScan = async (scanType, paths) => {
+      const isRoot = paths.length === 1 && !paths[0].endsWith('.bin');
+      if (isRoot) {
+        recoveries += 1;
+        recoveryStartedResolve();
+        await recoveryGate;
+        return { error: 'synthetic failure' };
+      }
+      scanned.push({ scanType, paths });
+      return { success: true, threatsFound: 0, threats: [] };
+    };
+    watcher.scanEngine.isScanning = true;
+    watcher.start();
+    for (let i = 0; i < 257; i++) {
+      const filePath = path.join(tmp, `stop-fail-${i}.bin`);
+      fs.writeFileSync(filePath, 'x');
+      watcher._enqueue(filePath);
+    }
+    watcher.scanEngine.isScanning = false;
+    watcher._drain();
+    await recoveryStarted;
+    // Stronger variant: restart immediately, then resolve the old failure.
+    watcher.stop();
+    watcher.start();
+    releaseRecovery();
+    const deadline = Date.now() + 8000;
+    while (watcher._draining && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    // Old failure must not repopulate the new lifecycle as deferred work,
+    // and no stale retry scan may run.
+    assert.equal(watcher.getStatus().overflowPending, 0);
+    assert.equal(watcher.getStatus().queued, 0);
+    assert.equal(recoveries, 1);
+  });
+
+  it('lifecycle timer retries deferred overflow without a new trigger', async () => {
+    // The single maintenance tick must wake overflow recovery again after a
+    // genuine same-generation failure, with no further enqueue or manual
+    // drain call from the test.
+    const timed = new FolderWatcher({
+      watchDirs: [tmp],
+      debounceMs: 50,
+      recentScanCleanupIntervalMs: 25,
+      clamEngine: { isReady: true },
+      watchFactory() {
+        return { on() { return this; }, close() {} };
+      },
+      scanEngine: {
+        isScanning: false,
+        async runScan(scanType, paths) {
+          const isRoot = paths.length === 1 && !paths[0].endsWith('.bin');
+          if (isRoot) {
+            recoveries += 1;
+            if (recoveries === 1) return { error: 'synthetic failure' };
+            return { success: true, threatsFound: 0, threats: [] };
+          }
+          scanned.push({ scanType, paths });
+          return { success: true, threatsFound: 0, threats: [] };
+        },
+        async runCustomScan(paths) {
+          scanned.push({ scanType: 'custom', paths });
+          return { success: true, threatsFound: 0, threats: [] };
+        }
+      }
+    });
+    let recoveries = 0;
+    try {
+      timed.scanEngine.isScanning = true;
+      timed.start();
+      for (let i = 0; i < 257; i++) {
+        const filePath = path.join(tmp, `timer-ov-${i}.bin`);
+        fs.writeFileSync(filePath, 'x');
+        timed._enqueue(filePath);
+      }
+      timed.scanEngine.isScanning = false;
+      timed._drain();
+      const deadline = Date.now() + 10000;
+      while ((timed.getStatus().overflowPending !== 0 || timed.getStatus().queued !== 0) && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      // First recovery failed (deferred, still pending); the timer retried
+      // it to a clean recovery with no hot loop and no test-driven trigger.
+      assert.equal(recoveries, 2);
+      assert.equal(timed.getStatus().overflowPending, 0);
+      assert.equal(timed.getStatus().queued, 0);
+      assert.equal(scanned.length, 256);
+    } finally {
+      timed.stop();
+    }
+  });
 });
