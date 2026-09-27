@@ -191,9 +191,55 @@ describe('EmergencyLockdown', () => {
   });
 
   describe('Network interface operations', () => {
-    it('should get network interfaces', async () => {
-      const interfaces = await lockdown.getNetworkInterfaces();
-      assert.ok(Array.isArray(interfaces));
+    // Deterministic command fakes: unit tests must never invoke real netsh
+    // on the host (GitHub runners may lack adapters; admin actions must
+    // never run from tests).
+    const NETSH_LIST_STDOUT = '\r\nAdmin State    State          Type             Interface Name\r\n-------------------------------------------------------------------------\r\nEnabled        Connected      Dedicated        Wi-Fi\r\nEnabled        Disconnected   Dedicated        Ethernet 2\r\n';
+
+    function fakeRunners({ asyncImpl, syncImpl } = {}) {
+      const commands = [];
+      const execAsync = asyncImpl || (async (command, options) => {
+        commands.push({ kind: 'async', command, options });
+        return { stdout: '', stderr: '' };
+      });
+      const execFileSync = syncImpl || ((file, args, options) => {
+        commands.push({ kind: 'sync', file, args, options });
+        return Buffer.from('');
+      });
+      const service = new EmergencyLockdown(db, eventBus, notify, { execAsync, execFileSync });
+      return { service, commands };
+    }
+
+    it('should get network interfaces without invoking real netsh', async () => {
+      const { service, commands } = fakeRunners({
+        asyncImpl: async (command, options) => {
+          commands.push({ kind: 'async', command, options });
+          return { stdout: NETSH_LIST_STDOUT, stderr: '' };
+        }
+      });
+      const interfaces = await service.getNetworkInterfaces();
+      assert.strictEqual(commands.length, 1);
+      assert.strictEqual(commands[0].command, 'netsh interface show interface');
+      assert.strictEqual(commands[0].options.timeout, 5000);
+      assert.strictEqual(interfaces.length, 2);
+      assert.strictEqual(interfaces[0].name, 'Wi-Fi');
+      assert.strictEqual(interfaces[0].state, 'connected');
+      assert.strictEqual(interfaces[1].name, 'Ethernet 2');
+      assert.strictEqual(interfaces[1].state, 'disconnected');
+    });
+
+    it('should wrap async interface-list failures with a useful prefix', async () => {
+      const { service } = fakeRunners({
+        asyncImpl: async () => { throw new Error('command timed out'); }
+      });
+      await assert.rejects(
+        async () => await service.getNetworkInterfaces(),
+        (err) => {
+          assert.ok(err.message.includes('Failed to get network interfaces'));
+          assert.ok(err.message.includes('command timed out'));
+          return true;
+        }
+      );
     });
 
     it('should parse modern netsh output with CRLF line endings', () => {
@@ -223,30 +269,98 @@ describe('EmergencyLockdown', () => {
     });
 
     it('should throw error when disabling interface fails', async () => {
+      const commands = [];
+      const service = new EmergencyLockdown(db, eventBus, notify, {
+        execFileSync: (file, args, options) => {
+          commands.push({ file, args, options });
+          throw Object.assign(new Error('synthetic command failure'), { code: 'SYNTHETIC' });
+        }
+      });
       await assert.rejects(
-        async () => await lockdown.disableInterface('NonExistent'),
+        async () => await service.disableInterface('Example Adapter'),
         (err) => {
           assert.ok(err.message.includes('Failed to disable'));
           return true;
         }
       );
+      assert.strictEqual(commands.length, 1);
+      assert.strictEqual(commands[0].file, 'netsh');
+      assert.deepStrictEqual(commands[0].args, ['interface', 'set', 'interface', 'Example Adapter', 'admin=disable']);
+      assert.strictEqual(commands[0].options.timeout, 10000);
     });
 
     it('should throw error when enabling interface fails', async () => {
+      const commands = [];
+      const service = new EmergencyLockdown(db, eventBus, notify, {
+        execFileSync: (file, args, options) => {
+          commands.push({ file, args, options });
+          throw Object.assign(new Error('synthetic command failure'), { code: 'SYNTHETIC' });
+        }
+      });
       await assert.rejects(
-        async () => await lockdown.enableInterface('NonExistent'),
+        async () => await service.enableInterface('Example Adapter'),
         (err) => {
           assert.ok(err.message.includes('Failed to enable'));
           return true;
         }
       );
+      assert.strictEqual(commands.length, 1);
+      assert.strictEqual(commands[0].file, 'netsh');
+      assert.deepStrictEqual(commands[0].args, ['interface', 'set', 'interface', 'Example Adapter', 'admin=enable']);
+      assert.strictEqual(commands[0].options.timeout, 10000);
+    });
+
+    it('should disable and enable interfaces through the injected runner', async () => {
+      const { service, commands } = fakeRunners();
+      assert.deepStrictEqual(await service.disableInterface('Wi-Fi'), { success: true, interface: 'Wi-Fi' });
+      assert.deepStrictEqual(await service.enableInterface('Wi-Fi'), { success: true, interface: 'Wi-Fi' });
+      assert.strictEqual(commands.length, 2);
+      assert.ok(commands.every((call) => call.kind === 'sync' && call.file === 'netsh'));
     });
   });
 
   describe('Service operations', () => {
-    it('should get non-essential services', async () => {
-      const services = await lockdown.getNonEssentialServices();
-      assert.ok(Array.isArray(services));
+    const SC_LIST_STDOUT = [
+      'SERVICE_NAME: Spooler',
+      'DISPLAY_NAME: Print Spooler',
+      '        TYPE               : 30  WIN32_SHARE_PROCESS  ',
+      '        STATE              : 4  RUNNING ',
+      '',
+      'SERVICE_NAME: BITS',
+      'DISPLAY_NAME: Background Intelligent Transfer Service',
+      '        TYPE               : 20  WIN32_OWN_PROCESS  ',
+      '        STATE              : 1  STOPPED ',
+      ''
+    ].join('\r\n');
+
+    it('should get non-essential services without invoking real sc', async () => {
+      const commands = [];
+      const service = new EmergencyLockdown(db, eventBus, notify, {
+        execAsync: async (command, options) => {
+          commands.push({ command, options });
+          return { stdout: SC_LIST_STDOUT, stderr: '' };
+        }
+      });
+      const services = await service.getNonEssentialServices();
+      assert.strictEqual(commands.length, 1);
+      assert.strictEqual(commands[0].command, 'sc query type= service state= all');
+      assert.strictEqual(commands[0].options.timeout, 10000);
+      assert.deepStrictEqual(services.map((entry) => entry.name), ['Spooler']);
+      assert.strictEqual(services[0].state, 'RUNNING');
+    });
+
+    it('should wrap async service-list failures with a useful prefix', async () => {
+      const service = new EmergencyLockdown(db, eventBus, notify, {
+        execAsync: async () => { throw new Error('command timed out'); }
+      });
+      await assert.rejects(
+        async () => await service.getNonEssentialServices(),
+        (err) => {
+          assert.ok(err.message.includes('Failed to get services'));
+          assert.ok(err.message.includes('command timed out'));
+          return true;
+        }
+      );
     });
 
     it('should parse sc query output with CRLF line endings and filter non-essential running services', () => {
@@ -286,27 +400,68 @@ describe('EmergencyLockdown', () => {
     });
 
     it('should throw error when stopping service fails', async () => {
+      const commands = [];
+      const service = new EmergencyLockdown(db, eventBus, notify, {
+        execFileSync: (file, args, options) => {
+          commands.push({ file, args, options });
+          throw Object.assign(new Error('synthetic command failure'), { code: 'SYNTHETIC' });
+        }
+      });
       await assert.rejects(
-        async () => await lockdown.stopService('NonExistentService'),
+        async () => await service.stopService('ExampleService'),
         (err) => {
           assert.ok(err.message.includes('Failed to stop'));
           return true;
         }
       );
+      assert.strictEqual(commands.length, 1);
+      assert.strictEqual(commands[0].file, 'sc');
+      assert.deepStrictEqual(commands[0].args, ['stop', 'ExampleService']);
+      assert.strictEqual(commands[0].options.timeout, 15000);
     });
 
     it('should throw error when starting service fails', async () => {
+      const commands = [];
+      const service = new EmergencyLockdown(db, eventBus, notify, {
+        execFileSync: (file, args, options) => {
+          commands.push({ file, args, options });
+          throw Object.assign(new Error('synthetic command failure'), { code: 'SYNTHETIC' });
+        }
+      });
       await assert.rejects(
-        async () => await lockdown.startService('NonExistentService'),
+        async () => await service.startService('ExampleService'),
         (err) => {
           assert.ok(err.message.includes('Failed to start'));
           return true;
         }
       );
+      assert.strictEqual(commands.length, 1);
+      assert.strictEqual(commands[0].file, 'sc');
+      assert.deepStrictEqual(commands[0].args, ['start', 'ExampleService']);
+      assert.strictEqual(commands[0].options.timeout, 15000);
+    });
+
+    it('should stop and start services through the injected runner', async () => {
+      const commands = [];
+      const service = new EmergencyLockdown(db, eventBus, notify, {
+        execFileSync: (file, args, options) => {
+          commands.push({ file, args, options });
+          return Buffer.from('');
+        }
+      });
+      assert.deepStrictEqual(await service.stopService('ExampleService'), { success: true, service: 'ExampleService' });
+      assert.deepStrictEqual(await service.startService('ExampleService'), { success: true, service: 'ExampleService' });
+      assert.strictEqual(commands.length, 2);
     });
   });
 
   describe('Lockdown status', () => {
+    it('preserves 3-argument production construction with real command defaults', () => {
+      const svc = new EmergencyLockdown(db, eventBus, notify);
+      assert.equal(typeof svc._execAsync, 'function');
+      assert.equal(typeof svc._execFileSync, 'function');
+    });
+
     it('should return initial status as not locked down', () => {
       const status = lockdown.getStatus();
       assert.strictEqual(status.isLockedDown, false);
