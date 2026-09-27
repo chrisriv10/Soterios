@@ -375,6 +375,30 @@ describe('FolderWatcher', () => {
     fakeRoots.stop();
   });
 
+  it('resolves alias-form paths (junctions/short names) to the canonical root', { skip: process.platform !== 'win32' && 'requires Windows junctions (mklink /J)' }, () => {
+    const { execFileSync } = require('child_process');
+    const realDir = path.join(tmp, 'realroot');
+    const linkDir = path.join(tmp, 'linkroot');
+    fs.mkdirSync(realDir, { recursive: true });
+    execFileSync('cmd.exe', ['/c', 'mklink', '/J', linkDir, realDir], { windowsHide: true });
+    const probeFile = path.join(linkDir, 'alias.bin');
+    fs.writeFileSync(probeFile, 'x');
+    const aliased = new FolderWatcher({
+      watchDirs: [],
+      scanEngine: { async runCustomScan() { return {}; } }
+    });
+    try {
+      aliased._watchers.set(realDir, { close() {} });
+      // Textually different (junction path) but identical on disk: the
+      // owning canonical root must still be found so overflow coalesces
+      // instead of degrading to per-path accounting.
+      assert.equal(aliased._ownerWatchRoot(probeFile), realDir);
+      assert.equal(aliased._ownerWatchRoot(path.join(realDir, 'alias.bin')), realDir);
+    } finally {
+      aliased.stop();
+    }
+  });
+
   it('recovers overflow with a coalesced root scan after the queue drains', async () => {
     const recoveryScans = [];
     watcher.scanEngine.runScan = async (scanType, paths, message) => {

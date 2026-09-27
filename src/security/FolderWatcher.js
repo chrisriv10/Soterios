@@ -172,11 +172,30 @@ class FolderWatcher {
 
   // Map an overflowed file to the canonical ACTIVE watch root containing it.
   // Path-aware containment (never a startsWith prefix check, so C:\Temp2 is
-  // not mistaken for C:\Temp). Returns null when no active root owns the
-  // path; callers then fall back to per-path accounting without scanning an
-  // arbitrary parent directory.
+  // not mistaken for C:\Temp). A realpath retry covers alias forms that are
+  // textually different but identical on disk (8.3 short names, junctions,
+  // case variants) — observed on CI tmp dirs. Returns null when no active
+  // root owns the path; callers then fall back to per-path accounting
+  // without scanning an arbitrary parent directory.
   _ownerWatchRoot(filePath) {
     if (typeof filePath !== 'string' || !filePath) return null;
+    const direct = this._matchWatchRoot(filePath);
+    if (direct) return direct;
+    try {
+      const realpath = typeof fs.realpathSync.native === 'function'
+        ? fs.realpathSync.native
+        : fs.realpathSync;
+      const resolved = realpath(filePath);
+      if (typeof resolved === 'string' && resolved !== filePath) {
+        return this._matchWatchRoot(resolved);
+      }
+    } catch (_) {
+      // Unresolvable (vanished/odd) path: not attributable to any root.
+    }
+    return null;
+  }
+
+  _matchWatchRoot(filePath) {
     const lowerFile = filePath.toLowerCase();
     for (const root of this._watchers.keys()) {
       if (typeof root !== 'string' || !root) continue;
