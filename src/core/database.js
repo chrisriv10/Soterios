@@ -11,7 +11,21 @@ class DatabaseService {
     }
 
     this.db = new Database(dbPath);
-    this.init();
+    try {
+      this.init();
+    } catch (error) {
+      // The SQLite handle is already open at this point (better-sqlite3
+      // opens lazily but init() statements force it). Release it so callers
+      // — including startup corruption recovery — can rename or replace the
+      // file immediately on Windows instead of hitting EBUSY. The original
+      // initialization error is preserved untouched.
+      try {
+        this.db.close();
+      } catch (_) {
+        // Best effort only; the original error below is what matters.
+      }
+      throw error;
+    }
   }
 
   init() {
