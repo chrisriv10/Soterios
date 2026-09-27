@@ -48,7 +48,7 @@ try {
   // If anything goes wrong here, we intentionally continue — these are best-effort mitigations
 }
 
-const DatabaseService = require('../core/database');
+const { openApplicationDatabaseWithRecovery } = require('./databaseRecovery');
 const eventBus = require('../core/eventBus');
 const { registerIpcHandlers } = require('./ipcHandlers');
 const serviceRegistry = require('./serviceRegistry');
@@ -788,9 +788,35 @@ app.whenReady().then(async () => {
   logLine('info', 'App starting', { theme: currentUiTheme });
   sendSplashProgress(0, t('splash.starting'));
 
-  // 1. Database
-  const db = new DatabaseService(dbPath);
+  // 1. Database. Corruption recovery lives at this startup boundary only:
+  // a confirmed-damaged database family is preserved aside and exactly one
+  // fresh database is created; anything else throws exactly as before.
+  const { db, recovery: dbRecovery } = openApplicationDatabaseWithRecovery({ dbPath });
   dbRef = db;
+  if (dbRecovery) {
+    logLine('warn', 'Recovered from a damaged local database', {
+      dbPath,
+      preserved: dbRecovery.preservedFiles,
+      reason: dbRecovery.reason,
+      sqliteCode: dbRecovery.sqliteCode,
+    });
+    try {
+      const preservedNames = dbRecovery.preservedFiles.map((file) => path.basename(file)).join(', ');
+      db.addAlert({
+        severity: 'warning',
+        title: 'Damaged database preserved — fresh start',
+        message: 'Soterios detected a damaged local database and preserved it untouched. '
+          + 'The app started with a fresh database, so previous local history and settings may not appear.',
+        detail: `Preserved files: ${preservedNames || path.basename(dbPath)}. Nothing was deleted.`,
+      });
+    } catch (alertError) {
+      // The recovery itself already succeeded; a warning-row failure must
+      // never discard the fresh database or break startup.
+      logLine('warn', 'Could not record database recovery alert', {
+        error: alertError.message || String(alertError),
+      });
+    }
+  }
   currentUiTheme = resolveThemeName(db.getSetting('ui.theme', currentUiTheme));
   sendSplashProgress(3, t('splash.connectingDb'));
 
