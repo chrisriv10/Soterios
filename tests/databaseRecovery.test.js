@@ -257,6 +257,82 @@ describe('database recovery helper: garbage database', () => {
     }
   });
 
+  it('refuses to omit a sidecar whose inspection fails (stale-WAL protection)', () => {
+    const dir = tempDir();
+    try {
+      const dbPath = dbPathIn(dir);
+      writeGarbageDb(dbPath, 'garbage-main');
+      fs.writeFileSync(`${dbPath}-wal`, 'wal-bytes');
+      let openCalls = 0;
+      const guardFs = {
+        existsSync: (...args) => fs.existsSync(...args),
+        statSync: (target, ...rest) => {
+          if (target === `${dbPath}-wal`) {
+            throw Object.assign(new Error('EPERM: operation not permitted, stat'), { code: 'EPERM' });
+          }
+          return fs.statSync(target, ...rest);
+        },
+        renameSync: (...args) => fs.renameSync(...args),
+      };
+      assert.throws(
+        () => openApplicationDatabaseWithRecovery({
+          dbPath,
+          openDatabase: () => {
+            openCalls += 1;
+            throw Object.assign(new Error('file is not a database'), { code: 'SQLITE_NOTADB' });
+          },
+          fsModule: guardFs,
+          now: () => FIXED_DATE,
+        }),
+        /EPERM/
+      );
+      assert.equal(openCalls, 1, 'no fresh DB attempt after inspection failure');
+      // Nothing moved, nothing created: the family is exactly as found.
+      assert.equal(fs.readFileSync(dbPath, 'utf8'), 'garbage-main');
+      assert.equal(fs.readFileSync(`${dbPath}-wal`, 'utf8'), 'wal-bytes');
+      assert.deepEqual(corruptNames(dir), []);
+    } finally {
+      rmDir(dir);
+    }
+  });
+
+  it('treats a raced-away file (ENOENT on stat) as absent, not fatal', () => {
+    const dir = tempDir();
+    try {
+      const dbPath = dbPathIn(dir);
+      writeGarbageDb(dbPath);
+      const vanishingFs = {
+        existsSync: (...args) => fs.existsSync(...args),
+        statSync: (target, ...rest) => {
+          if (String(target).endsWith('-wal')) {
+            throw Object.assign(new Error('no such file or directory, stat'), { code: 'ENOENT' });
+          }
+          return fs.statSync(target, ...rest);
+        },
+        renameSync: (...args) => fs.renameSync(...args),
+      };
+      let calls = 0;
+      const { db, recovery } = openApplicationDatabaseWithRecovery({
+        dbPath,
+        openDatabase: (targetPath) => {
+          calls += 1;
+          if (calls === 1) throw Object.assign(new Error('file is not a database'), { code: 'SQLITE_NOTADB' });
+          return new DatabaseService(targetPath);
+        },
+        fsModule: vanishingFs,
+        now: () => FIXED_DATE,
+      });
+      try {
+        assert.deepEqual(recovery.preservedFiles, [`${dbPath}.corrupt-${FIXED_ID}`]);
+        db.setSetting('k', 'v');
+      } finally {
+        db.db.close();
+      }
+    } finally {
+      rmDir(dir);
+    }
+  });
+
   it('never overwrites a previous recovery (collision suffix)', () => {
     const dir = tempDir();
     try {
