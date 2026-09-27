@@ -10,7 +10,7 @@ const DEFAULT_SCHEDULE = {
   lastRun: null,
 };
 
-function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputationEngine, folderWatchAbortWaitMs }) {
+function register(mainWindow, { db, eventBus, clamEngine, scanEngine, reputationEngine, folderWatchAbortWaitMs, removableDriveCoordinator }) {
   const definitionState = {
     isScanning: false,
     currentScan: null,
@@ -191,6 +191,15 @@ if (definitionState.isScanning) {
 
   ipcMain.handle('scan:abort', () => {
     return scanEngine.abortScan();
+  });
+
+  // Narrow entry for the removable-drive notification's Scan action. Takes
+  // no path argument: the mount comes from main-process pending state and
+  // is revalidated against live enumeration before any scan starts, so a
+  // renderer can never inject an arbitrary scan path through this channel.
+  ipcMain.handle('removableDrive:scanPending', () => {
+    if (!removableDriveCoordinator) throw new Error('Removable drive scanning is unavailable.');
+    return removableDriveCoordinator.scanPending();
   });
 
   ipcMain.handle('scan:dismissResult', () => {

@@ -54,6 +54,8 @@ const { registerIpcHandlers } = require('./ipcHandlers');
 const serviceRegistry = require('./serviceRegistry');
 const { MaintenanceScheduler } = require('./maintenanceScheduler');
 const ToolRunManager = require('./toolRunManager');
+const { RemovableDriveCoordinator } = require('./removableDriveCoordinator');
+const { createQuitCoordinator } = require('./quitCoordinator');
 const { MaintenanceSafetyVault } = require('./maintenanceSafetyVault');
 const { PersistenceMonitor } = require('./persistenceMonitor');
 const { ProcessReputationService } = require('./processReputationService');
@@ -78,6 +80,9 @@ let currentUiTheme = 'dark';
 let startupLocale = 'en'; // set from peekUiLanguage() before the DB is ready,
 // so the earliest splash messages respect the saved language
 let isQuitting = false;
+// Bounded tool-run drain budget during ordered shutdown. The drain never
+// blocks quit beyond this; see quitCoordinator.
+const TOOLRUN_SHUTDOWN_TIMEOUT_MS = 5000;
 const lifecycleRefs = {
   maintenanceScheduler: null,
   maintenanceSafetyVault: null,
@@ -211,7 +216,7 @@ function toastHtml(title, body, level, themeName, iconOverride = null, openText 
   const iconPaths = iconOverride || TOAST_ICONS[level] || TOAST_ICONS.info;
   const markDataUri = getToastMarkDataUri();
   const wordmarkDataUri = getToastWordmarkDataUri();
-  const hasAction = action === 'scanner' || action === 'tools';
+  const hasAction = action === 'scanner' || action === 'tools' || action === 'removable-scan';
   return `<!doctype html>
 <html><head><meta charset="utf-8"><style>
   html, body { margin:0; padding:0; background:transparent; overflow:hidden; user-select:none; }
@@ -652,10 +657,18 @@ function handleThreatDetectedDeepLink(url) {
     logLine('warn', 'Deep link received before database ready', { url });
     return;
   }
+  let threatDomain = '';
+  let threatType = '';
   try {
     const parsed = new URL(url.replace('soterios:', 'soterios://'));
-    const domain = parsed.searchParams.get('domain') || '';
-    const threatType = parsed.searchParams.get('threatType') || '';
+    threatDomain = parsed.searchParams.get('domain') || '';
+    threatType = parsed.searchParams.get('threatType') || '';
+  } catch (e) {
+    logLine('warn', 'Failed to parse deep link URL:', { url, error: e.message });
+    return;
+  }
+  try {
+    const domain = threatDomain;
     dbRef.addAlert({
       level: 'warning',
       source: 'Browser Extension',
@@ -667,7 +680,7 @@ function handleThreatDetectedDeepLink(url) {
     });
     if (eventBus) eventBus.emit('alert:new', { level: 'warning', source: 'Browser Extension' });
   } catch (e) {
-    logLine('warn', 'Failed to parse deep link URL:', { url, error: e.message });
+    logLine('warn', 'Failed to store deep link alert:', { url, error: e.message });
   }
 }
 
@@ -677,10 +690,19 @@ function handleCredentialLeakDeepLink(url) {
     logLine('warn', 'Deep link received before database ready', { url });
     return;
   }
+  let leakCount = 1;
+  let leakDomain = '';
   try {
     const parsed = new URL(url.replace('soterios:', 'soterios://'));
-    const count = parseInt(parsed.searchParams.get('count') || '1', 10);
-    const domain = parsed.searchParams.get('domain') || '';
+    leakCount = parseInt(parsed.searchParams.get('count') || '1', 10);
+    leakDomain = parsed.searchParams.get('domain') || '';
+  } catch (e) {
+    logLine('warn', 'Failed to parse deep link URL:', { url, error: e.message });
+    return;
+  }
+  try {
+    const count = leakCount;
+    const domain = leakDomain;
     const domainSuffix = domain ? ` on ${domain}` : '';
     dbRef.addAlert({
       level: 'danger',
@@ -693,7 +715,7 @@ function handleCredentialLeakDeepLink(url) {
     });
     if (eventBus) eventBus.emit('alert:new', { level: 'danger', source: 'Browser Extension' });
   } catch (e) {
-    logLine('warn', 'Failed to parse deep link URL:', { url, error: e.message });
+    logLine('warn', 'Failed to store deep link alert:', { url, error: e.message });
   }
 }
 
@@ -847,6 +869,22 @@ app.whenReady().then(async () => {
     })
   });
   services.toolRunManager = toolRunManager;
+  lifecycleRefs.toolRunManager = toolRunManager;
+
+  // Removable-drive detection + scan coordination (issue #124). Detection
+  // state is seeded silently on start; arrivals prompt (or auto-scan when
+  // the user opted in) through the existing custom-scan pipeline.
+  const removableDriveCoordinator = new RemovableDriveCoordinator({
+    db: services.db,
+    scanEngine: services.scanEngine,
+    eventBus,
+    showNotification: (title, body, level, iconOverride, action) => showNotification(title, body, level, iconOverride, action),
+    t,
+    logger: { warn: (message, meta) => logLine('warn', message, meta) },
+  });
+  services.removableDriveCoordinator = removableDriveCoordinator;
+  lifecycleRefs.removableDriveCoordinator = removableDriveCoordinator;
+  removableDriveCoordinator.start();
 
   const maintenanceSafetyVault = new MaintenanceSafetyVault({
     db: services.db,
@@ -1174,6 +1212,10 @@ app.whenReady().then(async () => {
       try {
         db.pruneNetworkStats(7);
         db.pruneMaintenanceRuns(100);
+        // Persistent process history: hourly retention + row-count bound.
+        // Reads the processHistoryRetentionDays setting internally and never
+        // throws outward; failures must not disturb the prune loop.
+        try { db.pruneProcessHistory(); } catch (_) {}
       } catch (_) {}
     }, 60 * 60_000);
     if (typeof pruneTimer.unref === 'function') pruneTimer.unref();
@@ -1202,19 +1244,32 @@ process.on('unhandledRejection', (err) => {
   logLine('fatal', 'Unhandled rejection', { message: err && err.message ? err.message : String(err), stack: err && err.stack });
 });
 
-app.on('before-quit', () => {
-  isQuitting = true;
-  lifecycleRefs.maintenanceScheduler?.stop();
-  lifecycleRefs.maintenanceSafetyVault?.stop();
-  lifecycleRefs.persistenceMonitor?.stop();
-  lifecycleRefs.extensionBridge?.stop();
-  lifecycleRefs.processService?.stop().catch(() => {});
-  lifecycleRefs.trayController?.dispose();
-  if (lifecycleRefs.networkStatsTimer) clearInterval(lifecycleRefs.networkStatsTimer);
-  if (lifecycleRefs.pruneTimer) clearInterval(lifecycleRefs.pruneTimer);
-  try {
+const quitCoordinator = createQuitCoordinator({
+  app,
+  // Ordered teardown: synchronous service stops first (unchanged behavior),
+  // then the bounded tool-run drain, then exactly one database close.
+  stopSyncServices: () => {
+    lifecycleRefs.maintenanceScheduler?.stop();
+    lifecycleRefs.maintenanceSafetyVault?.stop();
+    lifecycleRefs.persistenceMonitor?.stop();
+    lifecycleRefs.extensionBridge?.stop();
+    try { lifecycleRefs.removableDriveCoordinator?.dispose(); } catch (_) {}
+    lifecycleRefs.processService?.stop().catch(() => {});
+    lifecycleRefs.trayController?.dispose();
+    if (lifecycleRefs.networkStatsTimer) clearInterval(lifecycleRefs.networkStatsTimer);
+    if (lifecycleRefs.pruneTimer) clearInterval(lifecycleRefs.pruneTimer);
+  },
+  drainToolRuns: (timeoutMs) => lifecycleRefs.toolRunManager?.shutdown(timeoutMs)
+    ?? Promise.resolve({ settled: true, pending: 0 }),
+  closeDatabase: () => {
     if (dbRef?.db && typeof dbRef.db.close === 'function') dbRef.db.close();
-  } catch (_) {}
+  },
+  drainTimeoutMs: TOOLRUN_SHUTDOWN_TIMEOUT_MS,
+});
+
+app.on('before-quit', (event) => {
+  isQuitting = true;
+  quitCoordinator.handleBeforeQuit(event);
 });
 
 app.on('window-all-closed', () => {

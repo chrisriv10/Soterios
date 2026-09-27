@@ -321,3 +321,66 @@ describe('FirewallManager batch rule operations', () => {
     assert.equal(res.failed[0].name, 'Soterios - Block IP 1.2.3.4 (In)');
   });
 });
+
+describe('FirewallManager createRule protocol validation (BUG-2)', () => {
+  class RecordingManager extends FirewallManager {
+    constructor() {
+      super();
+      this.commands = [];
+    }
+
+    async runPowerShell(command) {
+      this.commands.push(command);
+      return '';
+    }
+  }
+
+  function baseSpec(overrides = {}) {
+    return { name: 'Probe', direction: 'Outbound', action: 'Block', ...overrides };
+  }
+
+  it('builds a quoted allowlisted protocol for every supported value', async () => {
+    for (const protocol of ['TCP', 'UDP', 'ICMPv4', 'ICMPv6']) {
+      const mgr = new RecordingManager();
+      const result = await mgr.createRule(baseSpec({ protocol }));
+      assert.equal(result.success, true);
+      assert.equal(mgr.commands.length, 1);
+      assert.match(mgr.commands[0], new RegExp(`-Protocol '${protocol}'`));
+    }
+  });
+
+  it('omits the protocol flag for Any or missing protocol', async () => {
+    for (const protocol of ['Any', undefined, '']) {
+      const mgr = new RecordingManager();
+      const spec = baseSpec();
+      if (protocol !== undefined) spec.protocol = protocol;
+      const result = await mgr.createRule(spec);
+      assert.equal(result.success, true);
+      assert.ok(!mgr.commands[0].includes('-Protocol'), `protocol flag present for ${protocol}`);
+    }
+  });
+
+  it('rejects PowerShell statement syntax before any execution', async () => {
+    const mgr = new RecordingManager();
+    await assert.rejects(
+      () => mgr.createRule(baseSpec({ protocol: 'TCP; New-Item $env:TEMP\\audit-pwned -ItemType Directory #' })),
+      /Unsupported protocol/
+    );
+    assert.equal(mgr.commands.length, 0);
+  });
+
+  it('rejects invalid protocols clearly without mapping them elsewhere', async () => {
+    const mgr = new RecordingManager();
+    for (const protocol of ['FTP', 'tcp', 123, 'TCP; Remove-NetFirewallRule']) {
+      await assert.rejects(() => mgr.createRule(baseSpec({ protocol })), /Unsupported protocol/);
+    }
+    assert.equal(mgr.commands.length, 0);
+  });
+
+  it('trims surrounding whitespace before allowlist matching', async () => {
+    const mgr = new RecordingManager();
+    const result = await mgr.createRule(baseSpec({ protocol: 'TCP ' }));
+    assert.equal(result.success, true);
+    assert.match(mgr.commands[0], /-Protocol 'TCP'/);
+  });
+});

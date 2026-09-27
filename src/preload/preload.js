@@ -92,6 +92,10 @@ contextBridge.exposeInMainWorld('soterios', {
     configureReputation: (apiKey, consent) => ipcRenderer.invoke('process:reputation:configure', apiKey, consent),
     clearReputation: () => ipcRenderer.invoke('process:reputation:clear'),
     checkReputation: (processKey) => ipcRenderer.invoke('process:reputation:check', processKey),
+    queryHistory: (filters) => ipcRenderer.invoke('process:history:query', filters),
+    getHistoryRetention: () => ipcRenderer.invoke('process:history:retention:get'),
+    setHistoryRetention: (days) => ipcRenderer.invoke('process:history:retention:set', days),
+    clearHistory: () => ipcRenderer.invoke('process:history:clear'),
     onFullSnapshot: (callback) => {
       const listener = (_event, payload) => callback(payload);
       ipcRenderer.on('process:fullSnapshot', listener);
@@ -137,6 +141,9 @@ contextBridge.exposeInMainWorld('soterios', {
     getState: () => ipcRenderer.invoke('browserExtension:getState'),
     install: (browserId) => ipcRenderer.invoke('browserExtension:install', browserId),
     openPage: (browserId) => ipcRenderer.invoke('browserExtension:openPage', browserId)
+  },
+  defender: {
+    getThreatHistory: (options) => ipcRenderer.invoke('defender:get-threat-history', options && options.refresh === true ? { refresh: true } : undefined)
   },
   ai: {
     status: () => ipcRenderer.invoke('ai:status'),

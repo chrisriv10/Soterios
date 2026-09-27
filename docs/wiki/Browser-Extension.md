@@ -19,7 +19,7 @@ The install command atomically stages the validated extension at `%LOCALAPPDATA%
 Generated deliverables are:
 
 - `browser-extension/dist/chromium` — load-unpacked directory included in the Electron installer.
-- `dist/extension/soterios-extension-2.0.0.zip` and its SHA-256 file — deterministic archive.
+- `dist/extension/soterios-extension-<version>.zip` and its SHA-256 file — deterministic archive.
 - `build/native-host/SoteriosNativeHost.exe` — Node Single Executable Application included in the unpacked Electron payload so release signing covers it.
 
 ## First-run privacy boundary

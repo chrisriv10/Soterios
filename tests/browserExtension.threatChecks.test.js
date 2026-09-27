@@ -1,5 +1,5 @@
 'use strict';
-const { test, beforeEach } = require('node:test');
+const { test, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { generateKeyPairSync, sign } = require('crypto');
 const { checkHibpPassword, sha1Hex } = require('../browser-extension/dist/test/credential.js');
@@ -7,8 +7,25 @@ const { inspectUrl, inspectCredentialDestination } = require('../browser-extensi
 const { migrateSettings, providerEnabled } = require('../browser-extension/dist/test/settings.js');
 const { pruneHistory } = require('../browser-extension/dist/test/history.js');
 const { verifyFeedManifest, threatToken, domainThreatTokens } = require('../browser-extension/dist/test/feed.js');
+const { checkGoogleUrl } = require('../browser-extension/dist/test/providers.js');
 
-beforeEach(() => {});
+let storedValues;
+let fetchCalls;
+let realFetch;
+beforeEach(() => {
+  storedValues = { providerSecretsV2: { googleSafeBrowsingKey: 'test-key-123_ABC' } };
+  fetchCalls = [];
+  realFetch = globalThis.fetch;
+  global.chrome = { storage: { local: {
+    get: async (key) => typeof key === 'string' ? { [key]: storedValues[key] } : { ...storedValues },
+    set: async (patch) => Object.assign(storedValues, patch)
+  } } };
+  globalThis.fetch = async (url, init) => {
+    fetchCalls.push({ url, init });
+    return { ok: true, status: 200, json: async () => ({ matches: [] }) };
+  };
+});
+afterEach(() => { delete global.chrome; globalThis.fetch = realFetch; });
 
 test('HIBP makes exactly one padded request and discards count-zero padding rows', async () => {
   const hash = await sha1Hex('completed password'); const suffix = hash.slice(5); const calls = [];
@@ -44,4 +61,13 @@ test('domain feed tokens match an exact listed domain and its subdomains without
   const parent = await domainThreatTokens('https://example.com/');
   assert.ok(child.includes(listed[0]));
   assert.ok(!parent.includes(listed[0]));
+});
+test('Safe Browsing payload reports the actual packaged extension version', async () => {
+  const expected = require('../browser-extension/package.json').version;
+  const matches = await checkGoogleUrl('https://evil.example/login');
+  assert.deepEqual(matches, []);
+  assert.equal(fetchCalls.length, 1);
+  const body = JSON.parse(fetchCalls[0].init.body);
+  assert.equal(body.client.clientId, 'soterios');
+  assert.equal(body.client.clientVersion, expected);
 });

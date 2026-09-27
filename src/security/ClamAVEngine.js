@@ -363,10 +363,17 @@ class ClamAVEngine {
         });
 
         const onlyOpenErrors = code === 2 && accessDeniedLines.length > 0 && foundLines.length === 0 && realErrorLines.length === 0;
-        const error = code === 2 && !onlyOpenErrors ? (stderr || output).trim() || 'clamscan exited with code 2' : null;
+        // ClamAV's documented exit semantics: 0 = clean, 1 = detections,
+        // 2 = error. Anything else (other nonzero codes, crashes, or signal
+        // termination reported as null) means the scan did not complete and
+        // must never be presented as a successful clean result.
+        const unexpectedExit = code !== 0 && code !== 1 && code !== 2;
+        const error = unexpectedExit
+          ? `clamscan terminated unexpectedly (exit code ${code === null ? 'killed by signal' : code})${stderr ? `: ${stderr.trim().slice(0, 500)}` : ''}`
+          : (code === 2 && !onlyOpenErrors ? (stderr || output).trim() || 'clamscan exited with code 2' : null);
 
         finish({
-          success: code !== 2 || onlyOpenErrors,
+          success: !unexpectedExit && (code !== 2 || onlyOpenErrors),
           error,
           warnings: accessDeniedLines,
           note: onlyOpenErrors ? `${accessDeniedLines.length} protected file(s) could not be opened and were skipped.` : null,

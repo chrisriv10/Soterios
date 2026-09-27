@@ -356,3 +356,111 @@ describe('ClamAVEngine', () => {
     }
   });
 });
+
+describe('ClamAVEngine exit-code semantics (BUG-5)', () => {
+  let tmp;
+  let ClamAVEngine;
+  let originalSpawn;
+
+  function mockClamExit(exitCode, stdoutLines = []) {
+    require('child_process').spawn = function (exe, args, options) {
+      const proc = createMockProcess();
+      if (String(exe).includes('clamscan')) {
+        setTimeout(() => {
+          for (const line of stdoutLines) proc.stdout.emit('data', line);
+          proc.emit('close', exitCode);
+        }, 10);
+      } else {
+        setTimeout(() => proc.emit('close', 0), 10);
+      }
+      return proc;
+    };
+    // ClamAVEngine destructures spawn at load: re-require so the mock takes effect.
+    delete require.cache[require.resolve('../src/security/ClamAVEngine')];
+    ClamAVEngine = require('../src/security/ClamAVEngine');
+  }
+
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'soterios-clamav-exit-'));
+    const clamavDir = path.join(tmp, 'clamav');
+    fs.mkdirSync(clamavDir, { recursive: true });
+    fs.mkdirSync(path.join(clamavDir, 'database'), { recursive: true });
+    fs.mkdirSync(path.join(clamavDir, 'certs'), { recursive: true });
+    fs.writeFileSync(path.join(clamavDir, 'clamscan.exe'), 'mock');
+    fs.writeFileSync(path.join(clamavDir, 'freshclam.exe'), 'mock');
+    originalSpawn = require('child_process').spawn;
+    delete require.cache[require.resolve('../src/security/ClamAVEngine')];
+    ClamAVEngine = require('../src/security/ClamAVEngine');
+  });
+
+  afterEach(() => {
+    require('child_process').spawn = originalSpawn;
+    try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (_) {}
+  });
+
+  async function readyEngine() {
+    const engine = new ClamAVEngine({ baseDir: path.join(tmp, 'clamav') });
+    fs.writeFileSync(path.join(engine.dbDir, 'main.cvd'), 'mock');
+    await engine.init();
+    const target = path.join(tmp, 'target.txt');
+    fs.writeFileSync(target, 'content');
+    return { engine, target };
+  }
+
+  it('exit 0 reports a successful clean scan', async () => {
+    mockClamExit(0, ['C:\\t\\a.txt: OK\n']);
+    const { engine, target } = await readyEngine();
+    const result = await engine.scanFile(target);
+    assert.equal(result.success, true);
+    assert.equal(result.threatsFound, 0);
+  });
+
+  it('exit 1 with a finding reports success with the detection', async () => {
+    mockClamExit(1, ['C:\\t\\a.txt: Win.Test.Eicar FOUND\n']);
+    const { engine, target } = await readyEngine();
+    const result = await engine.scanFile(target);
+    assert.equal(result.success, true);
+    assert.equal(result.threatsFound, 1);
+    assert.equal(result.threats[0].name, 'Win.Test.Eicar');
+  });
+
+  it('access-denied-only code 2 preserves the warning behavior', async () => {
+    mockClamExit(2, ["C:\\t\\locked.txt: Can't open file: Access is denied. ERROR\n"]);
+    const { engine, target } = await readyEngine();
+    const result = await engine.scanFile(target);
+    assert.equal(result.success, true);
+    assert.ok(Array.isArray(result.warnings) && result.warnings.length > 0);
+    assert.match(String(result.note || ''), /protected file/i);
+  });
+
+  it('genuine code-2 scanner error reports failure', async () => {
+    mockClamExit(2, ['LibClamAV ERROR: broken database\n']);
+    const { engine, target } = await readyEngine();
+    const result = await engine.scanFile(target);
+    assert.equal(result.success, false);
+    assert.ok(result.error);
+  });
+
+  it('exit 3 reports failure, never a clean scan', async () => {
+    mockClamExit(3, ['C:\\t\\a.txt: OK\n']);
+    const { engine, target } = await readyEngine();
+    const result = await engine.scanFile(target);
+    assert.equal(result.success, false);
+    assert.ok(result.error);
+  });
+
+  it('another unexpected nonzero exit reports failure', async () => {
+    mockClamExit(5, []);
+    const { engine, target } = await readyEngine();
+    const result = await engine.scanFile(target);
+    assert.equal(result.success, false);
+  });
+
+  it('null/signal termination reports failure', async () => {
+    mockClamExit(null, ['C:\\t\\a.txt: OK\n']);
+    const { engine, target } = await readyEngine();
+    const result = await engine.scanFile(target);
+    assert.equal(result.success, false);
+    assert.ok(result.error);
+  });
+});

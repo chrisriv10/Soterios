@@ -23,6 +23,17 @@ const {
 } = require('../maintenanceScheduler');
 const performanceModes = require('../performanceModes');
 const { loadRegistry } = require('../../scripts/scriptRunner');
+const { createThermalSampler } = require('../thermal');
+const thermalLogger = require('../../utils/logger');
+
+// Read-only thermal snapshot (issue #120). No arguments are accepted or
+// needed; the sampler never throws, so the page can always render.
+const sampleThermal = createThermalSampler({ logger: thermalLogger });
+
+// Read-only disk health snapshot (issue #121). TTL-cached in main so
+// repeated navigation does not re-query WMI; never throws.
+const { createDiskHealthSampler } = require('../diskHealth');
+const sampleDiskHealth = createDiskHealthSampler({ logger: thermalLogger });
 const i18n = require('../../i18n');
 const { requestText } = require('./_shared');
 const {
@@ -32,7 +43,13 @@ const {
   openWindowsUtility
 } = require('../shellLaunchers');
 const featureFlags = require('../../core/featureFlags');
+const { writeRendererSetting } = require('../rendererWritableSettings');
 const privacyMode = require('../../core/privacyMode');
+const { DefenderThreatHistory } = require('../../security/DefenderThreatHistory');
+
+// Single shared reader. Defender remains the authoritative store; results are
+// cached in memory briefly inside the module and never persisted to disk.
+const defenderThreatHistory = new DefenderThreatHistory();
 
 function deleteFileIfSafe(filePath) {
   if (!filePath) return;
@@ -100,6 +117,12 @@ function register(mainWindow, {
     return (folderWatcher && folderWatcher.getStatus()) || { running: false };
   });
 
+  // -- Thermal sensors (read-only) --
+  ipcMain.handle('system:thermalSnapshot', () => sampleThermal());
+
+  // -- Disk SMART health (read-only) --
+  ipcMain.handle('system:diskHealthSnapshot', () => sampleDiskHealth());
+
   ipcMain.handle('folderwatch:toggle', async (_event, enable) => {
     if (!folderWatcher) return { running: false };
     if (enable) folderWatcher.start();
@@ -126,22 +149,12 @@ function register(mainWindow, {
   });
 
   ipcMain.handle('db:setSetting', (_event, key, value) => {
-    if (typeof key === 'string' && key.startsWith('feature.')) {
-      try {
-        return featureFlags.setFlag(db, key, value);
-      } catch (_) {
-        // Unknown feature flag; fall through to raw DB write
-        return db.setSetting(key, value);
-      }
-    }
-    const result = db.setSetting(key, value);
-    if (key === 'ui.theme') {
-      try {
-        const themePath = path.join(app.getPath('userData'), 'theme.json');
-        fs.writeFileSync(themePath, JSON.stringify({ theme: value }, null, 2), 'utf8');
-      } catch (_) { }
-    }
-    return result;
+    // Renderer writes are restricted to the explicit allowlist with
+    // per-setting validation (issue #182). Unknown keys — including unknown
+    // feature.* keys and internal main-process keys — throw instead of
+    // falling through to a raw database write. Trusted main-process code
+    // keeps calling db.setSetting() directly and is unaffected.
+    return writeRendererSetting({ db, app, fs, path }, key, value);
   });
   // -- Internationalization --
   ipcMain.handle('i18n:getCatalog', (_event, locale) => i18n.loadCatalog(locale));
@@ -173,6 +186,18 @@ function register(mainWindow, {
     });
     db.replaceAuditWarnings(auditWarnings);
     return results;
+  });
+
+  // -- Defender threat history (read-only v1) --
+  // The renderer may only request a refresh; every other value is ignored so
+  // no filter string, path, or script can reach PowerShell from the UI.
+  ipcMain.handle('defender:get-threat-history', async (_event, options) => {
+    const refresh = options !== null && typeof options === 'object' && options.refresh === true;
+    try {
+      return await defenderThreatHistory.getHistory({ refresh });
+    } catch (_) {
+      return { ok: false, code: 'failed', error: 'Soterios could not read Defender threat history.' };
+    }
   });
 
   // -- Scheduled maintenance (#71) --

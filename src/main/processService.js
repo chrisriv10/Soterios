@@ -11,6 +11,7 @@ const { JavaScriptProcessCollector } = require('./processCollector');
 const { NativeProcessClient } = require('./nativeProcessClient');
 const { assessProcess } = require('../security/processRisk');
 const { getSignatureInfo } = require('../security/windowsChecks');
+const { ProcessHistoryRecorder } = require('./processHistory');
 const { hashFileStreaming } = require('../security/hashUtils');
 const { saveEncryptedTrace, savePortableTrace, writeAtomic } = require('./processTrace');
 const logger = require('../utils/logger');
@@ -143,6 +144,14 @@ class ProcessService extends EventEmitter {
     this.snapshot = null;
     this.histories = new Map();
     this.subscribers = new Map();
+    // Persistent lifecycle history (Issue #122) is recorded from the same
+    // sampling flow via delta transitions below — no second collector, no
+    // per-sample row writes. The recorder no-ops without a database and
+    // never throws, so history persistence cannot break live monitoring.
+    this.processHistory = new ProcessHistoryRecorder({
+      db: options.db || null,
+      touchIntervalMs: options.historyTouchIntervalMs,
+    });
     this._samplePromise = null;
     this._timer = null;
     this._lastByKey = new Map();
@@ -437,6 +446,26 @@ class ProcessService extends EventEmitter {
     }
   }
 
+  // Feeds one sample's lifecycle transitions to persistent history. The
+  // previous snapshot supplies enrichment (risk/publisher) for exits, since
+  // exit events themselves carry only identity.
+  _recordPersistentHistory(previous, next, delta) {
+    try {
+      const previousByKey = new Map(
+        (previous?.processes || []).map((proc) => [processKeyString(proc.key), proc])
+      );
+      const outcome = this.processHistory.recordSample({
+        processes: next.processes,
+        previousByKey,
+        delta,
+        collectedAt: next.collectedAt,
+      });
+      if (outcome?.error) logger.warn('Process history recording failed', { error: outcome.error });
+    } catch (error) {
+      logger.warn('Process history recording failed', { error: safeError(error) });
+    }
+  }
+
   _buildDelta(previous, next) {
     if (!previous) return { full: next };
     const previousMap = new Map(previous.processes.map((proc) => [processKeyString(proc.key), proc]));
@@ -482,6 +511,7 @@ class ProcessService extends EventEmitter {
         this.snapshot = next;
         this._recordHistory(next);
         const delta = this._buildDelta(previous, next);
+        this._recordPersistentHistory(previous, next, delta);
         this.emit('snapshot', next);
         this.emit('delta', delta);
         this._recordDiagnosticSample(sampleStartedAt, next.processes.length, true);
@@ -507,7 +537,9 @@ class ProcessService extends EventEmitter {
           const previous = this.snapshot;
           this.snapshot = next;
           this._recordHistory(next);
-          this.emit('delta', this._buildDelta(previous, next));
+          const fallbackDelta = this._buildDelta(previous, next);
+          this.emit('delta', fallbackDelta);
+          this._recordPersistentHistory(previous, next, fallbackDelta);
           this._recordDiagnosticSample(sampleStartedAt, next.processes.length, true);
           return next;
         }
@@ -656,6 +688,14 @@ class ProcessService extends EventEmitter {
       current.publisher = current.signature.publisher || null;
       current.risk = assessProcess(current, { parentName: current.parentName, trusted: current.trusted });
       current.suspiciousReasons = current.risk.evidence.map((item) => item.detail);
+      try {
+        this.processHistory.recordEnrichment(processKeyString(key), {
+          publisher: current.publisher,
+          signatureStatus: current.signature?.status,
+          riskScore: current.risk?.score,
+          riskLevel: current.risk?.severity,
+        });
+      } catch (_) {}
       nativeDetails.sections = { ...(nativeDetails.sections || {}), security: { signature: current.signature } };
     }
     return {
@@ -762,9 +802,14 @@ class ProcessService extends EventEmitter {
         result = await this.collector.performAction({ processKey, action, options: payload.options || {} });
       } else if (action === 'terminate') {
         result = await this._terminate(current.pid);
+        // Mark immediately on a successful kill: only the kill's success may
+        // attribute a later exit to the user, never a failed attempt.
+        try { this.processHistory.markUserTerminated(processKeyString(current.key)); } catch (_) {}
       } else if (action === 'restart') {
         if (!current.path || !path.isAbsolute(current.path) || !fs.existsSync(current.path)) throw new Error('Executable path is unavailable; restart is not safe.');
         await this._terminate(current.pid);
+        // The user killed the old process even if the relaunch below fails.
+        try { this.processHistory.markUserTerminated(processKeyString(current.key)); } catch (_) {}
         try {
           await spawnDetachedVerified(current.path, [], { cwd: path.dirname(current.path) }, this._spawn);
         } catch (error) {

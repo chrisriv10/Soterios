@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- System Restore point management ([#125](https://github.com/chrisriv10/Soterios/issues/125)): read-only restore-point listing plus explicit user-confirmed manual checkpoint creation (`MODIFY_SETTINGS`) on the Tools page, with fixed PowerShell scripts, verified-before-claimed results, and honest unconfirmed/unavailable states (no restore, delete, scheduling, or protection-policy changes)
+- Opt-in removable-drive scanning: newly connected removable volumes show a scan prompt (or auto-scan when explicitly enabled), reusing the existing custom-scan pipeline with revalidation, bounded queueing, and truthful removal handling
+- CPU/GPU temperature monitoring on the dashboard with graceful unavailable states for unsupported sensors
+- Disk SMART health monitoring on the dashboard with strict status mapping (Healthy/Warning/Unknown) and on-demand raw data inspection
+
+## [1.4.1] - 2026-09-19
+
+### Fixed
+- Corrected the browser extension's Safe Browsing client version reporting so it follows the packaged extension version (extension 2.1.1)
+- Prevented quarantine storage collisions when different files with the same basename are quarantined at the same time
+- Improved application shutdown so active tool runs are canceled/drained with a bounded timeout before database teardown, preventing late history writes during shutdown
+- Refreshed version-dependent README download/install documentation
+
+## [1.4.0] - 2026-09-19
+
+### Added
+- Ad & Tracker Protection in the Soterios browser extension: block known advertising and tracking network requests locally using packaged filter rules (EasyList and EasyPrivacy compiled to static Manifest V3 rules at build time; no browsing-history upload), with independent ad and tracker controls and per-site exact-host protection exceptions
+- Windows Defender Threat History: read-only viewer for Microsoft Defender detections with correlated threat metadata in Reports (no remediation or Defender configuration changes)
+
 ## [1.3.0] - 2026-08-20
 
 ### Added

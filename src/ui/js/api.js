@@ -109,6 +109,9 @@ const Api = {
     const networkTrafficHistory = await window.api.invoke('db:getSetting', 'feature.networkTrafficHistory', true);
     const aiAssistant = await window.api.invoke('db:getSetting', 'feature.aiAssistant', true);
     const privacyMode = await window.api.invoke('db:getSetting', 'feature.privacyMode', false);
+    // Plain (non-feature) preference: removable-drive auto-scan. Defaults
+    // false so fresh installs never scan media without explicit opt-in.
+    const autoScanRemovableDrives = await window.api.invoke('db:getSetting', 'scan.autoScanRemovableDrives', false);
     const dbTheme = await window.api.invoke('db:getSetting', 'ui.theme', 'dark');
     const savedLanguage = await window.api.invoke('db:getSetting', 'ui.language', '');
     let language = savedLanguage;
@@ -155,7 +158,8 @@ const Api = {
         emergencyLockdown,
         privacyMode,
         generateToolRunReports,
-        skipDeleteConfirm
+        skipDeleteConfirm,
+        autoScanRemovableDrives: autoScanRemovableDrives === true
       },      ui: { theme, language }
     };
   },
@@ -204,6 +208,9 @@ const Api = {
       }
       if (Object.prototype.hasOwnProperty.call(f, 'skipDeleteConfirm')) {
         await window.api.invoke('db:setSetting', 'reports.skipDeleteConfirm', !!f.skipDeleteConfirm);
+      }
+      if (Object.prototype.hasOwnProperty.call(f, 'autoScanRemovableDrives')) {
+        await window.api.invoke('db:setSetting', 'scan.autoScanRemovableDrives', !!f.autoScanRemovableDrives);
       }
     }
     if (patch.ui) {

@@ -173,7 +173,14 @@ class FirewallManager {
       `-Direction ${direction === 'Inbound' ? 'Inbound' : 'Outbound'}`,
       `-Action ${action === 'Allow' ? 'Allow' : 'Block'}`
     ];
-    if (protocol) parts.push(`-Protocol ${psEscape(protocol)}`);
+    if (protocol != null && protocol !== '') {
+      // Reuse the import-path allowlist (TCP/UDP/ICMPv4/ICMPv6/Any): anything
+      // else is rejected before PowerShell execution, and the validated
+      // value stays single-quoted as defense in depth. 'Any' normalizes to
+      // undefined (flag omitted), matching import behavior.
+      const normalized = this._normalizeProtocol(protocol);
+      if (normalized !== undefined) parts.push(`-Protocol '${normalized}'`);
+    }
     if (remoteAddress) parts.push(`-RemoteAddress '${psEscape(remoteAddress)}'`);
     if (remotePort != null && remotePort !== '') {
       const port = Number(remotePort);

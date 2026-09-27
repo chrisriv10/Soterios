@@ -20,9 +20,10 @@ Security projects require careful collaboration. Please avoid hostile language, 
 
 Before contributing, make sure you have:
 
-- Node.js (LTS recommended)
+- Node.js 26 or newer (required; Node 26 is Current, not LTS)
 - npm
 - Git
+- Rust toolchain 1.85.1 for the native process inspector
 - A Windows development environment (recommended for testing system-level features)
 
 Check your installed versions:
@@ -31,26 +32,53 @@ Check your installed versions:
 node -v
 npm -v
 git --version
+rustc --version
 ```
 
-### Clone the Repository
+Set up the pinned Windows Rust toolchain:
 
 ```bash
-git clone https://github.com/chrisriv10/Soterios.git
-cd Soterios
+rustup toolchain install 1.85.1-x86_64-pc-windows-msvc --profile minimal --component clippy,rustfmt
 ```
 
-Install dependencies:
+For the canonical clone, dependency installation, and application startup instructions, follow the [Development Setup](README.md#development-setup) section in the README.
+
+### Environment Doctor
+
+Run the read-only environment check to verify your local setup:
 
 ```bash
-npm install
+npm run doctor
 ```
 
-Run the application:
+It checks common setup problems (Node.js version, platform, PowerShell,
+ClamAV installation completeness, native helper/host artifacts, extension
+build output, repository configuration, and writable working locations) and
+prints remediation hints. It does not modify the system, install anything,
+build anything, or make network requests. It exits nonzero when a required
+check fails; warnings about optional build artifacts do not fail the command.
+Missing artifacts can usually be produced with `npm install`,
+`npm run native:process`, `npm run native-host:build`, or
+`npm run extension:build`. (On Linux/macOS the ClamAV bundle is skipped by
+design — see `SOTERIOS_SKIP_CLAMAV` / `SOTERIOS_FORCE_CLAMAV` under
+[Environment Variables](#environment-variables) — so a ClamAV "not installed"
+warning is expected there.)
 
-```bash
-npm start
-```
+### Environment Variables
+
+Runtime environment variables are documented in the [Environment Variables](README.md#environment-variables) section of the README.
+
+Contributor-relevant variables include:
+
+- `SOTERIOS_DISABLE_GPU=1`
+- `SOTERIOS_USERDATA=<path>`
+- `SOTERIOS_LOG_FILE=1` or `SOTERIOS_LOG_FILE=<path>`
+- `SOTERIOS_SKIP_CLAMAV=1`
+- `SOTERIOS_FORCE_CLAMAV=1`
+
+`npm install` downloads a prebuilt Windows ClamAV archive via `tools/download-clamav.js`. The pinned archive only contains Windows binaries, so the download is skipped automatically on Linux and macOS. Set `SOTERIOS_SKIP_CLAMAV=1` to skip it on Windows as well (for example when working offline or on a metered connection), or `SOTERIOS_FORCE_CLAMAV=1` to force the download on a non-Windows host when assembling a Windows package. Transient download failures are retried a few times before the install fails, and the archive's SHA-256 checksum is always verified.
+
+See the [Logging](#logging) section below for additional details about `SOTERIOS_LOG_FILE`.
 
 ---
 
@@ -74,7 +102,7 @@ git checkout -b feature/my-new-feature
 
 Use descriptive branch names:
 
-```
+```text
 feature/firewall-improvements
 bugfix/process-scanner-crash
 docs/update-readme
@@ -118,7 +146,7 @@ Please do not publicly disclose:
 - Bypass methods
 - Sensitive implementation details
 
-...until they have been reviewed. 
+...until they have been reviewed.
 
 Include:
 
@@ -145,61 +173,51 @@ If your change affects system-level operations, test carefully.
 
 ## Running Tests
 
-Soterios uses Node.js built-in test runner (`node:test`) for most unit tests. Test files live in `tests/` and follow the `*.test.js` naming convention.
+Soterios uses Node.js built-in test runner (`node:test`) for most unit tests, with Jest used for specific suites.
 
-### Run all tests
+### Run the main test suite
 
 ```bash
 npm test
 ```
 
-This runs every Node `tests/*.test.js` file (via `tests/node-test-runner.js`, excluding Jest-only suites), then Jest (`passwordTools`, `reportExport`).
+This runs the Node test suite through `tests/node-test-runner.js`, followed by the Jest suites for `passwordTools`, `reportExport`, and `splashProgress`.
 
-Integration smoke checks (maintenance, tray health summary, updater — no Electron UI):
+### Run the Node test suite with forced exit
+
+```bash
+npm run test:force
+```
+
+This runs the tests using Node's built-in test runner with forced process exit after completion.
+
+### Run integration smoke checks
 
 ```bash
 npm run smoke:integration
 ```
 
-You can also invoke the Node runner directly:
+This runs the integration smoke checks for project functionality that does not require the full Electron UI.
+
+### Run network alert smoke checks
 
 ```bash
-node --test tests/
+npm run smoke:alerts
 ```
 
-### Run a specific test file
+This runs the network alerts smoke test.
+
+### Visual PR verification
+
+For changes that affect the user interface, capture screenshots for pull request verification with:
 
 ```bash
-node --test tests/realTimeWatcher.test.js
-node --test tests/blocklistService.test.js
-node --test tests/scoringEngine.test.js
+npm run capture:screenshots
 ```
 
-### Jest-only suites
+Attach the relevant screenshots to the pull request when visual verification is needed.
 
-```bash
-npx jest tests/passwordTools.test.js
-npx jest tests/reportExport.test.js
-```
-
-Contributors should run `npm test` before submitting a pull request.
-
-### Expected output
-
-A successful run looks like:
-
-```text
-✔ BlocklistService tests (12ms)
-✔ Real-time watcher tests (28ms)
-
-ℹ tests X
-ℹ pass X
-ℹ fail 0
-```
-
-Counts and timings may vary as the test suite evolves.
-
-Run the full suite before opening a pull request.
+Contributors should run `npm test` before submitting a pull request and run any relevant smoke or visual checks for the areas they changed.
 
 ---
 
@@ -238,7 +256,7 @@ How was this tested?
 
 Use clear and descriptive commit messages. Good examples:
 
-```
+```text
 Add Windows firewall audit module
 
 Fix process scanner crash on missing permissions
@@ -248,7 +266,7 @@ Improve IPC validation
 
 Avoid vague messages like:
 
-```
+```text
 fixed stuff
 changes
 update

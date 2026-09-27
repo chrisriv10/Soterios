@@ -132,4 +132,40 @@ describe('scan IPC handlers', () => {
     assert.equal(result2.error, 'Definitions can\'t be updated while a scan is in progress.');
     await promise1;
   });
+
+  it('exposes a narrow pending-scan channel that takes no path argument', async () => {
+    const { register, handlers } = loadScanModule();
+    const calls = [];
+    const deps = {
+      db: { getSetting: () => false, setSetting: () => {} },
+      eventBus: { emit: () => {} },
+      clamEngine: {},
+      scanEngine: {},
+      reputationEngine: {},
+      removableDriveCoordinator: {
+        scanPending: async (...args) => {
+          calls.push(args);
+          return { ok: true };
+        },
+      },
+    };
+    register({ webContents: { send: () => {} } }, deps);
+    assert.equal(typeof handlers['removableDrive:scanPending'], 'function');
+    const result = await handlers['removableDrive:scanPending']();
+    assert.equal(result.ok, true);
+    assert.deepEqual(calls, [[]]);
+  });
+
+  it('rejects the pending-scan channel without a coordinator', async () => {
+    const { register, handlers } = loadScanModule();
+    const deps = {
+      db: { getSetting: () => false, setSetting: () => {} },
+      eventBus: { emit: () => {} },
+      clamEngine: {},
+      scanEngine: {},
+      reputationEngine: {},
+    };
+    register({ webContents: { send: () => {} } }, deps);
+    assert.throws(() => handlers['removableDrive:scanPending'](), /unavailable/);
+  });
 });

@@ -408,3 +408,106 @@ describe('DatabaseService getSetting', () => {
     service.db.close();
   });
 });
+
+describe('DatabaseService addAlert contract (BUG-1)', () => {
+  const tempDbs = [];
+
+  afterEach(() => {
+    while (tempDbs.length) {
+      const p = tempDbs.pop();
+      try { fs.rmSync(p, { force: true }); } catch (_) {}
+      try { fs.rmSync(p + '-wal', { force: true }); } catch (_) {}
+      try { fs.rmSync(p + '-shm', { force: true }); } catch (_) {}
+    }
+  });
+
+  function tempDbPath() {
+    const p = path.join(os.tmpdir(), `soterios-db-alert-${Date.now()}-${Math.random().toString(16).slice(2)}.db`);
+    tempDbs.push(p);
+    return p;
+  }
+
+  function unread(db) {
+    return db.db.prepare('SELECT * FROM alerts ORDER BY id ASC').all();
+  }
+
+  it('persists the existing two-argument call unchanged', () => {
+    const service = new DatabaseService(tempDbPath());
+    service.addAlert('warning', 'Persistence Monitor found 2 new mechanisms.');
+    const rows = unread(service);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].severity, 'warning');
+    assert.equal(rows[0].message, 'Persistence Monitor found 2 new mechanisms.');
+    service.db.close();
+  });
+
+  it('persists the extension bridge rich-object shape without throwing', () => {
+    const service = new DatabaseService(tempDbPath());
+    service.addAlert({
+      level: 'danger',
+      source: 'Browser Extension',
+      title: 'Credential finding',
+      message: 'credential breach on example.com. Seen 3 times in the breach corpus.',
+      detail: 'Category: credential_breach | Severity: danger',
+      timestamp: new Date().toISOString(),
+      metadata: { source: 'browser-extension-v2', category: 'credential_breach' },
+    });
+    const rows = unread(service);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].severity, 'danger');
+    assert.match(rows[0].message, /Credential finding/);
+    assert.match(rows[0].message, /example\.com/);
+    service.db.close();
+  });
+
+  it('persists the threat deep-link shape with title and detail preserved', () => {
+    const service = new DatabaseService(tempDbPath());
+    service.addAlert({
+      level: 'warning',
+      source: 'Browser Extension',
+      title: 'Suspected Malicious Site',
+      message: 'A site visited in the browser was flagged by Google Safe Browsing: evil.example',
+      detail: 'Threat type: MALWARE | Domain: evil.example',
+      timestamp: new Date().toISOString(),
+      metadata: { source: 'browser-extension-safebrowsing', domain: 'evil.example' },
+    });
+    const rows = unread(service);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].severity, 'warning');
+    assert.match(rows[0].message, /Suspected Malicious Site/);
+    assert.match(rows[0].message, /MALWARE/);
+    service.db.close();
+  });
+
+  it('persists the credential-leak deep-link shape with the breach count', () => {
+    const service = new DatabaseService(tempDbPath());
+    service.addAlert({
+      level: 'danger',
+      source: 'Browser Extension',
+      title: 'Credential Leak Detected',
+      message: 'Password found in 4 breaches on shop.example via browser extension',
+      detail: 'Breaches: 4 | Domain: shop.example',
+      timestamp: new Date().toISOString(),
+      metadata: { source: 'browser-extension', count: 4 },
+    });
+    const rows = unread(service);
+    assert.equal(rows.length, 1);
+    assert.match(rows[0].message, /Credential Leak Detected/);
+    assert.match(rows[0].message, /4/);
+    service.db.close();
+  });
+
+  it('rejects unusable alert values instead of storing garbage', () => {
+    const service = new DatabaseService(tempDbPath());
+    assert.throws(() => service.addAlert({}), /message/);
+    assert.throws(() => service.addAlert(42, 'x'), /severity/);
+    assert.equal(unread(service).length, 0);
+    service.db.close();
+  });
+
+  it('deep-link handlers distinguish storage failures from URL parse failures', () => {
+    const mainSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'main', 'main.js'), 'utf8');
+    assert.match(mainSource, /Failed to store deep link alert/);
+    assert.match(mainSource, /Failed to parse deep link URL/);
+  });
+});

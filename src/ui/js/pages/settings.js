@@ -75,6 +75,14 @@ window.Pages.settings = {
 
           <div class="toggle-row">
             <div>
+              <div class="toggle-label">${escapeHtml(t('settings.autoScanRemovableDrives.label'))}</div>
+              <div class="toggle-desc">${escapeHtml(t('settings.autoScanRemovableDrives.desc'))}</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="autoScanRemovableDrivesToggle" ${settings.features.autoScanRemovableDrives === true ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+          </div>
+
+          <div class="toggle-row">
+            <div>
               <div class="toggle-label">${escapeHtml(t('settings.emergencyLockdown.label'))}</div>
               <div class="toggle-desc">${escapeHtml(t('settings.emergencyLockdown.desc'))}</div>
             </div>
@@ -183,11 +191,6 @@ window.Pages.settings = {
 
         <div class="card">
           <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.browserExtension.label'))}</div>
-          <details class="browser-ext-disclosure">
-            <summary><span class="toggle-label">${escapeHtml(t('settings.browserExtension.disclosureTitle'))}</span><span class="browser-ext-disclosure-chevron" aria-hidden="true">▸</span></summary>
-            <div class="toggle-desc">${escapeHtml(t('settings.browserExtension.disclosureText'))}</div>
-            <label style="display:flex; align-items:flex-start; gap:8px; margin-top:10px; font-size:0.85rem;"><input type="checkbox" id="browserExtDisclosureConfirm" style="margin-top:3px;"> <span>${escapeHtml(t('settings.browserExtension.disclosureConfirm'))}</span></label>
-          </details>
           <div class="toggle-desc" style="margin-bottom:12px;">${escapeHtml(t('settings.browserExtension.desc'))}</div>
           <div id="browserExtensionBody">${escapeHtml(t('settings.browserExtension.checking'))}</div>
         </div>
@@ -291,7 +294,7 @@ window.Pages.settings = {
         <div class="card">
           <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.about'))}</div>
           <div style="font-size:0.9rem; line-height:1.8;">
-            <div><strong>Soterios</strong> v${escapeHtml(appInfo.version || '1.3.0')}</div>
+            <div><strong>Soterios</strong> v${escapeHtml(appInfo.version || '1.4.1')}</div>
             <div style="color:var(--text-muted); margin-top:8px;">${escapeHtml(t('settings.aboutDesc'))}</div>
             <div style="margin-top:8px;">
               <a href="https://github.com/chrisriv10/Soterios" id="githubLink" style="color:var(--accent-primary); text-decoration:none;">${escapeHtml(t('settings.githubRepo'))}</a>
@@ -443,6 +446,7 @@ window.Pages.settings = {
 
     container.querySelector('#rtpToggle').addEventListener('change', (event) => saveFeature('realtimeProtection', event.target.checked, event.target));
     container.querySelector('#folderWatchToggle').addEventListener('change', (event) => saveFeature('folderWatch', event.target.checked, event.target));
+    container.querySelector('#autoScanRemovableDrivesToggle').addEventListener('change', (event) => saveFeature('autoScanRemovableDrives', event.target.checked, event.target));
     container.querySelector('#networkAlertsToggle').addEventListener('change', (event) => saveFeature('networkAlerts', event.target.checked, event.target));
     container.querySelector('#networkTrafficHistoryToggle').addEventListener('change', (event) => saveFeature('networkTrafficHistory', event.target.checked, event.target));
     container.querySelector('#aiAssistantToggle').addEventListener('change', (event) => saveFeature('aiAssistant', event.target.checked, event.target));
@@ -638,7 +642,7 @@ body.innerHTML = `
               const folder = body.querySelector('#browserExtFolder');
               if (folder) folder.textContent = result.extDir;
               if (steps) steps.style.display = 'block';
-              status.textContent = `Extension ${result.installedVersion || '2.0.0'} staged. Native host ${result.nativeHostOk ? 'registered' : 'registration needs attention'}.`;
+              status.textContent = `Extension ${result.installedVersion || '2.1.1'} staged. Native host ${result.nativeHostOk ? 'registered' : 'registration needs attention'}.`;
               // Don't re-render - keep the steps visible so user can follow them
             } catch (err) {
               status.textContent = err.message || String(err);

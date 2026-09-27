@@ -646,4 +646,33 @@ describe('ScanEngine', () => {
     await engine.runScan('folderwatch', [tmp], 'Watching...');
     assert.equal(engine.getStatus().lastResult, null);
   });
+
+  it('marks the scan failed, never completed-clean, when the scanner fails (BUG-5)', async () => {
+    const failingClam = {
+      ...mockClamEngine,
+      scanFile: async () => ({
+        success: false,
+        error: 'clamscan exited with code 3',
+        threats: [],
+        threatsFound: 0,
+        filesScanned: 0,
+        output: ''
+      })
+    };
+    const engine = new ScanEngine(
+      mockDb,
+      mockEventBus,
+      failingClam,
+      mockHeuristicEngine,
+      mockReputationEngine,
+      mockQuarantineManager
+    );
+    const target = path.join(tmp, 'victim.txt');
+    fs.writeFileSync(target, 'content');
+    await engine.runCustomScan([target]);
+    const lastResult = engine.getStatus().lastResult;
+    assert.equal(lastResult.status, 'failed');
+    assert.equal(lastResult.threatsFound, 0);
+    assert.ok(lastResult.errors.length > 0);
+  });
 });

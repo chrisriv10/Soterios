@@ -272,6 +272,44 @@ window.Pages['dashboard'] = {
             <div class="page-subtitle" style="margin-top:8px; font-size:0.75rem; color:var(--accent-primary);">${escapeHtml(t('dashboard.healthClickDetails'))}</div>
           </div>
 
+          <div class="card" id="thermalCard">
+            <div class="status-card">
+              <div class="status-icon info">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M12 2v20"/>
+  <path d="M8 6l-3 3"/>
+  <path d="M16 6l3 3"/>
+  <path d="M5 13a7 7 0 0 0 14 0"/>
+  <path d="M12 13v5"/>
+</svg>
+              </div>
+              <div class="status-info">
+                <h3>${escapeHtml(t('thermal.title'))}</h3>
+                <div class="value" id="thermalCpu">${escapeHtml(t('common.loading'))}</div>
+              </div>
+            </div>
+            <div id="thermalGpus" class="page-subtitle" style="margin-top:12px; font-size:0.85rem;"></div>
+          </div>
+
+          <div class="card" id="diskHealthCard">
+            <div class="status-card">
+              <div class="status-icon info">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="3" y="5" width="18" height="12" rx="2"/>
+  <path d="M7 21h10"/>
+  <circle cx="12" cy="11" r="3"/>
+</svg>
+              </div>
+              <div class="status-info">
+                <h3>${escapeHtml(t('diskHealth.title'))}</h3>
+                <div class="value" id="diskHealthSummary">${escapeHtml(t('common.loading'))}</div>
+              </div>
+            </div>
+            <div id="diskHealthRows" class="page-subtitle" style="margin-top:12px; font-size:0.85rem;"></div>
+          </div>
+
 <!-- Device Cleanup -->
           <div class="card dashboard-device-cleanup">
             <div class="status-card">
@@ -882,6 +920,159 @@ async function loadWarnings() {
         // Status query must never break dashboard rendering.
       }
     }
+
+    // Thermal sensors (issue #120): display-only readings refreshed on a
+    // slow page-owned interval. Recursive setTimeout (not setInterval)
+    // guarantees no overlapping backend calls even if a sample is slow; the
+    // timer handle is registered for cleanup so navigation never leaks it.
+    const THERMAL_REFRESH_MS = 15000;
+    let thermalTimer = null;
+    const formatTempC = (value) => `${value.toFixed(1)}°C`;
+    async function refreshThermal() {
+      if (!hasView()) return;
+      try {
+        const snapshot = await window.api.invoke('system:thermalSnapshot');
+        if (!hasView()) return;
+        const cpuEl = container.querySelector('#thermalCpu');
+        const gpusEl = container.querySelector('#thermalGpus');
+        const cpu = snapshot?.cpu;
+        const cpuText = cpu?.available && typeof cpu.mainC === 'number'
+          ? `${t('thermal.cpu')}: ${formatTempC(cpu.mainC)}`
+          : `${t('thermal.cpu')}: ${t('thermal.unavailable')}`;
+        if (cpuEl) cpuEl.textContent = cpuText;
+        if (gpusEl) {
+          gpusEl.textContent = '';
+          const gpus = Array.isArray(snapshot?.gpus) ? snapshot.gpus : [];
+          if (!gpus.length) {
+            gpusEl.textContent = `${t('thermal.gpu')}: ${t('thermal.unavailable')}`;
+          } else {
+            for (const gpu of gpus) {
+              const row = document.createElement('div');
+              const label = document.createElement('strong');
+              label.textContent = typeof gpu?.name === 'string' && gpu.name ? gpu.name : t('thermal.unknownGpu');
+              const reading = document.createElement('span');
+              reading.textContent = ` — ${gpu?.available && typeof gpu.temperatureC === 'number' ? formatTempC(gpu.temperatureC) : t('thermal.unavailable')}`;
+              row.appendChild(label);
+              row.appendChild(reading);
+              gpusEl.appendChild(row);
+            }
+          }
+        }
+      } catch (_) {
+        // Thermal telemetry is optional: failures render as unavailable.
+        // Both CPU and GPU targets are cleared so a failed refresh never
+        // leaves stale readings visible.
+        if (!hasView()) return;
+        const cpuEl = container.querySelector('#thermalCpu');
+        const gpusEl = container.querySelector('#thermalGpus');
+        if (cpuEl) cpuEl.textContent = `${t('thermal.cpu')}: ${t('thermal.unavailable')}`;
+        if (gpusEl) gpusEl.textContent = `${t('thermal.gpu')}: ${t('thermal.unavailable')}`;
+      } finally {
+        if (hasView()) {
+          thermalTimer = setTimeout(refreshThermal, THERMAL_REFRESH_MS);
+        }
+      }
+    }
+    this.cleanups.push(() => { if (thermalTimer) clearTimeout(thermalTimer); thermalTimer = null; });
+    refreshThermal();
+
+    // Disk SMART health (issue #121): display-only snapshot refreshed on a
+    // slow page-owned cadence. Same lifecycle pattern as thermal telemetry:
+    // recursive setTimeout, cleanup on navigation, late results ignored.
+    const DISK_HEALTH_REFRESH_MS = 10 * 60 * 1000;
+    const DISK_HEALTH_RAW_LIMIT = 65536;
+    let diskTimer = null;
+    const formatSizeGB = (bytes) => {
+      const numeric = Number(bytes);
+      if (!Number.isFinite(numeric) || numeric <= 0) return null;
+      return `${(numeric / 1e9).toFixed(1)} GB`;
+    };
+    function renderDiskHealth(snapshot) {
+      const summaryEl = container.querySelector('#diskHealthSummary');
+      const rowsEl = container.querySelector('#diskHealthRows');
+      if (!summaryEl || !rowsEl) return;
+      const disks = Array.isArray(snapshot?.disks) ? snapshot.disks : [];
+      if (!snapshot || snapshot.available === false) {
+        summaryEl.textContent = t('diskHealth.queryUnavailable');
+        rowsEl.textContent = '';
+        return;
+      }
+      summaryEl.textContent = t('diskHealth.diskCount', { count: disks.length });
+      rowsEl.textContent = '';
+      if (!disks.length) {
+        rowsEl.textContent = t('diskHealth.noDisks');
+        return;
+      }
+      for (const disk of disks) {
+        const row = document.createElement('div');
+        row.style.marginBottom = '10px';
+        const title = document.createElement('strong');
+        const size = formatSizeGB(disk?.sizeBytes);
+        const type = typeof disk?.type === 'string' && disk.type ? ` ${disk.type}` : '';
+        title.textContent = `${typeof disk?.name === 'string' && disk.name ? disk.name : t('diskHealth.unknownDisk')}${type}${size ? ` — ${size}` : ''}`;
+        row.appendChild(title);
+        const status = document.createElement('div');
+        const health = disk?.health;
+        const healthLabel = health === 'healthy' ? t('diskHealth.healthy')
+          : health === 'warning' ? `${t('diskHealth.warning')} — ${t('diskHealth.warningDetail')}`
+          : t('diskHealth.unknown');
+        const temp = disk?.temperatureC;
+        const tempLabel = typeof temp === 'number' && Number.isFinite(temp)
+          ? formatTempC(temp)
+          : t('diskHealth.unavailable');
+        status.textContent = `${t('diskHealth.smart')}: ${healthLabel} · ${t('diskHealth.temperature')}: ${tempLabel}`;
+        row.appendChild(status);
+        if (disk && typeof disk.smartData === 'object' && disk.smartData !== null) {
+          const toggle = document.createElement('button');
+          toggle.type = 'button';
+          toggle.className = 'btn btn-sm btn-ghost';
+          toggle.textContent = t('diskHealth.rawData');
+          const pre = document.createElement('pre');
+          pre.hidden = true;
+          pre.style.whiteSpace = 'pre-wrap';
+          pre.style.wordBreak = 'break-word';
+          pre.style.maxHeight = '220px';
+          pre.style.overflow = 'auto';
+          let rendered = false;
+          toggle.addEventListener('click', () => {
+            if (pre.hidden && !rendered) {
+              rendered = true;
+              try {
+                const json = JSON.stringify(disk.smartData, null, 2) || '{}';
+                if (json.length > DISK_HEALTH_RAW_LIMIT) {
+                  pre.textContent = `${json.slice(0, DISK_HEALTH_RAW_LIMIT)}\n\n${t('diskHealth.rawTruncated')}`;
+                } else {
+                  pre.textContent = json;
+                }
+              } catch (_) {
+                pre.textContent = t('diskHealth.rawUnavailable');
+              }
+            }
+            pre.hidden = !pre.hidden;
+          });
+          row.appendChild(toggle);
+          row.appendChild(pre);
+        }
+        rowsEl.appendChild(row);
+      }
+    }
+    async function refreshDiskHealth() {
+      if (!hasView()) return;
+      try {
+        const snapshot = await window.api.invoke('system:diskHealthSnapshot');
+        if (!hasView()) return;
+        renderDiskHealth(snapshot);
+      } catch (_) {
+        if (!hasView()) return;
+        renderDiskHealth({ disks: [], available: false, sampledAt: null });
+      } finally {
+        if (hasView()) {
+          diskTimer = setTimeout(refreshDiskHealth, DISK_HEALTH_REFRESH_MS);
+        }
+      }
+    }
+    this.cleanups.push(() => { if (diskTimer) clearTimeout(diskTimer); diskTimer = null; });
+    refreshDiskHealth();
 
     if (btnRefreshWarnings) btnRefreshWarnings.addEventListener('click', async () => {
       const originalLabel = btnRefreshWarnings.textContent;

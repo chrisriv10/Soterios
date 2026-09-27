@@ -8,6 +8,7 @@ const vm = require('vm');
 
 describe('dashboard warning metadata', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'ui', 'js', 'pages', 'dashboard.js'), 'utf8');
+  const securityOverviewSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'tools', 'securityOverview.js'), 'utf8');
 
   function extractWarningActions() {
     const marker = 'const warningActions = {';
@@ -58,6 +59,17 @@ describe('dashboard warning metadata', () => {
       assert.ok(meta.title.startsWith('dashboard.warn.'), `${rawTitle}: title key must live under dashboard.warn`);
       assert.ok(meta.label.startsWith('dashboard.action.'), `${rawTitle}: label key must live under dashboard.action`);
     }
+  });
+
+  it('routes pending Windows Update warnings to the Windows Audit page', () => {
+    assert.match(
+      securityOverviewSource,
+      /addIssue\(issues, 'windows-updates-pending',[\s\S]*, 'audit'\);/
+    );
+    assert.doesNotMatch(
+      securityOverviewSource,
+      /addIssue\(issues, 'windows-updates-pending',[\s\S]*, 'settings'\);/
+    );
   });
 
   it('should translate a known warning via the shared source of truth', () => {

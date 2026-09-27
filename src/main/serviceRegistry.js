@@ -19,6 +19,7 @@ const { BlocklistService } = require('../security/BlocklistService');
 const { NetworkEnricher } = require('../security/NetworkEnricher');
 const { GeoLocationService } = require('../security/GeoLocationService');
 const { VpnManager } = require('./vpnManager');
+const { SystemRestoreManager } = require('./systemRestore');
 const toolRegistry = require('../core/toolRegistry');
 
 class ServiceRegistry {
@@ -86,6 +87,7 @@ class ServiceRegistry {
     });
     const emergencyLockdown = new EmergencyLockdown(db, eventBus, notify);
     const vpnManager = new VpnManager();
+    const systemRestoreManager = new SystemRestoreManager();
 
     this._services = {
       db,
@@ -109,6 +111,7 @@ class ServiceRegistry {
       networkAlertMonitor,
       emergencyLockdown,
       vpnManager,
+      systemRestoreManager,
       toolRegistry
     };
     return this._services;
