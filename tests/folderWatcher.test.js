@@ -165,8 +165,11 @@ describe('FolderWatcher', () => {
       assert.equal(watcher.getStatus().dropped, 744);
       // Nothing scanned while the engine reports busy.
       assert.equal(scanned.length, 0);
-      // Every drop was reported through the structured warning.
-      assert.equal(warnings.length, 744);
+      // Overflow coalesces to the single affected root: one warning for the
+      // newly-pending root, silence for repeats, counter authoritative.
+      assert.equal(watcher.getStatus().overflowPending, 1);
+      assert.equal(warnings.length, 1);
+      assert.equal(warnings[0][0], 'FolderWatcher scan queue full; coalescing overflow into root recovery scan for:');
     } finally {
       console.warn = originalWarn;
     }
@@ -311,12 +314,304 @@ describe('FolderWatcher', () => {
       watcher._enqueue(tricky);
       assert.equal(watcher.getStatus().dropped, 1);
       assert.equal(warnings.length, 1);
+      // Owned-root overflow coalesces: the warning names the root, encoded.
       const [prefix, encoded] = warnings[0];
-      assert.equal(prefix, 'FolderWatcher scan queue full; dropping path:');
-      assert.equal(JSON.parse(encoded), tricky);
+      assert.equal(prefix, 'FolderWatcher scan queue full; coalescing overflow into root recovery scan for:');
+      const canonicalTmp = typeof fs.realpathSync.native === 'function'
+        ? fs.realpathSync.native(tmp)
+        : fs.realpathSync(tmp);
+      assert.equal(JSON.parse(encoded), canonicalTmp);
       assert.ok(!prefix.includes(tricky), 'raw path must not appear in the fixed prefix');
+      // A repeat overflow for the same pending root stays silent.
+      const tricky2 = path.join(tmp, 'second.bin');
+      fs.writeFileSync(tricky2, 'x');
+      watcher._enqueue(tricky2);
+      assert.equal(watcher.getStatus().dropped, 2);
+      assert.equal(warnings.length, 1);
     } finally {
       console.warn = originalWarn;
     }
+  });
+
+  it('logs per-path structured warning when no watch root owns the file', () => {
+    const warnings = [];
+    const originalWarn = console.warn;
+    console.warn = (...args) => { warnings.push(args); };
+    try {
+      // Never started: no active watch roots, so ownership is unknown.
+      watcher.scanEngine.isScanning = true;
+      for (let i = 0; i < 257; i++) {
+        const filePath = path.join(tmp, `orphan-${i}.bin`);
+        fs.writeFileSync(filePath, 'x');
+        watcher._enqueue(filePath);
+      }
+      assert.equal(watcher.getStatus().queued, 256);
+      assert.equal(watcher.getStatus().dropped, 1);
+      assert.equal(watcher.getStatus().overflowPending, 0);
+      assert.equal(warnings.length, 1);
+      const [prefix, encoded] = warnings[0];
+      assert.equal(prefix, 'FolderWatcher scan queue full; dropping path:');
+      assert.equal(JSON.parse(encoded), path.join(tmp, 'orphan-256.bin'));
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
+  it('maps overflow files to owning roots without prefix confusion', () => {
+    const fakeRoots = new FolderWatcher({
+      watchDirs: [],
+      scanEngine: { async runCustomScan() { return {}; } }
+    });
+    fakeRoots._watchers.set('C:\\Temp', { close() {} });
+    fakeRoots._watchers.set('C:\\TempData', { close() {} });
+    assert.equal(fakeRoots._ownerWatchRoot('C:\\Temp\\a.bin'), 'C:\\Temp');
+    assert.equal(fakeRoots._ownerWatchRoot('C:\\TempData\\b.bin'), 'C:\\TempData');
+    assert.equal(fakeRoots._ownerWatchRoot('C:\\Temp2\\c.bin'), null);
+    assert.equal(fakeRoots._ownerWatchRoot('C:\\Other\\d.bin'), null);
+    assert.equal(fakeRoots._ownerWatchRoot('C:\\Temp'), 'C:\\Temp');
+    assert.equal(fakeRoots._ownerWatchRoot(''), null);
+    assert.equal(fakeRoots._ownerWatchRoot(null), null);
+    assert.equal(fakeRoots._ownerWatchRoot(42), null);
+    fakeRoots.stop();
+  });
+
+  it('recovers overflow with a coalesced root scan after the queue drains', async () => {
+    const recoveryScans = [];
+    watcher.scanEngine.runScan = async (scanType, paths, message) => {
+      if (paths.length === 1 && paths[0] !== undefined && !paths[0].endsWith('.bin')) {
+        recoveryScans.push({ scanType, paths, message });
+      } else {
+        scanned.push({ scanType, paths });
+      }
+      return { success: true, threatsFound: 0, threats: [] };
+    };
+    watcher.scanEngine.isScanning = true;
+    watcher.start();
+    for (let i = 0; i < 257; i++) {
+      const filePath = path.join(tmp, `rec-${i}.bin`);
+      fs.writeFileSync(filePath, 'x');
+      watcher._enqueue(filePath);
+    }
+    assert.equal(watcher.getStatus().queued, 256);
+    assert.equal(watcher.getStatus().overflowPending, 1);
+    watcher.scanEngine.isScanning = false;
+    const deadline = Date.now() + 5000;
+    while ((watcher.getStatus().queued > 0 || watcher.getStatus().overflowPending > 0) && Date.now() < deadline) {
+      watcher._drain();
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.equal(watcher.getStatus().queued, 0);
+    assert.equal(watcher.getStatus().overflowPending, 0);
+    assert.equal(recoveryScans.length, 1);
+    assert.equal(recoveryScans[0].scanType, 'folderwatch');
+    assert.deepEqual(recoveryScans[0].paths.length, 1);
+    assert.equal(scanned.length, 256, 'all normal queued files still scanned individually');
+  });
+
+  it('coalesces multiple roots and skips unaffected ones', async () => {
+    const dirA = path.join(tmp, 'rootA');
+    const dirB = path.join(tmp, 'rootB');
+    const dirC = path.join(tmp, 'rootC');
+    for (const dir of [dirA, dirB, dirC]) fs.mkdirSync(dir, { recursive: true });
+    const multi = new FolderWatcher({
+      watchDirs: [dirA, dirB, dirC],
+      debounceMs: 50,
+      clamEngine: { isReady: true },
+      watchFactory() {
+        return { on() { return this; }, close() {} };
+      },
+      scanEngine: {
+        isScanning: true,
+        async runCustomScan() { return { success: true }; }
+      }
+    });
+    const recoveryRoots = [];
+    multi.scanEngine.runScan = async (scanType, paths) => {
+      // Recovery scans carry watch roots (never *.bin); file scans pass through.
+      if (paths.every((entry) => !String(entry).endsWith('.bin'))) recoveryRoots.push(paths);
+      return { success: true, threatsFound: 0, threats: [] };
+    };
+    try {
+      multi.start();
+      for (const dir of [dirA, dirB]) {
+        for (let i = 0; i < 257; i++) {
+          const filePath = path.join(dir, `m-${i}.bin`);
+          fs.writeFileSync(filePath, 'x');
+          multi._enqueue(filePath);
+        }
+      }
+      assert.equal(multi.getStatus().queued, 256);
+      assert.equal(multi.getStatus().overflowPending, 2);
+      multi.scanEngine.isScanning = false;
+      const deadline = Date.now() + 8000;
+      while ((multi.getStatus().queued > 0 || multi.getStatus().overflowPending > 0) && Date.now() < deadline) {
+        multi._drain();
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      assert.equal(multi.getStatus().queued, 0);
+      assert.equal(multi.getStatus().overflowPending, 0);
+      assert.equal(recoveryRoots.length, 1, 'one coalesced recovery scan');
+      assert.deepEqual([...recoveryRoots[0]].sort(), [dirA, dirB].sort());
+      assert.ok(!recoveryRoots[0].includes(dirC), 'unaffected root must not be scanned');
+    } finally {
+      multi.stop();
+    }
+  });
+
+  it('keeps late overflow pending across an in-flight recovery (generations)', async () => {
+    const calls = [];
+    let releaseRecovery;
+    const recoveryGate = new Promise((resolve) => { releaseRecovery = resolve; });
+    let recoveryStartedResolve;
+    const recoveryStarted = new Promise((resolve) => { recoveryStartedResolve = resolve; });
+    let recoveries = 0;
+    watcher.scanEngine.runScan = async (scanType, paths) => {
+      const isRoot = paths.length === 1 && !paths[0].endsWith('.bin');
+      if (isRoot) {
+        recoveries += 1;
+        calls.push(paths[0]);
+        if (recoveries === 1) {
+          recoveryStartedResolve();
+          await recoveryGate;
+        }
+        return { success: true, threatsFound: 0, threats: [] };
+      }
+      scanned.push({ scanType, paths });
+      return { success: true, threatsFound: 0, threats: [] };
+    };
+    watcher.scanEngine.isScanning = true;
+    watcher.start();
+    for (let i = 0; i < 257; i++) {
+      const filePath = path.join(tmp, `gen-${i}.bin`);
+      fs.writeFileSync(filePath, 'x');
+      watcher._enqueue(filePath);
+    }
+    assert.equal(watcher.getStatus().overflowPending, 1);
+    watcher.scanEngine.isScanning = false;
+    const drainPromise = watcher._drain();
+    await recoveryStarted;
+    // Recovery #1 in flight: overflow again while the queue has drained.
+    for (let i = 0; i < 257; i++) {
+      const filePath = path.join(tmp, `gen2-${i}.bin`);
+      fs.writeFileSync(filePath, 'x');
+      watcher._enqueue(filePath);
+    }
+    releaseRecovery();
+    await drainPromise;
+    const deadline = Date.now() + 8000;
+    while ((watcher.getStatus().queued > 0 || watcher.getStatus().overflowPending > 0) && Date.now() < deadline) {
+      watcher._drain();
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.equal(recoveries, 2, 'second generation must run its own recovery');
+    assert.equal(watcher.getStatus().overflowPending, 0);
+    assert.equal(watcher.getStatus().queued, 0);
+  });
+
+  it('failed recovery stays pending without hot-looping', async () => {
+    let recoveryAttempts = 0;
+    watcher.scanEngine.runScan = async (scanType, paths) => {
+      const isRoot = paths.length === 1 && !paths[0].endsWith('.bin');
+      if (isRoot) {
+        recoveryAttempts += 1;
+        return { error: 'synthetic failure' };
+      }
+      scanned.push({ scanType, paths });
+      return { success: true, threatsFound: 0, threats: [] };
+    };
+    watcher.scanEngine.isScanning = true;
+    watcher.start();
+    for (let i = 0; i < 257; i++) {
+      const filePath = path.join(tmp, `fail-${i}.bin`);
+      fs.writeFileSync(filePath, 'x');
+      watcher._enqueue(filePath);
+    }
+    watcher.scanEngine.isScanning = false;
+    // The fill-phase drain loop owns _draining; wait until it settles
+    // instead of assuming an explicit _drain() call drives completion.
+    const deadline = Date.now() + 8000;
+    while (recoveryAttempts === 0 && Date.now() < deadline) {
+      watcher._drain();
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.equal(recoveryAttempts, 1);
+    await new Promise((r) => setTimeout(r, 150));
+    assert.equal(recoveryAttempts, 1, 'exactly one recovery attempt, no tight retry loop');
+    assert.equal(watcher.getStatus().overflowPending, 1, 'root stays pending for a later trigger');
+    assert.equal(watcher.getStatus().queued, 0);
+    // A later drain trigger retries and can succeed.
+    watcher.scanEngine.runScan = async () => ({ success: true, threatsFound: 0, threats: [] });
+    await watcher._drain();
+    const deadline2 = Date.now() + 5000;
+    while (watcher._draining && Date.now() < deadline2) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.equal(watcher.getStatus().overflowPending, 0);
+  });
+
+  it('user-scan preemption preserves overflow for later retry', async () => {
+    let releaseRecovery;
+    const recoveryGate = new Promise((resolve) => { releaseRecovery = resolve; });
+    let recoveryStartedResolve;
+    const recoveryStarted = new Promise((resolve) => { recoveryStartedResolve = resolve; });
+    watcher.scanEngine.runScan = async (scanType, paths) => {
+      const isRoot = paths.length === 1 && !paths[0].endsWith('.bin');
+      if (isRoot) {
+        recoveryStartedResolve();
+        await recoveryGate;
+        return { canceled: true };
+      }
+      scanned.push({ scanType, paths });
+      return { success: true, threatsFound: 0, threats: [] };
+    };
+    watcher.scanEngine.isScanning = true;
+    watcher.start();
+    for (let i = 0; i < 257; i++) {
+      const filePath = path.join(tmp, `pre-${i}.bin`);
+      fs.writeFileSync(filePath, 'x');
+      watcher._enqueue(filePath);
+    }
+    watcher.scanEngine.isScanning = false;
+    const drainPromise = watcher._drain();
+    await recoveryStarted;
+    // Simulate the user scan taking priority while recovery is in flight.
+    watcher.scanEngine.isScanning = true;
+    releaseRecovery();
+    await drainPromise;
+    // The explicit call above returns at once when another loop owns
+    // draining; wait for the owning loop to settle the recovery first.
+    const deadline = Date.now() + 8000;
+    while (watcher._draining && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.equal(watcher.getStatus().overflowPending, 1, 'preempted recovery stays pending');
+    assert.equal(watcher.scanEngine.isScanning, true, 'user scan left alone');
+  });
+
+  it('explicit abort with no user scan clears overflow without restart', async () => {
+    watcher.scanEngine.runScan = async (scanType, paths) => {
+      const isRoot = paths.length === 1 && !paths[0].endsWith('.bin');
+      if (isRoot) return { canceled: true };
+      scanned.push({ scanType, paths });
+      return { success: true, threatsFound: 0, threats: [] };
+    };
+    watcher.scanEngine.isScanning = true;
+    watcher.start();
+    for (let i = 0; i < 257; i++) {
+      const filePath = path.join(tmp, `abort-${i}.bin`);
+      fs.writeFileSync(filePath, 'x');
+      watcher._enqueue(filePath);
+    }
+    watcher.scanEngine.isScanning = false;
+    const deadline = Date.now() + 8000;
+    while (watcher._draining && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.equal(watcher.getStatus().overflowPending, 0, 'explicit abort honors user intent');
+    assert.equal(watcher.getStatus().queued, 0);
+    const scansAfterAbort = scanned.length;
+    await watcher._drain();
+    await new Promise((r) => setTimeout(r, 100));
+    assert.equal(scanned.length, scansAfterAbort, 'no automatic restart after explicit abort');
   });
 });

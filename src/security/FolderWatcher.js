@@ -54,6 +54,11 @@ class FolderWatcher {
     this._scannedRecently = new Map();
     this._droppedQueueJobs = 0;
     this._recentScanCleanupTimer = null;
+    // Bounded overflow recovery: when the per-file queue is full, affected
+    // WATCH ROOTS (never individual paths) are recorded here so a coalesced
+    // recovery scan can cover them after the normal queue drains. Bounded by
+    // active watch-directory count, not by file-event count.
+    this._overflowRoots = new Set();
   }
 
   static defaultWatchDirs() {
@@ -73,7 +78,8 @@ class FolderWatcher {
       running: this._running,
       watched: [...this._watchers.keys()],
       queued: this._queue.length,
-      dropped: this._droppedQueueJobs
+      dropped: this._droppedQueueJobs,
+      overflowPending: this._overflowRoots.size
     };
   }
 
@@ -85,11 +91,14 @@ class FolderWatcher {
     }
     // One lifecycle-managed cleanup timer: `_pruneRecentScans()` otherwise
     // runs only from `_enqueue()`, so expired entries would linger forever
-    // once the watcher goes idle. Guarded against duplicate starts; cleared
-    // in stop(). Unref'd so it can never keep the process alive.
+    // once the watcher goes idle. The same tick retries pending overflow
+    // recovery (failed/preempted generations) without a second timer;
+    // `_drain()` re-entry is guarded. Guarded against duplicate starts;
+    // cleared in stop(). Unref'd so it can never keep the process alive.
     if (!this._recentScanCleanupTimer) {
       this._recentScanCleanupTimer = setInterval(() => {
         this._pruneRecentScans();
+        if (this._running && this._overflowRoots.size) this._drain();
       }, this.recentScanCleanupIntervalMs);
       if (typeof this._recentScanCleanupTimer.unref === 'function') {
         this._recentScanCleanupTimer.unref();
@@ -115,6 +124,9 @@ class FolderWatcher {
     // cannot grow across stop/start cycles. The dropped-job counter stays
     // cumulative for the process lifetime (see getStatus()).
     this._scannedRecently.clear();
+    // Overflow recovery belongs to a running watcher only; a restart
+    // re-derives it from fresh events. Never restart work from here.
+    this._overflowRoots.clear();
     return this.getStatus();
   }
 
@@ -158,6 +170,24 @@ class FolderWatcher {
     }
   }
 
+  // Map an overflowed file to the canonical ACTIVE watch root containing it.
+  // Path-aware containment (never a startsWith prefix check, so C:\Temp2 is
+  // not mistaken for C:\Temp). Returns null when no active root owns the
+  // path; callers then fall back to per-path accounting without scanning an
+  // arbitrary parent directory.
+  _ownerWatchRoot(filePath) {
+    if (typeof filePath !== 'string' || !filePath) return null;
+    const lowerFile = filePath.toLowerCase();
+    for (const root of this._watchers.keys()) {
+      if (typeof root !== 'string' || !root) continue;
+      const lowerRoot = root.toLowerCase();
+      if (lowerFile === lowerRoot) return root;
+      const prefix = lowerRoot.endsWith(path.sep) ? lowerRoot : lowerRoot + path.sep;
+      if (lowerFile.startsWith(prefix)) return root;
+    }
+    return null;
+  }
+
   _enqueue(filePath) {
     try {
       const st = fs.statSync(filePath);
@@ -176,9 +206,17 @@ class FolderWatcher {
 
     if (this._queue.length >= MAX_QUEUE_SIZE) {
       this._droppedQueueJobs++;
-      // Structured args (never template-interpolated): filenames may carry
-      // newline/control characters that must not forge extra log lines.
-      console.warn('FolderWatcher scan queue full; dropping path:', JSON.stringify(filePath));
+      // Bounded coalescing: record only the owning watched root so a later
+      // recovery scan covers the overflow without retaining paths. One log
+      // line per newly-pending root; repeats for an already-pending root
+      // stay silent. Never interpolate the raw path into a log string.
+      const owner = this._ownerWatchRoot(filePath);
+      if (owner && !this._overflowRoots.has(owner)) {
+        this._overflowRoots.add(owner);
+        console.warn('FolderWatcher scan queue full; coalescing overflow into root recovery scan for:', JSON.stringify(owner));
+      } else if (!owner) {
+        console.warn('FolderWatcher scan queue full; dropping path:', JSON.stringify(filePath));
+      }
       return;
     }
 
@@ -190,7 +228,7 @@ class FolderWatcher {
     if (this._draining) return;
     this._draining = true;
     try {
-      while (this._queue.length && this._running) {
+      while (this._running && (this._queue.length || this._overflowRoots.size)) {
         if (this.clamEngine && !this.clamEngine.isReady) {
           await new Promise((r) => setTimeout(r, 500));
           continue;
@@ -204,35 +242,101 @@ class FolderWatcher {
           await new Promise((r) => setTimeout(r, 500));
           continue;
         }
-        const filePath = this._queue.shift();
-        this._scannedRecently.set(filePath, Date.now());
-        try {
-          const result = typeof this.scanEngine.runScan === 'function'
-            ? await this.scanEngine.runScan('folderwatch', [filePath], 'Folder watch scan starting...')
-            : await this.scanEngine.runCustomScan([filePath]);
-          if (result && (result.error || result.canceled)) {
-            if (result.canceled) {
-              // The background scan was canceled (e.g. via scan:abort); drop
-              // the remaining queue so it can't immediately restart.
-              this._queue = [];
-              break;
+        if (this._queue.length) {
+          const filePath = this._queue.shift();
+          this._scannedRecently.set(filePath, Date.now());
+          try {
+            const result = typeof this.scanEngine.runScan === 'function'
+              ? await this.scanEngine.runScan('folderwatch', [filePath], 'Folder watch scan starting...')
+              : await this.scanEngine.runCustomScan([filePath]);
+            if (result && (result.error || result.canceled)) {
+              if (result.canceled) {
+                // The background scan was canceled (e.g. via scan:abort); drop
+                // the remaining queue so it can't immediately restart.
+                this._queue = [];
+                if (!this._userScanActive()) this._overflowRoots.clear();
+                break;
+              }
+              continue;
             }
-            continue;
+            const threats = (result && result.threatsFound) || 0;
+            if (threats > 0) {
+              const msg = `Folder watch found ${threats} threat(s) in ${filePath}`;
+              if (this.db) this.db.addAlert('danger', msg);
+              if (this.eventBus) this.eventBus.emit('folderwatch:threat', { filePath, result });
+              this.notify('Folder watch alert', msg, 'danger');
+            }
+          } catch (_) {
+            /* skip individual failures */
           }
-          const threats = (result && result.threatsFound) || 0;
-          if (threats > 0) {
-            const msg = `Folder watch found ${threats} threat(s) in ${filePath}`;
-            if (this.db) this.db.addAlert('danger', msg);
-            if (this.eventBus) this.eventBus.emit('folderwatch:threat', { filePath, result });
-            this.notify('Folder watch alert', msg, 'danger');
-          }
-        } catch (_) {
-          /* skip individual failures */
+          continue;
         }
+        // Normal queue drained with overflow pending: one coalesced recovery
+        // scan. A non-recovered outcome stops this pass; later events or the
+        // maintenance tick trigger the next attempt. Never hot-loops here.
+        const outcome = await this._recoverOverflow();
+        if (outcome !== 'recovered') break;
       }
     } finally {
       this._draining = false;
     }
+  }
+
+  _userScanActive() {
+    try {
+      return !!(this.scanEngine && this.scanEngine.isScanning);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // Scan the pending overflow roots as one coalesced background folderwatch
+  // scan. Generation-safe: snapshot roots are removed BEFORE the scan, so
+  // overflow arriving mid-scan re-adds and survives completion. Returns
+  // 'recovered', 'deferred' (failed/preempted, still pending), or 'aborted'.
+  async _recoverOverflow() {
+    const snapshot = [...this._overflowRoots];
+    if (!snapshot.length) return 'recovered';
+    for (const root of snapshot) this._overflowRoots.delete(root);
+    let result;
+    try {
+      result = typeof this.scanEngine.runScan === 'function'
+        ? await this.scanEngine.runScan('folderwatch', snapshot, 'Folder watch overflow recovery scan starting...')
+        : await this.scanEngine.runCustomScan(snapshot);
+    } catch (_) {
+      result = { error: 'overflow recovery scan failed' };
+    }
+    if (result && result.canceled) {
+      if (this._userScanActive()) {
+        // Preempted by a user scan: restore for a later retry.
+        for (const root of snapshot) this._overflowRoots.add(root);
+        return 'deferred';
+      }
+      // Explicit background abort with nothing else running: honor the
+      // user's intent, do not restart this work automatically.
+      return 'aborted';
+    }
+    if (result && result.error) {
+      // Genuine failure: keep pending for a later maintenance/drain
+      // trigger. The caller breaks instead of retrying immediately.
+      for (const root of snapshot) this._overflowRoots.add(root);
+      console.warn('FolderWatcher overflow recovery scan failed; will retry on a later trigger.');
+      return 'deferred';
+    }
+    const threats = (result && result.threatsFound) || 0;
+    if (threats > 0) {
+      const msg = `Folder watch overflow recovery found ${threats} threat(s).`;
+      if (this.db) this.db.addAlert('danger', msg);
+      if (this.eventBus) {
+        this.eventBus.emit('folderwatch:threat', {
+          filePaths: snapshot,
+          result,
+          overflowRecovery: true
+        });
+      }
+      this.notify('Folder watch alert', msg, 'danger');
+    }
+    return 'recovered';
   }
 }
 
