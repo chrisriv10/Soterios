@@ -148,44 +148,55 @@ describe('FolderWatcher', () => {
     canonical.stop();
   });
   it('bounds the scan queue and counts dropped jobs during a burst', () => {
-  watcher.start();
-  watcher.scanEngine.isScanning = true;
+    const warnings = [];
+    const originalWarn = console.warn;
+    console.warn = (...args) => { warnings.push(args); };
+    try {
+      watcher.start();
+      watcher.scanEngine.isScanning = true;
 
-  for (let i = 0; i < 1000; i++) {
-    const filePath = path.join(tmp, `burst-${i}.bin`);
-    fs.writeFileSync(filePath, 'x');
-    watcher._enqueue(filePath);
-  }
+      for (let i = 0; i < 1000; i++) {
+        const filePath = path.join(tmp, `burst-${i}.bin`);
+        fs.writeFileSync(filePath, 'x');
+        watcher._enqueue(filePath);
+      }
 
-  assert.equal(watcher.getStatus().queued, 256);
-  assert.equal(watcher.getStatus().dropped, 744);
+      assert.equal(watcher.getStatus().queued, 256);
+      assert.equal(watcher.getStatus().dropped, 744);
+      // Nothing scanned while the engine reports busy.
+      assert.equal(scanned.length, 0);
+      // Every drop was reported through the structured warning.
+      assert.equal(warnings.length, 744);
+    } finally {
+      console.warn = originalWarn;
+    }
   });
 
   it('expires old recent-scan entries', () => {
-  const oldTime = Date.now() - 61_000;
-  const recentTime = Date.now();
+    const oldTime = Date.now() - 61_000;
+    const recentTime = Date.now();
 
-  watcher._scannedRecently.set(
-    path.join(tmp, 'old.bin'),
-    oldTime
-  );
+    watcher._scannedRecently.set(
+      path.join(tmp, 'old.bin'),
+      oldTime
+    );
 
-  watcher._scannedRecently.set(
-    path.join(tmp, 'recent.bin'),
-    recentTime
-  );
+    watcher._scannedRecently.set(
+      path.join(tmp, 'recent.bin'),
+      recentTime
+    );
 
-  watcher._pruneRecentScans();
+    watcher._pruneRecentScans();
 
-  assert.equal(
-    watcher._scannedRecently.has(path.join(tmp, 'old.bin')),
-    false
-  );
+    assert.equal(
+      watcher._scannedRecently.has(path.join(tmp, 'old.bin')),
+      false
+    );
 
-  assert.equal(
-    watcher._scannedRecently.has(path.join(tmp, 'recent.bin')),
-    true
-  );
+    assert.equal(
+      watcher._scannedRecently.has(path.join(tmp, 'recent.bin')),
+      true
+    );
   });
 
   it('skips a directory when its canonical path cannot be resolved', () => {
@@ -203,5 +214,109 @@ describe('FolderWatcher', () => {
     assert.equal(watchCalls, 0);
     assert.deepEqual(status.watched, []);
     inaccessible.stop();
+  });
+
+  it('creates exactly one cleanup timer across repeated starts', () => {
+    watcher.start();
+    const first = watcher._recentScanCleanupTimer;
+    assert.ok(first, 'cleanup timer must exist after start');
+    watcher.start();
+    assert.strictEqual(watcher._recentScanCleanupTimer, first, 'second start must not duplicate the timer');
+    watcher.stop();
+  });
+
+  it('clears the cleanup timer on stop and creates a fresh one on restart', () => {
+    watcher.start();
+    const first = watcher._recentScanCleanupTimer;
+    assert.ok(first);
+    watcher.stop();
+    assert.equal(watcher._recentScanCleanupTimer, null);
+    watcher.stop();
+    assert.equal(watcher._recentScanCleanupTimer, null, 'double stop must not throw or resurrect');
+    watcher.start();
+    const second = watcher._recentScanCleanupTimer;
+    assert.ok(second);
+    assert.notStrictEqual(second, first, 'restart must create a fresh timer');
+    watcher.stop();
+  });
+
+  it('clears recent-scan state on stop while keeping the dropped counter', () => {
+    watcher._scannedRecently.set(path.join(tmp, 'a.bin'), Date.now());
+    watcher._droppedQueueJobs = 7;
+    watcher.start();
+    watcher.stop();
+    assert.equal(watcher._scannedRecently.size, 0, 'stop must bound dedup state');
+    assert.equal(watcher.getStatus().dropped, 7, 'dropped counter stays cumulative');
+    assert.equal(watcher.getStatus().queued, 0);
+  });
+
+  it('prunes expired entries while idle without new enqueues', async () => {
+    const idleWatcher = new FolderWatcher({
+      watchDirs: [tmp],
+      debounceMs: 50,
+      recentScanCleanupIntervalMs: 40,
+      clamEngine: { isReady: true },
+      watchFactory() {
+        return { on() { return this; }, close() {} };
+      },
+      scanEngine: { async runCustomScan() { return {}; } }
+    });
+    try {
+      idleWatcher._scannedRecently.set(path.join(tmp, 'stale.bin'), Date.now() - 61_000);
+      idleWatcher._scannedRecently.set(path.join(tmp, 'fresh.bin'), Date.now());
+      idleWatcher.start();
+      await new Promise((r) => setTimeout(r, 150));
+      assert.equal(idleWatcher._scannedRecently.has(path.join(tmp, 'stale.bin')), false);
+      assert.equal(idleWatcher._scannedRecently.has(path.join(tmp, 'fresh.bin')), true);
+    } finally {
+      idleWatcher.stop();
+    }
+  });
+
+  it('stopped watcher performs no idle pruning afterwards', async () => {
+    const idleWatcher = new FolderWatcher({
+      watchDirs: [tmp],
+      recentScanCleanupIntervalMs: 40,
+      watchFactory() {
+        return { on() { return this; }, close() {} };
+      },
+      scanEngine: { async runCustomScan() { return {}; } }
+    });
+    idleWatcher.start();
+    idleWatcher.stop();
+    idleWatcher._scannedRecently.set(path.join(tmp, 'stale.bin'), Date.now() - 61_000);
+    await new Promise((r) => setTimeout(r, 120));
+    assert.equal(idleWatcher._scannedRecently.has(path.join(tmp, 'stale.bin')), true);
+    assert.equal(idleWatcher._recentScanCleanupTimer, null);
+  });
+
+  it('logs queue-full drops as structured escaped args, never interpolated', () => {
+    const warnings = [];
+    const originalWarn = console.warn;
+    console.warn = (...args) => { warnings.push(args); };
+    try {
+      watcher.start();
+      watcher.scanEngine.isScanning = true;
+      // Quote/semicolon/dollar/backtick are legal in Windows filenames and
+      // meaningful to shells; newlines are not creatable, so the invariant
+      // is enforced structurally: fixed prefix plus JSON-encoded path.
+      const tricky = path.join(tmp, `we'ird; $(x) & q.bin`);
+      fs.writeFileSync(tricky, 'x');
+      for (let i = 0; i < 256; i++) {
+        const filePath = path.join(tmp, `fill-${i}.bin`);
+        fs.writeFileSync(filePath, 'x');
+        watcher._enqueue(filePath);
+      }
+      assert.equal(watcher.getStatus().queued, 256);
+      watcher._enqueue(tricky);
+      assert.equal(watcher.getStatus().dropped, 1);
+      assert.equal(warnings.length, 1);
+      const [prefix, encoded] = warnings[0];
+      assert.equal(prefix, 'FolderWatcher scan queue full; dropping path:');
+      assert.equal(JSON.parse(encoded), tricky);
+      assert.ok(!prefix.includes(tricky), 'raw path must not appear in the fixed prefix');
+    } finally {
+      console.warn = originalWarn;
+    }
   });
 });

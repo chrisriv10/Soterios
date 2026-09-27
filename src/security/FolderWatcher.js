@@ -23,6 +23,9 @@ class FolderWatcher {
    * @param {number} [options.debounceMs]
    * @param {(dir: string) => string} [options.resolveWatchPath]
    * @param {typeof fs.watch} [options.watchFactory]
+   * @param {number} [options.recentScanCleanupIntervalMs] - How often idle
+   *   pruning of `_scannedRecently` runs. Defaults to RECENT_SCAN_WINDOW_MS.
+   *   Tests may pass a small value; production never changes this.
    */
   constructor(options = {}) {
     this.db = options.db || null;
@@ -38,6 +41,10 @@ class FolderWatcher {
       return realpath(dir);
     });
     this.debounceMs = options.debounceMs || 1500;
+    const cleanupIntervalMs = Number(options.recentScanCleanupIntervalMs);
+    this.recentScanCleanupIntervalMs = Number.isFinite(cleanupIntervalMs) && cleanupIntervalMs > 0
+      ? cleanupIntervalMs
+      : RECENT_SCAN_WINDOW_MS;
     this.watchDirs = options.watchDirs || FolderWatcher.defaultWatchDirs();
     this._watchers = new Map();
     this._pending = new Map();
@@ -46,6 +53,7 @@ class FolderWatcher {
     this._running = false;
     this._scannedRecently = new Map();
     this._droppedQueueJobs = 0;
+    this._recentScanCleanupTimer = null;
   }
 
   static defaultWatchDirs() {
@@ -75,6 +83,18 @@ class FolderWatcher {
     for (const dir of this.watchDirs) {
       this._watchDir(dir);
     }
+    // One lifecycle-managed cleanup timer: `_pruneRecentScans()` otherwise
+    // runs only from `_enqueue()`, so expired entries would linger forever
+    // once the watcher goes idle. Guarded against duplicate starts; cleared
+    // in stop(). Unref'd so it can never keep the process alive.
+    if (!this._recentScanCleanupTimer) {
+      this._recentScanCleanupTimer = setInterval(() => {
+        this._pruneRecentScans();
+      }, this.recentScanCleanupIntervalMs);
+      if (typeof this._recentScanCleanupTimer.unref === 'function') {
+        this._recentScanCleanupTimer.unref();
+      }
+    }
     return this.getStatus();
   }
 
@@ -87,6 +107,14 @@ class FolderWatcher {
     for (const timer of this._pending.values()) clearTimeout(timer);
     this._pending.clear();
     this._queue = [];
+    if (this._recentScanCleanupTimer) {
+      clearInterval(this._recentScanCleanupTimer);
+      this._recentScanCleanupTimer = null;
+    }
+    // A stopped watcher restarts without history: drop dedup state so it
+    // cannot grow across stop/start cycles. The dropped-job counter stays
+    // cumulative for the process lifetime (see getStatus()).
+    this._scannedRecently.clear();
     return this.getStatus();
   }
 
@@ -148,7 +176,9 @@ class FolderWatcher {
 
     if (this._queue.length >= MAX_QUEUE_SIZE) {
       this._droppedQueueJobs++;
-      console.warn(`FolderWatcher scan queue full; dropping ${filePath}`);
+      // Structured args (never template-interpolated): filenames may carry
+      // newline/control characters that must not forge extra log lines.
+      console.warn('FolderWatcher scan queue full; dropping path:', JSON.stringify(filePath));
       return;
     }
 
