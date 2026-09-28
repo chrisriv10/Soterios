@@ -1,5 +1,6 @@
 const logger = require('../utils/logger');
 const { execFile } = require('child_process');
+const net = require('node:net');
 const util = require('util');
 const execFilePromise = util.promisify(execFile);
 
@@ -14,9 +15,9 @@ function psEscape(value) {
 }
 
 function isValidIp(ip) {
-  const v4 = /^(\d{1,3}\.){3}\d{1,3}$/;
-  const v6 = /^[0-9a-fA-F:]+$/;
-  return v4.test(ip) || (v6.test(ip) && ip.includes(':'));
+  // Standard parser, not syntactic regexes: rejects octet overflow such as
+  // 999.999.999.999 and malformed IPv6 that shape-based checks accept.
+  return typeof ip === 'string' && net.isIP(ip.trim()) !== 0;
 }
 
 // PowerShell/Windows errors are long, technical, and often include a stack
@@ -362,13 +363,16 @@ class FirewallManager {
   _normalizeRemoteAddress(value) {
     if (value == null || value === '') return undefined;
     const raw = String(value).trim();
-    if (!raw || raw === 'Any') return undefined;
-    // Multi-value / range exports are not re-imported as address filters.
-    if (raw.includes(',')) return undefined;
-    if (!isValidIp(raw)) {
-      throw new Error(`Invalid remote address: ${raw}`);
+    if (!raw || /^any$/i.test(raw)) return undefined;
+    if (isValidIp(raw)) return raw;
+    // Fail closed like _normalizePort: the importer supports a single IP
+    // address only. Anything else — address lists, CIDR, ranges, keywords,
+    // or malformed values — must reject the rule instead of silently
+    // widening it to unrestricted.
+    if (/[,/*\s]/.test(raw) || /[^0-9a-fA-F.:]/.test(raw)) {
+      throw new Error(`Unsupported remote address expression (import supports a single IP address only): ${raw}`);
     }
-    return raw;
+    throw new Error(`Invalid remote address: ${raw}`);
   }
 
   _validateImportRule(rule, index) {
