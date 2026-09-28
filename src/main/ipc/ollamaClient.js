@@ -102,8 +102,12 @@ async function fetchModelTags(host, { timeoutMs = 5000, fetchImpl = fetch } = {}
 
 /**
  * Streams a chat completion. Calls onDelta(text) per chunk, then onDone().
- * Uses NDJSON from Ollama /api/chat. Resolves when the stream finishes
- * cleanly, rejects on transport/parse errors or abort.
+ * onDone may be synchronous or return a promise; streamChat waits for it, so
+ * an asynchronous completion callback (e.g. one that executes follow-up
+ * actions) delays resolution until it settles. A rejected onDone rejects
+ * streamChat with the same failure instead of detaching it. Uses NDJSON from
+ * Ollama /api/chat. Resolves when the stream finishes cleanly, rejects on
+ * transport/parse errors, abort, or completion-callback failure.
  */
 async function streamChat(host, messages, model, { systemPrompt, onDelta, onDone, signal, fetchImpl = fetch } = {}) {
   const base = normalizeHost(host);
@@ -166,7 +170,7 @@ async function streamChat(host, messages, model, { systemPrompt, onDelta, onDone
           if (onDelta) onDelta(content);
         }
         if (json.done) {
-          if (onDone) onDone();
+          if (onDone) await onDone();
           return;
         }
       }
@@ -174,7 +178,7 @@ async function streamChat(host, messages, model, { systemPrompt, onDelta, onDone
     }
   }
   // Stream ended without a done marker.
-  if (onDone) onDone();
+  if (onDone) await onDone();
 }
 
 module.exports = {
