@@ -299,3 +299,147 @@ describe('ollamaClient streamChat', () => {
     }
   });
 });
+
+describe('ollamaClient streamChat async onDone', () => {
+  it('waits for an asynchronous onDone before resolving', async () => {
+    const gatedServer = await startFakeOllama((req, res) => {
+      ndjsonResponse(res, [{ message: { role: 'assistant', content: 'hi' }, done: true }]);
+    });
+    try {
+      let releaseGate;
+      const gate = new Promise((resolve) => { releaseGate = resolve; });
+      const order = [];
+      let onDoneStarted = false;
+      let settled = false;
+      const pending = streamChat(
+        `http://127.0.0.1:${gatedServer.port}`,
+        [{ role: 'user', content: 'hi' }],
+        'llama3.2',
+        {
+          fetchImpl: fetch,
+          onDone: async () => {
+            onDoneStarted = true;
+            await gate;
+            order.push('onDone');
+          }
+        }
+      );
+      pending.then(() => { settled = true; order.push('streamChat'); });
+      const deadline = Date.now() + 5000;
+      while (!onDoneStarted && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 5));
+      }
+      assert.equal(onDoneStarted, true, 'onDone began');
+      // Let a non-awaiting implementation show itself: several macrotask
+      // turns pass while the gate is still held.
+      for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
+      assert.equal(settled, false, 'streamChat must not resolve while onDone is gated');
+      releaseGate();
+      await pending;
+      assert.deepEqual(order, ['onDone', 'streamChat']);
+    } finally {
+      gatedServer.server.close();
+    }
+  });
+
+  it('rejects with the async onDone failure on the done-marker path', async () => {
+    const failingServer = await startFakeOllama((req, res) => {
+      ndjsonResponse(res, [{ message: { role: 'assistant', content: 'hi' }, done: true }]);
+    });
+    try {
+      await assert.rejects(
+        streamChat(
+          `http://127.0.0.1:${failingServer.port}`,
+          [{ role: 'user', content: 'hi' }],
+          'llama3.2',
+          {
+            fetchImpl: fetch,
+            onDone: async () => { throw new Error('completion exploded'); }
+          }
+        ),
+        /completion exploded/
+      );
+    } finally {
+      failingServer.server.close();
+    }
+  });
+
+  it('awaits async onDone on the EOF-without-done-marker fallback', async () => {
+    const eofServer = await startFakeOllama((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
+      res.end(`${JSON.stringify({ message: { role: 'assistant', content: 'partial' } })}\n`);
+    });
+    try {
+      const order = [];
+      await streamChat(
+        `http://127.0.0.1:${eofServer.port}`,
+        [{ role: 'user', content: 'hi' }],
+        'llama3.2',
+        {
+          fetchImpl: fetch,
+          onDone: async () => {
+            await new Promise((r) => setTimeout(r, 20));
+            order.push('onDone');
+          }
+        }
+      );
+      assert.deepEqual(order, ['onDone']);
+    } finally {
+      eofServer.server.close();
+    }
+  });
+
+  it('rejects EOF fallback when async onDone fails', async () => {
+    const eofServer = await startFakeOllama((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
+      res.end(`${JSON.stringify({ message: { role: 'assistant', content: 'partial' } })}\n`);
+    });
+    try {
+      await assert.rejects(
+        streamChat(
+          `http://127.0.0.1:${eofServer.port}`,
+          [{ role: 'user', content: 'hi' }],
+          'llama3.2',
+          {
+            fetchImpl: fetch,
+            onDone: async () => { throw new Error('eof completion exploded'); }
+          }
+        ),
+        /eof completion exploded/
+      );
+    } finally {
+      eofServer.server.close();
+    }
+  });
+
+  it('propagates a real executeAction rejection through onDone', async () => {
+    const { executeAction } = require('../src/main/aiActions');
+    const actionServer = await startFakeOllama((req, res) => {
+      ndjsonResponse(res, [{ message: { role: 'assistant', content: 'hi' }, done: true }]);
+    });
+    try {
+      const ctx = {
+        db: {},
+        toolRegistry: {
+          run: async () => { throw new Error('synthetic tool failure'); }
+        }
+      };
+      await assert.rejects(
+        streamChat(
+          `http://127.0.0.1:${actionServer.port}`,
+          [{ role: 'user', content: 'hi' }],
+          'llama3.2',
+          {
+            fetchImpl: fetch,
+            onDone: async () => {
+              await executeAction('health-score', ctx);
+            }
+          }
+        ),
+        /synthetic tool failure/
+      );
+    } finally {
+      actionServer.server.close();
+    }
+  });
+});
