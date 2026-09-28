@@ -21,6 +21,33 @@
 // strand the app in the held-quit state, and the drain itself is bounded so
 // shutdown can never hang: worst case the timeout wins and quit completes.
 
+// Synchronous lifecycle teardown shared by production shutdown: security
+// background producers first (watcher/monitor stops, native child abort),
+// then the pre-existing teardown order, unchanged. Every step is
+// best-effort in isolation so one throwing service can never skip the
+// remaining stops or strand database close. Never closes the database
+// itself; closeDatabase stays owned by the coordinator sequence.
+function stopLifecycleServices(refs = {}, clearTimer = clearInterval) {
+  const safe = (fn) => {
+    try {
+      const result = fn();
+      if (result && typeof result.catch === 'function') result.catch(() => {});
+    } catch (_) {}
+  };
+  safe(() => refs.folderWatcher?.stop());
+  safe(() => refs.networkAlertMonitor?.stop());
+  safe(() => refs.clamEngine?.abortCurrentScan());
+  safe(() => refs.maintenanceScheduler?.stop());
+  safe(() => refs.maintenanceSafetyVault?.stop());
+  safe(() => refs.persistenceMonitor?.stop());
+  safe(() => refs.extensionBridge?.stop());
+  safe(() => refs.removableDriveCoordinator?.dispose());
+  safe(() => refs.processService?.stop());
+  safe(() => refs.trayController?.dispose());
+  safe(() => { if (refs.networkStatsTimer) clearTimer(refs.networkStatsTimer); });
+  safe(() => { if (refs.pruneTimer) clearTimer(refs.pruneTimer); });
+}
+
 function createQuitCoordinator({ app, stopSyncServices, drainToolRuns, closeDatabase, drainTimeoutMs = 5000 }) {
   if (!app || typeof app.quit !== 'function') throw new Error('A quit coordinator requires an app with quit().');
   let phase = 0;
@@ -86,4 +113,4 @@ function createQuitCoordinator({ app, stopSyncServices, drainToolRuns, closeData
   return { handleBeforeQuit, getPhase };
 }
 
-module.exports = { createQuitCoordinator };
+module.exports = { createQuitCoordinator, stopLifecycleServices };

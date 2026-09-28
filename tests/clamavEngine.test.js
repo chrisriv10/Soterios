@@ -274,6 +274,31 @@ describe('ClamAVEngine', () => {
     assert.equal(killed, false);
   });
 
+  it('abortCurrentScan kills an active definition update', () => {
+    const engine = new ClamAVEngine({ baseDir: path.join(tmp, 'clamav') });
+    let updateKills = 0;
+    engine.activeUpdateProcess = { kill() { updateKills += 1; } };
+    const killed = engine.abortCurrentScan();
+    assert.equal(killed, true);
+    assert.equal(updateKills, 1);
+    assert.equal(engine.cancelUpdateRequested, true);
+    assert.equal(engine.cancelScanRequested, false);
+  });
+
+  it('abortCurrentScan kills both active scan and update children in one call', () => {
+    const engine = new ClamAVEngine({ baseDir: path.join(tmp, 'clamav') });
+    let scanKills = 0;
+    let updateKills = 0;
+    engine.activeScanProcess = { kill() { scanKills += 1; } };
+    engine.activeUpdateProcess = { kill() { updateKills += 1; } };
+    const killed = engine.abortCurrentScan();
+    assert.equal(killed, true);
+    assert.equal(scanKills, 1);
+    assert.equal(updateKills, 1);
+    assert.equal(engine.cancelScanRequested, true);
+    assert.equal(engine.cancelUpdateRequested, true);
+  });
+
   it('init attempts update when no database exists', async () => {
     const engine = new ClamAVEngine({ baseDir: path.join(tmp, 'clamav') });
     // Ensure no database files exist

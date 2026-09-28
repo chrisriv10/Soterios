@@ -2,7 +2,7 @@
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { createQuitCoordinator } = require('../src/main/quitCoordinator');
+const { createQuitCoordinator, stopLifecycleServices } = require('../src/main/quitCoordinator');
 
 function fakeEvent() {
   return { prevented: false, preventDefault() { this.prevented = true; } };
@@ -89,5 +89,90 @@ describe('quitCoordinator ordered shutdown', () => {
 
   it('requires an app with quit()', () => {
     assert.throws(() => createQuitCoordinator({}), /quit/);
+  });
+});
+
+describe('stopLifecycleServices production shutdown order', () => {
+  function recordingRefs(order, { throwOn = null } = {}) {
+    const maybeThrow = (name, fn) => () => {
+      if (throwOn === name) throw new Error(`${name} failed`);
+      return fn();
+    };
+    return {
+      folderWatcher: { stop: maybeThrow('folderWatcher', () => { order.push('folderWatcher.stop'); }) },
+      networkAlertMonitor: { stop: maybeThrow('networkAlertMonitor', () => { order.push('networkAlertMonitor.stop'); }) },
+      clamEngine: { abortCurrentScan: maybeThrow('clamEngine', () => { order.push('clamEngine.abort'); return true; }) },
+      maintenanceScheduler: { stop: () => { order.push('maintenanceScheduler.stop'); } },
+      maintenanceSafetyVault: { stop: () => { order.push('maintenanceSafetyVault.stop'); } },
+      persistenceMonitor: { stop: () => { order.push('persistenceMonitor.stop'); } },
+      extensionBridge: { stop: () => { order.push('extensionBridge.stop'); } },
+      removableDriveCoordinator: { dispose: () => { order.push('removableDriveCoordinator.dispose'); } },
+      processService: { stop: () => { order.push('processService.stop'); return Promise.resolve(); } },
+      trayController: { dispose: () => { order.push('trayController.dispose'); } },
+      networkStatsTimer: 101,
+      pruneTimer: 202,
+    };
+  }
+
+  it('stops security background work first, then existing teardown in order', () => {
+    const order = [];
+    const cleared = [];
+    stopLifecycleServices(recordingRefs(order), (id) => { cleared.push(id); });
+    assert.deepEqual(order, [
+      'folderWatcher.stop',
+      'networkAlertMonitor.stop',
+      'clamEngine.abort',
+      'maintenanceScheduler.stop',
+      'maintenanceSafetyVault.stop',
+      'persistenceMonitor.stop',
+      'extensionBridge.stop',
+      'removableDriveCoordinator.dispose',
+      'processService.stop',
+      'trayController.dispose',
+    ]);
+    assert.deepEqual(cleared, [101, 202]);
+  });
+
+  it('one throwing stop does not block remaining teardown', () => {
+    const order = [];
+    stopLifecycleServices(recordingRefs(order, { throwOn: 'folderWatcher' }), () => {});
+    assert.deepEqual(order, [
+      'networkAlertMonitor.stop',
+      'clamEngine.abort',
+      'maintenanceScheduler.stop',
+      'maintenanceSafetyVault.stop',
+      'persistenceMonitor.stop',
+      'extensionBridge.stop',
+      'removableDriveCoordinator.dispose',
+      'processService.stop',
+      'trayController.dispose',
+    ]);
+  });
+
+  it('tolerates missing refs and null timers', () => {
+    stopLifecycleServices({}, () => { throw new Error('must not be called'); });
+    stopLifecycleServices({ folderWatcher: null, networkStatsTimer: null, pruneTimer: null }, () => {});
+  });
+
+  it('runs security stops before database close through the real coordinator', async () => {
+    const order = [];
+    const app = { quits: 0, quit() { this.quits += 1; } };
+    const coordinator = createQuitCoordinator({
+      app,
+      stopSyncServices: () => stopLifecycleServices(recordingRefs(order), () => {}),
+      drainToolRuns: async () => { order.push('drain'); },
+      closeDatabase: () => { order.push('close'); },
+      drainTimeoutMs: 200,
+    });
+    coordinator.handleBeforeQuit(fakeEvent());
+    await waitFor(() => app.quits === 1);
+    const closeIndex = order.indexOf('close');
+    assert.ok(closeIndex > 0);
+    for (const name of ['folderWatcher.stop', 'networkAlertMonitor.stop', 'clamEngine.abort']) {
+      assert.ok(order.includes(name), `${name} ran`);
+      assert.ok(order.indexOf(name) < closeIndex, `${name} runs before database close`);
+    }
+    assert.ok(order.indexOf('drain') < closeIndex);
+    assert.equal(order.filter((name) => name === 'close').length, 1);
   });
 });

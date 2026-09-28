@@ -55,7 +55,7 @@ const serviceRegistry = require('./serviceRegistry');
 const { MaintenanceScheduler } = require('./maintenanceScheduler');
 const ToolRunManager = require('./toolRunManager');
 const { RemovableDriveCoordinator } = require('./removableDriveCoordinator');
-const { createQuitCoordinator } = require('./quitCoordinator');
+const { createQuitCoordinator, stopLifecycleServices } = require('./quitCoordinator');
 const { MaintenanceSafetyVault } = require('./maintenanceSafetyVault');
 const { PersistenceMonitor } = require('./persistenceMonitor');
 const { ProcessReputationService } = require('./processReputationService');
@@ -91,7 +91,10 @@ const lifecycleRefs = {
   processService: null,
   trayController: null,
   networkStatsTimer: null,
-  pruneTimer: null
+  pruneTimer: null,
+  folderWatcher: null,
+  networkAlertMonitor: null,
+  clamEngine: null
 };
 
 function logLine(level, message, meta) {
@@ -957,6 +960,14 @@ app.whenReady().then(async () => {
     toolRegistry
   } = services;
 
+  // Hold shutdown-reachable refs BEFORE the long async background startup
+  // below: quit can land while ClamAV init is still in flight, and teardown
+  // must already be able to stop the watcher/monitor and abort native
+  // children at that point.
+  lifecycleRefs.folderWatcher = folderWatcher;
+  lifecycleRefs.networkAlertMonitor = networkAlertMonitor;
+  lifecycleRefs.clamEngine = clamEngine;
+
   updater.initAutoUpdater({ onNotify: (title, body, level) => showNotification(t(title), t(body), level) });
   updater.subscribe((status) => {
     for (const win of BrowserWindow.getAllWindows()) {
@@ -1205,6 +1216,11 @@ app.whenReady().then(async () => {
     } catch (err) {
       logLine('error', 'ClamAV init failed', { message: err.message });
     }
+    // Quit can land while any await above is in flight. Never let this stale
+    // startup continuation start or schedule background work after shutdown
+    // has begun; each boundary below re-checks before another long-lived
+    // service or timer is created.
+    if (isQuitting) return;
     try {
       if (featureFlags.getFlag(db, 'realtimeProtection', true)) {
         await realtimeWatcher.start();
@@ -1212,6 +1228,7 @@ app.whenReady().then(async () => {
     } catch (err) {
       logLine('error', 'Real-time protection init failed', { message: err.message });
     }
+    if (isQuitting) return;
     try {
       if (featureFlags.getFlag(db, 'folderWatch', true)) {
         folderWatcher.start();
@@ -1219,6 +1236,7 @@ app.whenReady().then(async () => {
     } catch (err) {
       logLine('error', 'Folder watcher init failed', { message: err.message });
     }
+    if (isQuitting) return;
     try {
       if (featureFlags.getFlag(db, 'networkAlerts', true)) {
         networkAlertMonitor.start();
@@ -1226,11 +1244,13 @@ app.whenReady().then(async () => {
     } catch (err) {
       logLine('error', 'Network alert monitor init failed', { message: err.message });
     }
+    if (isQuitting) return;
     try {
       await blocklistService.refreshAll();
     } catch (err) {
       logLine('error', 'Blocklist refresh failed', { message: err.message });
     }
+    if (isQuitting) return;
     if (featureFlags.getFlag(db, 'networkTrafficHistory', true)) {
       services.startNetworkStatsTimer();
     }
@@ -1272,19 +1292,10 @@ process.on('unhandledRejection', (err) => {
 
 const quitCoordinator = createQuitCoordinator({
   app,
-  // Ordered teardown: synchronous service stops first (unchanged behavior),
-  // then the bounded tool-run drain, then exactly one database close.
-  stopSyncServices: () => {
-    lifecycleRefs.maintenanceScheduler?.stop();
-    lifecycleRefs.maintenanceSafetyVault?.stop();
-    lifecycleRefs.persistenceMonitor?.stop();
-    lifecycleRefs.extensionBridge?.stop();
-    try { lifecycleRefs.removableDriveCoordinator?.dispose(); } catch (_) {}
-    lifecycleRefs.processService?.stop().catch(() => {});
-    lifecycleRefs.trayController?.dispose();
-    if (lifecycleRefs.networkStatsTimer) clearInterval(lifecycleRefs.networkStatsTimer);
-    if (lifecycleRefs.pruneTimer) clearInterval(lifecycleRefs.pruneTimer);
-  },
+  // Ordered teardown: security background stops plus the unchanged existing
+  // synchronous service stops (see stopLifecycleServices), then the bounded
+  // tool-run drain, then exactly one database close.
+  stopSyncServices: () => stopLifecycleServices(lifecycleRefs),
   drainToolRuns: (timeoutMs) => lifecycleRefs.toolRunManager?.shutdown(timeoutMs)
     ?? Promise.resolve({ settled: true, pending: 0 }),
   closeDatabase: () => {
