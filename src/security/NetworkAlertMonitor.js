@@ -28,6 +28,10 @@ class NetworkAlertMonitor {
     this._lastAlerted = new Map();
     this._ignored = new Set();
     this._lastHits = [];
+    // O(1) lifecycle generation: invalidated on every real stop/start so an
+    // in-flight lifecycle poll can never write alerts, notify, or mutate
+    // state after its generation ended. Never exposed outside the class.
+    this._lifecycleGeneration = 0;
   }
 
   getStatus() {
@@ -41,16 +45,24 @@ class NetworkAlertMonitor {
   start() {
     if (this._running) return this.getStatus();
     this._running = true;
+    // A real lifecycle transition: invalidate every in-flight poll from the
+    // previous generation. Idempotent restarts return above and never
+    // manufacture a new generation. Exactly one interval still exists.
+    this._lifecycleGeneration += 1;
+    const generation = this._lifecycleGeneration;
     this._timer = setInterval(() => {
-      this.poll().catch(() => {});
+      this.poll(generation).catch(() => {});
     }, this.pollMs);
     if (typeof this._timer.unref === 'function') this._timer.unref();
-    this.poll().catch(() => {});
+    this.poll(generation).catch(() => {});
     return this.getStatus();
   }
 
   stop() {
     this._running = false;
+    // Invalidate the current lifecycle before clearing: every in-flight
+    // poll captured the old generation and must discard its outcome.
+    this._lifecycleGeneration += 1;
     if (this._timer) clearInterval(this._timer);
     this._timer = null;
     return this.getStatus();
@@ -74,12 +86,21 @@ class NetworkAlertMonitor {
     return `${conn.OwningProcess || 0}|${conn.RemoteAddress || ''}|${conn.RemotePort || ''}`;
   }
 
-  async poll() {
+  // Direct/manual poll() calls pass no generation and keep today's
+  // behavior. Lifecycle-scheduled polls (timer + start's immediate poll)
+  // carry their start generation and are discarded after stop/restart.
+  async poll(lifecycleGeneration = null) {
     if (!this.networkMonitor || !this.blocklistService) return [];
     let connections = [];
     try {
       connections = await this.networkMonitor.getConnections();
     } catch (_) {
+      return [];
+    }
+    // Old lifecycle (stop, or stop/start since this poll began): return
+    // without DB writes, notifications, or _lastAlerted/_lastHits mutation.
+    if (lifecycleGeneration !== null &&
+        (!this._running || this._lifecycleGeneration !== lifecycleGeneration)) {
       return [];
     }
     const hits = [];
