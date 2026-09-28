@@ -800,13 +800,26 @@ describe('ScanEngine', () => {
       if (String(args[0]).includes('scan-reports')) throw new Error('ENOSPC: no space left on device');
       return realWrite.apply(fsModule, args);
     };
+    const loggerModule = require('../src/utils/logger');
+    const realWarn = loggerModule.warn;
+    const warnings = [];
+    loggerModule.warn = (message) => { warnings.push(String(message)); };
     let result;
     try {
       result = await engine.runScan('quick', [tmp], 'Starting...');
     } finally {
       fsModule.writeFileSync = realWrite;
+      loggerModule.warn = realWarn;
     }
     assert.equal(fsModule.writeFileSync, realWrite, 'fs stub is always restored');
+    assert.equal(loggerModule.warn, realWarn, 'logger stub is always restored');
+    // The warning names both intended files plus the OS reason, never
+    // report contents.
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /Scan report persistence failed/);
+    assert.match(warnings[0], /scan-quick-.*\.json/);
+    assert.match(warnings[0], /scan-quick-.*\.html/);
+    assert.match(warnings[0], /ENOSPC/);
 
     // Terminal outcome preserved, persistence failure surfaced, no throw.
     assert.equal(result.status, 'completed');
@@ -964,13 +977,23 @@ describe('ScanEngine', () => {
       if (String(args[0]).includes('scan-reports')) throw new Error('EROFS: read-only file system');
       return realMkdir.apply(fsModule, args);
     };
+    const loggerModule = require('../src/utils/logger');
+    const realWarn = loggerModule.warn;
+    const warnings = [];
+    loggerModule.warn = (message) => { warnings.push(String(message)); };
     let result;
     try {
       result = await engine.runScan('custom', [tmp], 'Starting...');
     } finally {
       fsModule.mkdirSync = realMkdir;
+      loggerModule.warn = realWarn;
     }
     assert.equal(fsModule.mkdirSync, realMkdir, 'fs stub is always restored');
+    // Paths are derived before mkdir, so even a directory-creation failure
+    // names both intended files.
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /scan-custom-.*\.json/);
+    assert.match(warnings[0], /scan-custom-.*\.html/);
 
     assert.equal(result.status, 'completed');
     assert.equal(result.success, true);

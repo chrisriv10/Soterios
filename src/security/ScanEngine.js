@@ -13,12 +13,6 @@ function esc(v) {
   return String(v ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 }
 
-function scanReportsDir() {
-  const dir = path.join(os.homedir(), '.soterios', 'scan-reports');
-  fs.mkdirSync(dir, { recursive: true });
-  return dir;
-}
-
 function renderScanReportHtml(report) {
   const threatRows = report.threats.length
     ? report.threats.map((t) => `<tr><td>${esc(t.name)}</td><td>${esc(t.path)}</td></tr>`).join('')
@@ -540,12 +534,14 @@ class ScanEngine {
           const reason = err && err.message ? err.message : String(err);
           const persistenceError = `Scan report persistence failed: ${reason}`;
           errors.push(persistenceError);
-          // Name the intended location (never report contents) for
-          // diagnostics. If even the directory path cannot be built, the
-          // OS reason alone is still surfaced in errors above.
-          let location = null;
-          try { location = path.join(os.homedir(), '.soterios', 'scan-reports'); } catch (_) {}
-          logger.warn(`Scan report persistence failed${location ? ` for reports in ${location}` : ''}: ${reason}`);
+          // Name both intended files when known, else the report directory,
+          // else the bare reason. Never report contents, threats, or details.
+          const reportPaths = err && err.reportPaths ? err.reportPaths : null;
+          let location = (reportPaths && `${reportPaths.jsonPath}, ${reportPaths.htmlPath}`) || null;
+          if (!location) {
+            try { location = path.join(os.homedir(), '.soterios', 'scan-reports'); } catch (_) {}
+          }
+          logger.warn(`Scan report persistence failed${location ? ` for ${location}` : ''}: ${reason}`);
           // Fall back to the in-memory payload, which shares the errors
           // array by reference and therefore already reflects the failure.
           // It carries no jsonPath/htmlPath, so it never claims files that
@@ -722,13 +718,23 @@ class ScanEngine {
       return report;
     }
 
-    const dir = scanReportsDir();
+    // Derive both destinations BEFORE creating the directory so a mkdir
+    // failure still names both intended files. Naming contract unchanged.
+    const dir = path.join(os.homedir(), '.soterios', 'scan-reports');
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     const base = `scan-${report.scanType}-${stamp}`;
     const jsonPath = path.join(dir, `${base}.json`);
     const htmlPath = path.join(dir, `${base}.html`);
-    fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2), 'utf8');
-    fs.writeFileSync(htmlPath, renderScanReportHtml(report), 'utf8');
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2), 'utf8');
+      fs.writeFileSync(htmlPath, renderScanReportHtml(report), 'utf8');
+    } catch (err) {
+      // Propagate the intended destinations with the failure so callers can
+      // log them without report contents. Success path unchanged.
+      if (err && typeof err === 'object') err.reportPaths = { jsonPath, htmlPath };
+      throw err;
+    }
     const saved = { ...report, jsonPath, htmlPath };
     try {
       this.db.addScanReport({
