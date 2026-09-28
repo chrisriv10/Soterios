@@ -384,3 +384,173 @@ describe('FirewallManager createRule protocol validation (BUG-2)', () => {
     assert.match(mgr.commands[0], /-Protocol 'TCP'/);
   });
 });
+
+describe('FirewallManager remote address import validation (#141)', () => {
+  let mgr;
+
+  beforeEach(() => {
+    mgr = new FakeFirewallManager([]);
+  });
+
+  function importRule(remoteAddress) {
+    return mgr.importRules({
+      version: 1,
+      rules: [{ name: 'Probe', direction: 'Outbound', action: 'Block', remoteAddress }]
+    });
+  }
+
+  it('imports a valid single IPv4 address unchanged', async () => {
+    const result = await importRule('8.8.8.8');
+    assert.equal(result.success, true);
+    assert.equal(result.created, 1);
+    assert.equal(mgr.created.length, 1);
+    assert.equal(mgr.created[0].remoteAddress, '8.8.8.8');
+  });
+
+  it('imports valid single IPv6 addresses unchanged', async () => {
+    for (const address of ['2001:db8::1', '::1']) {
+      const fresh = new FakeFirewallManager([]);
+      const result = await fresh.importRules({
+        version: 1,
+        rules: [{ name: `Probe ${address}`, direction: 'Outbound', action: 'Block', remoteAddress: address }]
+      });
+      assert.equal(result.success, true);
+      assert.equal(fresh.created[0].remoteAddress, address);
+    }
+  });
+
+  it('accepts Any/empty/missing as unrestricted', async () => {
+    for (const remoteAddress of ['Any', 'any', '', undefined]) {
+      const fresh = new FakeFirewallManager([]);
+      const rule = { name: 'Probe', direction: 'Outbound', action: 'Block' };
+      if (remoteAddress !== undefined) rule.remoteAddress = remoteAddress;
+      const result = await fresh.importRules({ version: 1, rules: [rule] });
+      assert.equal(result.success, true, `expected success for ${String(remoteAddress)}`);
+      assert.ok(fresh.created[0].remoteAddress == null, 'unrestricted means no address passed to createRule');
+    }
+  });
+
+  it('rejects invalid IPv4 octets before createRule runs', async () => {
+    for (const remoteAddress of ['999.999.999.999', '256.1.1.1']) {
+      const fresh = new FakeFirewallManager([]);
+      const result = await fresh.importRules({
+        version: 1,
+        rules: [{ name: 'Probe', direction: 'Outbound', action: 'Block', remoteAddress }]
+      });
+      assert.equal(result.success, false);
+      assert.equal(result.created, 0);
+      assert.equal(fresh.created.length, 0);
+      assert.equal(result.errors.length, 1);
+      assert.match(result.errors[0], /Invalid remote address/);
+    }
+  });
+
+  it('rejects malformed IPv6 values', async () => {
+    const fresh = new FakeFirewallManager([]);
+    const result = await fresh.importRules({
+      version: 1,
+      rules: [{ name: 'Probe', direction: 'Outbound', action: 'Block', remoteAddress: '2001:::1' }]
+    });
+    assert.equal(result.success, false);
+    assert.equal(fresh.created.length, 0);
+    assert.match(result.errors[0], /Invalid remote address/);
+
+    const fresh2 = new FakeFirewallManager([]);
+    const result2 = await fresh2.importRules({
+      version: 1,
+      rules: [{ name: 'Probe', direction: 'Outbound', action: 'Block', remoteAddress: 'gggg::1' }]
+    });
+    assert.equal(result2.success, false);
+    assert.equal(fresh2.created.length, 0);
+    assert.match(result2.errors[0], /remote address/i);
+  });
+
+  it('rejects comma-separated addresses instead of widening to Any', async () => {
+    const result = await importRule('1.2.3.4,5.6.7.8');
+    assert.equal(result.success, false);
+    assert.equal(result.created, 0);
+    assert.equal(mgr.created.length, 0);
+    assert.equal(result.errors.length, 1);
+    assert.match(result.errors[0], /single IP address only/);
+  });
+
+  it('rejects CIDR, ranges, and keywords', async () => {
+    for (const remoteAddress of ['1.2.3.0/24', '1.2.3.4-1.2.3.10', 'LocalSubnet', 'Internet', '*']) {
+      const fresh = new FakeFirewallManager([]);
+      const result = await fresh.importRules({
+        version: 1,
+        rules: [{ name: 'Probe', direction: 'Outbound', action: 'Block', remoteAddress }]
+      });
+      assert.equal(result.success, false, `expected rejection for ${remoteAddress}`);
+      assert.equal(fresh.created.length, 0);
+      assert.match(result.errors[0], /single IP address only/);
+    }
+  });
+
+  it('imports the valid rule and reports the invalid one in a mixed payload', async () => {
+    const result = await mgr.importRules({
+      version: 1,
+      rules: [
+        { name: 'Good', direction: 'Outbound', action: 'Block', remoteAddress: '9.9.9.9' },
+        { name: 'Bad', direction: 'Outbound', action: 'Block', remoteAddress: '1.2.3.4,5.6.7.8' }
+      ]
+    });
+    assert.equal(result.success, false);
+    assert.equal(result.created, 1);
+    assert.equal(mgr.created.length, 1);
+    assert.equal(mgr.created[0].remoteAddress, '9.9.9.9');
+    assert.equal(result.errors.length, 1);
+    assert.match(result.errors[0], /single IP address only/);
+  });
+
+  it('validates before deleting on overwrite conflicts', async () => {
+    const seeded = new FakeFirewallManager([
+      { name: 'Soterios - Restricted Allow', direction: 'Outbound', action: 'Allow', enabled: true, managedByApp: true }
+    ]);
+    const result = await seeded.importRules(
+      {
+        version: 1,
+        rules: [{ name: 'Restricted Allow', direction: 'Outbound', action: 'Allow', remoteAddress: '1.2.3.4,5.6.7.8' }]
+      },
+      { onConflict: 'overwrite' }
+    );
+    assert.equal(result.success, false);
+    assert.equal(seeded.deleted.length, 0, 'existing rule must survive failed validation');
+    assert.equal(seeded.created.length, 0);
+    assert.match(result.errors[0], /single IP address only/);
+  });
+});
+
+describe('FirewallManager createRule remote address validation (#141)', () => {
+  class RecordingManager extends FirewallManager {
+    constructor() {
+      super();
+      this.commands = [];
+    }
+
+    async runPowerShell(command) {
+      this.commands.push(command);
+      return '';
+    }
+  }
+
+  function baseSpec(overrides = {}) {
+    return { name: 'Probe', direction: 'Outbound', action: 'Block', ...overrides };
+  }
+
+  it('rejects malformed IPs before PowerShell execution', async () => {
+    const mgr = new RecordingManager();
+    for (const remoteAddress of ['999.999.999.999', 'gggg::1', '1.2.3.4,5.6.7.8']) {
+      await assert.rejects(() => mgr.createRule(baseSpec({ remoteAddress })), /remote address/i);
+    }
+    assert.equal(mgr.commands.length, 0);
+  });
+
+  it('passes a valid IPv6 address through to PowerShell quoted', async () => {
+    const mgr = new RecordingManager();
+    const result = await mgr.createRule(baseSpec({ remoteAddress: '2001:db8::1' }));
+    assert.equal(result.success, true);
+    assert.equal(mgr.commands.length, 1);
+    assert.match(mgr.commands[0], /-RemoteAddress '2001:db8::1'/);
+  });
+});
