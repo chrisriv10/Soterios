@@ -770,6 +770,240 @@ describe('ScanEngine', () => {
     assert.equal(saved.htmlPath, undefined);
   });
 
+  it('runScan preserves a completed outcome when report persistence fails', async () => {
+    const events = [];
+    mockEventBus.emit = (event, data) => { events.push({ event, data }); };
+    const clam = {
+      isReady: true,
+      abortCurrentScan: () => true,
+      scanFile: async () => ({
+        success: true,
+        threatsFound: 0,
+        filesScanned: 7,
+        threats: [],
+        output: ''
+      })
+    };
+    const engine = new ScanEngine(
+      mockDb,
+      mockEventBus,
+      clam,
+      mockHeuristicEngine,
+      mockReputationEngine,
+      mockQuarantineManager
+    );
+
+    // Fail ONLY the report file writes (Windows-safe: no permission tricks).
+    const fsModule = require('fs');
+    const realWrite = fsModule.writeFileSync;
+    fsModule.writeFileSync = (...args) => {
+      if (String(args[0]).includes('scan-reports')) throw new Error('ENOSPC: no space left on device');
+      return realWrite.apply(fsModule, args);
+    };
+    const loggerModule = require('../src/utils/logger');
+    const realWarn = loggerModule.warn;
+    const warnings = [];
+    loggerModule.warn = (message) => { warnings.push(String(message)); };
+    let result;
+    try {
+      result = await engine.runScan('quick', [tmp], 'Starting...');
+    } finally {
+      fsModule.writeFileSync = realWrite;
+      loggerModule.warn = realWarn;
+    }
+    assert.equal(fsModule.writeFileSync, realWrite, 'fs stub is always restored');
+    assert.equal(loggerModule.warn, realWarn, 'logger stub is always restored');
+    // The warning names both intended files plus the OS reason, never
+    // report contents.
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /Scan report persistence failed/);
+    assert.match(warnings[0], /scan-quick-.*\.json/);
+    assert.match(warnings[0], /scan-quick-.*\.html/);
+    assert.match(warnings[0], /ENOSPC/);
+
+    // Terminal outcome preserved, persistence failure surfaced, no throw.
+    assert.equal(result.status, 'completed');
+    assert.equal(result.success, true);
+    assert.equal(result.canceled, false);
+    assert.equal(result.filesScanned, 7);
+    assert.equal(result.threatsFound, 0);
+    assert.deepEqual(result.threats, []);
+    assert.equal(result.errors.length, 1);
+    assert.match(result.errors[0], /^Scan report persistence failed: /);
+    assert.match(result.errors[0], /ENOSPC/);
+    // The fallback report claims no saved files.
+    const lastResult = engine.getStatus().lastResult;
+    assert.ok(lastResult);
+    assert.equal(lastResult.report.jsonPath, undefined);
+    assert.equal(lastResult.report.htmlPath, undefined);
+    // In-memory fallback report reflects the same failure.
+    assert.ok(lastResult.report.errors.includes(result.errors[0]));
+    // Engine state cleaned up and terminal.
+    assert.equal(engine.isScanning, false);
+    assert.equal(engine.userScan.currentScan, null);
+    assert.equal(engine.userScan.abortController, null);
+    assert.equal(lastResult.status, 'completed');
+    assert.deepEqual(lastResult.errors, result.errors);
+    assert.deepEqual(lastResult.threats, []);
+    // Exactly one terminal scan:complete, agreeing with the result.
+    const completes = events.filter((e) => e.event === 'scan:complete');
+    assert.equal(completes.length, 1);
+    assert.equal(completes[0].data.status, 'completed');
+    assert.equal(completes[0].data.filesScanned, 7);
+    assert.deepEqual(completes[0].data.errors, result.errors);
+    assert.deepEqual(completes[0].data.threats, []);
+    assert.equal(completes[0].data.report.jsonPath, undefined);
+    assert.equal(completes[0].data.report.htmlPath, undefined);
+  });
+
+  it('runScan preserves a canceled outcome when report persistence fails', async () => {
+    const events = [];
+    mockEventBus.emit = (event, data) => { events.push({ event, data }); };
+    let releaseScan;
+    const scanGate = new Promise((resolve) => { releaseScan = resolve; });
+    const clam = {
+      isReady: true,
+      abortCurrentScan: () => true,
+      scanFile: async () => {
+        await scanGate;
+        return { success: false, canceled: true, error: 'Scan canceled', threatsFound: 0, filesScanned: 0, output: '' };
+      }
+    };
+    const engine = new ScanEngine(
+      mockDb,
+      mockEventBus,
+      clam,
+      mockHeuristicEngine,
+      mockReputationEngine,
+      mockQuarantineManager
+    );
+
+    const scanPromise = engine.runScan('quick', [tmp], 'Starting...');
+    await waitFor(() => engine.isScanning);
+    engine.abortScan();
+    const fsModule = require('fs');
+    const realWrite = fsModule.writeFileSync;
+    fsModule.writeFileSync = (...args) => {
+      if (String(args[0]).includes('scan-reports')) throw new Error('EACCES: permission denied');
+      return realWrite.apply(fsModule, args);
+    };
+    let result;
+    try {
+      releaseScan();
+      result = await scanPromise;
+    } finally {
+      fsModule.writeFileSync = realWrite;
+    }
+
+    assert.equal(result.status, 'canceled');
+    assert.equal(result.canceled, true);
+    assert.equal(result.cancellationReason, 'explicit-abort');
+    assert.match(result.errors[0], /^Scan report persistence failed: /);
+    const canceledEvents = events.filter((e) => e.event === 'scan:canceled');
+    const completeEvents = events.filter((e) => e.event === 'scan:complete');
+    assert.equal(canceledEvents.length, 1);
+    assert.equal(completeEvents.length, 1);
+    assert.equal(completeEvents[0].data.status, 'canceled');
+    assert.deepEqual(completeEvents[0].data.errors, result.errors);
+    assert.equal(engine.isScanning, false);
+  });
+
+  it('runScan keeps original errors when scan and report persistence both fail', async () => {
+    const events = [];
+    mockEventBus.emit = (event, data) => { events.push({ event, data }); };
+    const clam = {
+      isReady: true,
+      abortCurrentScan: () => true,
+      scanFile: async () => ({ success: false, error: 'Clam engine exploded', threatsFound: 0, filesScanned: 0, output: '' })
+    };
+    const engine = new ScanEngine(
+      mockDb,
+      mockEventBus,
+      clam,
+      mockHeuristicEngine,
+      mockReputationEngine,
+      mockQuarantineManager
+    );
+
+    const fsModule = require('fs');
+    const realWrite = fsModule.writeFileSync;
+    fsModule.writeFileSync = (...args) => {
+      if (String(args[0]).includes('scan-reports')) throw new Error('ENOSPC: no space left on device');
+      return realWrite.apply(fsModule, args);
+    };
+    let result;
+    try {
+      result = await engine.runScan('quick', [tmp], 'Starting...');
+    } finally {
+      fsModule.writeFileSync = realWrite;
+    }
+
+    assert.equal(result.status, 'failed');
+    assert.equal(result.success, false);
+    assert.equal(result.errors.length, 2);
+    assert.equal(result.errors[0], 'Clam engine exploded');
+    assert.match(result.errors[1], /^Scan report persistence failed: /);
+    const completes = events.filter((e) => e.event === 'scan:complete');
+    assert.equal(completes.length, 1);
+    assert.equal(completes[0].data.status, 'failed');
+    assert.deepEqual(completes[0].data.errors, result.errors);
+  });
+
+  it('runScan contains directory-creation failure the same as write failure', async () => {
+    const clam = {
+      isReady: true,
+      abortCurrentScan: () => true,
+      scanFile: async () => ({
+        success: true,
+        threatsFound: 0,
+        filesScanned: 3,
+        threats: [],
+        output: ''
+      })
+    };
+    const engine = new ScanEngine(
+      mockDb,
+      mockEventBus,
+      clam,
+      mockHeuristicEngine,
+      mockReputationEngine,
+      mockQuarantineManager
+    );
+
+    // Prove the containment boundary wraps mkdir too, not just the writes.
+    const fsModule = require('fs');
+    const realMkdir = fsModule.mkdirSync;
+    fsModule.mkdirSync = (...args) => {
+      if (String(args[0]).includes('scan-reports')) throw new Error('EROFS: read-only file system');
+      return realMkdir.apply(fsModule, args);
+    };
+    const loggerModule = require('../src/utils/logger');
+    const realWarn = loggerModule.warn;
+    const warnings = [];
+    loggerModule.warn = (message) => { warnings.push(String(message)); };
+    let result;
+    try {
+      result = await engine.runScan('custom', [tmp], 'Starting...');
+    } finally {
+      fsModule.mkdirSync = realMkdir;
+      loggerModule.warn = realWarn;
+    }
+    assert.equal(fsModule.mkdirSync, realMkdir, 'fs stub is always restored');
+    // Paths are derived before mkdir, so even a directory-creation failure
+    // names both intended files.
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /scan-custom-.*\.json/);
+    assert.match(warnings[0], /scan-custom-.*\.html/);
+
+    assert.equal(result.status, 'completed');
+    assert.equal(result.success, true);
+    assert.equal(result.filesScanned, 3);
+    assert.equal(result.errors.length, 1);
+    assert.match(result.errors[0], /^Scan report persistence failed: /);
+    assert.equal(engine.getStatus().lastResult.report.jsonPath, undefined);
+    assert.equal(engine.isScanning, false);
+  });
+
   it('runScan emits progress events', async () => {
     const progressEvents = [];
     mockEventBus.emit = (event, data) => {
