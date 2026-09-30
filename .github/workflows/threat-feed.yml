@@ -36,6 +36,8 @@ jobs:
         env:
           THREAT_FEED_PRIVATE_KEY: ${{ secrets.THREAT_FEED_PRIVATE_KEY }}
         run: node tools/build-threat-feed.mjs --certpl certpl-domains.txt --urlhaus urlhaus.json --output public/threat-feed
+      - name: Verify signed threat feed
+        run: npm run feed:verify -- public/threat-feed browser-extension/src/feed-public-key.json
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -101,9 +101,25 @@ function validManifestShape(value: unknown): value is FeedManifest {
   if (!Number.isFinite(Date.parse(manifest.generatedAt)) || !Number.isFinite(Date.parse(manifest.expiresAt))) return false;
   if (Date.parse(manifest.expiresAt) <= Date.parse(manifest.generatedAt)) return false;
   return manifest.shards.every((shard) => /^[0-9a-f]{2}$/i.test(shard.id)
-    && /^[a-zA-Z0-9._/-]{1,180}$/.test(shard.file)
+    && validShardFile(shard.file)
     && /^[0-9a-f]{64}$/i.test(shard.sha256)
     && Number.isSafeInteger(shard.count) && shard.count >= 0 && shard.count <= 5_000_000);
+}
+
+// A shard file must be a safe relative path: forward slashes only, no empty
+// segments, no '.'/'..' segments, never absolute, never a drive/UNC/URL
+// form. Exported for focused testing; validManifestShape enforces it before
+// any shard is fetched, so traversal-style names can never reach URL
+// resolution or IndexedDB storage.
+export function validShardFile(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  if (value.length < 1 || value.length > 180) return false;
+  if (value.startsWith('/')) return false;
+  if (/^[a-zA-Z]:[\\/]/.test(value)) return false;
+  if (value.startsWith('\\\\')) return false;
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value)) return false;
+  if (!/^[a-zA-Z0-9._/-]{1,180}$/.test(value)) return false;
+  return !value.split('/').some((segment) => segment === '' || segment === '.' || segment === '..');
 }
 
 async function digestHex(bytes: Uint8Array): Promise<string> {

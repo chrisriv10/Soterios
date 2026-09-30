@@ -6,7 +6,7 @@ const { checkHibpPassword, sha1Hex } = require('../browser-extension/dist/test/c
 const { inspectUrl, inspectCredentialDestination } = require('../browser-extension/dist/test/heuristics.js');
 const { migrateSettings, providerEnabled } = require('../browser-extension/dist/test/settings.js');
 const { pruneHistory } = require('../browser-extension/dist/test/history.js');
-const { verifyFeedManifest, threatToken, domainThreatTokens } = require('../browser-extension/dist/test/feed.js');
+const { verifyFeedManifest, validShardFile, threatToken, domainThreatTokens } = require('../browser-extension/dist/test/feed.js');
 const { checkGoogleUrl } = require('../browser-extension/dist/test/providers.js');
 
 let storedValues;
@@ -70,4 +70,11 @@ test('Safe Browsing payload reports the actual packaged extension version', asyn
   const body = JSON.parse(fetchCalls[0].init.body);
   assert.equal(body.client.clientId, 'soterios');
   assert.equal(body.client.clientVersion, expected);
+});
+test('feed shard paths accept safe relative paths and reject traversal', () => {
+  assert.equal(validShardFile('shards/ab.json'), true);
+  assert.equal(validShardFile('ab.json'), true);
+  for (const unsafe of ['../ab.json', 'shards/../ab.json', './ab.json', 'shards/./ab.json', '/ab.json', 'shards//ab.json', 'C:/temp/ab.json', '\\\\server\\share\\ab.json', '', 'shards/ab.json '.repeat(20)]) {
+    assert.equal(validShardFile(unsafe), false, `expected rejection for ${unsafe}`);
+  }
 });
