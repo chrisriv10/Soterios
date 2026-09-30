@@ -389,6 +389,21 @@ describe('threat-feed verifier rollback baseline', () => {
     assert.notEqual(result.status, 0);
     assert.match(result.output, /current-version/);
   }));
+
+  it('rejects a present baseline flag with a missing or empty operand', withTempRoot(async (root) => {
+    const keys = makeKeys();
+    const feedDir = path.join(root, 'feed');
+    fs.mkdirSync(feedDir, { recursive: true });
+    const keyFile = writePublicKey(root, keys.publicKey);
+    const token = randomToken();
+    buildSignedFeed({ dir: feedDir, keys, shards: [{ id: token.slice(0, 2), file: `shards/${token.slice(0, 2)}.json`, tokens: { [token]: 'phishing' } }] });
+    const missing = runVerifier(feedDir, keyFile, ['--current-version']);
+    assert.notEqual(missing.status, 0);
+    assert.match(missing.output, /requires a value/);
+    const empty = runVerifier(feedDir, keyFile, ['--current-version', '']);
+    assert.notEqual(empty.status, 0, 'empty interpolation must not silently disable rollback protection');
+    assert.match(empty.output, /requires a value/);
+  }));
 });
 
 describe('threat-feed verifier expiry semantics', () => {

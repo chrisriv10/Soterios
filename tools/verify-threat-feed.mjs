@@ -65,14 +65,22 @@ function stablePayload(manifest) {
 
 function argument(name) {
   const index = process.argv.indexOf(name);
-  return index >= 0 ? process.argv[index + 1] : '';
+  if (index < 0) return null;
+  const value = process.argv[index + 1];
+  // A present flag with a missing or empty operand must fail loudly: an
+  // empty interpolation (e.g. --current-version "$PREV") must never
+  // silently disable the trusted rollback baseline.
+  if (value === undefined || value === '' || value.startsWith('-')) {
+    throw new Error(`Threat-feed ${name} requires a value.`);
+  }
+  return value;
 }
 
 const feedDir = path.resolve(process.argv[2] || 'public/threat-feed');
 const publicKeyFile = path.resolve(process.argv[3] || 'browser-extension/src/feed-public-key.json');
 const currentVersionRaw = argument('--current-version');
 let currentVersion = null;
-if (currentVersionRaw !== '') {
+if (currentVersionRaw !== null) {
   if (!/^\d+$/.test(currentVersionRaw)) throw new Error('Threat-feed --current-version must be a safe non-negative integer.');
   currentVersion = Number(currentVersionRaw);
   if (!Number.isSafeInteger(currentVersion)) throw new Error('Threat-feed --current-version must be a safe non-negative integer.');
