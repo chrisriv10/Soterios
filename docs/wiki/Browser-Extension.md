@@ -47,7 +47,7 @@ The page component lives in an isolated Shadow DOM overlay. It does not modify t
 
 The signing private key is held outside the repository at `%LOCALAPPDATA%\Soterios\signing\threat-feed-ed25519.pem` on the provisioning workstation. Add its PEM contents to the repository's `THREAT_FEED_PRIVATE_KEY` Actions secret. The corresponding public key is pinned in `browser-extension/src/feed-public-key.json`. Also configure `URLHAUS_AUTH_KEY`; CERT Polska requires no key. Do not replace the public key without coordinating a signed feed-key rotation release.
 
-If signature validation, schema limits, freshness checks, checksum validation, or rollback protection fails, the last valid feed is retained and the UI reports degraded/unknown protection; it does not claim a clean verdict.
+If signature validation, schema limits, freshness checks, checksum validation, or rollback protection fails, the last valid feed is retained and the UI reports degraded/unknown protection; it does not claim a clean verdict. A structurally valid feed whose timestamps are merely expired is reported stale rather than rejected; malformed timestamp ordering is a validation failure.
 
 ## Native protocol
 
