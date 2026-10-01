@@ -213,6 +213,22 @@ describe('windowsDebloat analyze', () => {
     assert.match(catalog.findEntry('Microsoft.ZuneMusic_8wekyb3d8bbwe').name, /Windows Media Player/);
     assert.equal(catalog.findEntry('Microsoft.ZuneVideo_8wekyb3d8bbwe').recommendation, 'optional');
   });
+
+  it('returns an empty inventory when PowerShell emits no output', async () => {
+    const outerExec = childProcess.execFile;
+    childProcess.execFile = (file, args, options, callback) => {
+      callback(null, '   \n', '');
+      return {};
+    };
+    try {
+      const result = await debloat({ mode: 'analyze' });
+      assert.equal(result.supported, true);
+      assert.equal(result.counts.installed, 0);
+      assert.deepEqual(result.packages, []);
+    } finally {
+      childProcess.execFile = outerExec;
+    }
+  });
 });
 
 describe('windowsDebloat selection validation', () => {

@@ -172,7 +172,7 @@ function classifyPackage(pkg, context = {}) {
 async function discoverPackages() {
   const stdout = await runPs(DISCOVERY_SCRIPT, { timeoutMs: DISCOVERY_TIMEOUT_MS, maxBuffer: DISCOVERY_MAX_BUFFER });
   const trimmed = stdout.trim();
-  if (!trimmed) return [];
+  if (!trimmed) return { packages: [], malformed: 0, ambiguousFamilies: new Set() };
   let parsed;
   try {
     parsed = JSON.parse(trimmed);
