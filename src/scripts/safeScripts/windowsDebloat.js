@@ -23,6 +23,11 @@ const DISCOVERY_MAX_BUFFER = 8 * 1024 * 1024;
 const REMOVAL_TIMEOUT_MS = 60_000;
 const REMOVAL_MAX_BUFFER = 1024 * 1024;
 const MAX_SELECTIONS = 100;
+// Generous fixed caps: legitimate family names stay well under 100
+// characters and full names under 200. These bound per-string work before
+// any catalog lookup, enumeration scan, or comparison happens.
+const MAX_SELECTION_ID_LENGTH = 256;
+const MAX_FULLNAME_LENGTH = 512;
 const FULLNAME_ENV_VAR = 'SOTERIOS_DEBLOAT_FULLNAME';
 // PackageFullName shape: Name_Version_Arch_Resource_PublisherId. The
 // resource section is frequently empty (double underscore), so it may be
@@ -91,11 +96,21 @@ function runPs(script, { env = {}, timeoutMs, maxBuffer } = {}) {
   });
 }
 
+function toTriState(value) {
+  if (value === true) return true;
+  if (value === false) return false;
+  return null;
+}
+
 function normalizePackage(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const familyName = typeof raw.PackageFamilyName === 'string' ? raw.PackageFamilyName : '';
   const fullName = typeof raw.PackageFullName === 'string' ? raw.PackageFullName : '';
   if (!familyName || !fullName) return null;
+  // Safety metadata is tri-state: true, false, or null (missing/invalid).
+  // Unknown safety state must never be silently converted to false; the
+  // classifier blocks removal unless every required field is explicitly
+  // known.
   return {
     name: typeof raw.Name === 'string' && raw.Name ? raw.Name : familyName,
     packageFullName: fullName,
@@ -104,27 +119,42 @@ function normalizePackage(raw) {
     publisher: raw.Publisher == null ? '' : String(raw.Publisher),
     architecture: typeof raw.Architecture === 'string' ? raw.Architecture : '',
     installLocation: typeof raw.InstallLocation === 'string' ? raw.InstallLocation : '',
-    isFramework: raw.IsFramework === true,
-    isResourcePackage: raw.IsResourcePackage === true,
-    isBundle: raw.IsBundle === true,
-    nonRemovable: raw.NonRemovable === true,
-    status: typeof raw.Status === 'string' ? raw.Status : ''
+    isFramework: toTriState(raw.IsFramework),
+    isResourcePackage: toTriState(raw.IsResourcePackage),
+    isBundle: toTriState(raw.IsBundle),
+    nonRemovable: toTriState(raw.NonRemovable),
+    status: typeof raw.Status === 'string' && raw.Status ? raw.Status : null
   };
 }
 
-function classifyPackage(pkg) {
+function classifyPackage(pkg, context = {}) {
   const entry = findEntry(pkg.packageFamilyName);
   const catalogId = entry ? entry.id : null;
   const verdict = (extra) => ({ ...pkg, catalogId, uncataloged: false, ...extra });
-  // Live metadata protection applies whether or not the package is
-  // cataloged: a framework package is protected, not merely uncataloged.
+  // A family with multiple installed identities is ambiguous: neither record
+  // may be selected, because revalidation could otherwise resolve the wrong
+  // PackageFullName. This check precedes all metadata handling.
+  if (context.ambiguousFamilies instanceof Set
+    && context.ambiguousFamilies.has(String(pkg.packageFamilyName).toLowerCase())) {
+    return verdict({ recommendation: 'protected', reason: 'Multiple installed packages share this family; identity is ambiguous.', canRemove: false });
+  }
+  // Fail closed on unknown safety state: any required metadata that is
+  // missing or invalid blocks removal, even for cataloged families.
+  const safetyUnknown = pkg.isFramework == null || pkg.isResourcePackage == null || pkg.isBundle == null
+    || pkg.nonRemovable == null || typeof pkg.status !== 'string' || !pkg.status;
+  if (safetyUnknown) {
+    return verdict({ recommendation: 'protected', reason: 'Incomplete or invalid AppX safety metadata; removal blocked.', canRemove: false });
+  }
   if (pkg.isFramework || pkg.isResourcePackage) {
     return verdict({ recommendation: 'protected', reason: 'Framework/resource package required by other apps.', canRemove: false });
+  }
+  if (pkg.isBundle) {
+    return verdict({ recommendation: 'protected', reason: 'Bundle package: removal is not supported.', canRemove: false });
   }
   if (pkg.nonRemovable) {
     return verdict({ recommendation: 'protected', reason: 'Marked NonRemovable by Windows.', canRemove: false });
   }
-  if (pkg.status && pkg.status !== 'Ok') {
+  if (pkg.status !== 'Ok') {
     return verdict({ recommendation: 'protected', reason: `Package status is '${pkg.status}', not healthy.`, canRemove: false });
   }
   if (entry && entry.recommendation === 'protected') {
@@ -157,11 +187,19 @@ async function discoverPackages() {
     if (normalized) packages.push(normalized);
     else malformed += 1;
   }
-  return { packages, malformed };
+  const familyCounts = new Map();
+  for (const pkg of packages) {
+    const key = pkg.packageFamilyName.toLowerCase();
+    familyCounts.set(key, (familyCounts.get(key) || 0) + 1);
+  }
+  const ambiguousFamilies = new Set(
+    [...familyCounts.entries()].filter(([, count]) => count > 1).map(([key]) => key)
+  );
+  return { packages, malformed, ambiguousFamilies };
 }
 
-function analyzeResult(packages, malformed) {
-  const classified = packages.map(classifyPackage);
+function analyzeResult(packages, malformed, ambiguousFamilies = new Set()) {
+  const classified = packages.map((pkg) => classifyPackage(pkg, { ambiguousFamilies }));
   const counts = { installed: classified.length, recommended: 0, optional: 0, protected: 0, uncataloged: 0 };
   for (const pkg of classified) {
     if (pkg.uncataloged) counts.uncataloged += 1;
@@ -194,6 +232,9 @@ function validateSelections(selections) {
     }
     const id = selection.trim();
     if (!id || seen.has(id.toLowerCase())) continue;
+    if (id.length > MAX_SELECTION_ID_LENGTH) {
+      throw new Error('Invalid package selection.');
+    }
     const entry = findEntry(id);
     if (!entry) {
       throw new Error(`Unknown package identifier: ${id}`);
@@ -211,7 +252,7 @@ function validateSelections(selections) {
 }
 
 function validateFullName(fullName) {
-  if (typeof fullName !== 'string' || !FULLNAME_PATTERN.test(fullName.trim())) {
+  if (typeof fullName !== 'string' || fullName.length > MAX_FULLNAME_LENGTH || !FULLNAME_PATTERN.test(fullName.trim())) {
     throw new Error('Refusing to remove a package with an unexpected identity format.');
   }
   return fullName.trim();
@@ -241,7 +282,10 @@ async function removeFlow(args = {}, onProgress) {
   const before = await discoverPackages();
   const byFamily = new Map();
   for (const pkg of before.packages) {
-    byFamily.set(pkg.packageFamilyName.toLowerCase(), pkg);
+    const key = pkg.packageFamilyName.toLowerCase();
+    // Ambiguous families never enter the map: with several identities under
+    // one family, no single PackageFullName can be safely selected.
+    if (!before.ambiguousFamilies.has(key) && !byFamily.has(key)) byFamily.set(key, pkg);
   }
   const previewById = {};
   if (args.preview && typeof args.preview === 'object' && !Array.isArray(args.preview)) {
@@ -249,7 +293,7 @@ async function removeFlow(args = {}, onProgress) {
     // preview object cannot force unbounded work.
     for (const id of ids) {
       const fullName = args.preview[id];
-      if (typeof fullName === 'string') previewById[id.toLowerCase()] = fullName;
+      if (typeof fullName === 'string' && fullName.length <= MAX_FULLNAME_LENGTH) previewById[id.toLowerCase()] = fullName;
     }
   }
 
@@ -259,6 +303,10 @@ async function removeFlow(args = {}, onProgress) {
   let index = 0;
   for (const id of ids) {
     index += 1;
+    if (before.ambiguousFamilies.has(id.toLowerCase())) {
+      skipped.push({ id, reason: 'Multiple installed packages share this family; refresh required.' });
+      continue;
+    }
     const current = byFamily.get(id.toLowerCase());
     if (!current) {
       skipped.push({ id, reason: 'Package is no longer installed; refresh required.' });
@@ -269,7 +317,7 @@ async function removeFlow(args = {}, onProgress) {
       skipped.push({ id, reason: 'Package changed since preview; refresh required.' });
       continue;
     }
-    const classified = classifyPackage(current);
+    const classified = classifyPackage(current, { ambiguousFamilies: before.ambiguousFamilies });
     if (!classified.canRemove) {
       skipped.push({ id, reason: classified.reason });
       continue;
@@ -317,9 +365,9 @@ module.exports = async function windowsDebloat(args = {}, onProgress) {
     return removeFlow(args, onProgress);
   }
   onProgress?.({ phase: 'collecting', label: 'Reading installed AppX packages', pct: 5, cancelable: true });
-  const { packages, malformed } = await discoverPackages();
+  const { packages, malformed, ambiguousFamilies } = await discoverPackages();
   onProgress?.({ phase: 'analyzing', label: 'Classifying packages against the Soterios catalog', pct: 75, cancelable: true });
-  const result = analyzeResult(packages, malformed);
+  const result = analyzeResult(packages, malformed, ambiguousFamilies);
   onProgress?.({ phase: 'complete', label: 'AppX inventory ready', pct: 100, count: packages.length, total: packages.length, cancelable: false });
   return result;
 };

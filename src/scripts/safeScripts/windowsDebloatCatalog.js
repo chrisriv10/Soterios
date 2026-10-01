@@ -23,7 +23,7 @@ const ENTRIES = [
     description: 'Preinstalled Solitaire game bundle.',
     category: 'games',
     recommendation: 'recommended',
-    rationale: 'Optional consumer game with no OS dependency.'
+    rationale: 'Optional Microsoft consumer game; remove only if unused.'
   },
   {
     id: 'Microsoft.WindowsFeedbackHub_8wekyb3d8bbwe',
@@ -31,7 +31,7 @@ const ENTRIES = [
     description: 'Sends feedback and diagnostics to Microsoft.',
     category: 'system-utilities',
     recommendation: 'recommended',
-    rationale: 'Optional feedback channel; safe to remove for most users.'
+    rationale: 'Optional feedback channel; remove only if unused.'
   },
   {
     id: 'Microsoft.Getstarted_8wekyb3d8bbwe',
@@ -39,15 +39,15 @@ const ENTRIES = [
     description: 'Windows tips and guided tours.',
     category: 'system-utilities',
     recommendation: 'recommended',
-    rationale: 'Onboarding content with no OS dependency.'
+    rationale: 'Included tips content; remove only if unused.'
   },
   {
     id: 'Microsoft.People_8wekyb3d8bbwe',
     name: 'People',
-    description: 'Contacts aggregation app (deprecated by Microsoft).',
+    description: 'Contacts aggregation app.',
     category: 'communication',
     recommendation: 'recommended',
-    rationale: 'Deprecated app with no OS dependency.'
+    rationale: 'Contacts app with no system role; remove only if unused.'
   },
   {
     id: 'Microsoft.BingNews_8wekyb3d8bbwe',
@@ -55,7 +55,7 @@ const ENTRIES = [
     description: 'MSN news reader.',
     category: 'news',
     recommendation: 'recommended',
-    rationale: 'Optional news client with no OS dependency.'
+    rationale: 'Optional MSN news client; remove only if unused.'
   },
   {
     id: 'Microsoft.BingWeather_8wekyb3d8bbwe',
@@ -63,7 +63,7 @@ const ENTRIES = [
     description: 'MSN weather app.',
     category: 'news',
     recommendation: 'recommended',
-    rationale: 'Optional weather client with no OS dependency.'
+    rationale: 'Optional MSN weather client; remove only if unused.'
   },
   {
     id: 'Microsoft.MicrosoftOfficeHub_8wekyb3d8bbwe',
@@ -71,7 +71,7 @@ const ENTRIES = [
     description: 'Microsoft 365 companion hub.',
     category: 'productivity',
     recommendation: 'recommended',
-    rationale: 'Optional companion; full Office apps are unaffected.'
+    rationale: 'Optional Microsoft 365 companion; remove only if unused.'
   },
   {
     id: 'Microsoft.SkypeApp_8wekyb3d8bbwe',
@@ -79,23 +79,23 @@ const ENTRIES = [
     description: 'Skype consumer client.',
     category: 'communication',
     recommendation: 'recommended',
-    rationale: 'Optional client; removing it does not affect Teams or system calling.'
+    rationale: 'Optional calling client; remove only if unused.'
   },
   {
     id: 'Microsoft.ZuneMusic_8wekyb3d8bbwe',
-    name: 'Groove Music (legacy)',
-    description: 'Legacy Groove Music client.',
+    name: 'Windows Media Player',
+    description: 'Windows Media Player music playback.',
     category: 'media',
-    recommendation: 'recommended',
-    rationale: 'Superseded media client with no OS dependency.'
+    recommendation: 'optional',
+    rationale: 'Hosts Windows Media Player music playback on modern Windows; remove only if you do not use Windows Media Player.'
   },
   {
     id: 'Microsoft.ZuneVideo_8wekyb3d8bbwe',
-    name: 'Movies & TV (legacy)',
-    description: 'Legacy video client.',
+    name: 'Windows Media Player (video)',
+    description: 'Windows Media Player video playback.',
     category: 'media',
-    recommendation: 'recommended',
-    rationale: 'Superseded media client with no OS dependency.'
+    recommendation: 'optional',
+    rationale: 'Hosts Windows Media Player video playback on modern Windows; remove only if you do not use it.'
   },
   {
     id: 'Microsoft.YourPhone_8wekyb3d8bbwe',

@@ -162,6 +162,57 @@ describe('windowsDebloat analyze', () => {
     assert.equal(debloat.normalizePackage(null), null);
     assert.equal(debloat.normalizePackage({ Name: 'NoIdentity' }), null);
   });
+
+  it('blocks removal when safety metadata is missing, even for cataloged families', () => {
+    for (const field of ['IsFramework', 'IsResourcePackage', 'IsBundle', 'NonRemovable', 'Status']) {
+      const raw = appRecord();
+      delete raw[field];
+      const verdict = debloat.classifyPackage(debloat.normalizePackage(raw));
+      assert.equal(verdict.canRemove, false, `missing ${field} must block removal`);
+      assert.equal(verdict.recommendation, 'protected');
+      assert.match(verdict.reason, /Incomplete or invalid AppX safety metadata/);
+    }
+  });
+
+  it('blocks removal for invalid boolean and status metadata shapes', () => {
+    for (const overrides of [
+      { IsFramework: 1 }, { IsFramework: 'yes' }, { IsFramework: null },
+      { IsResourcePackage: 0 }, { NonRemovable: 'false' }, { IsBundle: {} },
+      { Status: 42 }, { Status: null }, { Status: '' }, { Status: {} }
+    ]) {
+      const verdict = debloat.classifyPackage(debloat.normalizePackage(appRecord(overrides)));
+      assert.equal(verdict.canRemove, false, `must block removal for ${JSON.stringify(overrides)}`);
+      assert.match(verdict.reason, /Incomplete or invalid AppX safety metadata/);
+    }
+  });
+
+  it('treats bundles as explicitly protected', () => {
+    const bundled = debloat.classifyPackage(debloat.normalizePackage(appRecord({ IsBundle: true })));
+    assert.equal(bundled.canRemove, false);
+    assert.equal(bundled.recommendation, 'protected');
+    assert.match(bundled.reason, /Bundle/);
+  });
+
+  it('treats duplicate installed family identities as ambiguous and protected', () => {
+    const first = debloat.normalizePackage(appRecord());
+    const second = debloat.normalizePackage(appRecord({
+      PackageFullName: 'Microsoft.MicrosoftSolitaireCollection_9.9.9.9_x64__8wekyb3d8bbwe'
+    }));
+    const ambiguous = new Set([first.packageFamilyName.toLowerCase()]);
+    for (const pkg of [first, second]) {
+      const verdict = debloat.classifyPackage(pkg, { ambiguousFamilies: ambiguous });
+      assert.equal(verdict.canRemove, false);
+      assert.equal(verdict.recommendation, 'protected');
+      assert.match(verdict.reason, /ambiguous/);
+    }
+    assert.equal(debloat.classifyPackage(first).canRemove, true);
+  });
+
+  it('classifies the media player entries as optional, not recommended', () => {
+    assert.equal(catalog.findEntry('Microsoft.ZuneMusic_8wekyb3d8bbwe').recommendation, 'optional');
+    assert.match(catalog.findEntry('Microsoft.ZuneMusic_8wekyb3d8bbwe').name, /Windows Media Player/);
+    assert.equal(catalog.findEntry('Microsoft.ZuneVideo_8wekyb3d8bbwe').recommendation, 'optional');
+  });
 });
 
 describe('windowsDebloat selection validation', () => {
@@ -180,6 +231,11 @@ describe('windowsDebloat selection validation', () => {
     assert.throws(() => debloat.validateSelections('not-an-array'), /at least one/);
     assert.throws(() => debloat.validateSelections([null]), /Invalid package selection/);
     assert.throws(() => debloat.validateSelections(new Array(101).fill('Microsoft.People_8wekyb3d8bbwe')), /at most/);
+  });
+
+  it('rejects oversized selection ids and full names', () => {
+    assert.throws(() => debloat.validateSelections([`Microsoft.People_8wekyb3d8bbwe${'x'.repeat(300)}`]), /Invalid package selection/);
+    assert.throws(() => debloat.validateFullName(`Microsoft.SkypeApp_1.0.0.0_x64__8wekyb3d8bbwe${'x'.repeat(600)}`), /unexpected identity/);
   });
 
   it('rejects unexpected PackageFullName shapes', () => {
@@ -319,5 +375,51 @@ describe('windowsDebloat remove flow', () => {
     assert.equal(result.failed.length, 0);
     assert.equal(result.skipped.length, 1);
     assert.match(result.skipped[0].reason, /NonRemovable/);
+  });
+
+  it('never invokes removal for an ambiguous duplicate family', async () => {
+    let removalAttempts = 0;
+    const outerExec = childProcess.execFile;
+    childProcess.execFile = (file, args, options, callback) => {
+      const script = Buffer.from(args[args.indexOf('-EncodedCommand') + 1], 'base64').toString('utf16le');
+      if (/Remove-AppxPackage/.test(script)) {
+        removalAttempts += 1;
+        callback(null, 'SOTERIOS_DEBLOAT_REMOVED', '');
+        return {};
+      }
+      if (/Get-AppxPackage/.test(script)) {
+        const twin = appRecord({ PackageFullName: 'Microsoft.MicrosoftSolitaireCollection_9.9.9.9_x64__8wekyb3d8bbwe' });
+        const other = appRecord({
+          Name: 'Skype', PackageFullName: 'Microsoft.SkypeApp_15.100.0.0_x64__8wekyb3d8bbwe',
+          PackageFamilyName: 'Microsoft.SkypeApp_8wekyb3d8bbwe'
+        });
+        const payload = [twin, appRecord(), other].map((row) => JSON.stringify(row)).join(',');
+        callback(null, `[${payload}]`, '');
+        return {};
+      }
+      callback(new Error('unexpected invocation'), '', '');
+      return {};
+    };
+    try {
+      const analyze = await debloat({ mode: 'analyze' });
+      const solitaire = analyze.packages.filter((pkg) => pkg.catalogId === 'Microsoft.MicrosoftSolitaireCollection_8wekyb3d8bbwe');
+      assert.equal(solitaire.length, 2);
+      for (const pkg of solitaire) {
+        assert.equal(pkg.canRemove, false);
+        assert.match(pkg.reason, /ambiguous/);
+      }
+      const result = await debloat({
+        mode: 'remove',
+        confirmed: true,
+        selections: ['Microsoft.MicrosoftSolitaireCollection_8wekyb3d8bbwe'],
+        preview: {}
+      });
+      assert.equal(result.removed.length, 0);
+      assert.equal(result.skipped.length, 1);
+      assert.match(result.skipped[0].reason, /share this family/);
+      assert.equal(removalAttempts, 0, 'Remove-AppxPackage must never run for an ambiguous family');
+    } finally {
+      childProcess.execFile = outerExec;
+    }
   });
 });
