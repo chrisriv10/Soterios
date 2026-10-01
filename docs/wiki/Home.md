@@ -8,6 +8,7 @@ Version-controlled wiki source for [Soterios](https://github.com/chrisriv10/Sote
 - [Dashboard](Dashboard.md) — health score, status cards, workflow
 - [Malware Scanning](Scanning.md) — scan types, scheduling, reports, cancellation
 - [Quarantine](Quarantine.md) — restore, delete, bulk actions
+- [Windows Debloat](Windows-Debloat.md) — review and remove optional Store apps for the current user
 - [System Audits](Audits.md) — Windows security checks
 - [System Tools](System-Tools.md) — maintenance utilities
 - [Process and Network Monitoring](Process-and-Network-Monitoring.md) — processes, connections, firewall

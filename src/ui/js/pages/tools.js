@@ -18,6 +18,7 @@
     'scheduled-tasks-report': ['tools.script.scheduledTasksReport.name', 'tools.script.scheduledTasksReport.desc'],
     'hosts-file-check': ['tools.script.hostsFileCheck.name', 'tools.script.hostsFileCheck.desc'],
     'uninstaller-report': ['tools.script.uninstallerReport.name', 'tools.script.uninstallerReport.desc'],
+    'windows-debloat': ['tools.script.windowsDebloat.name', 'tools.script.windowsDebloat.desc'],
     'duplicate-finder': ['tools.script.duplicateFinder.name', 'tools.script.duplicateFinder.desc'],
     'file-shredder': ['tools.script.fileShredder.name', 'tools.script.fileShredder.desc'],
     'maintenance-safety-vault': ['tools.hub.vault.name', 'tools.hub.vault.desc'],
@@ -54,6 +55,9 @@
     _maintenanceScripts: [],
     _maintenanceBrowserOptions: [],
     _systemRestore: { state: 'idle', status: null, points: [], count: 0, message: null, error: null, creating: false, draft: null, lastCreated: null, createError: null },
+    _debloatSelected: new Set(),
+    _debloatRestoreChecked: true,
+    _debloatRestore: null,
 
     e(value) {
       return String(value ?? '')
@@ -176,6 +180,13 @@
     },
 
     async _afterResult(toolId) {
+      if (toolId === 'windows-debloat' && this._results[toolId]?.mode === 'analyze') {
+        this._debloatSelected = new Set(
+          (this._results[toolId].packages || [])
+            .filter((pkg) => pkg.canRemove && pkg.recommendation === 'recommended')
+            .map((pkg) => pkg.catalogId)
+        );
+      }
       if (toolId === 'list-startup-items' && this._results[toolId]?.items) {
         const disabled = await window.soterios.startup.listDisabled().catch(() => []);
         this._results[toolId].items = [...this._results[toolId].items, ...disabled];
@@ -545,6 +556,8 @@
           return `<div class="maintenance-controls"><label>Show <select id="serviceRiskFilter"><option value="all">All services</option><option value="flagged" ${this._serviceRiskFilter === 'flagged' ? 'selected' : ''}>Flagged only</option></select></label>${runButton('Analyze services')}<button type="button" class="btn btn-ghost" data-action="open-utility" data-utility="services">Open Services</button></div>`;
         case 'uninstaller-report':
           return `<div class="maintenance-controls maintenance-controls-wrap"><label>Search <input id="softwareSearch" type="search" value="${this.e(this._softwareSearch)}" placeholder="Name or publisher"></label>${runButton('Refresh installed apps')}<button type="button" class="btn btn-ghost" data-action="open-apps-settings">Windows Apps settings</button><div class="maintenance-leftover-controls"><label>Recently uninstalled app <input id="leftoverAppName" type="text" value="${this.e(this._leftoverAppName)}" placeholder="Application name"></label><button type="button" class="btn btn-ghost" data-action="scan-leftovers">Scan leftovers</button></div></div>`;
+        case 'windows-debloat':
+          return `<div class="maintenance-controls maintenance-controls-wrap"><span>${this.e(this.t('tools.debloat.scopeNote', 'Current user only. Nothing is removed during a scan.'))}</span>${runButton(this.t('tools.debloat.scan', 'Scan installed apps'))}<button type="button" class="btn btn-ghost" data-action="open-apps-settings">Windows Apps settings</button></div>`;
         default:
           return `<div class="maintenance-controls">${runButton(tool.impact === 'low' ? 'Run check' : 'Run analysis')}</div>`;
       }
@@ -578,6 +591,7 @@
         case 'duplicate-finder': return this._renderDuplicates(result);
         case 'list-startup-items': return this._renderStartup(result);
         case 'uninstaller-report': return this._renderSoftware(result);
+        case 'windows-debloat': return this._renderDebloat(result);
         case 'file-shredder': return this._renderShredder(result);
         case 'maintenance-safety-vault': return this._renderVault(result);
         case 'persistence-change-monitor': return this._renderPersistence(result);
@@ -682,6 +696,36 @@
         ${result.leftoverBlocked ? `<div class="maintenance-result-banner result-warning"><strong>Leftover scan paused</strong><span>${this.e(result.leftoverBlocked)}</span></div>` : ''}
         ${result.leftovers?.length ? this._renderLeftovers(result) : ''}
         ${apps.length ? `<div class="maintenance-table-wrap"><table class="maintenance-table"><thead><tr><th>Application</th><th>Publisher</th><th>Version</th><th>Installed</th><th>Size</th><th></th></tr></thead><tbody>${apps.map((app) => `<tr><td><strong>${this.e(app.name)}</strong><small>${app.appType === 'store' ? 'Microsoft Store app' : 'Desktop app'}</small></td><td>${this.e(app.publisher || 'Unknown')}</td><td>${this.e(app.version || '—')}</td><td>${this.e(app.installDate || 'Unknown')}</td><td>${app.estimatedSizeMB == null ? 'Unknown' : `${app.estimatedSizeMB} MB`}</td><td>${app.uninstallString ? `<button class="btn btn-sm btn-danger" data-action="launch-uninstaller" data-app-name="${this.e(app.name)}">Uninstall</button>` : `<button class="btn btn-sm btn-ghost" data-action="open-apps-settings">Manage</button>`}</td></tr>`).join('')}</tbody></table></div>` : '<div class="maintenance-empty"><h3>No applications match</h3><p>Clear the search field or refresh the installed software list.</p></div>'}`;
+    },
+
+    _renderDebloat(result) {
+      if (result.supported === false) {
+        return `<div class="maintenance-empty"><h3>${this.e(this.t('tools.debloat.unsupportedTitle', 'Not available on this system'))}</h3><p>${this.e(result.message || this.t('tools.debloat.unsupported', 'Windows AppX cleanup is only available on Windows.'))}</p></div>`;
+      }
+      if (result.mode === 'remove') return this._renderDebloatResult(result);
+      const packages = result.packages || [];
+      const removable = packages.filter((pkg) => pkg.canRemove);
+      const recommended = removable.filter((pkg) => pkg.recommendation === 'recommended');
+      const optional = removable.filter((pkg) => pkg.recommendation === 'optional');
+      const sheltered = packages.filter((pkg) => !pkg.canRemove);
+      const row = (pkg, checked) => `<tr><td><input type="checkbox" class="debloat-select" data-id="${this.e(pkg.catalogId)}" ${checked ? 'checked' : ''} aria-label="Remove ${this.e(pkg.name)}"></td><td><strong>${this.e(pkg.name)}</strong><small>${this.e(pkg.packageFamilyName)}</small></td><td>${this.e(pkg.version || '—')}</td><td>${this.e(pkg.publisher || 'Unknown')}</td><td><small>${this.e(pkg.reason)}</small></td></tr>`;
+      const table = (items, precheck) => items.length ? `<div class="maintenance-table-wrap"><table class="maintenance-table"><thead><tr><th></th><th>${this.e(this.t('tools.debloat.colApp', 'Application'))}</th><th>${this.e(this.t('tools.debloat.colVersion', 'Version'))}</th><th>${this.e(this.t('tools.debloat.colPublisher', 'Publisher'))}</th><th>${this.e(this.t('tools.debloat.colWhy', 'Why listed'))}</th></tr></thead><tbody>${items.map((pkg) => row(pkg, precheck && this._debloatSelected.has(pkg.catalogId))).join('')}</tbody></table></div>` : '';
+      return `${this._summaryTiles([[this.t('tools.debloat.installed', 'Installed AppX apps'), result.counts?.installed || 0], [this.t('tools.debloat.recommended', 'Recommended'), result.counts?.recommended || 0, result.counts?.recommended ? 'ok' : ''], [this.t('tools.debloat.optional', 'Optional'), result.counts?.optional || 0], [this.t('tools.debloat.protected', 'Protected'), result.counts?.protected || 0]])}
+        <div class="maintenance-result-banner result-warning"><strong>${this.e(this.t('tools.debloat.irreversibleTitle', 'Removal may be difficult to reverse'))}</strong><span>${this.e(this.t('tools.debloat.irreversible', 'Removed apps can be reinstalled from the Microsoft Store, but Soterios cannot automatically restore them. Only the packages you explicitly select are ever removed.'))}</span></div>
+        ${recommended.length ? `<h3>${this.e(this.t('tools.debloat.recommended', 'Recommended'))} (${recommended.length})</h3>${table(recommended, true)}` : ''}
+        ${optional.length ? `<h3>${this.e(this.t('tools.debloat.optional', 'Optional'))} (${optional.length})</h3>${table(optional, false)}` : ''}
+        ${!removable.length ? `<div class="maintenance-empty"><h3>${this.e(this.t('tools.debloat.nothingRemovable', 'Nothing eligible for removal'))}</h3><p>${this.e(this.t('tools.debloat.nothingRemovableHint', 'Every installed package is either protected, required by Windows, or outside the Soterios catalog.'))}</p></div>` : ''}
+        ${sheltered.length ? `<details class="maintenance-detail-row"><summary><span><strong>${this.e(this.t('tools.debloat.protected', 'Protected'))} (${sheltered.length})</strong><small>${this.e(this.t('tools.debloat.protectedHint', 'Never offered for removal.'))}</small></span></summary><div class="maintenance-table-wrap"><table class="maintenance-table"><thead><tr><th>${this.e(this.t('tools.debloat.colApp', 'Application'))}</th><th>${this.e(this.t('tools.debloat.colWhy', 'Why listed'))}</th></tr></thead><tbody>${sheltered.slice(0, 100).map((pkg) => `<tr><td><strong>${this.e(pkg.name)}</strong><small>${this.e(pkg.packageFamilyName)}</small></td><td><small>${this.e(pkg.reason)}</small></td></tr>`).join('')}</tbody></table></div></details>` : ''}
+        ${removable.length ? `<div class="maintenance-result-toolbar"><span id="debloatSelectedCount">${this.e(this.t('tools.debloat.selectedCount', '{count} selected', { count: this._debloatSelected.size }))}</span><div class="maintenance-toolbar-actions"><label class="check-label"><input type="checkbox" id="debloatRestore" ${this._debloatRestoreChecked ? 'checked' : ''}> ${this.e(this.t('tools.debloat.restorePoint', 'Create a system restore point first'))}</label><button type="button" class="btn btn-danger" data-action="debloat-remove">${this.e(this.t('tools.debloat.removeSelected', 'Remove selected'))}</button></div></div>` : ''}`;
+    },
+
+    _renderDebloatResult(result) {
+      const restore = this._debloatRestore;
+      return `${restore ? `<div class="maintenance-result-banner result-${restore.state === 'created' ? 'completed' : 'warning'}"><strong>${this.e(restore.state === 'created' ? this.t('tools.debloat.restoreCreated', 'Restore point created and verified.') : this.t('tools.debloat.restoreSkipped', 'No restore point was created.'))}</strong>${restore.message ? `<span>${this.e(restore.message)}</span>` : ''}</div>` : ''}
+        ${this._summaryTiles([[this.t('tools.debloat.removed', 'Removed'), result.removed?.length || 0, (result.failed?.length || result.skipped?.length) ? '' : 'ok'], [this.t('tools.debloat.failed', 'Failed'), result.failed?.length || 0, result.failed?.length ? 'warn' : ''], [this.t('tools.debloat.skipped', 'Skipped'), result.skipped?.length || 0, result.skipped?.length ? 'warn' : '']])}
+        ${result.removed?.length ? `<div class="maintenance-result-banner result-completed"><strong>${this.e(this.t('tools.debloat.removedTitle', 'Packages removed'))}</strong><span>${this.e(result.removed.map((item) => item.name).join(', '))}</span></div>` : ''}
+        ${(result.failed?.length || result.skipped?.length) ? this._renderIssueList([...(result.failed || []).map((item) => ({ path: item.name, reason: item.error })), ...(result.skipped || []).map((item) => ({ path: item.id, reason: item.reason }))], this.t('tools.debloat.attention', 'Failed and skipped packages')) : ''}
+        <div class="maintenance-result-toolbar"><span>${this.e(this.t('tools.debloat.rescanHint', 'Re-scan to verify the current package inventory.'))}</span><div class="maintenance-toolbar-actions"><button type="button" class="btn btn-primary" data-action="debloat-rescan">${this.e(this.t('tools.debloat.rescan', 'Re-scan installed apps'))}</button></div></div>`;
     },
 
     _renderLeftovers(result) {
@@ -822,6 +866,8 @@
       if (action === 'approve-hosts-baseline') { await this._approveHostsBaseline(); return; }
       if (action === 'toggle-startup') { await this._toggleStartup(target.dataset.itemId, target.dataset.enable === 'true'); return; }
       if (action === 'launch-uninstaller') { await this._launchUninstaller(target.dataset.appName); return; }
+      if (action === 'debloat-remove') { await this._removeDebloat(); return; }
+      if (action === 'debloat-rescan') { this._debloatSelected.clear(); this._debloatRestore = null; await this._runScript('windows-debloat', { mode: 'analyze' }); return; }
       if (action === 'scan-leftovers') { await this._scanLeftovers(); return; }
       if (action === 'vault-leftovers') { await this._vaultLeftovers(); return; }
       if (action === 'open-apps-settings') { await window.soterios.shell.openExternal('ms-settings:appsfeatures'); return; }
@@ -875,6 +921,13 @@
         return;
       }
       if (target.classList.contains('large-select')) { target.checked ? this._selectedLarge.add(target.dataset.path) : this._selectedLarge.delete(target.dataset.path); return; }
+      if (target.classList.contains('debloat-select')) {
+        target.checked ? this._debloatSelected.add(target.dataset.id) : this._debloatSelected.delete(target.dataset.id);
+        const counter = this._container.querySelector('#debloatSelectedCount');
+        if (counter) counter.textContent = this.t('tools.debloat.selectedCount', '{count} selected', { count: this._debloatSelected.size });
+        return;
+      }
+      if (target.id === 'debloatRestore') { this._debloatRestoreChecked = target.checked; return; }
       if (target.classList.contains('temp-select')) { target.checked ? this._selectedTemp.add(target.dataset.path) : this._selectedTemp.delete(target.dataset.path); return; }
       if (target.classList.contains('duplicate-select')) {
         const group = this._results['duplicate-finder']?.duplicateGroups?.find((entry) => entry.id === target.dataset.groupId);
@@ -1063,6 +1116,62 @@
         this._progress[scriptId] = this._runs[scriptId];
       }
       this._renderView();
+    },
+
+    async _removeDebloat() {
+      const result = this._results['windows-debloat'];
+      if (!result || result.mode !== 'analyze') throw new Error(this.t('tools.debloat.scanFirst', 'Scan installed apps before removing anything.'));
+      const checked = [...this._container.querySelectorAll('.debloat-select:checked')].map((input) => input.dataset.id);
+      if (!checked.length) throw new Error(this.t('tools.debloat.emptySelection', 'Select at least one package to remove.'));
+      const byId = new Map((result.packages || []).filter((pkg) => pkg.canRemove).map((pkg) => [pkg.catalogId, pkg]));
+      const selected = [];
+      for (const id of checked) {
+        const pkg = byId.get(id);
+        if (!pkg) throw new Error(this.t('tools.debloat.invalidSelection', 'A selected package is no longer eligible. Refresh and try again.'));
+        selected.push(pkg);
+      }
+      const preview = {};
+      for (const pkg of selected) preview[pkg.catalogId] = pkg.packageFullName;
+      const ok = await this._confirm({
+        title: this.t('tools.debloat.confirmTitle', 'Remove selected Windows apps?'),
+        message: `${this.t('tools.debloat.confirmMessage', 'These packages will be removed for the current user only. Reinstall them from the Microsoft Store if needed; Soterios cannot restore them automatically.')}\n\n${selected.map((pkg) => `• ${pkg.name}`).join('\n')}`,
+        confirmLabel: this.t('tools.debloat.confirmLabel', 'Remove packages'),
+        danger: true,
+        typed: 'REMOVE'
+      });
+      if (!ok) return;
+      this._debloatRestore = null;
+      if (this._debloatRestoreChecked) {
+        this._setNotice(this.t('tools.debloat.restoreCreating', 'Creating a system restore point…'), 'info');
+        try {
+          const response = await window.api.invoke('systemRestore:create', { description: 'Soterios Windows Debloat' });
+          if (response && response.ok) {
+            this._debloatRestore = { state: 'created', message: null };
+          } else {
+            const proceed = await this._confirm({
+              title: this.t('tools.debloat.noCheckpointTitle', 'Restore point was not created'),
+              message: `${(response && response.message) || this.t('tools.debloat.restoreFailed', 'Windows did not create a restore point.')}\n\n${this.t('tools.debloat.proceedMessage', 'Proceed with removal without a restore point?')}`,
+              confirmLabel: this.t('tools.debloat.proceedLabel', 'Proceed without checkpoint'),
+              danger: true
+            });
+            if (!proceed) { this._renderView(); return; }
+            this._debloatRestore = { state: 'skipped', message: (response && response.message) || null };
+          }
+        } catch (error) {
+          const proceed = await this._confirm({
+            title: this.t('tools.debloat.noCheckpointTitle', 'Restore point was not created'),
+            message: `${error?.message || String(error)}\n\n${this.t('tools.debloat.proceedMessage', 'Proceed with removal without a restore point?')}`,
+            confirmLabel: this.t('tools.debloat.proceedLabel', 'Proceed without checkpoint'),
+            danger: true
+          });
+          if (!proceed) { this._renderView(); return; }
+          this._debloatRestore = { state: 'failed', message: error?.message || String(error) };
+        }
+      } else {
+        this._debloatRestore = { state: 'skipped', message: this.t('tools.debloat.restoreOptOut', 'Restore-point creation was unchecked.') };
+      }
+      this._debloatSelected.clear();
+      await this._runScript('windows-debloat', { mode: 'remove', confirmed: true, selections: selected.map((pkg) => pkg.catalogId), preview });
     },
 
     async _cleanTemp(allEligible = false) {
