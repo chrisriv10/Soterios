@@ -1,0 +1,41 @@
+name: "Markdown Link Check"
+
+# Validates Markdown links (relative links, anchors, GitHub and external
+# URLs) on pull requests that touch documentation. Inspects Markdown as data
+# only: no repository code is executed, installed, or tested here, no secrets
+# are required, and no writes or automated issues are produced, so this is
+# safe for fork pull requests.
+on:
+  pull_request:
+    paths:
+      - "**/*.md"
+
+permissions:
+  contents: read
+
+jobs:
+  links:
+    name: Check Markdown Links
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check Markdown links
+        # Pinned to lychee-action v2.9.0 (immutable SHA with release note).
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          # GITHUB_TOKEN is only used by lychee for GitHub API rate limits on
+          # public github.com links. It carries no privileged credentials.
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fail: true
+          format: markdown
+          jobSummary: true
+          args: >-
+            --verbose --no-progress
+            --root-dir "$(pwd)"
+            --max-retries 3
+            --include-fragments
+            --exclude-path 'dist/**'
+            --exclude-path 'browser-extension/dist/**'
+            './**/*.md'
