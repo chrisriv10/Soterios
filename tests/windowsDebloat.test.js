@@ -55,6 +55,20 @@ describe('windowsDebloat catalog', () => {
   });
 });
 
+describe('windowsDebloat production execution path', () => {
+  it('runs analyze through scriptRunner worker threads', async () => {
+    const { runScript } = require('../src/scripts/scriptRunner');
+    const result = await runScript('windows-debloat', { mode: 'analyze' });
+    assert.equal(typeof result.supported, 'boolean');
+    if (result.supported) {
+      assert.ok(Array.isArray(result.packages));
+      assert.ok(result.counts && typeof result.counts.installed === 'number');
+    } else {
+      assert.ok(result.message);
+    }
+  });
+});
+
 describe('windowsDebloat platform guard', () => {
   let realPlatform;
   beforeEach(() => {
@@ -310,13 +324,18 @@ describe('windowsDebloat selection validation', () => {
     assert.throws(() => debloat.validateFullName(`Microsoft.SkypeApp_1.0.0.0_x64__8wekyb3d8bbwe${'x'.repeat(600)}`), /unexpected identity/);
   });
 
-  it('rejects unexpected PackageFullName shapes', () => {
-    assert.throws(() => debloat.validateFullName('Microsoft.Solitaire; Remove-Item C:\\'), /unexpected identity/);
-    assert.throws(() => debloat.validateFullName('just-a-name'), /unexpected identity/);
+  it('accepts x86a64 identities while rejecting malformed shapes', () => {
+    assert.equal(
+      debloat.validateFullName('Microsoft.Example_1.2.3.4_x86a64__8wekyb3d8bbwe'),
+      'Microsoft.Example_1.2.3.4_x86a64__8wekyb3d8bbwe'
+    );
     assert.equal(
       debloat.validateFullName('Microsoft.MicrosoftSolitaireCollection_4.12.3171.0_x64__8wekyb3d8bbwe'),
       'Microsoft.MicrosoftSolitaireCollection_4.12.3171.0_x64__8wekyb3d8bbwe'
     );
+    assert.throws(() => debloat.validateFullName('Microsoft.Solitaire; Remove-Item C:\\'), /unexpected identity/);
+    assert.throws(() => debloat.validateFullName('just-a-name'), /unexpected identity/);
+    assert.throws(() => debloat.validateFullName('Pkg_1.0_x87__pub'), /unexpected identity/);
   });
 });
 
@@ -560,6 +579,78 @@ describe('windowsDebloat remove flow', () => {
       assert.match(result.skipped[0].reason, /preview identity/, name);
     }
     assert.equal(removalCalls, 0, 'Remove-AppxPackage must never run without a valid preview');
+  });
+
+  it('treats discovery failure as failure, never as empty inventory', async () => {
+    const outerExec = childProcess.execFile;
+    let removals = 0;
+    childProcess.execFile = (file, args, options, callback) => {
+      const script = Buffer.from(args[args.indexOf('-EncodedCommand') + 1], 'base64').toString('utf16le');
+      if (/Remove-AppxPackage/.test(script)) {
+        removals += 1;
+        callback(null, 'SOTERIOS_DEBLOAT_REMOVED', '');
+        return {};
+      }
+      callback(new Error('provider exploded'), '', 'Get-AppxPackage : provider failure');
+      return {};
+    };
+    try {
+      await assert.rejects(debloat({ mode: 'analyze' }), /provider failure/);
+      const result = await debloat({
+        mode: 'remove',
+        confirmed: true,
+        selections: ['Microsoft.MicrosoftSolitaireCollection_8wekyb3d8bbwe'],
+        preview: { 'Microsoft.MicrosoftSolitaireCollection_8wekyb3d8bbwe': SOLITAIRE.PackageFullName }
+      });
+      assert.equal(result.removed.length, 0);
+      assert.equal(result.skipped.length, 0);
+      assert.equal(result.failed.length, 1);
+      assert.match(result.failed[0].error, /Revalidation discovery failed/);
+      assert.equal(removals, 0, 'no removal without successful revalidation');
+    } finally {
+      childProcess.execFile = outerExec;
+    }
+  });
+
+  it('preserves removals and reports unverified when the final rescan fails', async () => {
+    const outerExec = childProcess.execFile;
+    let discoveries = 0;
+    childProcess.execFile = (file, args, options, callback) => {
+      const script = Buffer.from(args[args.indexOf('-EncodedCommand') + 1], 'base64').toString('utf16le');
+      if (/Get-AppxPackage/.test(script)) {
+        discoveries += 1;
+        if (discoveries > 1) {
+          callback(new Error('rescan exploded'), '', 'provider unavailable');
+          return {};
+        }
+        callback(null, discoveryJson([SOLITAIRE]), '');
+        return {};
+      }
+      if (/Remove-AppxPackage/.test(script)) {
+        callback(null, 'SOTERIOS_DEBLOAT_REMOVED', '');
+        return {};
+      }
+      callback(new Error('unexpected invocation'), '', '');
+      return {};
+    };
+    try {
+      const result = await debloat({
+        mode: 'remove',
+        confirmed: true,
+        selections: ['Microsoft.MicrosoftSolitaireCollection_8wekyb3d8bbwe'],
+        preview: { 'Microsoft.MicrosoftSolitaireCollection_8wekyb3d8bbwe': SOLITAIRE.PackageFullName }
+      });
+      assert.equal(result.removed.length, 1);
+      assert.equal(result.removed[0].id, 'Microsoft.MicrosoftSolitaireCollection_8wekyb3d8bbwe');
+      assert.equal(result.failed.length, 0);
+      assert.equal(result.skipped.length, 0);
+      assert.equal(result.rescan.verified, false);
+      assert.match(result.rescan.verificationError, /unavailable/);
+      assert.equal(result.rescan.removedCount, 1);
+      assert.equal(result.rescan.installedCount, null);
+    } finally {
+      childProcess.execFile = outerExec;
+    }
   });
 
   it('never invokes removal for an ambiguous duplicate family', async () => {

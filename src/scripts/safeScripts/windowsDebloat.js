@@ -32,19 +32,25 @@ const FULLNAME_ENV_VAR = 'SOTERIOS_DEBLOAT_FULLNAME';
 // PackageFullName shape: Name_Version_Arch_Resource_PublisherId. The
 // resource section is frequently empty (double underscore), so it may be
 // zero-length; everything else must be present and shell-safe.
-const FULLNAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*_[0-9][A-Za-z0-9._-]*_(neutral|x86|x64|arm|arm64)_([A-Za-z0-9._-]*)_([A-Za-z0-9]+)$/i;
+const FULLNAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*_[0-9][A-Za-z0-9._-]*_(neutral|x86|x64|x86a64|arm|arm64)_([A-Za-z0-9._-]*)_([A-Za-z0-9]+)$/i;
 
 // Fixed discovery script: current user only (no -AllUsers), metadata only,
 // bounded JSON output. No caller input reaches this source.
 //
+// Enumeration runs under `$ErrorActionPreference = 'Stop'` so a failing
+// Get-AppxPackage aborts the whole discovery instead of yielding a partial
+// inventory that could undermine duplicate-family and removal checks.
+// Malformed individual records are still skipped and counted by the JS
+// layer; only transport/enumeration/serialization failures throw.
+//
 // Safety metadata uses an explicit null-preserving projection: a missing or
 // null AppX property must serialize as JSON null (which the JS tri-state
 // normalization keeps unknown) and never collapse to false/''. The trailing
-// marker line proves the script ran to completion, so a truncated or failed
-// run cannot be mistaken for an empty inventory.
+// marker line proves the script ran to completion, so a truncated run cannot
+// be mistaken for an empty inventory.
 const DISCOVERY_OK_MARKER = 'SOTERIOS_DEBLOAT_DISCOVERY_OK';
 const DISCOVERY_SCRIPT = [
-  "$ErrorActionPreference = 'SilentlyContinue'",
+  "$ErrorActionPreference = 'Stop'",
   "$toBoolOrNull = { param($value) if ($null -eq $value) { $null } else { [bool]$value } }",
   "$pkgs = @(Get-AppxPackage | ForEach-Object {",
   "  [PSCustomObject]@{",
@@ -381,10 +387,19 @@ async function removeFlow(args = {}, onProgress) {
   }
 
   onProgress?.({ phase: 'verifying', label: 'Re-scanning installed packages', pct: 90, cancelable: true });
-  const after = await discoverPackages();
-  const remaining = new Set(after.packages.map((pkg) => pkg.packageFullName));
-  const verifiedRemoved = removed.filter((item) => !remaining.has(item.packageFullName));
-  const stillInstalled = removed.filter((item) => remaining.has(item.packageFullName));
+  // A failing final rescan must not discard the removals that already
+  // happened: report them as unverified instead of throwing the whole
+  // result away or falsely claiming verification.
+  let after = null;
+  let verificationError = null;
+  try {
+    after = await discoverPackages();
+  } catch (err) {
+    verificationError = err.message || String(err);
+  }
+  const remaining = new Set((after ? after.packages : []).map((pkg) => pkg.packageFullName));
+  const verifiedRemoved = after ? removed.filter((item) => !remaining.has(item.packageFullName)) : [];
+  const stillInstalled = after ? removed.filter((item) => remaining.has(item.packageFullName)) : [];
   for (const item of stillInstalled) {
     failed.push({ id: item.id, packageFullName: item.packageFullName, name: item.name, error: 'Package is still installed after removal.' });
   }
@@ -395,13 +410,15 @@ async function removeFlow(args = {}, onProgress) {
     mode: 'remove',
     generatedAt: new Date().toISOString(),
     selected: ids,
-    removed: verifiedRemoved,
+    removed: after ? verifiedRemoved : removed,
     failed,
     skipped,
     rescan: {
+      verified: after !== null,
+      verificationError,
       remaining: stillInstalled.map((item) => item.packageFullName),
-      removedCount: verifiedRemoved.length,
-      installedCount: after.packages.length
+      removedCount: after ? verifiedRemoved.length : removed.length,
+      installedCount: after ? after.packages.length : null
     }
   };
 }
