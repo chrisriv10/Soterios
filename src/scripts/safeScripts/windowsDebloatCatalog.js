@@ -75,11 +75,11 @@ const ENTRIES = [
   },
   {
     id: 'Microsoft.SkypeApp_8wekyb3d8bbwe',
-    name: 'Skype',
-    description: 'Skype consumer client.',
+    name: 'Skype (legacy)',
+    description: 'Legacy Skype consumer client.',
     category: 'communication',
     recommendation: 'recommended',
-    rationale: 'Optional calling client; remove only if unused.'
+    rationale: 'Legacy calling client; remove only if unused.'
   },
   {
     id: 'Microsoft.ZuneMusic_8wekyb3d8bbwe',

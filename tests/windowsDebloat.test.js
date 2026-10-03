@@ -222,6 +222,13 @@ describe('windowsDebloat analyze', () => {
     assert.equal(catalog.findEntry('MicrosoftTeams_8wekyb3d8bbwe'), null);
   });
 
+  it('labels the Skype entry as legacy without changing its identity', () => {
+    const skype = catalog.findEntry('Microsoft.SkypeApp_8wekyb3d8bbwe');
+    assert.match(skype.name, /legacy/i);
+    assert.match(skype.description, /[Ll]egacy/);
+    assert.equal(skype.recommendation, 'recommended');
+  });
+
   it('keeps PowerShell nulls and missing keys unknown through discovery', async () => {
     const outerExec = childProcess.execFile;
     childProcess.execFile = (file, args, options, callback) => {
@@ -532,6 +539,27 @@ describe('windowsDebloat remove flow', () => {
     } finally {
       childProcess.execFile = outerExec;
     }
+  });
+
+  it('requires a valid preview identity for every selected package', async () => {
+    const id = 'Microsoft.MicrosoftSolitaireCollection_8wekyb3d8bbwe';
+    const cases = [
+      ['no preview object', undefined],
+      ['empty preview', {}],
+      ['missing entry', { 'Microsoft.SkypeApp_8wekyb3d8bbwe': 'Microsoft.SkypeApp_15.100.0.0_x64__8wekyb3d8bbwe' }],
+      ['non-string entry', { [id]: 42 }],
+      ['empty-string entry', { [id]: '' }],
+      ['differently keyed entry', { [id.toLowerCase()]: SOLITAIRE.PackageFullName }]
+    ];
+    for (const [name, preview] of cases) {
+      const args = { mode: 'remove', confirmed: true, selections: [id] };
+      if (preview !== undefined) args.preview = preview;
+      const result = await debloat(args);
+      assert.equal(result.removed.length, 0, name);
+      assert.equal(result.skipped.length, 1, name);
+      assert.match(result.skipped[0].reason, /preview identity/, name);
+    }
+    assert.equal(removalCalls, 0, 'Remove-AppxPackage must never run without a valid preview');
   });
 
   it('never invokes removal for an ambiguous duplicate family', async () => {

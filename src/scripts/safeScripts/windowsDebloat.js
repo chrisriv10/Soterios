@@ -351,7 +351,16 @@ async function removeFlow(args = {}, onProgress) {
       continue;
     }
     const expectedFullName = previewById[key];
-    if (expectedFullName && current.packageFullName !== expectedFullName) {
+    // The preview gate is mandatory, not conditional: every selected package
+    // must carry a valid preview identity from the same canonical id, and
+    // the fresh PackageFullName must equal it exactly. Missing, empty,
+    // non-string, differently keyed, or mismatched preview data can never
+    // authorize a removal.
+    if (typeof expectedFullName !== 'string' || !expectedFullName) {
+      skipped.push({ id, reason: 'No valid preview identity for this package; refresh required.' });
+      continue;
+    }
+    if (current.packageFullName !== expectedFullName) {
       skipped.push({ id, reason: 'Package changed since preview; refresh required.' });
       continue;
     }
