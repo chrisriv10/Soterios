@@ -91,11 +91,11 @@ const ENTRIES = [
   },
   {
     id: 'Microsoft.ZuneVideo_8wekyb3d8bbwe',
-    name: 'Windows Media Player (video)',
-    description: 'Windows Media Player video playback.',
+    name: 'Movies & TV',
+    description: 'Movies & TV video playback.',
     category: 'media',
     recommendation: 'optional',
-    rationale: 'Hosts Windows Media Player video playback on modern Windows; remove only if you do not use it.'
+    rationale: 'Ships the Movies & TV experience; remove only if you do not use it.'
   },
   {
     id: 'Microsoft.YourPhone_8wekyb3d8bbwe',
@@ -106,12 +106,12 @@ const ENTRIES = [
     rationale: 'Legitimate functionality some users rely on; remove only if unused.'
   },
   {
-    id: 'MicrosoftTeams_8wekyb3d8bbwe',
-    name: 'Microsoft Teams (personal)',
-    description: 'Teams personal client.',
+    id: 'MSTeams_8wekyb3d8bbwe',
+    name: 'Microsoft Teams',
+    description: 'Teams client.',
     category: 'communication',
     recommendation: 'optional',
-    rationale: 'Work/school communication for many users; remove only if unused.'
+    rationale: 'Current Teams client; remove only if you do not use Teams.'
   },
   {
     id: 'Microsoft.Todos_8wekyb3d8bbwe',

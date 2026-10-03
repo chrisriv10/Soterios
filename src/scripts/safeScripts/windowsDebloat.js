@@ -36,18 +36,30 @@ const FULLNAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*_[0-9][A-Za-z0-9._-]*_(neut
 
 // Fixed discovery script: current user only (no -AllUsers), metadata only,
 // bounded JSON output. No caller input reaches this source.
+//
+// Safety metadata uses an explicit null-preserving projection: a missing or
+// null AppX property must serialize as JSON null (which the JS tri-state
+// normalization keeps unknown) and never collapse to false/''. The trailing
+// marker line proves the script ran to completion, so a truncated or failed
+// run cannot be mistaken for an empty inventory.
+const DISCOVERY_OK_MARKER = 'SOTERIOS_DEBLOAT_DISCOVERY_OK';
 const DISCOVERY_SCRIPT = [
   "$ErrorActionPreference = 'SilentlyContinue'",
+  "$toBoolOrNull = { param($value) if ($null -eq $value) { $null } else { [bool]$value } }",
   "$pkgs = @(Get-AppxPackage | ForEach-Object {",
   "  [PSCustomObject]@{",
   "    Name=$_.Name; PackageFullName=$_.PackageFullName; PackageFamilyName=$_.PackageFamilyName;",
   "    Version=[string]$_.Version; Publisher=$_.Publisher; Architecture=[string]$_.Architecture;",
-  "    InstallLocation=$_.InstallLocation; IsFramework=[bool]$_.IsFramework;",
-  "    IsResourcePackage=[bool]$_.IsResourcePackage; IsBundle=[bool]$_.IsBundle;",
-  "    NonRemovable=[bool]$_.NonRemovable; Status=[string]$_.Status",
+  "    InstallLocation=$_.InstallLocation;",
+  "    IsFramework=& $toBoolOrNull $_.IsFramework;",
+  "    IsResourcePackage=& $toBoolOrNull $_.IsResourcePackage;",
+  "    IsBundle=& $toBoolOrNull $_.IsBundle;",
+  "    NonRemovable=& $toBoolOrNull $_.NonRemovable;",
+  "    Status=$(if ($null -eq $_.Status) { $null } else { [string]$_.Status })",
   "  }",
   "})",
-  "$pkgs | ConvertTo-Json -Depth 4 -Compress"
+  "$pkgs | ConvertTo-Json -Depth 4 -Compress",
+  `Write-Output '${DISCOVERY_OK_MARKER}'`
 ].join('\n');
 
 // Fixed removal script. The exact PackageFullName arrives via the child
@@ -171,11 +183,17 @@ function classifyPackage(pkg, context = {}) {
 
 async function discoverPackages() {
   const stdout = await runPs(DISCOVERY_SCRIPT, { timeoutMs: DISCOVERY_TIMEOUT_MS, maxBuffer: DISCOVERY_MAX_BUFFER });
-  const trimmed = stdout.trim();
-  if (!trimmed) return { packages: [], malformed: 0, ambiguousFamilies: new Set() };
+  const lines = stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  // The marker proves the script completed: without it, a crash or a
+  // truncated stream must fail loudly rather than look like zero packages.
+  if (lines.length === 0 || lines[lines.length - 1] !== DISCOVERY_OK_MARKER) {
+    throw new Error('AppX discovery did not complete.');
+  }
+  const body = lines.slice(0, -1).join('\n').trim();
+  if (!body) return { packages: [], malformed: 0, ambiguousFamilies: new Set() };
   let parsed;
   try {
-    parsed = JSON.parse(trimmed);
+    parsed = JSON.parse(body);
   } catch (_) {
     throw new Error('AppX discovery returned unparseable output.');
   }
@@ -187,15 +205,25 @@ async function discoverPackages() {
     if (normalized) packages.push(normalized);
     else malformed += 1;
   }
-  const familyCounts = new Map();
+  const { ambiguousFamilies } = indexByFamily(packages);
+  return { packages, malformed, ambiguousFamilies };
+}
+
+// Index normalized packages by lowercase family name. Duplicate families are
+// reported separately; only unambiguous first records enter the map, so no
+// lookup can silently resolve the wrong PackageFullName.
+function indexByFamily(packages) {
+  const byFamily = new Map();
+  const counts = new Map();
   for (const pkg of packages) {
     const key = pkg.packageFamilyName.toLowerCase();
-    familyCounts.set(key, (familyCounts.get(key) || 0) + 1);
+    counts.set(key, (counts.get(key) || 0) + 1);
+    if (!byFamily.has(key)) byFamily.set(key, pkg);
   }
   const ambiguousFamilies = new Set(
-    [...familyCounts.entries()].filter(([, count]) => count > 1).map(([key]) => key)
+    [...counts.entries()].filter(([, count]) => count > 1).map(([key]) => key)
   );
-  return { packages, malformed, ambiguousFamilies };
+  return { byFamily, ambiguousFamilies };
 }
 
 function analyzeResult(packages, malformed, ambiguousFamilies = new Set()) {
@@ -279,14 +307,6 @@ async function removeFlow(args = {}, onProgress) {
   validateCatalog();
 
   onProgress?.({ phase: 'revalidating', label: 'Re-checking selected packages', pct: 10, cancelable: true });
-  const before = await discoverPackages();
-  const byFamily = new Map();
-  for (const pkg of before.packages) {
-    const key = pkg.packageFamilyName.toLowerCase();
-    // Ambiguous families never enter the map: with several identities under
-    // one family, no single PackageFullName can be safely selected.
-    if (!before.ambiguousFamilies.has(key) && !byFamily.has(key)) byFamily.set(key, pkg);
-  }
   const previewById = {};
   if (args.preview && typeof args.preview === 'object' && !Array.isArray(args.preview)) {
     // Read only the entries for explicitly selected ids so an oversized
@@ -303,31 +323,51 @@ async function removeFlow(args = {}, onProgress) {
   let index = 0;
   for (const id of ids) {
     index += 1;
-    if (before.ambiguousFamilies.has(id.toLowerCase())) {
+    const key = id.toLowerCase();
+    // Every package is revalidated against a FRESH discovery immediately
+    // before its own removal: metadata observed minutes ago (or for a
+    // sibling package) never authorizes this mutation.
+    onProgress?.({ phase: 'revalidating', label: `Re-checking ${id}`, pct: 10 + Math.round((index / ids.length) * 20), cancelable: true });
+    let freshPackages;
+    try {
+      freshPackages = (await discoverPackages()).packages;
+    } catch (err) {
+      failed.push({ id, packageFullName: previewById[key] || '', name: id, error: `Revalidation discovery failed: ${err.message || err}` });
+      continue;
+    }
+    const { byFamily, ambiguousFamilies } = indexByFamily(freshPackages);
+    if (ambiguousFamilies.has(key)) {
       skipped.push({ id, reason: 'Multiple installed packages share this family; refresh required.' });
       continue;
     }
-    const current = byFamily.get(id.toLowerCase());
+    const current = byFamily.get(key);
     if (!current) {
       skipped.push({ id, reason: 'Package is no longer installed; refresh required.' });
       continue;
     }
-    const expectedFullName = previewById[id.toLowerCase()];
-    if (expectedFullName && current.packageFullName !== expectedFullName) {
-      skipped.push({ id, reason: 'Package changed since preview; refresh required.' });
-      continue;
-    }
-    const classified = classifyPackage(current, { ambiguousFamilies: before.ambiguousFamilies });
+    const classified = classifyPackage(current, { ambiguousFamilies });
     if (!classified.canRemove) {
       skipped.push({ id, reason: classified.reason });
       continue;
     }
-    onProgress?.({ phase: 'removing', label: `Removing ${classified.name}`, pct: 10 + Math.round((index / ids.length) * 70), cancelable: true });
+    const expectedFullName = previewById[key];
+    if (expectedFullName && current.packageFullName !== expectedFullName) {
+      skipped.push({ id, reason: 'Package changed since preview; refresh required.' });
+      continue;
+    }
+    let validatedName;
     try {
-      await removeOnePackage(current.packageFullName);
-      removed.push({ id, packageFullName: current.packageFullName, name: classified.name });
+      validatedName = validateFullName(current.packageFullName);
     } catch (err) {
-      failed.push({ id, packageFullName: current.packageFullName, name: classified.name, error: err.message || String(err) });
+      skipped.push({ id, reason: 'Package identity failed validation; refresh required.' });
+      continue;
+    }
+    onProgress?.({ phase: 'removing', label: `Removing ${classified.name}`, pct: 30 + Math.round((index / ids.length) * 50), cancelable: true });
+    try {
+      await removeOnePackage(validatedName);
+      removed.push({ id, packageFullName: validatedName, name: classified.name });
+    } catch (err) {
+      failed.push({ id, packageFullName: validatedName, name: classified.name, error: err.message || String(err) });
     }
   }
 
@@ -380,4 +420,5 @@ module.exports.validateSelections = validateSelections;
 module.exports.validateFullName = validateFullName;
 module.exports.FULLNAME_ENV_VAR = FULLNAME_ENV_VAR;
 module.exports.DISCOVERY_SCRIPT = DISCOVERY_SCRIPT;
+module.exports.DISCOVERY_OK_MARKER = DISCOVERY_OK_MARKER;
 module.exports.REMOVAL_SCRIPT = REMOVAL_SCRIPT;

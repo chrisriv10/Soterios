@@ -27,7 +27,8 @@ function appRecord(overrides = {}) {
 
 function discoveryJson(records) {
   const rows = Array.isArray(records) ? records : [records];
-  return rows.length === 1 ? JSON.stringify(rows[0]) : JSON.stringify(rows);
+  const body = rows.length === 1 ? JSON.stringify(rows[0]) : JSON.stringify(rows);
+  return `${body}\n${debloat.DISCOVERY_OK_MARKER}\n`;
 }
 
 describe('windowsDebloat catalog', () => {
@@ -212,12 +213,60 @@ describe('windowsDebloat analyze', () => {
     assert.equal(catalog.findEntry('Microsoft.ZuneMusic_8wekyb3d8bbwe').recommendation, 'optional');
     assert.match(catalog.findEntry('Microsoft.ZuneMusic_8wekyb3d8bbwe').name, /Windows Media Player/);
     assert.equal(catalog.findEntry('Microsoft.ZuneVideo_8wekyb3d8bbwe').recommendation, 'optional');
+    assert.match(catalog.findEntry('Microsoft.ZuneVideo_8wekyb3d8bbwe').name, /Movies & TV/);
+  });
+
+  it('uses the current Teams identity and drops the obsolete one', () => {
+    assert.equal(catalog.findEntry('MSTeams_8wekyb3d8bbwe').recommendation, 'optional');
+    assert.match(catalog.findEntry('MSTeams_8wekyb3d8bbwe').name, /Microsoft Teams/);
+    assert.equal(catalog.findEntry('MicrosoftTeams_8wekyb3d8bbwe'), null);
+  });
+
+  it('keeps PowerShell nulls and missing keys unknown through discovery', async () => {
+    const outerExec = childProcess.execFile;
+    childProcess.execFile = (file, args, options, callback) => {
+      // PowerShell-shaped output: explicit nulls and omitted keys, exactly
+      // as ConvertTo-Json would serialize them.
+      const raw = {
+        Name: 'Solitaire',
+        PackageFullName: 'Microsoft.MicrosoftSolitaireCollection_4.12.3171.0_x64__8wekyb3d8bbwe',
+        PackageFamilyName: 'Microsoft.MicrosoftSolitaireCollection_8wekyb3d8bbwe',
+        Version: '4.12.3171.0',
+        IsFramework: null,
+        IsResourcePackage: false,
+        IsBundle: false,
+        Status: 'Ok'
+      };
+      callback(null, `${JSON.stringify(raw)}\n${debloat.DISCOVERY_OK_MARKER}\n`, '');
+      return {};
+    };
+    try {
+      const result = await debloat({ mode: 'analyze' });
+      assert.equal(result.packages.length, 1);
+      assert.equal(result.packages[0].canRemove, false);
+      assert.match(result.packages[0].reason, /Incomplete or invalid AppX safety metadata/);
+    } finally {
+      childProcess.execFile = outerExec;
+    }
+  });
+
+  it('rejects truncated discovery output instead of reporting empty', async () => {
+    const outerExec = childProcess.execFile;
+    childProcess.execFile = (file, args, options, callback) => {
+      callback(null, discoveryJson([appRecord()]).split(`\n${debloat.DISCOVERY_OK_MARKER}`)[0], '');
+      return {};
+    };
+    try {
+      await assert.rejects(debloat({ mode: 'analyze' }), /did not complete/);
+    } finally {
+      childProcess.execFile = outerExec;
+    }
   });
 
   it('returns an empty inventory when PowerShell emits no output', async () => {
     const outerExec = childProcess.execFile;
     childProcess.execFile = (file, args, options, callback) => {
-      callback(null, '   \n', '');
+      callback(null, `${debloat.DISCOVERY_OK_MARKER}\n`, '');
       return {};
     };
     try {
@@ -286,6 +335,7 @@ describe('windowsDebloat remove flow', () => {
   const removedFullNames = [];
   const metadataOverrides = {};
   let discoveryCalls = 0;
+  let removalCalls = 0;
 
   const SOLITAIRE = appRecord();
   const SKYPE = appRecord({
@@ -300,6 +350,7 @@ describe('windowsDebloat remove flow', () => {
     removedFullNames.length = 0;
     for (const key of Object.keys(metadataOverrides)) delete metadataOverrides[key];
     discoveryCalls = 0;
+    removalCalls = 0;
     childProcess.execFile = (file, args, options, callback) => {
       const script = Buffer.from(args[args.indexOf('-EncodedCommand') + 1], 'base64').toString('utf16le');
       if (/Get-AppxPackage/.test(script)) {
@@ -311,6 +362,7 @@ describe('windowsDebloat remove flow', () => {
         return {};
       }
       if (/Remove-AppxPackage/.test(script)) {
+        removalCalls += 1;
         const fullName = options.env[debloat.FULLNAME_ENV_VAR];
         assert.ok(fullName && !/[;*"']/.test(fullName), 'package value travels as data');
         if (fullName === SKYPE.PackageFullName) {
@@ -354,7 +406,7 @@ describe('windowsDebloat remove flow', () => {
     assert.ok(result.failed[0].error);
     assert.equal(result.rescan.removedCount, 1);
     assert.ok(!result.rescan.remaining.includes(SOLITAIRE.PackageFullName));
-    assert.ok(discoveryCalls >= 2, 'preview revalidation plus post-removal rescan');
+    assert.ok(discoveryCalls >= 3, 'per-package revalidation plus post-removal rescan');
   });
 
   it('skips packages that vanished or changed since preview', async () => {
@@ -393,6 +445,95 @@ describe('windowsDebloat remove flow', () => {
     assert.match(result.skipped[0].reason, /NonRemovable/);
   });
 
+  it('never invokes removal when metadata turns NonRemovable after preview', async () => {
+    const preview = await debloat({ mode: 'analyze' });
+    const solitaire = preview.packages.find((pkg) => pkg.catalogId === 'Microsoft.MicrosoftSolitaireCollection_8wekyb3d8bbwe');
+    assert.equal(solitaire.canRemove, true, 'removable during the initial state');
+    metadataOverrides['Microsoft.MicrosoftSolitaireCollection_8wekyb3d8bbwe'] = { NonRemovable: true };
+    const result = await debloat({
+      mode: 'remove',
+      confirmed: true,
+      selections: ['Microsoft.MicrosoftSolitaireCollection_8wekyb3d8bbwe'],
+      preview: { 'Microsoft.MicrosoftSolitaireCollection_8wekyb3d8bbwe': SOLITAIRE.PackageFullName }
+    });
+    assert.equal(result.removed.length, 0);
+    assert.equal(result.skipped.length, 1);
+    assert.match(result.skipped[0].reason, /NonRemovable/);
+    assert.equal(removalCalls, 0, 'Remove-AppxPackage must never run after the transition');
+  });
+
+  it('never invokes removal when metadata turns bundled after preview', async () => {
+    metadataOverrides['Microsoft.MicrosoftSolitaireCollection_8wekyb3d8bbwe'] = { IsBundle: true };
+    const result = await debloat({
+      mode: 'remove',
+      confirmed: true,
+      selections: ['Microsoft.MicrosoftSolitaireCollection_8wekyb3d8bbwe'],
+      preview: { 'Microsoft.MicrosoftSolitaireCollection_8wekyb3d8bbwe': SOLITAIRE.PackageFullName }
+    });
+    assert.equal(result.removed.length, 0);
+    assert.equal(result.skipped.length, 1);
+    assert.match(result.skipped[0].reason, /Bundle/);
+    assert.equal(removalCalls, 0, 'Remove-AppxPackage must never run after the transition');
+  });
+
+  it('revalidates each package independently between sibling removals', async () => {
+    const outerExec = childProcess.execFile;
+    const SOL = appRecord();
+    const SKY = appRecord({
+      Name: 'Skype', PackageFullName: 'Microsoft.SkypeApp_15.100.0.0_x64__8wekyb3d8bbwe',
+      PackageFamilyName: 'Microsoft.SkypeApp_8wekyb3d8bbwe'
+    });
+    let removalsSeen = 0;
+    const goneFullNames = [];
+    childProcess.execFile = (file, args, options, callback) => {
+      const script = Buffer.from(args[args.indexOf('-EncodedCommand') + 1], 'base64').toString('utf16le');
+      if (/Get-AppxPackage/.test(script)) {
+        const live = [SOL, SKY]
+          .filter((app) => !goneFullNames.includes(app.PackageFullName))
+          .map((app) => {
+          // External change lands while the first removal executes: the
+          // second package becomes NonRemovable before its own gating.
+          if (app.PackageFamilyName === SKY.PackageFamilyName && removalsSeen > 0) {
+            return { ...app, NonRemovable: true };
+          }
+          return { ...app };
+        });
+        callback(null, discoveryJson(live), '');
+        return {};
+      }
+      if (/Remove-AppxPackage/.test(script)) {
+        removalsSeen += 1;
+        goneFullNames.push(options.env[debloat.FULLNAME_ENV_VAR]);
+        callback(null, 'SOTERIOS_DEBLOAT_REMOVED', '');
+        return {};
+      }
+      callback(new Error('unexpected invocation'), '', '');
+      return {};
+    };
+    try {
+      const result = await debloat({
+        mode: 'remove',
+        confirmed: true,
+        selections: [
+          'Microsoft.MicrosoftSolitaireCollection_8wekyb3d8bbwe',
+          'Microsoft.SkypeApp_8wekyb3d8bbwe'
+        ],
+        preview: {
+          'Microsoft.MicrosoftSolitaireCollection_8wekyb3d8bbwe': SOL.PackageFullName,
+          'Microsoft.SkypeApp_8wekyb3d8bbwe': SKY.PackageFullName
+        }
+      });
+      assert.equal(result.removed.length, 1);
+      assert.equal(result.removed[0].id, 'Microsoft.MicrosoftSolitaireCollection_8wekyb3d8bbwe');
+      assert.equal(result.skipped.length, 1);
+      assert.equal(result.skipped[0].id, 'Microsoft.SkypeApp_8wekyb3d8bbwe');
+      assert.match(result.skipped[0].reason, /NonRemovable/);
+      assert.equal(removalsSeen, 1, 'only the still-removable package reaches Remove-AppxPackage');
+    } finally {
+      childProcess.execFile = outerExec;
+    }
+  });
+
   it('never invokes removal for an ambiguous duplicate family', async () => {
     let removalAttempts = 0;
     const outerExec = childProcess.execFile;
@@ -410,7 +551,7 @@ describe('windowsDebloat remove flow', () => {
           PackageFamilyName: 'Microsoft.SkypeApp_8wekyb3d8bbwe'
         });
         const payload = [twin, appRecord(), other].map((row) => JSON.stringify(row)).join(',');
-        callback(null, `[${payload}]`, '');
+        callback(null, `[${payload}]\n${debloat.DISCOVERY_OK_MARKER}\n`, '');
         return {};
       }
       callback(new Error('unexpected invocation'), '', '');
