@@ -61,6 +61,11 @@
       "inputs": [], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
     },
     {
+      "id": "windows-debloat", "name": "Windows Debloat", "description": "Review optional Windows apps and remove selected packages from the current user.",
+      "file": "safeScripts/windowsDebloat.js", "runner": "script", "category": "app-management", "impact": "high", "icon": "package-minus",
+      "inputs": ["mode", "selections", "preview", "confirmed"], "progress": true, "cancellation": true, "scheduling": ["analyze"], "visible": true
+    },
+    {
       "id": "file-shredder", "name": "File Shredder", "description": "Irreversibly delete selected files with storage-aware warnings and protected-path enforcement.",
       "file": "safeScripts/fileShredder.js", "runner": "script", "category": "privacy-recovery", "impact": "high", "icon": "file-x-2",
       "inputs": ["paths", "passes", "confirmation"], "progress": true, "cancellation": true, "scheduling": [], "visible": true
