@@ -16,6 +16,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify release tag matches package version
+        # Tag-triggered runs only: manual workflow_dispatch builds must keep
+        # working for validation without publishing anything.
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          # Passed via the environment (never interpolated into the script)
+          # so an unusual tag value cannot break out of shell quoting.
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: pwsh
+        run: |
+          $pkg = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $expected = "v$pkg"
+          if ($env:RELEASE_TAG -cne $expected) {
+            Write-Error "Release tag '$env:RELEASE_TAG' does not match package.json version '$pkg' (expected '$expected')."
+            exit 1
+          }
+
       - name: Install Node 26
         uses: actions/setup-node@v4
         with:
@@ -41,6 +58,14 @@ jobs:
           CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
 
+      - name: Validate Windows updater metadata
+        # Fail-closed gate: the installer and the updater metadata published
+        # below must come from this exact build and correspond to each other.
+        # A missing or inconsistent latest.yml/blockmap fails the job before
+        # anything is uploaded or released.
+        shell: pwsh
+        run: node tools/verify-release-updater-metadata.js dist
+
       - name: Package browser extension
         run: npm run extension:package
 
@@ -57,6 +82,8 @@ jobs:
           name: windows-installer
           path: |
             dist/*.exe
+            dist/latest.yml
+            dist/*.blockmap
             dist/SHA256SUMS.txt
             dist/soterios-node.cdx.json
             dist/soterios-rust-metadata.json
@@ -67,7 +94,8 @@ jobs:
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          gh release create "${{ github.ref_name }}" dist/*.exe dist/SHA256SUMS.txt dist/soterios-node.cdx.json dist/soterios-rust-metadata.json dist/extension/*.zip dist/extension/*.sha256 \
+          gh release create "${{ github.ref_name }}" dist/*.exe dist/latest.yml dist/*.blockmap dist/SHA256SUMS.txt dist/soterios-node.cdx.json dist/soterios-rust-metadata.json dist/extension/*.zip dist/extension/*.sha256 \
+            --verify-tag \
             --title "Soterios ${{ github.ref_name }}" \
             --generate-notes
         env:
