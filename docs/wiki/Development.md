@@ -4,7 +4,7 @@ Guide for contributors building and extending Soterios.
 
 ## Prerequisites
 
-- **Node.js** 26 or newer (see the `engines` field in `package.json`; CI and releases use Node 26)
+- **Node.js** 26 or newer (see the `engines` field in `package.json`; the build, test, coverage, release, and wiki-sync workflows use Node 26, while the scheduled threat-feed workflow currently uses Node 22)
 - **npm**
 - **Git**
 - **Windows** (recommended — system features use Windows APIs)
