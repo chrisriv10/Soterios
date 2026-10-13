@@ -7,11 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-13
+
 ### Added
+- Windows Debloat AppX cleanup: review optional Store apps and remove explicitly selected packages for the current user only, with catalog-based recommended/optional/protected classification, preview, typed confirmation, optional System Restore checkpoint, and post-removal rescan
+- Persistent process history: process activity is recorded to the local database and can be reviewed on the Processes page
 - System Restore point management ([#125](https://github.com/chrisriv10/Soterios/issues/125)): read-only restore-point listing plus explicit user-confirmed manual checkpoint creation (`MODIFY_SETTINGS`) on the Tools page, with fixed PowerShell scripts, verified-before-claimed results, and honest unconfirmed/unavailable states (no restore, delete, scheduling, or protection-policy changes)
 - Opt-in removable-drive scanning: newly connected removable volumes show a scan prompt (or auto-scan when explicitly enabled), reusing the existing custom-scan pipeline with revalidation, bounded queueing, and truthful removal handling
 - CPU/GPU temperature monitoring on the dashboard with graceful unavailable states for unsupported sensors
 - Disk SMART health monitoring on the dashboard with strict status mapping (Healthy/Warning/Unknown) and on-demand raw data inspection
+
+### Security
+- Quarantine restore is now atomic, so an interrupted restore can no longer leave partially restored files behind
+- Renderer-writable settings are restricted to an allowlisted schema with strict value validation
+- Firewall imports fail closed on unsupported remote-address expressions instead of silently recreating rules without address restrictions
+- Destructive maintenance scripts (file deletion, leftover removal) now enforce the shared path-safety policy covering protected credential/application paths, approved maintenance roots, and symlink/reparse traversal
+- Hardened security-critical failure paths across database access, ClamAV scanning, firewall management, and quarantine handling
+
+### Fixed
+- SQLite corruption recovery: confirmed database corruption is set aside and replaced with a fresh database instead of preventing startup
+- Scan-report history reads tolerate malformed stored JSON, and report-file write failures no longer discard the terminal scan result
+- FolderWatcher scan queue is bounded with coalesced overflow recovery and lifecycle-safe restart behavior
+- Background security services (folder watcher, network monitor, ClamAV child processes) stop cleanly during shutdown before the database closes
+- AI chat completion and action failures now reach the request error path instead of surfacing as unhandled rejections
+- Threat-feed verification aligned between the Node verifier and the browser extension, including shard path traversal protection
+- Release pipeline publishes Windows updater metadata (`latest.yml`/blockmap) with installer correspondence validation and a tag/version consistency guard
 
 ## [1.4.1] - 2026-09-19
 
