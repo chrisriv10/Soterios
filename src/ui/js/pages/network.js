@@ -4,6 +4,7 @@ window.Pages['network'] = {
   CHART_REFRESH_INTERVAL_MS: 30000,
   _connectionQuery: '',
   _lastConnections: null,
+  _connectionLoadToken: 0,
   _historyRangeHours: 1,
   _historyCache: new Map(),
   _historyRequestToken: 0,
@@ -976,6 +977,7 @@ if (content) this.paintHistoryChart(content).catch(() => {});
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     const content = container.querySelector('#networkContent');
     if (!content) return;
+    const requestToken = ++this._connectionLoadToken;
     const prevScrollEl = content?.querySelector('#activeConnectionsList');
     const prevScrollTop = prevScrollEl ? prevScrollEl.scrollTop : 0;
     const prevSearchEl = content?.querySelector('#connectionSearch');
@@ -990,7 +992,7 @@ if (content) this.paintHistoryChart(content).catch(() => {});
         window.api.invoke('network:vpn:list')
       ]);
 
-      if (!document.body.contains(container)) {
+      if (!document.body.contains(container) || requestToken !== this._connectionLoadToken) {
         return;
       }
 
@@ -1006,7 +1008,9 @@ if (content) this.paintHistoryChart(content).catch(() => {});
       // Fetch user location on initial load (safely with fallback)
       if (isInitial && !this._userLocation) {
         try {
-          this._userLocation = await window.api.invoke('network:getUserLocation');
+          const userLocation = await window.api.invoke('network:getUserLocation');
+          if (requestToken !== this._connectionLoadToken || !document.body.contains(container)) return;
+          this._userLocation = userLocation;
           // Safety: validate the returned location data
           if (this._userLocation) {
             if (typeof this._userLocation.lat !== 'number' || typeof this._userLocation.lon !== 'number' ||
@@ -1017,6 +1021,7 @@ if (content) this.paintHistoryChart(content).catch(() => {});
             }
           }
         } catch (e) {
+          if (requestToken !== this._connectionLoadToken) return;
           console.warn('Failed to fetch user location, using fallback:', e.message || e);
           this._userLocation = null;
         }
@@ -1134,6 +1139,7 @@ if (content) this.paintHistoryChart(content).catch(() => {});
         let lastProfile = '';
         try {
           const lastProfileResult = await window.api.invoke('db:getSetting', 'vpn.lastProfile');
+          if (requestToken !== this._connectionLoadToken || !document.body.contains(container)) return;
           if (lastProfileResult && typeof lastProfileResult === 'string') {
             lastProfile = lastProfileResult;
           }
@@ -1304,7 +1310,7 @@ if (content) this.paintHistoryChart(content).catch(() => {});
       if (uncachedIps.length) {
         try {
           const fresh = await window.api.invoke('network:geo', uncachedIps);
-          if (!document.body.contains(container)) {
+          if (!document.body.contains(container) || requestToken !== this._connectionLoadToken) {
             return;
           }
           Object.assign(this._geoCache, fresh);
@@ -1451,6 +1457,7 @@ if (content) this.paintHistoryChart(content).catch(() => {});
         html += `<div id="connectionNoResults" class="empty-state" style="display:none; margin-top:8px;">${escapeHtml(t('network.noResults'))}</div>`;
       }
 
+      if (!document.body.contains(container) || requestToken !== this._connectionLoadToken) return;
       content.innerHTML = html;
       if (this._heatmapData && !this._minimized.has('heatmap')) {
         this._mountHeatmapWidget(content, this._heatmapData, t);
@@ -1506,6 +1513,7 @@ if (content) this.paintHistoryChart(content).catch(() => {});
         }
       }
     } catch (e) {
+      if (!document.body.contains(container) || requestToken !== this._connectionLoadToken) return;
       content.innerHTML = `<div class="empty-state" role="alert">${escapeHtml(t('network.error', { error: e.message }))}</div>`;
     }
   },

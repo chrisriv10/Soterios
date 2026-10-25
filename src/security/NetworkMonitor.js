@@ -82,10 +82,10 @@ class NetworkMonitor {
         txTotal: Math.round((s.tx_bytes || 0) / (1024 * 1024) * 10) / 10
       }));
 
-      // Try to get connection stats via PowerShell
+      // Try PowerShell first, but keep the netstat fallback available while it is cooling down.
       let connections = null;
-      // Only attempt the PowerShell method if we haven't recently failed
-      if (Date.now() - lastNetPsFailedAt < netPsCooldownMs) {
+      let useNetstat = Date.now() - lastNetPsFailedAt < netPsCooldownMs;
+      if (useNetstat) {
         if (debugNet) logger.info('NetworkMonitor: skipping Get-NetTCPConnection due to recent failure cooldown');
       } else {
         const psStart = Date.now();
@@ -103,6 +103,7 @@ class NetworkMonitor {
           };
         } catch (psError) {
           lastNetPsFailedAt = Date.now();
+          useNetstat = true;
           const psElapsed = Date.now() - psStart;
           if (!netPsWarned) {
             logger.warn('Get-NetTCPConnection failed, using fallback', {
@@ -117,38 +118,39 @@ class NetworkMonitor {
           } else if (debugNet) {
             logger.info('NetworkMonitor: Get-NetTCPConnection failed again; suppressed warning');
           }
+        }
+      }
 
-          // Fallback: use netstat if Get-NetTCPConnection is not available
-          const netstatStart = Date.now();
-          try {
-            const { stdout } = await execFilePromise('netstat.exe', ['-an'], { timeout: 10000, windowsHide: true });
-            const lines = stdout.split('\n');
-            let total = 0, established = 0, listen = 0, timeWait = 0, closeWait = 0;
-            for (const line of lines) {
-              if (line.includes('TCP')) {
-                total++;
-                if (line.includes('ESTABLISHED')) established++;
-                else if (line.includes('LISTENING')) listen++;
-                else if (line.includes('TIME_WAIT')) timeWait++;
-                else if (line.includes('CLOSE_WAIT')) closeWait++;
-              }
+      if (useNetstat) {
+        const netstatStart = Date.now();
+        try {
+          const { stdout } = await execFilePromise('netstat.exe', ['-an'], { timeout: 10000, windowsHide: true });
+          const lines = stdout.split('\n');
+          let total = 0, established = 0, listen = 0, timeWait = 0, closeWait = 0;
+          for (const line of lines) {
+            if (line.includes('TCP')) {
+              total++;
+              if (line.includes('ESTABLISHED')) established++;
+              else if (line.includes('LISTENING')) listen++;
+              else if (line.includes('TIME_WAIT')) timeWait++;
+              else if (line.includes('CLOSE_WAIT')) closeWait++;
             }
-            connections = { total, established, listen, timeWait, closeWait };
-          } catch (netstatError) {
-            const nsElapsed = Date.now() - netstatStart;
-            if (!netPsWarned) {
-              logger.warn('netstat fallback also failed', {
-                message: netstatError.message,
-                elapsed: nsElapsed,
-                killed: netstatError.killed,
-                signal: netstatError.signal,
-                code: netstatError.code,
-                stderr: netstatError.stderr ? netstatError.stderr.toString().trim() : ''
-              });
-              netPsWarned = true;
-            } else if (debugNet) {
-              logger.info('NetworkMonitor: netstat fallback also failed; suppressed warning');
-            }
+          }
+          connections = { total, established, listen, timeWait, closeWait };
+        } catch (netstatError) {
+          const nsElapsed = Date.now() - netstatStart;
+          if (!netPsWarned) {
+            logger.warn('netstat fallback also failed', {
+              message: netstatError.message,
+              elapsed: nsElapsed,
+              killed: netstatError.killed,
+              signal: netstatError.signal,
+              code: netstatError.code,
+              stderr: netstatError.stderr ? netstatError.stderr.toString().trim() : ''
+            });
+            netPsWarned = true;
+          } else if (debugNet) {
+            logger.info('NetworkMonitor: netstat fallback also failed; suppressed warning');
           }
         }
       }
