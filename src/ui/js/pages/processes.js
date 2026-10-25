@@ -184,8 +184,8 @@ window.Pages.processes = {
           <div id="piHistoryNotice" class="pi-provider-notice" hidden></div>
           <div class="pi-workspace">
           <div class="pi-list-panel">
-            <div id="phColumnHeader" class="pi-column-header"></div>
             <div id="phViewport" class="pi-viewport" tabindex="0" role="table" aria-label="${this.esc(this.t('processes.historyView'))}">
+              <div id="phColumnHeader" class="pi-column-header"></div>
               <div id="phRows" class="pi-rows"><div class="empty-state">${this.esc(this.t('processes.historyEmpty'))}</div></div>
             </div>
             <button class="btn btn-sm" id="phMore" hidden>${this.esc(this.t('processes.historyLoadMore'))}</button>
@@ -501,7 +501,8 @@ window.Pages.processes = {
     const missing = [...new Set(images.map((img) => img.dataset.exe).filter((exe) => exe && !this._iconCache.has(exe)))].slice(0, 64);
     const apply = () => images.forEach((img) => {
       const icon = this._iconCache.get(img.dataset.exe);
-      if (icon) { img.src = icon; img.hidden = false; } else img.hidden = true;
+      if (icon) img.src = icon;
+      img.classList.toggle('is-placeholder', !icon);
     });
     if (!missing.length) { apply(); return; }
     window.soterios.process.getIcons(missing).then((result) => {
