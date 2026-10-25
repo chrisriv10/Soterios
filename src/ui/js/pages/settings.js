@@ -586,7 +586,7 @@ updatePrivacyModeStatus();
             : '<span style="color:var(--text-muted);">Native host not registered</span>';
           return `
           <div class="browser-ext-row${b.id === selectedExtensionBrowserId ? ' is-selected' : ''}" role="button" tabindex="0" aria-pressed="${b.id === selectedExtensionBrowserId}" data-browser-select="${escapeHtml(b.id)}" style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px; margin:4px 0; border:1px solid var(--border, rgba(128,128,128,0.2)); border-radius:8px; cursor:pointer;">
-            <div style="min-width:0;">
+            <div class="browser-ext-copy">
               <div class="toggle-label">${escapeHtml(b.name)} &nbsp; ${status}</div>
               <div class="toggle-desc">${escapeHtml(t('settings.browserExtension.extensionId', { id: state.extensionId }))}</div>
               <div class="toggle-desc">${hostStatus}</div>
