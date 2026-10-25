@@ -250,24 +250,8 @@ container.querySelector('#generateReport').addEventListener('click', () => this.
       return;
     }
 
-    const listMap = {
-      'scanReports:deleteAll': '#scanReportHistory',
-      'reports:deleteAll': '#reportHistory',
-      'maintenance:deleteAllManual': '#maintenanceHistory',
-      'maintenance:deleteAllScheduled': '#scheduledMaintenanceHistory',
-    };
-    const btnMap = {
-      'scanReports:deleteAll': '#clearAllScanReports',
-      'reports:deleteAll': '#clearAllSavedReports',
-      'maintenance:deleteAllManual': '#clearAllManualMaintenance',
-      'maintenance:deleteAllScheduled': '#clearAllScheduledMaintenance',
-    };
-    const listEl = container.querySelector(listMap[ipcChannel]);
-    const clearBtn = container.querySelector(btnMap[ipcChannel]);
-    if (clearBtn && listEl) {
-      const hasItems = listEl.children.length > 0;
-      clearBtn.classList.toggle('hidden', !hasItems);
-    }
+    // Each refreshed loader owns visibility from its fetched data.
+
   },
 
   setScanReportViewer(container, report) {

@@ -55,6 +55,8 @@ it('report clear actions follow populated, empty and failed list refreshes', asy
   const sandbox = {
     window: { Pages: {}, api: { invoke: async channel => {
       if (fail) throw new Error('Unavailable');
+      if (channel === 'db:getSetting') return true;
+      if (channel.includes(':deleteAll')) { populated = false; return { success: true }; }
       const rows = populated ? [{ id: 1, status: 'completed', name: 'soterios-report-test.json', path: 'test.json', mtime: '2026-10-25T12:00:00Z', summary: {}, results: [] }] : [];
       return channel.startsWith('maintenance:') ? { data: rows } : rows;
     } } },
@@ -65,10 +67,16 @@ it('report clear actions follow populated, empty and failed list refreshes', asy
     filename: path.join(__dirname, '..', 'src', 'ui', 'js', 'pages', 'reports.js'),
   });
   const reports = sandbox.window.Pages.reports;
-  for (const method of ['listScanReports', 'listReports', 'listManualMaintenanceHistory', 'listScheduledMaintenanceHistory']) {
+  for (const [method, clearChannel] of [
+    ['listScanReports', 'scanReports:deleteAll'],
+    ['listReports', 'reports:deleteAll'],
+    ['listManualMaintenanceHistory', 'maintenance:deleteAllManual'],
+    ['listScheduledMaintenanceHistory', 'maintenance:deleteAllScheduled'],
+  ]) {
     let hidden = true;
     const button = { classList: { add: () => { hidden = true; }, toggle: (_, value) => { hidden = value; } } };
-    const list = { innerHTML: '', querySelectorAll: () => [] };
+    // An empty list still has its empty-state DOM child; it is not a report.
+    const list = { innerHTML: '', children: [{ className: 'empty-state' }], querySelectorAll: () => [] };
     const container = { querySelector: selector => selector.startsWith('#clearAll') ? button : list };
     fail = false;
     for (const state of [true, false, true]) {
@@ -79,5 +87,10 @@ it('report clear actions follow populated, empty and failed list refreshes', asy
     fail = true;
     await reports[method](container);
     assert.equal(hidden, true, `${method}: failed refresh`);
+    fail = false;
+    populated = true;
+    await reports[method](container);
+    await reports.handleClearAll(container, clearChannel, 'confirm', () => reports[method](container));
+    assert.equal(hidden, true, `${method}: successful clear leaves only the empty state`);
   }
 });
