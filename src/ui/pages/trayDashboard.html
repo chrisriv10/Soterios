@@ -27,7 +27,10 @@
     }
     .panel {
       margin: 8px;
-      padding: 16px;
+      padding: 12px;
+      box-sizing: border-box;
+      max-height: calc(100vh - 16px);
+      overflow: auto;
       border-radius: 12px;
       background: var(--bg);
       border: 1px solid var(--border);
@@ -62,6 +65,8 @@
     .rtp-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--border); }
     .rtp-label { font-size: 12px; color: var(--muted); flex: 1; }
     .sparkline {
+      flex: 1;
+      min-width: 0;
       height: 40px;
       margin: 8px 0;
       position: relative;
@@ -74,9 +79,10 @@
       color: var(--muted);
       margin-top: 2px;
     }
-    .actions { display: flex; gap: 8px; margin-top: 14px; }
+    .actions { display: flex; gap: 8px; margin-top: 8px; }
     button {
       flex: 1;
+      min-width: 0;
       border: 1px solid var(--border);
       background: rgba(255,255,255,0.04);
       color: var(--text);

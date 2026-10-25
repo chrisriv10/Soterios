@@ -4,7 +4,7 @@ const { Tray, BrowserWindow, nativeImage, screen, Menu } = require('electron');
 const path = require('path');
 
 const TRAY_WIDTH = 320;
-const TRAY_HEIGHT = 220;
+const TRAY_HEIGHT = 320;
 const TRAY_MARGIN = 8;
 
 function createTrayIcon() {

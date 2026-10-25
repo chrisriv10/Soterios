@@ -30,5 +30,7 @@ describe('reports section action alignment', () => {
   it('keeps Generate System Report in a separate action slot', () => {
     assert.match(reportsSource, /class="report-section-extra-slot"><button class="btn btn-primary btn-sm report-generate-button" id="generateReport"/);
     assert.match(reportsStyles, /\.report-generate-button\s*\{[\s\S]*width:\s*168px;/);
+    assert.match(reportsStyles, /\.report-generate-button\s*\{[^}]*min-width:\s*168px;[^}]*flex-shrink:\s*0;/);
+    assert.match(reportsStyles, /@container reports-browser \(max-width:\s*520px\)[\s\S]*"label label chevron"\s*"clear extra extra"/);
   });
 });
