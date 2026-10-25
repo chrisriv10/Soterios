@@ -228,6 +228,10 @@ describe('functional hardening: network renderer', () => {
     await page.load(h.element('container'));
     assert.ok(!content.innerHTML.includes(translate('network.staleData')));
     assert.ok(content.innerHTML.includes(translate('network.noConnections')));
+    connections = [null];
+    await page.load(h.element('container'));
+    assert.ok(content.innerHTML.includes('role="alert"'));
+    assert.ok(!content.innerHTML.includes(translate('network.noConnections')));
   });
 
   it('history distinguishes rejected reads with/without cached rows from successful empty reads', async () => {

@@ -25,7 +25,7 @@ function monitorHarness() {
       throw new Error(name);
     },
   };
-  vm.runInNewContext(read('src/security/NetworkMonitor.js'), sandbox);
+  vm.runInNewContext(read('src/security/NetworkMonitor.js'), sandbox, { filename: path.join(root, 'src/security/NetworkMonitor.js') });
   return { monitor: new sandbox.module.exports(), advance: () => { now += 6000; }, fail: () => { fail = true; }, recover: () => { fail = false; }, empty: () => { rows = []; }, failInterfaces: () => { interfacesFail = true; }, calls: () => calls };
 }
 
@@ -60,7 +60,7 @@ describe('network collection failures', () => {
 describe('firewall status collection', () => {
   it('propagates collection and malformed-output failures rather than returning an empty success', async () => {
     const sandbox = { module: { exports: {} }, require: name => name === '../utils/logger' ? { error() {} } : require(name) };
-    vm.runInNewContext(read('src/security/FirewallManager.js'), sandbox);
+    vm.runInNewContext(read('src/security/FirewallManager.js'), sandbox, { filename: path.join(root, 'src/security/FirewallManager.js') });
     const manager = new sandbox.module.exports();
     manager.runPowerShell = async () => { throw new Error('Access is denied'); };
     await assert.rejects(manager.getStatus(), /Access denied/);
