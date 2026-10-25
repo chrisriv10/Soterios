@@ -54,7 +54,9 @@ class NetworkMonitor {
         code: e.code,
         stderr: e.stderr ? e.stderr.toString().trim() : ''
       });
-      return connectionsCache ?? [];
+      // Never present the previous successful cache as a fresh collection.
+      // Renderers may retain it only with a visible stale-data warning.
+      throw e;
     }
   }
 
@@ -80,15 +82,15 @@ class NetworkMonitor {
         txTotal: Math.round((s.tx_bytes || 0) / (1024 * 1024) * 10) / 10
       }));
 
-      // Try to get connection stats via PowerShell
-      let connections = { total: 0, established: 0, listen: 0, timeWait: 0, closeWait: 0 };
-      // Only attempt the PowerShell method if we haven't recently failed
-      if (Date.now() - lastNetPsFailedAt < netPsCooldownMs) {
+      // Try PowerShell first, but keep the netstat fallback available while it is cooling down.
+      let connections = null;
+      let useNetstat = Date.now() - lastNetPsFailedAt < netPsCooldownMs;
+      if (useNetstat) {
         if (debugNet) logger.info('NetworkMonitor: skipping Get-NetTCPConnection due to recent failure cooldown');
       } else {
         const psStart = Date.now();
         try {
-          const psScript = `$conns = Get-NetTCPConnection -ErrorAction SilentlyContinue; if ($conns) { $total = $conns.Count; $established = ($conns | Where-Object { $_.State -eq 'Established' }).Count; $listen = ($conns | Where-Object { $_.State -eq 'Listen' }).Count; $timeWait = ($conns | Where-Object { $_.State -eq 'TimeWait' }).Count; $closeWait = ($conns | Where-Object { $_.State -eq 'CloseWait' }).Count; Write-Output ($total, $established, $listen, $timeWait, $closeWait -join '|') } else { Write-Output '0|0|0|0|0' }`;
+          const psScript = `$conns = Get-NetTCPConnection -ErrorAction Stop; if ($conns) { $total = $conns.Count; $established = ($conns | Where-Object { $_.State -eq 'Established' }).Count; $listen = ($conns | Where-Object { $_.State -eq 'Listen' }).Count; $timeWait = ($conns | Where-Object { $_.State -eq 'TimeWait' }).Count; $closeWait = ($conns | Where-Object { $_.State -eq 'CloseWait' }).Count; Write-Output ($total, $established, $listen, $timeWait, $closeWait -join '|') } else { Write-Output '0|0|0|0|0' }`;
           const { stdout } = await runPowerShell(psScript, 10000);
           netPsWarned = false;
           const parts = stdout.trim().split('|');
@@ -101,6 +103,7 @@ class NetworkMonitor {
           };
         } catch (psError) {
           lastNetPsFailedAt = Date.now();
+          useNetstat = true;
           const psElapsed = Date.now() - psStart;
           if (!netPsWarned) {
             logger.warn('Get-NetTCPConnection failed, using fallback', {
@@ -115,38 +118,39 @@ class NetworkMonitor {
           } else if (debugNet) {
             logger.info('NetworkMonitor: Get-NetTCPConnection failed again; suppressed warning');
           }
+        }
+      }
 
-          // Fallback: use netstat if Get-NetTCPConnection is not available
-          const netstatStart = Date.now();
-          try {
-            const { stdout } = await execFilePromise('netstat.exe', ['-an'], { timeout: 10000, windowsHide: true });
-            const lines = stdout.split('\n');
-            let total = 0, established = 0, listen = 0, timeWait = 0, closeWait = 0;
-            for (const line of lines) {
-              if (line.includes('TCP')) {
-                total++;
-                if (line.includes('ESTABLISHED')) established++;
-                else if (line.includes('LISTENING')) listen++;
-                else if (line.includes('TIME_WAIT')) timeWait++;
-                else if (line.includes('CLOSE_WAIT')) closeWait++;
-              }
+      if (useNetstat) {
+        const netstatStart = Date.now();
+        try {
+          const { stdout } = await execFilePromise('netstat.exe', ['-an'], { timeout: 10000, windowsHide: true });
+          const lines = stdout.split('\n');
+          let total = 0, established = 0, listen = 0, timeWait = 0, closeWait = 0;
+          for (const line of lines) {
+            if (line.includes('TCP')) {
+              total++;
+              if (line.includes('ESTABLISHED')) established++;
+              else if (line.includes('LISTENING')) listen++;
+              else if (line.includes('TIME_WAIT')) timeWait++;
+              else if (line.includes('CLOSE_WAIT')) closeWait++;
             }
-            connections = { total, established, listen, timeWait, closeWait };
-          } catch (netstatError) {
-            const nsElapsed = Date.now() - netstatStart;
-            if (!netPsWarned) {
-              logger.warn('netstat fallback also failed', {
-                message: netstatError.message,
-                elapsed: nsElapsed,
-                killed: netstatError.killed,
-                signal: netstatError.signal,
-                code: netstatError.code,
-                stderr: netstatError.stderr ? netstatError.stderr.toString().trim() : ''
-              });
-              netPsWarned = true;
-            } else if (debugNet) {
-              logger.info('NetworkMonitor: netstat fallback also failed; suppressed warning');
-            }
+          }
+          connections = { total, established, listen, timeWait, closeWait };
+        } catch (netstatError) {
+          const nsElapsed = Date.now() - netstatStart;
+          if (!netPsWarned) {
+            logger.warn('netstat fallback also failed', {
+              message: netstatError.message,
+              elapsed: nsElapsed,
+              killed: netstatError.killed,
+              signal: netstatError.signal,
+              code: netstatError.code,
+              stderr: netstatError.stderr ? netstatError.stderr.toString().trim() : ''
+            });
+            netPsWarned = true;
+          } else if (debugNet) {
+            logger.info('NetworkMonitor: netstat fallback also failed; suppressed warning');
           }
         }
       }
@@ -165,7 +169,7 @@ class NetworkMonitor {
         code: e.code,
         stderr: e.stderr ? e.stderr.toString().trim() : ''
       });
-      return { interfaces: [], connections: { total: 0, established: 0, listen: 0, timeWait: 0, closeWait: 0 } };
+      throw e;
     }
   }
 }

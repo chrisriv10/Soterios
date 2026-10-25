@@ -58,7 +58,7 @@ it('report clear actions follow populated, empty and failed list refreshes', asy
       if (channel === 'db:getSetting') return true;
       if (channel.includes(':deleteAll')) { populated = false; return { success: true }; }
       const rows = populated ? [{ id: 1, status: 'completed', name: 'soterios-report-test.json', path: 'test.json', mtime: '2026-10-25T12:00:00Z', summary: {}, results: [] }] : [];
-      return channel.startsWith('maintenance:') ? { data: rows } : rows;
+      return channel.startsWith('maintenance:') ? { ok: true, data: rows } : rows;
     } } },
     escapeHtml: value => String(value ?? ''),
     tFactory: () => key => key,
