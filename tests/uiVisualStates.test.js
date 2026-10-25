@@ -61,7 +61,9 @@ it('report clear actions follow populated, empty and failed list refreshes', asy
     escapeHtml: value => String(value ?? ''),
     tFactory: () => key => key,
   };
-  vm.runInNewContext(source('src/ui/js/pages/reports.js'), sandbox);
+  vm.runInNewContext(source('src/ui/js/pages/reports.js'), sandbox, {
+    filename: path.join(__dirname, '..', 'src', 'ui', 'js', 'pages', 'reports.js'),
+  });
   const reports = sandbox.window.Pages.reports;
   for (const method of ['listScanReports', 'listReports', 'listManualMaintenanceHistory', 'listScheduledMaintenanceHistory']) {
     let hidden = true;
