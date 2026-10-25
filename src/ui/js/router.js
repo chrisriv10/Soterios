@@ -49,6 +49,26 @@
 
   navItems.forEach((item) => { item.addEventListener('click', () => navigate(item.dataset.page)); });
   window.AppRouter = { navigate, current: () => currentPage };
+  // Listen for toast click to navigate to a page
+  if (window.api) {
+    window.api.on('navigate-to-scanner', () => {
+      navigate('scanner');
+    });
+    window.api.on('navigate-to-network', () => {
+      navigate('network');
+    });
+    window.api.on('navigate-to-tools', () => {
+      navigate('tools');
+    });
+    window.api.on('navigate-to-removable-scan', () => {
+      navigate('scanner');
+      window.api.invoke('removableDrive:scanPending').then((result) => {
+        if (result && result.queued) return;
+        if (result && !result.ok) alert(result.error || 'Removable drive scan unavailable.');
+      }).catch((error) => alert(error.message || String(error)));
+    });
+  }
+
   if (window.Api) {
     await window.Api.initializeTheme();
     await window.Api.initializeLanguage();
@@ -85,22 +105,6 @@
       if (!setupComplete) initialPage = 'setup';
     } catch (_) {}
   }
-  navigate(initialPage);
+  if (!currentPage) navigate(initialPage);
 
-  // Listen for toast click to navigate to a page
-  if (window.api) {
-    window.api.on('navigate-to-scanner', () => {
-      navigate('scanner');
-    });
-    window.api.on('navigate-to-tools', () => {
-      navigate('tools');
-    });
-    window.api.on('navigate-to-removable-scan', () => {
-      navigate('scanner');
-      window.api.invoke('removableDrive:scanPending').then((result) => {
-        if (result && result.queued) return;
-        if (result && !result.ok) alert(result.error || 'Removable drive scan unavailable.');
-      }).catch((error) => alert(error.message || String(error)));
-    });
-  }
 })();

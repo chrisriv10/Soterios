@@ -54,7 +54,9 @@ class NetworkMonitor {
         code: e.code,
         stderr: e.stderr ? e.stderr.toString().trim() : ''
       });
-      return connectionsCache ?? [];
+      // Never present the previous successful cache as a fresh collection.
+      // Renderers may retain it only with a visible stale-data warning.
+      throw e;
     }
   }
 
@@ -81,14 +83,14 @@ class NetworkMonitor {
       }));
 
       // Try to get connection stats via PowerShell
-      let connections = { total: 0, established: 0, listen: 0, timeWait: 0, closeWait: 0 };
+      let connections = null;
       // Only attempt the PowerShell method if we haven't recently failed
       if (Date.now() - lastNetPsFailedAt < netPsCooldownMs) {
         if (debugNet) logger.info('NetworkMonitor: skipping Get-NetTCPConnection due to recent failure cooldown');
       } else {
         const psStart = Date.now();
         try {
-          const psScript = `$conns = Get-NetTCPConnection -ErrorAction SilentlyContinue; if ($conns) { $total = $conns.Count; $established = ($conns | Where-Object { $_.State -eq 'Established' }).Count; $listen = ($conns | Where-Object { $_.State -eq 'Listen' }).Count; $timeWait = ($conns | Where-Object { $_.State -eq 'TimeWait' }).Count; $closeWait = ($conns | Where-Object { $_.State -eq 'CloseWait' }).Count; Write-Output ($total, $established, $listen, $timeWait, $closeWait -join '|') } else { Write-Output '0|0|0|0|0' }`;
+          const psScript = `$conns = Get-NetTCPConnection -ErrorAction Stop; if ($conns) { $total = $conns.Count; $established = ($conns | Where-Object { $_.State -eq 'Established' }).Count; $listen = ($conns | Where-Object { $_.State -eq 'Listen' }).Count; $timeWait = ($conns | Where-Object { $_.State -eq 'TimeWait' }).Count; $closeWait = ($conns | Where-Object { $_.State -eq 'CloseWait' }).Count; Write-Output ($total, $established, $listen, $timeWait, $closeWait -join '|') } else { Write-Output '0|0|0|0|0' }`;
           const { stdout } = await runPowerShell(psScript, 10000);
           netPsWarned = false;
           const parts = stdout.trim().split('|');
@@ -165,7 +167,7 @@ class NetworkMonitor {
         code: e.code,
         stderr: e.stderr ? e.stderr.toString().trim() : ''
       });
-      return { interfaces: [], connections: { total: 0, established: 0, listen: 0, timeWait: 0, closeWait: 0 } };
+      throw e;
     }
   }
 }

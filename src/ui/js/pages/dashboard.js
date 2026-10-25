@@ -790,12 +790,17 @@ async function loadWarnings() {
 
       let fwEnabled = null;
       if (fwResult.status === 'fulfilled') {
-        fwEnabled = fwResult.value;
+        // Windows can serialize a single profile as an object. Protection
+        // requires affirmative evidence for every returned profile.
+        const profiles = Array.isArray(fwResult.value) ? fwResult.value : [fwResult.value];
+        if (profiles.length && profiles.every(p => p && [true, false, 1, 0].includes(p.Enabled))) {
+          fwEnabled = profiles.every(p => p.Enabled === true || p.Enabled === 1);
+        }
       }
       const fwIcon = document.getElementById('fwIcon');
       const fwStatusText = document.getElementById('fwStatusText');
       if (fwEnabled === null) {
-        if (fwStatusText) fwStatusText.textContent = t('common.unknown');
+        if (fwStatusText) fwStatusText.textContent = t(fwResult.status === 'rejected' ? 'common.notAvailable' : 'common.unknown');
         if (fwIcon) fwIcon.className = 'status-icon warning';
       } else {
         if (fwStatusText) fwStatusText.textContent = fwEnabled ? t('dashboard.firewallActive') : t('dashboard.firewallDisabled');

@@ -143,6 +143,8 @@ const RENDERER_WRITABLE_SETTINGS = Object.freeze({
   // Feature booleans written by Settings/Dashboard flows.
   'feature.realtimeProtection': booleanEntry(),
   'feature.autoReports': booleanEntry(),
+  'feature.autoUpdates': booleanEntry(),
+  'feature.vpnAutoConnect': booleanEntry(),
   'feature.scanHistory': booleanEntry(),
   'feature.externalLookups': booleanEntry(),
   'feature.geoLookup': booleanEntry(),

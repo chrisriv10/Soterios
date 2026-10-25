@@ -3,6 +3,7 @@ window.Pages['network'] = {
   REFRESH_INTERVAL_MS: 3000,
   CHART_REFRESH_INTERVAL_MS: 30000,
   _connectionQuery: '',
+  _lastConnections: null,
   _historyRangeHours: 1,
   _historyCache: new Map(),
   _historyRequestToken: 0,
@@ -994,9 +995,12 @@ if (content) this.paintHistoryChart(content).catch(() => {});
       }
 
       const stats = statsResult.status === 'fulfilled' ? statsResult.value : null;
-      const connections = connectionsResult.status === 'fulfilled' ? connectionsResult.value : null;
+      const connectionsFailed = connectionsResult.status !== 'fulfilled' || !Array.isArray(connectionsResult.value);
+      if (!connectionsFailed) this._lastConnections = connectionsResult.value;
+      const connections = this._lastConnections;
       const networkTrafficHistoryEnabled = settingsResult.status === 'fulfilled' ? settingsResult.value : true;
       const vpn = vpnResult.status === 'fulfilled' ? vpnResult.value : null;
+      const vpnFailed = !vpn || vpn.ok !== true || !Array.isArray(vpn.vpns);
       const vpns = (vpn && Array.isArray(vpn.vpns)) ? vpn.vpns : [];
 
       // Fetch user location on initial load (safely with fallback)
@@ -1019,6 +1023,10 @@ if (content) this.paintHistoryChart(content).catch(() => {});
       }
 
       let html = '';
+      const unavailable = escapeHtml(t('common.notAvailable'));
+      if (connectionsFailed) {
+        html += `<div class="empty-state" role="status" style="color:var(--warn);">${escapeHtml(t(connections ? 'network.staleData' : 'common.notAvailable'))}</div>`;
+      }
 
       const STATE_CODE_MAP = {
         1: 'CLOSED', 2: 'LISTEN', 3: 'SYN_SENT', 4: 'SYN_RECEIVED',
@@ -1097,6 +1105,8 @@ if (content) this.paintHistoryChart(content).catch(() => {});
           <div class="stat-tile"><div class="stat-label">${escapeHtml(t('network.timeWait'))}</div><div class="stat-value" style="color:var(--warn);">${c.timeWait}</div></div>
           <div class="stat-tile"><div class="stat-label">${escapeHtml(t('network.closeWait'))}</div><div class="stat-value" style="color:var(--danger);">${c.closeWait}</div></div>
         </div>`;
+      } else {
+        html += `<div class="empty-state" role="status">${escapeHtml(t('network.totalTcp'))}: ${unavailable}</div>`;
       }
 
       const vpnMin = this._minimized.has('vpn');
@@ -1112,7 +1122,9 @@ if (content) this.paintHistoryChart(content).catch(() => {});
       }
       html += `</div>`;
       if (!vpnMin) {
-        if (vpns.length === 0) {
+        if (vpnFailed) {
+          html += `<div class="empty-state" role="status">${unavailable}</div>`;
+        } else if (vpns.length === 0) {
         html += `<div style="font-size:0.8rem; color:var(--text-dim); flex:1 1 100%; display:flex; align-items:center; gap:8px;">
           ${escapeHtml(t('network.vpnNoProfiles'))}
           <button id="vpnAddBtn" class="btn btn-sm btn-secondary" data-i18n="network.vpn.addBtn">Add VPN</button>
@@ -1197,7 +1209,7 @@ if (content) this.paintHistoryChart(content).catch(() => {});
           }
           html += '</div>';
         } else {
-          html += `<div class="empty-state" style="font-size:0.85rem;">${escapeHtml(t('network.noInterfaceData'))}</div>`;
+          html += `<div class="empty-state" style="font-size:0.85rem;">${stats ? escapeHtml(t('network.noInterfaceData')) : unavailable}</div>`;
         }
       }
       html += '</div></div>';
@@ -1208,7 +1220,7 @@ if (content) this.paintHistoryChart(content).catch(() => {});
       html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:${csMin ? '0' : '10px'};"><h3 style="margin:0; font-size:1rem;">${escapeHtml(t('network.connectionStates'))}</h3><button class="card-minimize-btn" data-card-id="connStates" title="${csMin ? 'Restore' : 'Minimize'}" style="background:none; border:none; cursor:pointer; color:var(--text-dim); font-size:1rem; padding:0 4px; line-height:1; transition:transform 0.2s;" aria-label="${csMin ? 'Restore' : 'Minimize'}">${csMin ? '&#9660;' : '&#9650;'}</button></div>`;
       if (!csMin) {
         if (stateTotal === 0) {
-          html += `<div class="empty-state" style="font-size:0.85rem;">${escapeHtml(t('network.noConnectionData'))}</div>`;
+          html += `<div class="empty-state" style="font-size:0.85rem;">${connectionsFailed ? unavailable : escapeHtml(t('network.noConnectionData'))}</div>`;
         } else {
           let cumulative = 0;
           const gradientStops = stateEntries.map(([name, count]) => {
@@ -1241,7 +1253,9 @@ if (content) this.paintHistoryChart(content).catch(() => {});
       html += '<div class="card" style="padding:14px 16px; flex:1;">';
       const sfMin = this._minimized.has('secFlags');
       html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:${sfMin ? '0' : '10px'};"><h3 style="margin:0; font-size:1rem;">${escapeHtml(t('network.securityFlags'))}</h3><button class="card-minimize-btn" data-card-id="secFlags" title="${sfMin ? 'Restore' : 'Minimize'}" style="background:none; border:none; cursor:pointer; color:var(--text-dim); font-size:1rem; padding:0 4px; line-height:1; transition:transform 0.2s;" aria-label="${sfMin ? 'Restore' : 'Minimize'}">${sfMin ? '&#9660;' : '&#9650;'}</button></div>`;
-      if (!sfMin) {
+      if (!sfMin && connectionsFailed && !connections) {
+        html += `<div class="empty-state" role="status">${unavailable}</div>`;
+      } else if (!sfMin) {
         html += `<div style="display:flex; flex-direction:column; gap:8px; font-size:0.85rem;">
           <div style="display:flex; align-items:center; justify-content:space-between;">
             <span style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:9px; border-radius:50%; background:var(--ok); display:inline-block;"></span>${escapeHtml(t('network.flagSafe'))}</span>
@@ -1364,7 +1378,7 @@ if (content) this.paintHistoryChart(content).catch(() => {});
         </div>
       </div>`;
       if (!connections || connections.length === 0) {
-        html += `<div class="empty-state">${escapeHtml(t('network.noConnections'))}</div>`;
+        html += `<div class="empty-state">${connectionsFailed ? unavailable : escapeHtml(t('network.noConnections'))}</div>`;
       } else {
         const classificationOrder = { SAFE: 0, UNKNOWN: 1, MALICIOUS: 2 };
         const sortedConnections = [...connections].sort((a, b) => {
@@ -1492,11 +1506,7 @@ if (content) this.paintHistoryChart(content).catch(() => {});
         }
       }
     } catch (e) {
-      if (isInitial) {
-        content.innerHTML = `<div class="empty-state">${escapeHtml(t('network.error', { error: e.message }))}</div>`;
-      } else {
-        console.error('Network refresh failed:', e);
-      }
+      content.innerHTML = `<div class="empty-state" role="alert">${escapeHtml(t('network.error', { error: e.message }))}</div>`;
     }
   },
 
@@ -1704,13 +1714,18 @@ if (content) this.paintHistoryChart(content).catch(() => {});
     let rows = [];
     let failed = false;
     try {
-      rows = await window.api.invoke('network:history', request.payload) || [];
+      rows = await window.api.invoke('network:history', request.payload);
+      if (!Array.isArray(rows)) throw new Error('Invalid network history response');
     } catch (_) {
       failed = true;
     }
     const resolved = this._resolveHistoryRequest(request, rows, failed);
     if (resolved.stale || !canvas.isConnected) return;
     const series = this._normalizeHistoryRows(resolved.rows);
+    if (empty) {
+      empty.textContent = t(failed ? (series.length ? 'network.staleData' : 'common.notAvailable') : 'network.historyEmpty');
+      empty.setAttribute('role', failed ? 'status' : 'presentation');
+    }
     if (!series.length) {
       if (empty) empty.hidden = false;
       canvas.hidden = true;
@@ -1718,7 +1733,7 @@ if (content) this.paintHistoryChart(content).catch(() => {});
       if (tooltip) tooltip.hidden = true;
       return;
     }
-    if (empty) empty.hidden = true;
+    if (empty) empty.hidden = !failed;
     canvas.hidden = false;
 
     const metrics = this._historyMetrics(series);
