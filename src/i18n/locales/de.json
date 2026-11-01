@@ -1834,7 +1834,7 @@
   "processes.historyStatusLabel": "Status",
   "processes.historyStatusAll": "Alle Status",
   "processes.historyStatusExited": "Beendet",
-  "processes.historyStatusActive": "Beendigung unbekannt",
+  "processes.historyStatusActive": "Exit unknown",
   "processes.historyRunningNow": "Läuft aktuell",
   "processes.historyRangeLabel": "Datumsbereich",
   "processes.historyRangeAny": "Jederzeit",
