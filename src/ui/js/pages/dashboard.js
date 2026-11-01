@@ -265,7 +265,7 @@ window.Pages['dashboard'] = {
               </div>
               <div class="status-info">
                 <h3>${escapeHtml(t('dashboard.healthScore'))}</h3>
-                <div class="value" id="healthScore">Loading...</div>
+                <div class="value" id="healthScore">${escapeHtml(t('common.loading'))}</div>
               </div>
             </div>
             <div id="healthDetail" class="page-subtitle" style="margin-top:12px; font-size:0.85rem;">${escapeHtml(t('dashboard.healthCalculating'))}</div>
