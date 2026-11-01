@@ -91,6 +91,8 @@ const Api = {
   async getSettings() {
     const realtimeProtection = await window.api.invoke('db:getSetting', 'feature.realtimeProtection', true);
     const autoReports = await window.api.invoke('db:getSetting', 'feature.autoReports', true);
+    const autoUpdates = await window.api.invoke('db:getSetting', 'feature.autoUpdates', true);
+    const vpnAutoConnect = await window.api.invoke('db:getSetting', 'feature.vpnAutoConnect', false);
     const scanHistory = await window.api.invoke('db:getSetting', 'feature.scanHistory', true);
     const externalLookups = await window.api.invoke('db:getSetting', 'feature.externalLookups', true);
     const geoLookup = await window.api.invoke('db:getSetting', 'feature.geoLookup', true);
@@ -144,6 +146,8 @@ const Api = {
       features: {
         realtimeProtection,
         autoReports,
+        autoUpdates,
+        vpnAutoConnect,
         scanHistory,
         externalLookups,
         geoLookup,
@@ -172,6 +176,8 @@ const Api = {
         await window.api.invoke('db:setSetting', 'feature.realtimeProtection', !!result);
       }
       if (Object.prototype.hasOwnProperty.call(f, 'autoReports')) await window.api.invoke('db:setSetting', 'feature.autoReports', !!f.autoReports);
+      if (Object.prototype.hasOwnProperty.call(f, 'autoUpdates')) await window.api.invoke('db:setSetting', 'feature.autoUpdates', !!f.autoUpdates);
+      if (Object.prototype.hasOwnProperty.call(f, 'vpnAutoConnect')) await window.api.invoke('db:setSetting', 'feature.vpnAutoConnect', !!f.vpnAutoConnect);
       if (Object.prototype.hasOwnProperty.call(f, 'scanHistory')) await window.api.invoke('db:setSetting', 'feature.scanHistory', !!f.scanHistory);
       if (Object.prototype.hasOwnProperty.call(f, 'externalLookups')) await window.api.invoke('db:setSetting', 'feature.externalLookups', !!f.externalLookups);
       if (Object.prototype.hasOwnProperty.call(f, 'geoLookup')) await window.api.invoke('db:setSetting', 'feature.geoLookup', !!f.geoLookup);

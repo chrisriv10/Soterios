@@ -1964,5 +1964,6 @@
   "tools.debloat.restoreFailed": "Windows did not create a restore point.",
   "tools.debloat.proceedMessage": "Proceed with removal without a restore point?",
   "tools.debloat.proceedLabel": "Proceed without checkpoint",
-  "tools.debloat.restoreOptOut": "Restore-point creation was unchecked."
+  "tools.debloat.restoreOptOut": "Restore-point creation was unchecked.",
+  "network.staleData": "새로 고침에 실패했습니다. 이전에 수집한 데이터가 표시되며 최신 정보가 아닐 수 있습니다."
 }

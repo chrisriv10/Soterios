@@ -250,24 +250,8 @@ container.querySelector('#generateReport').addEventListener('click', () => this.
       return;
     }
 
-    const listMap = {
-      'scanReports:deleteAll': '#scanReportHistory',
-      'reports:deleteAll': '#reportHistory',
-      'maintenance:deleteAllManual': '#maintenanceHistory',
-      'maintenance:deleteAllScheduled': '#scheduledMaintenanceHistory',
-    };
-    const btnMap = {
-      'scanReports:deleteAll': '#clearAllScanReports',
-      'reports:deleteAll': '#clearAllSavedReports',
-      'maintenance:deleteAllManual': '#clearAllManualMaintenance',
-      'maintenance:deleteAllScheduled': '#clearAllScheduledMaintenance',
-    };
-    const listEl = container.querySelector(listMap[ipcChannel]);
-    const clearBtn = container.querySelector(btnMap[ipcChannel]);
-    if (clearBtn && listEl) {
-      const hasItems = listEl.children.length > 0;
-      clearBtn.classList.toggle('hidden', !hasItems);
-    }
+    // Each refreshed loader owns visibility from its fetched data.
+
   },
 
   setScanReportViewer(container, report) {
@@ -314,6 +298,7 @@ container.querySelector('#generateReport').addEventListener('click', () => this.
   },
 
   async exportCurrentReport(container, format) {
+    const t = tFactory();
     const isSecurityReport = this._currentSecurityReportPath !== null;
     const reportId = isSecurityReport ? this._currentSecurityReportPath : this._currentScanReportId;
     if (!reportId) return;
@@ -329,6 +314,8 @@ container.querySelector('#generateReport').addEventListener('click', () => this.
       }
       const label = format === 'pdf' ? 'PDF' : 'CSV';
       this.showExportToast(container, `${label} ${t('reports.exportSuccess')}`, res.path);
+    } catch (err) {
+      alert(err.message || t('common.failed'));
     } finally {
       setButtonLoading(btn, false);
     }
@@ -411,8 +398,11 @@ container.querySelector('#generateReport').addEventListener('click', () => this.
 
   async listScanReports(container) {
     const el = container.querySelector('#scanReportHistory');
+    const clearBtn = container.querySelector('#clearAllScanReports');
+    if (clearBtn) clearBtn.classList.add('hidden');
     try {
       const reports = await window.api.invoke('scanReports:list', 25);
+      if (clearBtn) clearBtn.classList.toggle('hidden', !reports.length);
       if (!reports.length) {
         el.innerHTML = `<div class="empty-state">${escapeHtml(tFactory()('reports.noScanReports'))}</div>`;
         return;
@@ -481,13 +471,17 @@ container.querySelector('#generateReport').addEventListener('click', () => this.
 
   async listReports(container) {
     const el = container.querySelector('#reportHistory');
+    const clearBtn = container.querySelector('#clearAllSavedReports');
+    if (clearBtn) clearBtn.classList.add('hidden');
     try {
       const files = await window.api.invoke('reports:list');
+      if (!Array.isArray(files)) throw new Error(tFactory()('common.failed'));
       if (!files.length) {
         el.innerHTML = `<div class="empty-state">${escapeHtml(tFactory()('reports.noSavedReports'))}</div>`;
         return;
       }
       const groups = this.groupReportFiles(files);
+      if (clearBtn) clearBtn.classList.toggle('hidden', !groups.length);
 
       el.innerHTML = groups.map((g) => {
         const jsonFile = g.files.json;
@@ -547,10 +541,9 @@ container.querySelector('#generateReport').addEventListener('click', () => this.
         });
       });
     } catch (err) {
+      if (clearBtn) clearBtn.classList.add('hidden');
       el.innerHTML = `<div class="empty-state">${escapeHtml(tFactory()('reports.errorPrefix', { error: err.message }))}</div>`;
     }
-    const clearBtn = container.querySelector('#clearAllSavedReports');
-    if (clearBtn) clearBtn.classList.toggle('hidden', !groups.length);
   },
 
   formatBytes(bytes) {
@@ -627,9 +620,13 @@ container.querySelector('#generateReport').addEventListener('click', () => this.
 
   async listManualMaintenanceHistory(container) {
     const el = container.querySelector('#maintenanceHistory');
+    const clearBtn = container.querySelector('#clearAllManualMaintenance');
+    if (clearBtn) clearBtn.classList.add('hidden');
     try {
-      const response = await window.api.invoke('maintenance:getManualHistory').catch(() => ({ ok: false, data: [] }));
-      const rows = response?.data || [];
+      const response = await window.api.invoke('maintenance:getManualHistory');
+      if (!response?.ok || !Array.isArray(response.data)) throw new Error(response?.error || tFactory()('common.failed'));
+      const rows = response.data;
+      if (clearBtn) clearBtn.classList.toggle('hidden', !rows.length);
       if (!rows.length) {
         el.innerHTML = `<div class="empty-state">${escapeHtml(tFactory()('reports.noMaintenance'))}</div>`;
         return;
@@ -686,17 +683,20 @@ container.querySelector('#generateReport').addEventListener('click', () => this.
         });
       });
     } catch (err) {
+      if (clearBtn) clearBtn.classList.add('hidden');
       el.innerHTML = `<div class="empty-state">${escapeHtml(tFactory()('reports.errorPrefix', { error: err.message }))}</div>`;
     }
-    const clearBtn = container.querySelector('#clearAllManualMaintenance');
-    if (clearBtn) clearBtn.classList.toggle('hidden', !rows.length);
   },
 
   async listScheduledMaintenanceHistory(container) {
     const el = container.querySelector('#scheduledMaintenanceHistory');
+    const clearBtn = container.querySelector('#clearAllScheduledMaintenance');
+    if (clearBtn) clearBtn.classList.add('hidden');
     try {
-      const response = await window.api.invoke('maintenance:getScheduledHistory').catch(() => ({ ok: false, data: [] }));
-      const rows = response?.data || [];
+      const response = await window.api.invoke('maintenance:getScheduledHistory');
+      if (!response?.ok || !Array.isArray(response.data)) throw new Error(response?.error || tFactory()('common.failed'));
+      const rows = response.data;
+      if (clearBtn) clearBtn.classList.toggle('hidden', !rows.length);
       if (!rows.length) {
         el.innerHTML = `<div class="empty-state">${escapeHtml(tFactory()('reports.noMaintenance'))}</div>`;
         return;
@@ -753,10 +753,9 @@ container.querySelector('#generateReport').addEventListener('click', () => this.
         });
       });
     } catch (err) {
+      if (clearBtn) clearBtn.classList.add('hidden');
       el.innerHTML = `<div class="empty-state">${escapeHtml(tFactory()('reports.errorPrefix', { error: err.message }))}</div>`;
     }
-    const clearBtn = container.querySelector('#clearAllScheduledMaintenance');
-    if (clearBtn) clearBtn.classList.toggle('hidden', !rows.length);
   },
 
   // -- Defender threat history (read-only v1) --

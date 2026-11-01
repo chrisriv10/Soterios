@@ -355,7 +355,7 @@ function showNotification(title, body, level = 'info', iconOverride = null, acti
     // Translate title and body before rendering
     const translatedTitle = t(title);
     const translatedBody = t(body);
-    const translatedOpenText = t('toast.open');
+    const translatedOpenText = t(action === 'removable-scan' ? 'nav.scanner' : 'toast.open');
     toastWindow.setAlwaysOnTop(true, 'screen-saver');
     toastWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(toastHtml(translatedTitle, translatedBody, level, themeName, iconOverride, translatedOpenText, action)));
     toastWindow.once('ready-to-show', () => toastWindow.show());

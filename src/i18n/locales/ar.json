@@ -1964,5 +1964,6 @@
   "tools.debloat.restoreFailed": "Windows did not create a restore point.",
   "tools.debloat.proceedMessage": "Proceed with removal without a restore point?",
   "tools.debloat.proceedLabel": "Proceed without checkpoint",
-  "tools.debloat.restoreOptOut": "Restore-point creation was unchecked."
+  "tools.debloat.restoreOptOut": "Restore-point creation was unchecked.",
+  "network.staleData": "تعذر التحديث. تُعرض بيانات جُمعت سابقًا وقد تكون قديمة."
 }

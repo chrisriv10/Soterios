@@ -443,8 +443,9 @@ function register(mainWindow, {
         path: path.join(dir, f),
         mtime: fs.statSync(path.join(dir, f)).mtime.toISOString(),
       }));
-    } catch {
-      return [];
+    } catch (error) {
+      if (error?.code === 'ENOENT') return [];
+      throw error;
     }
   });
 

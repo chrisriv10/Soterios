@@ -294,7 +294,7 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
 
           <div class="card" id="diskHealthCard">
             <div class="status-card">
-              <div class="status-icon info">
+              <div class="status-icon info" id="diskHealthIcon">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <rect x="3" y="5" width="18" height="12" rx="2"/>
@@ -790,12 +790,17 @@ async function loadWarnings() {
 
       let fwEnabled = null;
       if (fwResult.status === 'fulfilled') {
-        fwEnabled = fwResult.value;
+        // Windows can serialize a single profile as an object. Protection
+        // requires affirmative evidence for every returned profile.
+        const profiles = Array.isArray(fwResult.value) ? fwResult.value : [fwResult.value];
+        if (profiles.length && profiles.every(p => p && [true, false, 1, 0].includes(p.Enabled))) {
+          fwEnabled = profiles.every(p => p.Enabled === true || p.Enabled === 1);
+        }
       }
       const fwIcon = document.getElementById('fwIcon');
       const fwStatusText = document.getElementById('fwStatusText');
       if (fwEnabled === null) {
-        if (fwStatusText) fwStatusText.textContent = t('common.unknown');
+        if (fwStatusText) fwStatusText.textContent = t(fwResult.status === 'rejected' ? 'common.notAvailable' : 'common.unknown');
         if (fwIcon) fwIcon.className = 'status-icon warning';
       } else {
         if (fwStatusText) fwStatusText.textContent = fwEnabled ? t('dashboard.firewallActive') : t('dashboard.firewallDisabled');
@@ -992,6 +997,11 @@ async function loadWarnings() {
       const rowsEl = container.querySelector('#diskHealthRows');
       if (!summaryEl || !rowsEl) return;
       const disks = Array.isArray(snapshot?.disks) ? snapshot.disks : [];
+      const icon = container.querySelector('#diskHealthIcon');
+      const available = snapshot && snapshot.available !== false;
+      const severity = available && disks.some(disk => disk?.health === 'warning') ? 'warning'
+        : available && disks.length && disks.every(disk => disk?.health === 'healthy') ? 'safe' : 'info';
+      if (icon) icon.className = `status-icon ${severity}`;
       if (!snapshot || snapshot.available === false) {
         summaryEl.textContent = t('diskHealth.queryUnavailable');
         rowsEl.textContent = '';
@@ -1013,6 +1023,7 @@ async function loadWarnings() {
         row.appendChild(title);
         const status = document.createElement('div');
         const health = disk?.health;
+        status.className = health === 'warning' ? 'disk-health-warning' : '';
         const healthLabel = health === 'healthy' ? t('diskHealth.healthy')
           : health === 'warning' ? `${t('diskHealth.warning')} — ${t('diskHealth.warningDetail')}`
           : t('diskHealth.unknown');

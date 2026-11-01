@@ -46,6 +46,7 @@ describe('renderer-writable settings schema shape', () => {
       'app.setupComplete',
       'feature.aiAssistant',
       'feature.autoReports',
+      'feature.autoUpdates',
       'feature.emergencyLockdown',
       'feature.externalLookups',
       'feature.folderWatch',
@@ -60,6 +61,7 @@ describe('renderer-writable settings schema shape', () => {
       'feature.realtimeProtection',
       'feature.scanHistory',
       'feature.scanNotifications',
+      'feature.vpnAutoConnect',
       'privacy.snapshot',
       'processInspector.mode',
       'reports.generateToolRunReports',
@@ -105,8 +107,8 @@ describe('unknown and internal keys fail closed', () => {
       'feature.someFutureUnknownFlag',
       'feature.autoReports.evil',
       'feature.autoReports.',
-      'feature.autoUpdates',
-      'feature.vpnAutoConnect',
+      'feature.autoUpdates.evil',
+      'feature.vpnAutoConnect.evil',
       'feature.systemMonitoring',
     ]) {
       throwsNotWritable(key, true);
@@ -152,6 +154,8 @@ describe('boolean settings are strictly boolean', () => {
   const BOOLEAN_KEYS = [
     'feature.realtimeProtection',
     'feature.autoReports',
+    'feature.autoUpdates',
+    'feature.vpnAutoConnect',
     'feature.scanHistory',
     'feature.externalLookups',
     'feature.geoLookup',

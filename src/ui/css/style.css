@@ -1334,7 +1334,7 @@ body {
 .pi-process-cell strong { font-size: .78rem; }
 .pi-process-cell small { color: var(--text-muted); font-size: .65rem; }
 .pi-icon { width: 20px; height: 20px; flex: 0 0 auto; object-fit: contain; }
-.pi-icon[hidden] { display: block; opacity: 0; }
+.pi-icon.is-placeholder { visibility: hidden; }
 
 .technical-name { padding-inline-start: calc(var(--tree-depth, 0) * 13px); }
 .pi-tree-toggle {
@@ -1889,6 +1889,8 @@ body {
 }
 .report-generate-button {
   width: 168px;
+  min-width: 168px;
+  flex-shrink: 0;
   justify-content: center;
   text-align: center;
 }
@@ -1928,10 +1930,10 @@ body {
    label before the fixed action slots can squeeze the label into a column. */
 @container reports-browser (max-width: 520px) {
   .report-section-toggle {
-    grid-template-columns: minmax(0, 1fr) 14px;
+    grid-template-columns: minmax(80px, 1fr) 154px 14px;
     grid-template-areas:
-      "label chevron"
-      "clear extra";
+      "label label chevron"
+      "clear extra extra";
     row-gap: 8px;
   }
 
@@ -2373,9 +2375,7 @@ body {
   margin-left: 12px;
 }
 
-[dir="rtl"] .brand-logo {
-  transform: scaleX(-1);
-}
+/* Brand artwork is direction-neutral; only directional controls mirror in RTL. */
 
 [dir="rtl"] .status-icon {
   margin-right: 0;
@@ -3411,7 +3411,7 @@ body {
 
 .maintenance-notice.warning,
 .result-warning {
-  color: var(--warn);
+  color: var(--warning-text);
   background: var(--warn-glow);
 }
 
@@ -4246,3 +4246,45 @@ body.setup-mode .app-shell { display: block; }
 }
 
 [dir="rtl"] .setup-skip { right: auto; left: 24px; }
+
+/* Hidden is a state contract, including controls that normally use flex/grid. */
+[hidden], .hidden { display: none !important; }
+
+:root { --warning-text: var(--warn); }
+:root[data-theme="light"],
+:root[data-theme="sand"],
+:root[data-theme="mint"] {
+  --warning-text: color-mix(in srgb, var(--warn) 55%, var(--text-main));
+}
+
+/* History has four/five cells; live process columns remain independent. */
+.pi-history .pi-column-header.simple, .pi-history .pi-row.simple {
+  grid-template-columns: minmax(220px, 1.2fr) 180px 180px minmax(300px, 1.5fr);
+  min-width: 950px;
+}
+.pi-history .pi-column-header.technical, .pi-history .pi-row.technical {
+  grid-template-columns: minmax(220px, 1.2fr) 64px 180px 180px minmax(230px, 1fr);
+  min-width: 950px;
+}
+.pi-history .pi-column-header {
+  box-sizing: border-box;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-panel);
+}
+#phRows { position: static; }
+.pi-history .pi-row { height: auto; min-height: 58px; }
+.pi-history .pi-row > * { min-width: 0; overflow-wrap: anywhere; }
+.pi-history .pi-metric { white-space: normal; }
+.pi-history .pi-risk { box-sizing: border-box; }
+
+.btn:disabled, .btn:disabled:hover, .btn:disabled:active {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+.browser-ext-copy { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+#srDescription { box-sizing: border-box; }
+.disk-health-warning { color: var(--warning-text); font-weight: 600; }

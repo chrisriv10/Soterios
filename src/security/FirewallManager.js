@@ -57,11 +57,11 @@ class FirewallManager {
 
   async getStatus() {
     try {
-      const stdout = await this.runPowerShell('Get-NetFirewallProfile | Select-Object Name, Enabled | ConvertTo-Json');
+      const stdout = await this.runPowerShell('Get-NetFirewallProfile -ErrorAction Stop | Select-Object Name, Enabled | ConvertTo-Json');
       return JSON.parse(stdout);
     } catch (e) {
       logger.error('Failed to get firewall status', e);
-      return [];
+      throw friendlyFirewallError(e, 'Could not read firewall status.');
     }
   }
 
