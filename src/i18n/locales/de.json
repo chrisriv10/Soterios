@@ -1964,5 +1964,6 @@
   "tools.debloat.restoreFailed": "Windows hat keinen Wiederherstellungspunkt erstellt.",
   "tools.debloat.proceedMessage": "Mit dem Entfernen ohne Wiederherstellungspunkt fortfahren?",
   "tools.debloat.proceedLabel": "Ohne Wiederherstellungspunkt fortfahren",
-  "tools.debloat.restoreOptOut": "Erstellung des Wiederherstellungspunkts war deaktiviert."
+  "tools.debloat.restoreOptOut": "Erstellung des Wiederherstellungspunkts war deaktiviert.",
+  "network.staleData": "Aktualisierung fehlgeschlagen. Zuvor erfasste Daten werden angezeigt und sind möglicherweise veraltet."
 }
