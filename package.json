@@ -48,7 +48,7 @@
     "better-sqlite3": "^13.0.2",
     "electron-updater": "^6.8.9",
     "ps-list": "^9.0.0",
-    "systeminformation": "5.33.1"
+    "systeminformation": "5.33.16"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",
