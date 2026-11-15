@@ -159,7 +159,7 @@
       flex-direction: column;
       align-items: center;
       box-sizing: border-box;
-      width: min(400px, calc(100vw - 32px));
+      width: min(420px, calc(100vw - 32px));
       max-width: calc(100vw - 32px);
       max-height: calc(100vh - 32px);
       overflow: auto;
@@ -172,8 +172,8 @@
     }
 
     .mark {
-      width: clamp(80px, calc(100vh - 200px), 200px);
-      height: clamp(80px, calc(100vh - 200px), 200px);
+      width: clamp(80px, calc(100vh - 200px), 220px);
+      height: clamp(80px, calc(100vh - 200px), 220px);
       flex-shrink: 0;
       border-radius: 0px;
       object-fit: contain;
@@ -181,11 +181,11 @@
     }
 
     .wordmark {
-      height: clamp(48px, 19vh, 76px);
+      height: clamp(50px, 19vh, 80px);
       object-fit: contain;
       width: auto;
       opacity: 0.97;
-      margin-top: clamp(-42px, -10.5vh, -24px);
+      margin-top: clamp(-45px, -10.5vh, -24px);
     }
 
     html[data-theme="light"] .wordmark,
@@ -193,7 +193,7 @@
     html[data-theme="mint"] .wordmark { filter: brightness(0); }
 
     .loading-bar {
-      width: 240px;
+      width: 250px;
       height: 4px;
       border-radius: 2px;
       background: var(--splash-bar);
@@ -240,7 +240,7 @@
       }
 
       .loading-bar {
-        width: min(240px, calc(100vw - 72px));
+        width: min(250px, calc(100vw - 72px));
       }
     }
 

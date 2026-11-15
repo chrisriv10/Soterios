@@ -15,8 +15,8 @@ describe('splash progress sequencing', () => {
     const html = fs.readFileSync(path.join(__dirname, '../src/ui/pages/splash.html'), 'utf8');
     const main = fs.readFileSync(path.join(__dirname, '../src/main/main.js'), 'utf8');
 
-    expect(main).toMatch(/function createSplashWindow\([\s\S]*?width:\s*520,[\s\S]*?height:\s*400,/);
-    expect(html).toMatch(/\.splash-card\s*\{[^}]*width:\s*min\(400px, calc\(100vw - 32px\)\)/);
+    expect(main).toMatch(/function createSplashWindow\([\s\S]*?width:\s*560,[\s\S]*?height:\s*430,/);
+    expect(html).toMatch(/\.splash-card\s*\{[^}]*width:\s*min\(420px, calc\(100vw - 32px\)\)/);
     expect(html).toMatch(/@media\s*\(max-height:\s*340px\)/);
     expect(html).toMatch(/@media\s*\(max-width:\s*380px\)/);
     expect(html).toMatch(/html\[data-theme="light"\][\s\S]*?\.wordmark\s*\{\s*filter:\s*brightness\(0\);\s*\}/);
