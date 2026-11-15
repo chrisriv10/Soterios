@@ -11,6 +11,17 @@ describe('splash progress sequencing', () => {
     jest.useRealTimers();
   });
 
+  it('keeps the splash composition sized and responsive', () => {
+    const html = fs.readFileSync(path.join(__dirname, '../src/ui/pages/splash.html'), 'utf8');
+    const main = fs.readFileSync(path.join(__dirname, '../src/main/main.js'), 'utf8');
+
+    expect(main).toMatch(/function createSplashWindow\([\s\S]*?width:\s*520,[\s\S]*?height:\s*400,/);
+    expect(html).toMatch(/\.splash-card\s*\{[^}]*width:\s*min\(400px, calc\(100vw - 32px\)\)/);
+    expect(html).toMatch(/@media\s*\(max-height:\s*340px\)/);
+    expect(html).toMatch(/@media\s*\(max-width:\s*380px\)/);
+    expect(html).toMatch(/html\[data-theme="light"\][\s\S]*?\.wordmark\s*\{\s*filter:\s*brightness\(0\);\s*\}/);
+  });
+
   function bootstrapSplash() {
     const html = fs.readFileSync(path.join(__dirname, '../src/ui/pages/splash.html'), 'utf8');
     const match = html.match(/<script>([\s\S]*?)<\/script>/);
