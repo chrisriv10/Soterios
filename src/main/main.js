@@ -383,8 +383,8 @@ function showNotification(title, body, level = 'info', iconOverride = null, acti
 function createSplashWindow(themeName = 'dark') {
   const theme = resolveThemeName(themeName);
   splashWindow = new BrowserWindow({
-    width: 660,
-    height: 440,
+    width: 560,
+    height: 430,
     frame: false,
     resizable: false,
     movable: true,
