@@ -1968,11 +1968,15 @@
   "network.staleData": "Yenileme başarısız. Daha önce toplanan veriler gösteriliyor; güncel olmayabilir.",
   "dashboard.cards.customize": "Özelleştir",
   "dashboard.cards.title": "Pano kartlarını özelleştir",
-  "dashboard.cards.help": "Tam olarak 6 kart seçin. Sıralarını değiştirmek için okları kullanın.",
+  "dashboard.cards.help": "Tam olarak 6 kart seçin. Eklemek, değiştirmek veya sıralamak için kartları önizleme alanlarına sürükleyin.",
   "dashboard.cards.selectedCount": "{total} karttan {count} tanesi seçildi",
   "dashboard.cards.moveUp": "{title} kartını yukarı taşı",
   "dashboard.cards.moveDown": "{title} kartını aşağı taşı",
   "dashboard.cards.restoreDefaults": "Varsayılanları geri yükle",
   "dashboard.cards.exactlySix": "Tam olarak 6 pano kartı seçin.",
-  "dashboard.cards.saveFailed": "Pano kartları kaydedilemedi."
+  "dashboard.cards.saveFailed": "Pano kartları kaydedilemedi.",
+  "dashboard.cards.availableTitle": "Kartlar",
+  "dashboard.cards.previewTitle": "Önizleme",
+  "dashboard.cards.dragHelp": "Bu listedeki bir kartı önizleme konumuna sürükleyin.",
+  "dashboard.cards.dropHere": "Kartı buraya bırakın"
 }

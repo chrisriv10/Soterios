@@ -27,6 +27,32 @@ describe('dashboard card configuration', () => {
     assert.deepEqual(Array.from(cards.normalize(JSON.stringify({ cards: selection }))), selection);
   });
 
+  it('places dragged cards by reordering, replacing, or filling a preview slot', () => {
+    const reordered = cards.place(cards.defaults, 'network-firewall', 0);
+    assert.deepEqual(Array.from(reordered), [
+      'network-firewall', 'realtime-protection', 'threats-blocked', 'health-score', 'disk-health', 'last-scan'
+    ]);
+
+    const replaced = cards.place(cards.defaults, 'system-temperatures', 4);
+    assert.deepEqual(Array.from(replaced), [
+      'last-scan', 'realtime-protection', 'threats-blocked', 'health-score', 'system-temperatures', 'network-firewall'
+    ]);
+    assert.equal(cards.validate(replaced), true);
+
+    const incomplete = cards.defaults.slice(0, 5);
+    const filled = cards.place(incomplete, 'device-cleanup', 5);
+    assert.deepEqual(Array.from(filled), [...incomplete, 'device-cleanup']);
+    assert.equal(cards.validate(filled), true);
+  });
+
+  it('ignores invalid drag targets and renders the mini preview from existing dashboard cards', () => {
+    assert.deepEqual(Array.from(cards.place(cards.defaults, 'unknown-card', 1)), Array.from(cards.defaults));
+    assert.deepEqual(Array.from(cards.place(cards.defaults, 'system-temperatures', 6)), Array.from(cards.defaults));
+    assert.match(source, /dashboard-card-preview-grid/);
+    assert.match(source, /sourceCard\.cloneNode\(true\)/);
+    assert.match(source, /preview\.addEventListener\('drop'/);
+  });
+
   it('persists a reordered selection across a database reopen', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'soterios-dashboard-cards-'));
     const dbPath = path.join(dir, 'settings.db');

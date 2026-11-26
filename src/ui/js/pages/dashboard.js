@@ -43,11 +43,36 @@ function validateDashboardCardIds(ids) {
   return unique.length === 6 && unique.every((id) => typeof id === 'string' && DASHBOARD_CARD_ID_SET.has(id));
 }
 
+function placeDashboardCard(ids, cardId, targetIndex) {
+  if (!Array.isArray(ids) || !DASHBOARD_CARD_ID_SET.has(cardId) || !Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex > 5) {
+    return Array.isArray(ids) ? [...ids] : [...DASHBOARD_DEFAULT_CARD_IDS];
+  }
+  const draft = [...ids];
+  const sourceIndex = draft.indexOf(cardId);
+  if (sourceIndex === targetIndex) return draft;
+
+  if (sourceIndex !== -1 && targetIndex < draft.length) {
+    [draft[sourceIndex], draft[targetIndex]] = [draft[targetIndex], draft[sourceIndex]];
+    return draft;
+  }
+
+  if (sourceIndex !== -1) {
+    draft.splice(sourceIndex, 1);
+    draft.splice(Math.min(targetIndex, draft.length), 0, cardId);
+    return draft;
+  }
+
+  if (draft.length >= 6) draft[targetIndex] = cardId;
+  else draft.splice(Math.min(targetIndex, draft.length), 0, cardId);
+  return draft;
+}
+
 window.DashboardCards = Object.freeze({
   registry: DASHBOARD_CARD_REGISTRY,
   defaults: [...DASHBOARD_DEFAULT_CARD_IDS],
   normalize: normalizeDashboardCardIds,
-  validate: validateDashboardCardIds
+  validate: validateDashboardCardIds,
+  place: placeDashboardCard
 });
 
 function invalidateDashboardCache() {
@@ -426,10 +451,12 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
       </div>
     `;
 
+    const dashboardCardElements = new Map();
     const dashboardGrid = container.querySelector('.dashboard-grid');
     if (dashboardGrid) {
       const renderedCards = new Map([...dashboardGrid.querySelectorAll('[data-dashboard-card]')]
         .map((card) => [card.dataset.dashboardCard, card]));
+      for (const [id, element] of renderedCards) dashboardCardElements.set(id, element);
       for (const [id, element] of renderedCards) if (!selectedCardIds.includes(id)) element.remove();
       for (const id of selectedCardIds) {
         const element = renderedCards.get(id);
@@ -444,27 +471,121 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
         <h2 id="dashboardCardPickerTitle">${escapeHtml(t('dashboard.cards.title'))}</h2>
         <p id="dashboardCardPickerHelp">${escapeHtml(t('dashboard.cards.help'))}</p>
         <p class="dashboard-card-count" aria-live="polite"></p>
-        <div class="dashboard-card-options"></div>
+        <div class="dashboard-card-editor">
+          <section class="dashboard-card-palette" aria-labelledby="dashboardCardChoicesTitle">
+            <h3 id="dashboardCardChoicesTitle" class="dashboard-card-section-title">${escapeHtml(t('dashboard.cards.availableTitle'))}</h3>
+            <div class="dashboard-card-options" role="list"></div>
+          </section>
+          <section class="dashboard-card-preview-panel" aria-labelledby="dashboardCardPreviewTitle">
+            <h3 id="dashboardCardPreviewTitle" class="dashboard-card-section-title">${escapeHtml(t('dashboard.cards.previewTitle'))}</h3>
+            <p class="dashboard-card-drag-help">${escapeHtml(t('dashboard.cards.dragHelp'))}</p>
+            <div class="dashboard-card-preview-grid" role="list" aria-label="${escapeHtml(t('dashboard.cards.previewTitle'))}"></div>
+          </section>
+        </div>
         <p class="cleanup-picker-error" role="alert" hidden></p>
         <div class="pi-modal-actions"><button type="button" class="btn btn-sm btn-ghost" data-restore>${escapeHtml(t('dashboard.cards.restoreDefaults'))}</button><span class="pi-modal-actions-spacer"></span><button type="button" class="btn btn-sm" data-cancel>${escapeHtml(t('common.cancel'))}</button><button type="submit" class="btn btn-sm primary" data-save>${escapeHtml(t('common.save'))}</button></div>
       </form>`;
       document.body.appendChild(dialog);
       const options = dialog.querySelector('.dashboard-card-options');
+      const preview = dialog.querySelector('.dashboard-card-preview-grid');
       const count = dialog.querySelector('.dashboard-card-count');
       const error = dialog.querySelector('.cleanup-picker-error');
       let draft = [...selectedCardIds];
+      let draggedCardId = null;
 
       const renderOptions = (focusSelector) => {
         count.textContent = t('dashboard.cards.selectedCount', { count: draft.length, total: '6' });
         dialog.querySelector('[data-save]').disabled = !validateDashboardCardIds(draft);
         options.innerHTML = DASHBOARD_CARD_REGISTRY.map((card) => {
-          const selectedIndex = draft.indexOf(card.id);
-          const checked = selectedIndex !== -1;
+          const checked = draft.includes(card.id);
           const locked = !checked && draft.length >= 6;
-          const orderControls = checked ? `<span class="dashboard-card-order"><span>${selectedIndex + 1}</span><button type="button" class="btn btn-sm btn-ghost" data-move="up" data-card-id="${card.id}" aria-label="${escapeHtml(t('dashboard.cards.moveUp', { title: t(card.titleKey) }))}" ${selectedIndex === 0 ? 'disabled' : ''}>↑</button><button type="button" class="btn btn-sm btn-ghost" data-move="down" data-card-id="${card.id}" aria-label="${escapeHtml(t('dashboard.cards.moveDown', { title: t(card.titleKey) }))}" ${selectedIndex === draft.length - 1 ? 'disabled' : ''}>↓</button></span>` : '';
-          return `<label class="dashboard-card-option${checked ? ' is-selected' : ''}"><input type="checkbox" data-card-check="${card.id}" ${checked ? 'checked' : ''} ${locked ? 'disabled' : ''}><span>${escapeHtml(t(card.titleKey))}</span>${orderControls}</label>`;
+          return '<label class="dashboard-card-option' + (checked ? ' is-selected' : '') + '" role="listitem" data-card-option="' + card.id + '" draggable="true">' +
+            '<input type="checkbox" data-card-check="' + card.id + '"' + (checked ? ' checked' : '') + (locked ? ' disabled' : '') + '>' +
+            '<span class="dashboard-card-option-title">' + escapeHtml(t(card.titleKey)) + '</span>' +
+            '<span class="dashboard-card-option-grip" aria-hidden="true">⠿</span></label>';
         }).join('');
-        if (focusSelector) options.querySelector(focusSelector)?.focus();
+
+        preview.replaceChildren();
+        for (let index = 0; index < 6; index++) {
+          const id = draft[index];
+          const item = document.createElement('div');
+          item.dataset.previewIndex = String(index);
+          item.setAttribute('role', 'listitem');
+          if (!id) {
+            item.className = 'dashboard-preview-empty-slot';
+            item.setAttribute('aria-label', t('dashboard.cards.dropHere'));
+            const slotNumber = document.createElement('span');
+            slotNumber.className = 'dashboard-preview-empty-number';
+            slotNumber.textContent = String(index + 1);
+            const dropLabel = document.createElement('span');
+            dropLabel.textContent = t('dashboard.cards.dropHere');
+            item.append(slotNumber, dropLabel);
+            preview.appendChild(item);
+            continue;
+          }
+
+          const card = DASHBOARD_CARD_REGISTRY.find((entry) => entry.id === id);
+          const title = card ? t(card.titleKey) : id;
+          item.className = 'dashboard-preview-item';
+          item.dataset.previewCard = id;
+          item.draggable = true;
+          item.setAttribute('aria-label', title + ', ' + (index + 1));
+
+          const toolbar = document.createElement('div');
+          toolbar.className = 'dashboard-preview-toolbar';
+          const grip = document.createElement('span');
+          grip.className = 'dashboard-preview-grip';
+          grip.setAttribute('aria-hidden', 'true');
+          grip.textContent = '⠿';
+          const order = document.createElement('span');
+          order.className = 'dashboard-preview-order';
+          order.textContent = String(index + 1);
+          const controls = document.createElement('span');
+          controls.className = 'dashboard-preview-actions';
+          for (const direction of ['up', 'down']) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn btn-xs btn-ghost';
+            button.dataset.move = direction;
+            button.dataset.cardId = id;
+            button.setAttribute('aria-label', t(direction === 'up' ? 'dashboard.cards.moveUp' : 'dashboard.cards.moveDown', { title }));
+            button.textContent = direction === 'up' ? '↑' : '↓';
+            button.disabled = direction === 'up' ? index === 0 : index === draft.length - 1;
+            controls.appendChild(button);
+          }
+          toolbar.append(grip, order, controls);
+
+          const content = document.createElement('div');
+          content.className = 'dashboard-preview-content';
+          const sourceCard = dashboardCardElements.get(id);
+          if (sourceCard) {
+            const clone = sourceCard.cloneNode(true);
+            clone.removeAttribute('data-dashboard-card');
+            clone.removeAttribute('id');
+            clone.removeAttribute('role');
+            clone.removeAttribute('tabindex');
+            clone.setAttribute('aria-hidden', 'true');
+            clone.classList.add('dashboard-preview-card-content');
+            clone.querySelectorAll('[id]').forEach((node) => node.removeAttribute('id'));
+            clone.querySelectorAll('button, a, input, select, textarea').forEach((node) => node.remove());
+            clone.querySelectorAll('[role], [tabindex], [aria-controls], [aria-labelledby]').forEach((node) => {
+              node.removeAttribute('role');
+              node.removeAttribute('tabindex');
+              node.removeAttribute('aria-controls');
+              node.removeAttribute('aria-labelledby');
+            });
+            clone.querySelectorAll('div[style]').forEach((node) => {
+              if (!node.textContent.trim() && !node.querySelector('svg, img')) node.remove();
+            });
+            content.appendChild(clone);
+          } else {
+            content.textContent = title;
+          }
+          item.append(toolbar, content);
+          preview.appendChild(item);
+        }
+
+        if (focusSelector) dialog.querySelector(focusSelector)?.focus();
       };
       const close = () => {
         dialog.remove();
@@ -485,7 +606,7 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
           const next = index + (move.dataset.move === 'up' ? -1 : 1);
           if (index >= 0 && next >= 0 && next < draft.length) {
             [draft[index], draft[next]] = [draft[next], draft[index]];
-            renderOptions(`[data-move="${move.dataset.move}"][data-card-id="${move.dataset.cardId}"]`);
+            renderOptions('[data-move="' + move.dataset.move + '"][data-card-id="' + move.dataset.cardId + '"]');
           }
         }
       });
@@ -495,7 +616,52 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
         if (checkbox.checked && draft.length < 6) draft.push(checkbox.dataset.cardCheck);
         else if (!checkbox.checked) draft = draft.filter((id) => id !== checkbox.dataset.cardCheck);
         error.hidden = true;
-        renderOptions(`[data-card-check="${checkbox.dataset.cardCheck}"]`);
+        renderOptions('[data-card-check="' + checkbox.dataset.cardCheck + '"]');
+      });
+      const startCardDrag = (event, cardId) => {
+        draggedCardId = cardId;
+        if (event.dataTransfer) {
+          event.dataTransfer.effectAllowed = draft.includes(cardId) ? 'move' : 'copy';
+          event.dataTransfer.setData('text/plain', cardId);
+        }
+      };
+      options.addEventListener('dragstart', (event) => {
+        const option = event.target.closest('[data-card-option]');
+        if (option) startCardDrag(event, option.dataset.cardOption);
+      });
+      options.addEventListener('dragend', () => { draggedCardId = null; });
+      preview.addEventListener('dragstart', (event) => {
+        if (event.target.closest('button')) { event.preventDefault(); return; }
+        const item = event.target.closest('[data-preview-card]');
+        if (!item) return;
+        startCardDrag(event, item.dataset.previewCard);
+        item.classList.add('is-dragging');
+      });
+      preview.addEventListener('dragover', (event) => {
+        const slot = event.target.closest('[data-preview-index]');
+        if (!slot) return;
+        event.preventDefault();
+        preview.querySelectorAll('.is-drop-target').forEach((target) => target.classList.remove('is-drop-target'));
+        slot.classList.add('is-drop-target');
+      });
+      preview.addEventListener('dragleave', (event) => {
+        const slot = event.target.closest('[data-preview-index]');
+        if (slot && !slot.contains(event.relatedTarget)) slot.classList.remove('is-drop-target');
+      });
+      preview.addEventListener('drop', (event) => {
+        const slot = event.target.closest('[data-preview-index]');
+        if (!slot) return;
+        event.preventDefault();
+        const cardId = event.dataTransfer?.getData('text/plain') || draggedCardId;
+        preview.querySelectorAll('.is-drop-target, .is-dragging').forEach((target) => target.classList.remove('is-drop-target', 'is-dragging'));
+        draggedCardId = null;
+        if (!cardId) return;
+        const next = placeDashboardCard(draft, cardId, Number(slot.dataset.previewIndex));
+        if (next.some((id, index) => id !== draft[index]) || next.length !== draft.length) {
+          draft = next;
+          error.hidden = true;
+          renderOptions();
+        }
       });
       dialog.querySelector('form').addEventListener('submit', async (event) => {
         event.preventDefault();

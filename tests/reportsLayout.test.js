@@ -33,4 +33,18 @@ describe('reports section action alignment', () => {
     assert.match(reportsStyles, /\.report-generate-button\s*\{[^}]*min-width:\s*168px;[^}]*flex-shrink:\s*0;/);
     assert.match(reportsStyles, /@container reports-browser \(max-width:\s*520px\)[\s\S]*"label label chevron"\s*"clear extra extra"/);
   });
+
+  it('scopes Defender rows and controls to shrink-safe responsive layouts', () => {
+    assert.match(reportsSource, /class="history-item defender-history-item"/);
+    assert.match(reportsSource, /class="defender-history-content"/);
+    assert.match(reportsSource, /class="defender-history-actions"/);
+    assert.match(reportsSource, /class="history-meta defender-history-resource" dir="ltr"/);
+    assert.match(reportsStyles, /\.history-item\s*\{\s*display:\s*flex;/, 'generic history layout remains unchanged');
+    assert.match(reportsStyles, /\.defender-history-item\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;/);
+    assert.match(reportsStyles, /\.defender-history-content\s*\{[^}]*min-width:\s*0;[^}]*overflow-wrap:\s*anywhere;/);
+    assert.match(reportsStyles, /\.defender-history-detected,\s*\.defender-history-resource\s*\{[^}]*overflow-wrap:\s*anywhere;[^}]*word-break:\s*break-word;/);
+    assert.match(reportsStyles, /\.defender-history-resource\s*\{[^}]*direction:\s*ltr;/);
+    assert.match(reportsStyles, /@container reports-browser \(max-width:\s*700px\)[\s\S]*\.defender-history-filter-buttons\s*\{\s*grid-column:\s*1 \/ -1;/);
+    assert.match(reportsStyles, /@container reports-browser \(max-width:\s*400px\)[\s\S]*\.defender-history-item\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\);/);
+  });
 });

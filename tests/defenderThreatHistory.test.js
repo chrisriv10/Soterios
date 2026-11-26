@@ -803,6 +803,12 @@ describe('Defender history renderer filters', () => {
       assert.ok(!html.includes('<b>Evil</b>'));
       // Status pill text is present (not color-only).
       assert.ok(html.includes('defender.history.statusActive'));
+      // Defender rows isolate variable-length content from the Details action.
+      assert.match(html, /class="history-item defender-history-item"/);
+      assert.match(html, /class="defender-history-content"/);
+      assert.match(html, /class="defender-history-actions"/);
+      assert.match(html, /class="history-meta defender-history-resource" dir="ltr"/);
+      assert.ok(html.includes('evil.exe'));
       // Empty-state path renders the centered detail without a duplicate title.
       page._defenderDetections = [];
       page.renderDefenderHistory(container);
@@ -817,6 +823,37 @@ describe('Defender history renderer filters', () => {
       assert.ok(!errorHtml.includes('defender.history.unavailableTitle'));
       assert.ok(!errorHtml.includes('Get-MpThreatDetection'));
     })();
+  });
+
+  it('keeps long names, resource paths, and each Defender status in the scoped row markup', () => {
+    const page = loadReportsPage();
+    if (!global.escapeHtml) {
+      global.escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      }[c]));
+    }
+    global.window.I18n = { t: (key) => key };
+    page._defenderFilter = page.defenderDefaultFilter();
+    page._defenderTruncated = false;
+    page._defenderDetections = [
+      { threatName: 'Short threat', status: 'active', detectedAt: '2026-08-13T20:41:12.000Z', resources: [{ display: 'C:\\\\ProgramData\\\\Microsoft\\\\Windows Defender\\\\Quarantine\\\\long-resource-name.exe' }] },
+      { threatName: 'Trojan:Win32/VeryLongThreatFamilyName.WithAdditionalSegments.AndMoreSegments', status: 'remediated', detectedAt: '2026-08-12T20:41:12.000Z', resources: [{ display: 'C:\\\\Users\\\\Public\\\\Documents\\\\nested\\\\many\\\\levels\\\\infected-file.exe' }] },
+      { threatName: 'Ransom:Win64/FailureCase', status: 'failed', detectedAt: '2026-08-11T20:41:12.000Z', resources: [{ display: 'C:\\\\Windows\\\\Temp\\\\failed-scan.exe' }] },
+    ];
+    const list = { innerHTML: '', querySelectorAll: () => [] };
+    page.renderDefenderHistory({ querySelector: (selector) => selector === '#defenderHistory' ? list : null });
+
+    assert.equal((list.innerHTML.match(/class="history-item defender-history-item"/g) || []).length, 3);
+    assert.equal((list.innerHTML.match(/class="defender-history-content"/g) || []).length, 3);
+    assert.equal((list.innerHTML.match(/class="defender-history-actions"/g) || []).length, 3);
+    for (const statusKey of ['statusActive', 'statusRemediated', 'statusFailed']) {
+      assert.ok(list.innerHTML.includes(`defender.history.${statusKey}`));
+    }
+    assert.ok(list.innerHTML.includes('Short threat'));
+    assert.ok(list.innerHTML.includes('VeryLongThreatFamilyName'));
+    assert.ok(list.innerHTML.includes('long-resource-name.exe'));
+    assert.ok(list.innerHTML.includes('infected-file.exe'));
+    assert.ok(!list.innerHTML.includes(' · '), 'resource paths are not concatenated into timestamps');
   });
 
   it('fails cleanly when the narrow preload API is absent', async () => {

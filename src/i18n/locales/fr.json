@@ -1968,11 +1968,15 @@
   "network.staleData": "Échec de l’actualisation. Les données précédentes sont affichées et peuvent être obsolètes.",
   "dashboard.cards.customize": "Personnaliser",
   "dashboard.cards.title": "Personnaliser les cartes du tableau de bord",
-  "dashboard.cards.help": "Choisissez exactement 6 cartes. Utilisez les flèches pour modifier leur ordre.",
+  "dashboard.cards.help": "Choisissez exactement 6 cartes. Faites-les glisser dans l’aperçu pour les ajouter, les remplacer ou les réorganiser.",
   "dashboard.cards.selectedCount": "{count} sur {total} sélectionnées",
   "dashboard.cards.moveUp": "Déplacer {title} vers le haut",
   "dashboard.cards.moveDown": "Déplacer {title} vers le bas",
   "dashboard.cards.restoreDefaults": "Rétablir les valeurs par défaut",
   "dashboard.cards.exactlySix": "Choisissez exactement 6 cartes.",
-  "dashboard.cards.saveFailed": "Impossible d’enregistrer les cartes du tableau de bord."
+  "dashboard.cards.saveFailed": "Impossible d’enregistrer les cartes du tableau de bord.",
+  "dashboard.cards.availableTitle": "Cartes",
+  "dashboard.cards.previewTitle": "Aperçu",
+  "dashboard.cards.dragHelp": "Faites glisser une carte de cette liste vers une position de l’aperçu.",
+  "dashboard.cards.dropHere": "Déposer la carte ici"
 }

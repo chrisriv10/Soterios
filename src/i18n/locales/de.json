@@ -1968,11 +1968,15 @@
   "network.staleData": "Aktualisierung fehlgeschlagen. Zuvor erfasste Daten werden angezeigt und sind möglicherweise veraltet.",
   "dashboard.cards.customize": "Anpassen",
   "dashboard.cards.title": "Dashboard-Karten anpassen",
-  "dashboard.cards.help": "Wähle genau 6 Karten. Ändere ihre Reihenfolge mit den Pfeilen.",
+  "dashboard.cards.help": "Wähle genau 6 Karten. Ziehe Karten auf Vorschauplätze, um sie hinzuzufügen, zu ersetzen oder neu anzuordnen.",
   "dashboard.cards.selectedCount": "{count} von {total} ausgewählt",
   "dashboard.cards.moveUp": "{title} nach oben verschieben",
   "dashboard.cards.moveDown": "{title} nach unten verschieben",
   "dashboard.cards.restoreDefaults": "Standard wiederherstellen",
   "dashboard.cards.exactlySix": "Wähle genau 6 Dashboard-Karten.",
-  "dashboard.cards.saveFailed": "Dashboard-Karten konnten nicht gespeichert werden."
+  "dashboard.cards.saveFailed": "Dashboard-Karten konnten nicht gespeichert werden.",
+  "dashboard.cards.availableTitle": "Karten",
+  "dashboard.cards.previewTitle": "Vorschau",
+  "dashboard.cards.dragHelp": "Ziehe eine Karte aus dieser Liste auf einen Vorschauplatz.",
+  "dashboard.cards.dropHere": "Karte hier ablegen"
 }

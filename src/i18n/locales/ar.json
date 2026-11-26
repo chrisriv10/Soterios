@@ -1968,11 +1968,15 @@
   "network.staleData": "تعذر التحديث. تُعرض بيانات جُمعت سابقًا وقد تكون قديمة.",
   "dashboard.cards.customize": "تخصيص",
   "dashboard.cards.title": "تخصيص بطاقات لوحة المعلومات",
-  "dashboard.cards.help": "اختر 6 بطاقات بالضبط. استخدم الأسهم لتغيير ترتيبها.",
+  "dashboard.cards.help": "اختر 6 بطاقات بالضبط. اسحب البطاقات إلى المعاينة لإضافتها أو استبدالها أو إعادة ترتيبها.",
   "dashboard.cards.selectedCount": "تم تحديد {count} من {total}",
   "dashboard.cards.moveUp": "نقل {title} لأعلى",
   "dashboard.cards.moveDown": "نقل {title} لأسفل",
   "dashboard.cards.restoreDefaults": "استعادة الإعدادات الافتراضية",
   "dashboard.cards.exactlySix": "اختر 6 بطاقات بالضبط.",
-  "dashboard.cards.saveFailed": "تعذر حفظ بطاقات لوحة المعلومات."
+  "dashboard.cards.saveFailed": "تعذر حفظ بطاقات لوحة المعلومات.",
+  "dashboard.cards.availableTitle": "البطاقات",
+  "dashboard.cards.previewTitle": "معاينة",
+  "dashboard.cards.dragHelp": "اسحب بطاقة من هذه القائمة إلى موضع في المعاينة.",
+  "dashboard.cards.dropHere": "أسقط البطاقة هنا"
 }

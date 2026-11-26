@@ -124,13 +124,15 @@ window.Pages.reports = {
           </div>
           <div id="defenderHistorySection">
             <div class="page-subtitle" style="font-size:0.85rem; margin:2px 0 8px;">${escapeHtml(t('defender.history.subtitle'))}</div>
-            <div id="defenderHistoryFilters" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:8px;" role="group" aria-label="${escapeHtml(t('defender.history.title'))}">
-              <button type="button" class="btn btn-xs defender-filter" data-status="all" aria-pressed="true">${escapeHtml(t('defender.history.filterAll'))}</button>
-              <button type="button" class="btn btn-xs defender-filter" data-status="active" aria-pressed="false">${escapeHtml(t('defender.history.filterActive'))}</button>
-              <button type="button" class="btn btn-xs defender-filter" data-status="remediated" aria-pressed="false">${escapeHtml(t('defender.history.filterRemediated'))}</button>
-              <button type="button" class="btn btn-xs defender-filter" data-status="failed" aria-pressed="false">${escapeHtml(t('defender.history.filterFailed'))}</button>
-              <input type="search" id="defenderHistorySearch" class="ai-input" style="flex:1; min-width:140px; padding:4px 8px; font-size:0.8rem;" placeholder="${escapeHtml(t('defender.history.searchPlaceholder'))}" aria-label="${escapeHtml(t('defender.history.searchPlaceholder'))}">
-              <select id="defenderHistoryRange" class="ai-input" style="padding:4px 8px; font-size:0.8rem;" aria-label="${escapeHtml(t('defender.history.rangeLabel'))}">
+            <div id="defenderHistoryFilters" class="defender-history-controls" role="group" aria-label="${escapeHtml(t('defender.history.title'))}">
+              <div class="defender-history-filter-buttons">
+                <button type="button" class="btn btn-xs defender-filter" data-status="all" aria-pressed="true">${escapeHtml(t('defender.history.filterAll'))}</button>
+                <button type="button" class="btn btn-xs defender-filter" data-status="active" aria-pressed="false">${escapeHtml(t('defender.history.filterActive'))}</button>
+                <button type="button" class="btn btn-xs defender-filter" data-status="remediated" aria-pressed="false">${escapeHtml(t('defender.history.filterRemediated'))}</button>
+                <button type="button" class="btn btn-xs defender-filter" data-status="failed" aria-pressed="false">${escapeHtml(t('defender.history.filterFailed'))}</button>
+              </div>
+              <input type="search" id="defenderHistorySearch" class="ai-input defender-history-search" placeholder="${escapeHtml(t('defender.history.searchPlaceholder'))}" aria-label="${escapeHtml(t('defender.history.searchPlaceholder'))}">
+              <select id="defenderHistoryRange" class="ai-input defender-history-range" aria-label="${escapeHtml(t('defender.history.rangeLabel'))}">
                 <option value="all">${escapeHtml(t('defender.history.rangeAll'))}</option>
                 <option value="24h">${escapeHtml(t('defender.history.range24h'))}</option>
                 <option value="7d">${escapeHtml(t('defender.history.range7d'))}</option>
@@ -946,12 +948,16 @@ container.querySelector('#generateReport').addEventListener('click', () => this.
       const name = d.threatName || t('defender.history.unknownThreat');
       const firstResource = d.resources && d.resources[0] ? d.resources[0].display : '';
       return `
-        <div class="history-item">
-          <div style="min-width:0;">
-            <div class="history-title">${escapeHtml(name)} ${this.defenderStatusPill(d.status, t)}</div>
-            <div class="history-meta">${escapeHtml(t('defender.history.detected'))}: ${escapeHtml(this.formatDefenderDate(d.detectedAt, t))}${firstResource ? ` · ${escapeHtml(firstResource)}` : ''}</div>
+        <div class="history-item defender-history-item">
+          <div class="defender-history-content">
+            <div class="defender-history-heading">
+              <span class="history-title defender-history-threat-name">${escapeHtml(name)}</span>
+              ${this.defenderStatusPill(d.status, t)}
+            </div>
+            <div class="history-meta defender-history-detected">${escapeHtml(t('defender.history.detected'))}: ${escapeHtml(this.formatDefenderDate(d.detectedAt, t))}</div>
+            ${firstResource ? `<div class="history-meta defender-history-resource" dir="ltr">${escapeHtml(firstResource)}</div>` : ''}
           </div>
-          <div style="display:flex; gap:6px; flex-shrink:0;">
+          <div class="defender-history-actions">
             <button type="button" class="btn btn-sm open-defender-detection" data-index="${index}">${escapeHtml(t('defender.history.details'))}</button>
           </div>
         </div>`;

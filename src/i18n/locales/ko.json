@@ -1968,11 +1968,15 @@
   "network.staleData": "새로 고침에 실패했습니다. 이전에 수집한 데이터가 표시되며 최신 정보가 아닐 수 있습니다.",
   "dashboard.cards.customize": "사용자 지정",
   "dashboard.cards.title": "대시보드 카드 사용자 지정",
-  "dashboard.cards.help": "카드 6개를 선택하세요. 화살표로 순서를 변경할 수 있습니다.",
+  "dashboard.cards.help": "카드 6개를 선택하세요. 미리 보기 위치로 드래그해 추가, 교체, 재정렬할 수 있습니다.",
   "dashboard.cards.selectedCount": "{total}개 중 {count}개 선택됨",
   "dashboard.cards.moveUp": "{title} 위로 이동",
   "dashboard.cards.moveDown": "{title} 아래로 이동",
   "dashboard.cards.restoreDefaults": "기본값 복원",
   "dashboard.cards.exactlySix": "대시보드 카드를 6개 선택하세요.",
-  "dashboard.cards.saveFailed": "대시보드 카드를 저장하지 못했습니다."
+  "dashboard.cards.saveFailed": "대시보드 카드를 저장하지 못했습니다.",
+  "dashboard.cards.availableTitle": "카드",
+  "dashboard.cards.previewTitle": "미리 보기",
+  "dashboard.cards.dragHelp": "이 목록에서 카드를 미리 보기 위치로 드래그하세요.",
+  "dashboard.cards.dropHere": "여기에 카드 놓기"
 }

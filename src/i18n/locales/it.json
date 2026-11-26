@@ -1968,11 +1968,15 @@
   "network.staleData": "Aggiornamento non riuscito. Sono mostrati dati raccolti in precedenza che potrebbero non essere aggiornati.",
   "dashboard.cards.customize": "Personalizza",
   "dashboard.cards.title": "Personalizza le schede della dashboard",
-  "dashboard.cards.help": "Scegli esattamente 6 schede. Usa le frecce per cambiarne l’ordine.",
+  "dashboard.cards.help": "Scegli esattamente 6 schede. Trascinale nell’anteprima per aggiungerle, sostituirle o riordinarle.",
   "dashboard.cards.selectedCount": "{count} di {total} selezionate",
   "dashboard.cards.moveUp": "Sposta {title} in alto",
   "dashboard.cards.moveDown": "Sposta {title} in basso",
   "dashboard.cards.restoreDefaults": "Ripristina valori predefiniti",
   "dashboard.cards.exactlySix": "Scegli esattamente 6 schede.",
-  "dashboard.cards.saveFailed": "Impossibile salvare le schede della dashboard."
+  "dashboard.cards.saveFailed": "Impossibile salvare le schede della dashboard.",
+  "dashboard.cards.availableTitle": "Schede",
+  "dashboard.cards.previewTitle": "Anteprima",
+  "dashboard.cards.dragHelp": "Trascina una scheda da questo elenco in una posizione dell’anteprima.",
+  "dashboard.cards.dropHere": "Rilascia la scheda qui"
 }

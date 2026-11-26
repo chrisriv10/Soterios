@@ -1968,11 +1968,15 @@
   "network.staleData": "刷新失败。正在显示先前收集的数据，可能已过时。",
   "dashboard.cards.customize": "自定义",
   "dashboard.cards.title": "自定义仪表板卡片",
-  "dashboard.cards.help": "请选择恰好 6 张卡片。使用箭头调整顺序。",
+  "dashboard.cards.help": "恰好选择 6 张卡片。将卡片拖到预览位置即可添加、替换或重新排序。",
   "dashboard.cards.selectedCount": "已选择 {count}/{total}",
   "dashboard.cards.moveUp": "将 {title} 上移",
   "dashboard.cards.moveDown": "将 {title} 下移",
   "dashboard.cards.restoreDefaults": "恢复默认设置",
   "dashboard.cards.exactlySix": "请选择恰好 6 张仪表板卡片。",
-  "dashboard.cards.saveFailed": "无法保存仪表板卡片。"
+  "dashboard.cards.saveFailed": "无法保存仪表板卡片。",
+  "dashboard.cards.availableTitle": "卡片",
+  "dashboard.cards.previewTitle": "预览",
+  "dashboard.cards.dragHelp": "将此列表中的卡片拖到预览位置。",
+  "dashboard.cards.dropHere": "将卡片拖放到此处"
 }

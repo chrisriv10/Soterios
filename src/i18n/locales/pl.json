@@ -1968,11 +1968,15 @@
   "network.staleData": "Odświeżenie nie powiodło się. Wyświetlane są wcześniej zebrane dane, które mogą być nieaktualne.",
   "dashboard.cards.customize": "Dostosuj",
   "dashboard.cards.title": "Dostosuj karty pulpitu",
-  "dashboard.cards.help": "Wybierz dokładnie 6 kart. Użyj strzałek, aby zmienić ich kolejność.",
+  "dashboard.cards.help": "Wybierz dokładnie 6 kart. Przeciągnij je na podgląd, aby dodać, zastąpić lub zmienić kolejność.",
   "dashboard.cards.selectedCount": "Wybrano {count} z {total}",
   "dashboard.cards.moveUp": "Przenieś {title} w górę",
   "dashboard.cards.moveDown": "Przenieś {title} w dół",
   "dashboard.cards.restoreDefaults": "Przywróć domyślne",
   "dashboard.cards.exactlySix": "Wybierz dokładnie 6 kart pulpitu.",
-  "dashboard.cards.saveFailed": "Nie można zapisać kart pulpitu."
+  "dashboard.cards.saveFailed": "Nie można zapisać kart pulpitu.",
+  "dashboard.cards.availableTitle": "Karty",
+  "dashboard.cards.previewTitle": "Podgląd",
+  "dashboard.cards.dragHelp": "Przeciągnij kartę z tej listy na miejsce w podglądzie.",
+  "dashboard.cards.dropHere": "Upuść kartę tutaj"
 }

@@ -1968,11 +1968,15 @@
   "network.staleData": "Refresh failed. Showing previously collected data; it may be out of date.",
   "dashboard.cards.customize": "Customize",
   "dashboard.cards.title": "Customize dashboard cards",
-  "dashboard.cards.help": "Choose exactly 6 cards. Use the arrows to change their order.",
+  "dashboard.cards.help": "Choose exactly 6 cards. Drag cards onto preview positions to add, replace, or reorder them.",
   "dashboard.cards.selectedCount": "{count} of {total} selected",
   "dashboard.cards.moveUp": "Move {title} up",
   "dashboard.cards.moveDown": "Move {title} down",
   "dashboard.cards.restoreDefaults": "Restore defaults",
   "dashboard.cards.exactlySix": "Choose exactly 6 dashboard cards.",
-  "dashboard.cards.saveFailed": "Could not save dashboard cards."
+  "dashboard.cards.saveFailed": "Could not save dashboard cards.",
+  "dashboard.cards.availableTitle": "Cards",
+  "dashboard.cards.previewTitle": "Preview",
+  "dashboard.cards.dragHelp": "Drag a card from this list onto a preview position.",
+  "dashboard.cards.dropHere": "Drop card here"
 }
