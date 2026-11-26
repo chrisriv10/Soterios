@@ -1965,5 +1965,14 @@
   "tools.debloat.proceedMessage": "Proceed with removal without a restore point?",
   "tools.debloat.proceedLabel": "Proceed without checkpoint",
   "tools.debloat.restoreOptOut": "Restore-point creation was unchecked.",
-  "network.staleData": "Odświeżenie nie powiodło się. Wyświetlane są wcześniej zebrane dane, które mogą być nieaktualne."
+  "network.staleData": "Odświeżenie nie powiodło się. Wyświetlane są wcześniej zebrane dane, które mogą być nieaktualne.",
+  "dashboard.cards.customize": "Dostosuj",
+  "dashboard.cards.title": "Dostosuj karty pulpitu",
+  "dashboard.cards.help": "Wybierz dokładnie 6 kart. Użyj strzałek, aby zmienić ich kolejność.",
+  "dashboard.cards.selectedCount": "Wybrano {count} z {total}",
+  "dashboard.cards.moveUp": "Przenieś {title} w górę",
+  "dashboard.cards.moveDown": "Przenieś {title} w dół",
+  "dashboard.cards.restoreDefaults": "Przywróć domyślne",
+  "dashboard.cards.exactlySix": "Wybierz dokładnie 6 kart pulpitu.",
+  "dashboard.cards.saveFailed": "Nie można zapisać kart pulpitu."
 }

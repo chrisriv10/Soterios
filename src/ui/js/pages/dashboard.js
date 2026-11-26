@@ -10,6 +10,46 @@ const dashboardCache = {
 };
 const dashboardCacheTtl = 60_000; // 60 seconds
 
+const DASHBOARD_CARD_SETTING = 'dashboard.cards';
+const DASHBOARD_DEFAULT_CARD_IDS = Object.freeze([
+  'last-scan', 'realtime-protection', 'threats-blocked', 'health-score', 'disk-health', 'network-firewall'
+]);
+const DASHBOARD_CARD_REGISTRY = Object.freeze([
+  { id: 'last-scan', titleKey: 'dashboard.lastScan' },
+  { id: 'realtime-protection', titleKey: 'dashboard.rtpTitle' },
+  { id: 'threats-blocked', titleKey: 'dashboard.threatsBlocked' },
+  { id: 'health-score', titleKey: 'dashboard.healthScore' },
+  { id: 'system-temperatures', titleKey: 'thermal.title' },
+  { id: 'disk-health', titleKey: 'diskHealth.title' },
+  { id: 'device-cleanup', titleKey: 'dashboard.deviceCleanup' },
+  { id: 'network-firewall', titleKey: 'dashboard.networkFirewallTitle' }
+]);
+const DASHBOARD_CARD_ID_SET = new Set(DASHBOARD_CARD_REGISTRY.map((card) => card.id));
+
+function normalizeDashboardCardIds(value) {
+  let parsed = value;
+  if (typeof parsed === 'string') {
+    try { parsed = JSON.parse(parsed); } catch (_) { return [...DASHBOARD_DEFAULT_CARD_IDS]; }
+  }
+  const candidates = Array.isArray(parsed) ? parsed : parsed?.cards;
+  if (!Array.isArray(candidates)) return [...DASHBOARD_DEFAULT_CARD_IDS];
+  const ids = [...new Set(candidates.filter((id) => typeof id === 'string' && DASHBOARD_CARD_ID_SET.has(id)))];
+  return ids.length === 6 ? ids : [...DASHBOARD_DEFAULT_CARD_IDS];
+}
+
+function validateDashboardCardIds(ids) {
+  if (!Array.isArray(ids)) return false;
+  const unique = [...new Set(ids)];
+  return unique.length === 6 && unique.every((id) => typeof id === 'string' && DASHBOARD_CARD_ID_SET.has(id));
+}
+
+window.DashboardCards = Object.freeze({
+  registry: DASHBOARD_CARD_REGISTRY,
+  defaults: [...DASHBOARD_DEFAULT_CARD_IDS],
+  normalize: normalizeDashboardCardIds,
+  validate: validateDashboardCardIds
+});
+
 function invalidateDashboardCache() {
   dashboardCache.overview = { ts: 0, data: null };
   dashboardCache.health = { ts: 0, data: null };
@@ -30,6 +70,14 @@ window.Pages['dashboard'] = {
     const t = (key, vars) => window.I18n?.t(key, vars) ?? key;
     let alive = true;
     this.cleanups.push(() => { alive = false; });
+
+    let selectedCardIds = [...DASHBOARD_DEFAULT_CARD_IDS];
+    try {
+      selectedCardIds = normalizeDashboardCardIds(await window.api.invoke('db:getSetting', DASHBOARD_CARD_SETTING, null));
+    } catch (_) {
+      // First launch and unreadable old settings use the stable default layout.
+    }
+    if (!alive) return;
 
     function hasView() {
       return alive && document.body.contains(container);
@@ -171,15 +219,18 @@ window.Pages['dashboard'] = {
             <h1 class="page-title">${escapeHtml(t('dashboard.title'))}</h1>
             <p class="page-subtitle">${escapeHtml(t('dashboard.subtitle'))}</p>
           </div>
+          <div class="dashboard-header-actions">
+          <button id="btnCustomizeDashboard" class="btn" type="button">${escapeHtml(t('dashboard.cards.customize'))}</button>
           <button id="btnRefreshDashboard" class="btn btn-secondary" style="font-size:0.85rem; padding:6px 12px;" title="${escapeHtml(t('dashboard.refreshTooltip'))}">
             ${escapeHtml(t('dashboard.refresh'))}
           </button>
+          </div>
         </div>
       </header>
       <div id="dashboardContent" style="overflow-y:auto; margin-right:8px; padding-right:8px;">
 <div class="dashboard-grid">
           <!-- Last Scan -->
-          <div class="card">
+          <div class="card" data-dashboard-card="last-scan">
             <div class="status-card">
               <div class="status-icon info">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -196,7 +247,7 @@ window.Pages['dashboard'] = {
           </div>
 
           <!-- Protection Status -->
-          <div class="card">
+          <div class="card" data-dashboard-card="realtime-protection">
             <div class="status-card">
               <div class="status-icon safe" id="rtpIcon">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
@@ -212,7 +263,7 @@ window.Pages['dashboard'] = {
           </div>
 
 <!-- Threats Blocked -->
-          <div class="card">
+          <div class="card" data-dashboard-card="threats-blocked">
             <div class="status-card">
               <div class="status-icon danger">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
@@ -251,7 +302,7 @@ window.Pages['dashboard'] = {
             </div>
           </div>
 
-          <div class="card" id="healthCard" style="cursor:pointer;" title="${escapeHtml(t('dashboard.healthClickDetails'))}">
+          <div class="card" id="healthCard" data-dashboard-card="health-score" style="cursor:pointer;" title="${escapeHtml(t('dashboard.healthClickDetails'))}">
             <div class="status-card">
               <div class="status-icon info" id="healthIcon">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
@@ -272,7 +323,7 @@ window.Pages['dashboard'] = {
             <div class="page-subtitle" style="margin-top:8px; font-size:0.75rem; color:var(--accent-primary);">${escapeHtml(t('dashboard.healthClickDetails'))}</div>
           </div>
 
-          <div class="card" id="thermalCard">
+          <div class="card" id="thermalCard" data-dashboard-card="system-temperatures">
             <div class="status-card">
               <div class="status-icon info">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
@@ -292,7 +343,7 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
             <div id="thermalGpus" class="page-subtitle" style="margin-top:12px; font-size:0.85rem;"></div>
           </div>
 
-          <div class="card" id="diskHealthCard">
+          <div class="card" id="diskHealthCard" data-dashboard-card="disk-health">
             <div class="status-card">
               <div class="status-icon info" id="diskHealthIcon">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
@@ -311,7 +362,7 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
           </div>
 
 <!-- Device Cleanup -->
-          <div class="card dashboard-device-cleanup">
+          <div class="card dashboard-device-cleanup" data-dashboard-card="device-cleanup">
             <div class="status-card">
               <div class="status-icon info">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
@@ -333,7 +384,7 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
           </div>
 
           <!-- Network & Firewall -->
-          <div class="card">
+          <div class="card" data-dashboard-card="network-firewall">
             <div class="status-card">
               <div class="status-icon info" id="fwIcon">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
@@ -374,6 +425,99 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
         </div>
       </div>
     `;
+
+    const dashboardGrid = container.querySelector('.dashboard-grid');
+    if (dashboardGrid) {
+      const renderedCards = new Map([...dashboardGrid.querySelectorAll('[data-dashboard-card]')]
+        .map((card) => [card.dataset.dashboardCard, card]));
+      for (const [id, element] of renderedCards) if (!selectedCardIds.includes(id)) element.remove();
+      for (const id of selectedCardIds) {
+        const element = renderedCards.get(id);
+        if (element) dashboardGrid.appendChild(element);
+      }
+    }
+
+    function showDashboardCardPicker(trigger) {
+      const dialog = document.createElement('div');
+      dialog.className = 'pi-modal-backdrop';
+      dialog.innerHTML = `<form class="pi-modal dashboard-card-picker" aria-labelledby="dashboardCardPickerTitle" aria-describedby="dashboardCardPickerHelp" role="dialog" aria-modal="true">
+        <h2 id="dashboardCardPickerTitle">${escapeHtml(t('dashboard.cards.title'))}</h2>
+        <p id="dashboardCardPickerHelp">${escapeHtml(t('dashboard.cards.help'))}</p>
+        <p class="dashboard-card-count" aria-live="polite"></p>
+        <div class="dashboard-card-options"></div>
+        <p class="cleanup-picker-error" role="alert" hidden></p>
+        <div class="pi-modal-actions"><button type="button" class="btn btn-sm btn-ghost" data-restore>${escapeHtml(t('dashboard.cards.restoreDefaults'))}</button><span class="pi-modal-actions-spacer"></span><button type="button" class="btn btn-sm" data-cancel>${escapeHtml(t('common.cancel'))}</button><button type="submit" class="btn btn-sm primary" data-save>${escapeHtml(t('common.save'))}</button></div>
+      </form>`;
+      document.body.appendChild(dialog);
+      const options = dialog.querySelector('.dashboard-card-options');
+      const count = dialog.querySelector('.dashboard-card-count');
+      const error = dialog.querySelector('.cleanup-picker-error');
+      let draft = [...selectedCardIds];
+
+      const renderOptions = (focusSelector) => {
+        count.textContent = t('dashboard.cards.selectedCount', { count: draft.length, total: '6' });
+        dialog.querySelector('[data-save]').disabled = !validateDashboardCardIds(draft);
+        options.innerHTML = DASHBOARD_CARD_REGISTRY.map((card) => {
+          const selectedIndex = draft.indexOf(card.id);
+          const checked = selectedIndex !== -1;
+          const locked = !checked && draft.length >= 6;
+          const orderControls = checked ? `<span class="dashboard-card-order"><span>${selectedIndex + 1}</span><button type="button" class="btn btn-sm btn-ghost" data-move="up" data-card-id="${card.id}" aria-label="${escapeHtml(t('dashboard.cards.moveUp', { title: t(card.titleKey) }))}" ${selectedIndex === 0 ? 'disabled' : ''}>↑</button><button type="button" class="btn btn-sm btn-ghost" data-move="down" data-card-id="${card.id}" aria-label="${escapeHtml(t('dashboard.cards.moveDown', { title: t(card.titleKey) }))}" ${selectedIndex === draft.length - 1 ? 'disabled' : ''}>↓</button></span>` : '';
+          return `<label class="dashboard-card-option${checked ? ' is-selected' : ''}"><input type="checkbox" data-card-check="${card.id}" ${checked ? 'checked' : ''} ${locked ? 'disabled' : ''}><span>${escapeHtml(t(card.titleKey))}</span>${orderControls}</label>`;
+        }).join('');
+        if (focusSelector) options.querySelector(focusSelector)?.focus();
+      };
+      const close = () => {
+        dialog.remove();
+        document.removeEventListener('keydown', onKey);
+        if (trigger?.isConnected) trigger.focus();
+      };
+      const onKey = (event) => { if (event.key === 'Escape') close(); };
+      renderOptions();
+      document.addEventListener('keydown', onKey);
+      dialog.addEventListener('click', (event) => {
+        if (event.target === dialog) close();
+        const restore = event.target.closest('[data-restore]');
+        if (restore) { draft = [...DASHBOARD_DEFAULT_CARD_IDS]; error.hidden = true; renderOptions(); return; }
+        if (event.target.closest('[data-cancel]')) close();
+        const move = event.target.closest('[data-move]');
+        if (move && !move.disabled) {
+          const index = draft.indexOf(move.dataset.cardId);
+          const next = index + (move.dataset.move === 'up' ? -1 : 1);
+          if (index >= 0 && next >= 0 && next < draft.length) {
+            [draft[index], draft[next]] = [draft[next], draft[index]];
+            renderOptions(`[data-move="${move.dataset.move}"][data-card-id="${move.dataset.cardId}"]`);
+          }
+        }
+      });
+      options.addEventListener('change', (event) => {
+        const checkbox = event.target.closest('[data-card-check]');
+        if (!checkbox) return;
+        if (checkbox.checked && draft.length < 6) draft.push(checkbox.dataset.cardCheck);
+        else if (!checkbox.checked) draft = draft.filter((id) => id !== checkbox.dataset.cardCheck);
+        error.hidden = true;
+        renderOptions(`[data-card-check="${checkbox.dataset.cardCheck}"]`);
+      });
+      dialog.querySelector('form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!validateDashboardCardIds(draft)) { error.textContent = t('dashboard.cards.exactlySix'); error.hidden = false; return; }
+        const save = dialog.querySelector('[data-save]');
+        save.disabled = true;
+        try {
+          await window.api.invoke('db:setSetting', DASHBOARD_CARD_SETTING, JSON.stringify({ cards: draft }));
+          selectedCardIds = [...draft];
+          close();
+          this.destroy();
+          await this.render(container);
+        } catch (_) {
+          error.textContent = t('dashboard.cards.saveFailed');
+          error.hidden = false;
+          save.disabled = false;
+        }
+      });
+    }
+
+    const btnCustomizeDashboard = container.querySelector('#btnCustomizeDashboard');
+    if (btnCustomizeDashboard) btnCustomizeDashboard.addEventListener('click', () => showDashboardCardPicker(btnCustomizeDashboard));
 
     window.api.invoke('splash:progress', { pct: 20, label: t('splash.loadingDashboard') });
 
@@ -848,14 +992,14 @@ async function loadWarnings() {
 
       if (healthResult.status === 'fulfilled') {
         lastHealthResult = healthResult.value;
-        healthScore.textContent = String(healthResult.value.score);
+        if (healthScore) healthScore.textContent = String(healthResult.value.score);
         const level = healthResult.value.score >= 80 ? 'safe' : healthResult.value.score >= 60 ? 'warning' : 'danger';
-        healthIcon.className = 'status-icon ' + level;
-        healthDetail.textContent = summarizeHealth(healthResult.value);
+        if (healthIcon) healthIcon.className = 'status-icon ' + level;
+        if (healthDetail) healthDetail.textContent = summarizeHealth(healthResult.value);
       } else {
-        healthScore.textContent = t('common.notAvailable');
-        healthDetail.textContent = (healthResult.reason && healthResult.reason.message) || t('common.failed');
-        healthIcon.className = 'status-icon warning';
+        if (healthScore) healthScore.textContent = t('common.notAvailable');
+        if (healthDetail) healthDetail.textContent = (healthResult.reason && healthResult.reason.message) || t('common.failed');
+        if (healthIcon) healthIcon.className = 'status-icon warning';
       }
       window.api.invoke('splash:progress', { pct: 65, label: t('splash.calculatingHealth') });
       if (warningsResult.status === 'rejected') {
@@ -934,7 +1078,7 @@ async function loadWarnings() {
     let thermalTimer = null;
     const formatTempC = (value) => `${value.toFixed(1)}°C`;
     async function refreshThermal() {
-      if (!hasView()) return;
+      if (!hasView() || !container.querySelector('#thermalCpu')) return;
       try {
         const snapshot = await window.api.invoke('system:thermalSnapshot');
         if (!hasView()) return;
@@ -973,7 +1117,7 @@ async function loadWarnings() {
         if (cpuEl) cpuEl.textContent = `${t('thermal.cpu')}: ${t('thermal.unavailable')}`;
         if (gpusEl) gpusEl.textContent = `${t('thermal.gpu')}: ${t('thermal.unavailable')}`;
       } finally {
-        if (hasView()) {
+        if (hasView() && container.querySelector('#thermalCpu')) {
           thermalTimer = setTimeout(refreshThermal, THERMAL_REFRESH_MS);
         }
       }
@@ -1068,7 +1212,7 @@ async function loadWarnings() {
       }
     }
     async function refreshDiskHealth() {
-      if (!hasView()) return;
+      if (!hasView() || !container.querySelector('#diskHealthSummary')) return;
       try {
         const snapshot = await window.api.invoke('system:diskHealthSnapshot');
         if (!hasView()) return;
@@ -1077,7 +1221,7 @@ async function loadWarnings() {
         if (!hasView()) return;
         renderDiskHealth({ disks: [], available: false, sampledAt: null });
       } finally {
-        if (hasView()) {
+        if (hasView() && container.querySelector('#diskHealthSummary')) {
           diskTimer = setTimeout(refreshDiskHealth, DISK_HEALTH_REFRESH_MS);
         }
       }
@@ -1194,7 +1338,7 @@ try {
       });
     }
 
-    btnToggleRtp.addEventListener('click', async () => {
+    if (btnToggleRtp) btnToggleRtp.addEventListener('click', async () => {
       const previous = isRtpActive;
       const next = !isRtpActive;
       btnToggleRtp.disabled = true;
@@ -1249,7 +1393,7 @@ try {
     }
 
     // Listen for scan progress events from other sources (scanner page, tray, etc.)
-    this.cleanups.push(window.api.on('scan:progress', (data) => {
+    if (container.querySelector('#lastScanTime') || container.querySelector('#healthScore')) this.cleanups.push(window.api.on('scan:progress', (data) => {
       if (!hasView()) return;
       if (data?.scanType === 'folderwatch') return;
       if (data && data.pct !== undefined) {
@@ -1258,7 +1402,7 @@ try {
     }));
 
     // Listen for scan complete events to reset button state
-    this.cleanups.push(window.api.on('scan:complete', async (data) => {
+    if (container.querySelector('#lastScanTime') || container.querySelector('#healthScore')) this.cleanups.push(window.api.on('scan:complete', async (data) => {
       if (!hasView()) return;
       if (data?.scanType === 'folderwatch') return;
       setScanButtonsState(false);

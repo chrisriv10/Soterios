@@ -1965,5 +1965,14 @@
   "tools.debloat.proceedMessage": "Proceed with removal without a restore point?",
   "tools.debloat.proceedLabel": "Proceed without checkpoint",
   "tools.debloat.restoreOptOut": "Restore-point creation was unchecked.",
-  "network.staleData": "Не удалось обновить. Показаны ранее собранные данные, которые могут быть устаревшими."
+  "network.staleData": "Не удалось обновить. Показаны ранее собранные данные, которые могут быть устаревшими.",
+  "dashboard.cards.customize": "Настроить",
+  "dashboard.cards.title": "Настроить карточки панели",
+  "dashboard.cards.help": "Выберите ровно 6 карточек. Используйте стрелки, чтобы изменить порядок.",
+  "dashboard.cards.selectedCount": "Выбрано: {count} из {total}",
+  "dashboard.cards.moveUp": "Переместить «{title}» вверх",
+  "dashboard.cards.moveDown": "Переместить «{title}» вниз",
+  "dashboard.cards.restoreDefaults": "Восстановить настройки по умолчанию",
+  "dashboard.cards.exactlySix": "Выберите ровно 6 карточек панели.",
+  "dashboard.cards.saveFailed": "Не удалось сохранить карточки панели."
 }

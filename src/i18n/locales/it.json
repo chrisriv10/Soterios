@@ -1965,5 +1965,14 @@
   "tools.debloat.proceedMessage": "Proceed with removal without a restore point?",
   "tools.debloat.proceedLabel": "Proceed without checkpoint",
   "tools.debloat.restoreOptOut": "Restore-point creation was unchecked.",
-  "network.staleData": "Aggiornamento non riuscito. Sono mostrati dati raccolti in precedenza che potrebbero non essere aggiornati."
+  "network.staleData": "Aggiornamento non riuscito. Sono mostrati dati raccolti in precedenza che potrebbero non essere aggiornati.",
+  "dashboard.cards.customize": "Personalizza",
+  "dashboard.cards.title": "Personalizza le schede della dashboard",
+  "dashboard.cards.help": "Scegli esattamente 6 schede. Usa le frecce per cambiarne l’ordine.",
+  "dashboard.cards.selectedCount": "{count} di {total} selezionate",
+  "dashboard.cards.moveUp": "Sposta {title} in alto",
+  "dashboard.cards.moveDown": "Sposta {title} in basso",
+  "dashboard.cards.restoreDefaults": "Ripristina valori predefiniti",
+  "dashboard.cards.exactlySix": "Scegli esattamente 6 schede.",
+  "dashboard.cards.saveFailed": "Impossibile salvare le schede della dashboard."
 }

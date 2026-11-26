@@ -1965,5 +1965,14 @@
   "tools.debloat.proceedMessage": "Proceed with removal without a restore point?",
   "tools.debloat.proceedLabel": "Proceed without checkpoint",
   "tools.debloat.restoreOptOut": "Restore-point creation was unchecked.",
-  "network.staleData": "No se pudo actualizar. Se muestran datos anteriores que pueden estar desactualizados."
+  "network.staleData": "No se pudo actualizar. Se muestran datos anteriores que pueden estar desactualizados.",
+  "dashboard.cards.customize": "Personalizar",
+  "dashboard.cards.title": "Personalizar tarjetas del panel",
+  "dashboard.cards.help": "Elige exactamente 6 tarjetas. Usa las flechas para cambiar el orden.",
+  "dashboard.cards.selectedCount": "{count} de {total} seleccionadas",
+  "dashboard.cards.moveUp": "Mover {title} arriba",
+  "dashboard.cards.moveDown": "Mover {title} abajo",
+  "dashboard.cards.restoreDefaults": "Restaurar valores predeterminados",
+  "dashboard.cards.exactlySix": "Elige exactamente 6 tarjetas del panel.",
+  "dashboard.cards.saveFailed": "No se pudieron guardar las tarjetas del panel."
 }

@@ -1965,5 +1965,14 @@
   "tools.debloat.proceedMessage": "Proceed with removal without a restore point?",
   "tools.debloat.proceedLabel": "Proceed without checkpoint",
   "tools.debloat.restoreOptOut": "Restore-point creation was unchecked.",
-  "network.staleData": "Yenileme başarısız. Daha önce toplanan veriler gösteriliyor; güncel olmayabilir."
+  "network.staleData": "Yenileme başarısız. Daha önce toplanan veriler gösteriliyor; güncel olmayabilir.",
+  "dashboard.cards.customize": "Özelleştir",
+  "dashboard.cards.title": "Pano kartlarını özelleştir",
+  "dashboard.cards.help": "Tam olarak 6 kart seçin. Sıralarını değiştirmek için okları kullanın.",
+  "dashboard.cards.selectedCount": "{total} karttan {count} tanesi seçildi",
+  "dashboard.cards.moveUp": "{title} kartını yukarı taşı",
+  "dashboard.cards.moveDown": "{title} kartını aşağı taşı",
+  "dashboard.cards.restoreDefaults": "Varsayılanları geri yükle",
+  "dashboard.cards.exactlySix": "Tam olarak 6 pano kartı seçin.",
+  "dashboard.cards.saveFailed": "Pano kartları kaydedilemedi."
 }

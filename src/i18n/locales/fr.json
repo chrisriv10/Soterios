@@ -1965,5 +1965,14 @@
   "tools.debloat.proceedMessage": "Proceed with removal without a restore point?",
   "tools.debloat.proceedLabel": "Proceed without checkpoint",
   "tools.debloat.restoreOptOut": "Restore-point creation was unchecked.",
-  "network.staleData": "Échec de l’actualisation. Les données précédentes sont affichées et peuvent être obsolètes."
+  "network.staleData": "Échec de l’actualisation. Les données précédentes sont affichées et peuvent être obsolètes.",
+  "dashboard.cards.customize": "Personnaliser",
+  "dashboard.cards.title": "Personnaliser les cartes du tableau de bord",
+  "dashboard.cards.help": "Choisissez exactement 6 cartes. Utilisez les flèches pour modifier leur ordre.",
+  "dashboard.cards.selectedCount": "{count} sur {total} sélectionnées",
+  "dashboard.cards.moveUp": "Déplacer {title} vers le haut",
+  "dashboard.cards.moveDown": "Déplacer {title} vers le bas",
+  "dashboard.cards.restoreDefaults": "Rétablir les valeurs par défaut",
+  "dashboard.cards.exactlySix": "Choisissez exactement 6 cartes.",
+  "dashboard.cards.saveFailed": "Impossible d’enregistrer les cartes du tableau de bord."
 }

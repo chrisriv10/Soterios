@@ -1965,5 +1965,14 @@
   "tools.debloat.proceedMessage": "Proceed with removal without a restore point?",
   "tools.debloat.proceedLabel": "Proceed without checkpoint",
   "tools.debloat.restoreOptOut": "Restore-point creation was unchecked.",
-  "network.staleData": "Refresh failed. Showing previously collected data; it may be out of date."
+  "network.staleData": "Refresh failed. Showing previously collected data; it may be out of date.",
+  "dashboard.cards.customize": "Customize",
+  "dashboard.cards.title": "Customize dashboard cards",
+  "dashboard.cards.help": "Choose exactly 6 cards. Use the arrows to change their order.",
+  "dashboard.cards.selectedCount": "{count} of {total} selected",
+  "dashboard.cards.moveUp": "Move {title} up",
+  "dashboard.cards.moveDown": "Move {title} down",
+  "dashboard.cards.restoreDefaults": "Restore defaults",
+  "dashboard.cards.exactlySix": "Choose exactly 6 dashboard cards.",
+  "dashboard.cards.saveFailed": "Could not save dashboard cards."
 }

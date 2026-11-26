@@ -40,6 +40,7 @@ const MAX_SNAPSHOT_CHARS = 4096;
 const MAX_HOSTS_CONTENT_CHARS = 1024 * 1024;
 // ISO timestamps are short; bound rejects garbage before Date.parse.
 const MAX_TIMESTAMP_CHARS = 100;
+const MAX_DASHBOARD_CARDS_CHARS = 2048;
 
 const PRIVACY_FEATURE_SET = new Set(PRIVACY_SENSITIVE_FEATURES);
 const HOSTS_BASELINE_FIELDS = new Set(['hash', 'content', 'approvedAt']);
@@ -135,6 +136,19 @@ function validateHostsBaseline(value) {
   return { ok: true, value };
 }
 
+function validateDashboardCards(value) {
+  if (typeof value !== 'string' || value.length > MAX_DASHBOARD_CARDS_CHARS) return fail('bounded string required');
+  let parsed;
+  try { parsed = JSON.parse(value); } catch (_) { return fail('dashboard card config must be valid JSON'); }
+  if (!isPlainRecord(parsed) || Object.keys(parsed).length !== 1 || !Array.isArray(parsed.cards)
+    || parsed.cards.length !== 6
+    || parsed.cards.some((id) => typeof id !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(id))
+    || new Set(parsed.cards).size !== 6) {
+    return fail('six unique dashboard card ids required');
+  }
+  return { ok: true, value };
+}
+
 function booleanEntry() {
   return validateBooleanSetting;
 }
@@ -159,6 +173,7 @@ const RENDERER_WRITABLE_SETTINGS = Object.freeze({
   'feature.emergencyLockdown': booleanEntry(),
   'feature.privacyMode': booleanEntry(),
   // Report preferences.
+  'dashboard.cards': validateDashboardCards,
   'reports.generateToolRunReports': booleanEntry(),
   'reports.skipDeleteConfirm': booleanEntry(),
   // Removable-drive auto-scan opt-in.

@@ -1965,5 +1965,14 @@
   "tools.debloat.proceedMessage": "Proceed with removal without a restore point?",
   "tools.debloat.proceedLabel": "Proceed without checkpoint",
   "tools.debloat.restoreOptOut": "Restore-point creation was unchecked.",
-  "network.staleData": "تعذر التحديث. تُعرض بيانات جُمعت سابقًا وقد تكون قديمة."
+  "network.staleData": "تعذر التحديث. تُعرض بيانات جُمعت سابقًا وقد تكون قديمة.",
+  "dashboard.cards.customize": "تخصيص",
+  "dashboard.cards.title": "تخصيص بطاقات لوحة المعلومات",
+  "dashboard.cards.help": "اختر 6 بطاقات بالضبط. استخدم الأسهم لتغيير ترتيبها.",
+  "dashboard.cards.selectedCount": "تم تحديد {count} من {total}",
+  "dashboard.cards.moveUp": "نقل {title} لأعلى",
+  "dashboard.cards.moveDown": "نقل {title} لأسفل",
+  "dashboard.cards.restoreDefaults": "استعادة الإعدادات الافتراضية",
+  "dashboard.cards.exactlySix": "اختر 6 بطاقات بالضبط.",
+  "dashboard.cards.saveFailed": "تعذر حفظ بطاقات لوحة المعلومات."
 }

@@ -1965,5 +1965,14 @@
   "tools.debloat.proceedMessage": "Proceed with removal without a restore point?",
   "tools.debloat.proceedLabel": "Proceed without checkpoint",
   "tools.debloat.restoreOptOut": "Restore-point creation was unchecked.",
-  "network.staleData": "更新に失敗しました。以前に取得したデータを表示しています。最新ではない可能性があります。"
+  "network.staleData": "更新に失敗しました。以前に取得したデータを表示しています。最新ではない可能性があります。",
+  "dashboard.cards.customize": "カスタマイズ",
+  "dashboard.cards.title": "ダッシュボードカードをカスタマイズ",
+  "dashboard.cards.help": "カードを6つ選択してください。矢印で順序を変更できます。",
+  "dashboard.cards.selectedCount": "{total}件中{count}件を選択",
+  "dashboard.cards.moveUp": "{title}を上へ移動",
+  "dashboard.cards.moveDown": "{title}を下へ移動",
+  "dashboard.cards.restoreDefaults": "既定に戻す",
+  "dashboard.cards.exactlySix": "ダッシュボードカードを6つ選択してください。",
+  "dashboard.cards.saveFailed": "ダッシュボードカードを保存できませんでした。"
 }

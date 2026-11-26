@@ -1965,5 +1965,14 @@
   "tools.debloat.proceedMessage": "Proceed with removal without a restore point?",
   "tools.debloat.proceedLabel": "Proceed without checkpoint",
   "tools.debloat.restoreOptOut": "Restore-point creation was unchecked.",
-  "network.staleData": "Falha ao atualizar. São apresentados dados anteriores que podem estar desatualizados."
+  "network.staleData": "Falha ao atualizar. São apresentados dados anteriores que podem estar desatualizados.",
+  "dashboard.cards.customize": "Personalizar",
+  "dashboard.cards.title": "Personalizar cartões do painel",
+  "dashboard.cards.help": "Escolha exatamente 6 cartões. Use as setas para alterar a ordem.",
+  "dashboard.cards.selectedCount": "{count} de {total} selecionados",
+  "dashboard.cards.moveUp": "Mover {title} para cima",
+  "dashboard.cards.moveDown": "Mover {title} para baixo",
+  "dashboard.cards.restoreDefaults": "Restaurar padrões",
+  "dashboard.cards.exactlySix": "Escolha exatamente 6 cartões do painel.",
+  "dashboard.cards.saveFailed": "Não foi possível salvar os cartões do painel."
 }

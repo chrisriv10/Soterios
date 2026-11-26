@@ -3,8 +3,73 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const vm = require('vm');
+const DatabaseService = require('../src/core/database');
+const { writeRendererSetting } = require('../src/main/rendererWritableSettings');
+
+describe('dashboard card configuration', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'ui', 'js', 'pages', 'dashboard.js'), 'utf8');
+  const context = vm.createContext({ window: { Pages: {} } });
+  vm.runInContext(source, context);
+  const cards = context.window.DashboardCards;
+
+  it('defines the six security-focused defaults in the intended order', () => {
+    assert.deepEqual(Array.from(cards.defaults), [
+      'last-scan', 'realtime-protection', 'threats-blocked', 'health-score', 'disk-health', 'network-firewall'
+    ]);
+  });
+
+  it('accepts another exact-six selection and preserves its order', () => {
+    const selection = ['system-temperatures', 'last-scan', 'realtime-protection', 'threats-blocked', 'health-score', 'device-cleanup'];
+    assert.equal(cards.validate(selection), true);
+    assert.deepEqual(Array.from(cards.normalize(JSON.stringify({ cards: selection }))), selection);
+  });
+
+  it('persists a reordered selection across a database reopen', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'soterios-dashboard-cards-'));
+    const dbPath = path.join(dir, 'settings.db');
+    let db = new DatabaseService(dbPath);
+    const selection = ['system-temperatures', 'last-scan', 'realtime-protection', 'threats-blocked', 'health-score', 'device-cleanup'];
+    try {
+      writeRendererSetting({ db }, 'dashboard.cards', JSON.stringify({ cards: selection }));
+      db.db.close();
+      db = new DatabaseService(dbPath);
+      assert.deepEqual(Array.from(cards.normalize(db.getSetting('dashboard.cards'))), selection);
+    } finally {
+      try { db.db.close(); } catch (_) {}
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects selections with fewer or more than six cards', () => {
+    assert.equal(cards.validate(cards.defaults.slice(0, 5)), false);
+    assert.equal(cards.validate([...cards.defaults, 'device-cleanup']), false);
+    assert.deepEqual(Array.from(cards.normalize({ cards: cards.defaults.slice(0, 5) })), Array.from(cards.defaults));
+  });
+
+  it('safely ignores unknown and duplicate ids and falls back if six valid choices remain unavailable', () => {
+    const normalized = cards.normalize({ cards: [...cards.defaults, 'future-card', 'last-scan'] });
+    assert.deepEqual(Array.from(normalized), Array.from(cards.defaults));
+    assert.deepEqual(Array.from(cards.normalize('{bad json')), Array.from(cards.defaults));
+  });
+
+  it('keeps optional cards in the registry and warnings outside the card grid', () => {
+    assert.ok(cards.registry.some((card) => card.id === 'system-temperatures'));
+    assert.ok(cards.registry.some((card) => card.id === 'device-cleanup'));
+    assert.match(source, /<div class="dashboard-grid">[\s\S]*<div class="card" style="margin-top:24px;">/);
+    assert.match(source, /for \(const id of selectedCardIds\)[\s\S]*dashboardGrid\.appendChild\(element\)/);
+  });
+
+  it('preserves card actions and limits thermal and disk refreshes to rendered cards', () => {
+    for (const id of ['btnQuickScan', 'btnFullScan', 'btnToggleRtp', 'btnViewQuarantine', 'btnRunCleanup', 'btnManageFirewall']) {
+      assert.ok(source.includes(`id="${id}"`), `missing existing card action ${id}`);
+    }
+    assert.match(source, /if \(!hasView\(\) \|\| !container\.querySelector\('#thermalCpu'\)\) return;/);
+    assert.match(source, /if \(!hasView\(\) \|\| !container\.querySelector\('#diskHealthSummary'\)\) return;/);
+  });
+});
 
 describe('dashboard warning metadata', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'ui', 'js', 'pages', 'dashboard.js'), 'utf8');

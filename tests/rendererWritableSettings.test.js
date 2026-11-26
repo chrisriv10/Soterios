@@ -44,6 +44,7 @@ describe('renderer-writable settings schema shape', () => {
   it('matches the exact expected key set (catches accidental additions)', () => {
     assert.deepEqual(Object.keys(RENDERER_WRITABLE_SETTINGS).sort(), [
       'app.setupComplete',
+      'dashboard.cards',
       'feature.aiAssistant',
       'feature.autoReports',
       'feature.autoUpdates',
@@ -342,6 +343,23 @@ describe('tools.hostsBaseline.v1 validation', () => {
 
   it('rejects oversized content', () => {
     throwsInvalidValue('tools.hostsBaseline.v1', { ...VALID, content: 'x'.repeat(1024 * 1024 + 1) });
+  });
+});
+
+describe('dashboard.cards validation', () => {
+  it('persists exactly six unique, bounded card ids', () => {
+    const ids = ['last-scan', 'realtime-protection', 'threats-blocked', 'health-score', 'disk-health', 'network-firewall'];
+    assert.deepEqual(validateRendererSetting('dashboard.cards', JSON.stringify({ cards: ids })), {
+      key: 'dashboard.cards', value: JSON.stringify({ cards: ids })
+    });
+  });
+
+  it('rejects malformed, duplicate, non-six, or oversized dashboard layouts', () => {
+    throwsInvalidValue('dashboard.cards', '{bad');
+    throwsInvalidValue('dashboard.cards', JSON.stringify({ cards: ['a', 'b', 'c', 'd', 'e'] }));
+    throwsInvalidValue('dashboard.cards', JSON.stringify({ cards: ['a', 'b', 'c', 'd', 'e', 'e'] }));
+    throwsInvalidValue('dashboard.cards', JSON.stringify({ cards: ['a', 'b', 'c', 'd', 'e', 'invalid id'] }));
+    throwsInvalidValue('dashboard.cards', 'x'.repeat(2049));
   });
 });
 

@@ -1965,5 +1965,14 @@
   "tools.debloat.proceedMessage": "Proceed with removal without a restore point?",
   "tools.debloat.proceedLabel": "Proceed without checkpoint",
   "tools.debloat.restoreOptOut": "Restore-point creation was unchecked.",
-  "network.staleData": "Vernieuwen mislukt. Eerder verzamelde gegevens worden getoond en kunnen verouderd zijn."
+  "network.staleData": "Vernieuwen mislukt. Eerder verzamelde gegevens worden getoond en kunnen verouderd zijn.",
+  "dashboard.cards.customize": "Aanpassen",
+  "dashboard.cards.title": "Dashboardkaarten aanpassen",
+  "dashboard.cards.help": "Kies precies 6 kaarten. Gebruik de pijlen om de volgorde te wijzigen.",
+  "dashboard.cards.selectedCount": "{count} van {total} geselecteerd",
+  "dashboard.cards.moveUp": "{title} omhoog verplaatsen",
+  "dashboard.cards.moveDown": "{title} omlaag verplaatsen",
+  "dashboard.cards.restoreDefaults": "Standaard herstellen",
+  "dashboard.cards.exactlySix": "Kies precies 6 dashboardkaarten.",
+  "dashboard.cards.saveFailed": "Dashboardkaarten konden niet worden opgeslagen."
 }
