@@ -47,4 +47,18 @@ describe('ProcessInspector suspicious assessment', () => {
     assert.equal(result.suspicious, true);
     assert.ok(result.locationReasons.length > 0);
   });
+
+  it('describes a Recycle Bin process as unusual without claiming it is illegitimate', async () => {
+    const inspector = new ProcessInspector({
+      getSignatureInfo: async () => ({ status: 'Unknown', publisher: null })
+    });
+
+    const result = await inspector._assessSuspicious({
+      name: 'payload.exe',
+      path: 'C:\\$Recycle.Bin\\payload.exe',
+      cmd: 'C:\\$Recycle.Bin\\payload.exe'
+    });
+
+    assert.equal(result.recommendedAction, 'An executable running from the Recycle Bin is unusual. Verify its source before allowing it to continue.');
+  });
 });

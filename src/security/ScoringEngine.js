@@ -1,6 +1,6 @@
 /**
- * ScoringEngine - Classifies network connections based on various factors
- * Uses heuristics to classify connections as SAFE, UNKNOWN, or MALICIOUS
+ * ScoringEngine - Classifies network connections using blocklists and local heuristics
+ * Internal classifications are presentation categories, not security verdicts.
  */
 
 const { ServiceNames } = require('./ServiceNames');
@@ -22,7 +22,7 @@ class ScoringEngine {
   static classify(connection, isBlocklisted = false) {
     const { remoteAddress, remotePort } = connection;
 
-    // If the IP is blocklisted, it's malicious
+    // A blocklist match is a risk indicator, not proof that the connection is malicious.
     if (isBlocklisted) {
       return 'MALICIOUS';
     }
@@ -101,9 +101,9 @@ class ScoringEngine {
    */
   static getDescription(classification) {
     const descriptions = {
-      'SAFE': 'Trusted network connection',
-      'UNKNOWN': 'Connection to public IP',
-      'MALICIOUS': 'Known malicious IP'
+      'SAFE': 'Lower concern under a local heuristic',
+      'UNKNOWN': 'Unverified connection with no current blocklist match',
+      'MALICIOUS': 'IP address matched a downloaded blocklist'
     };
     return descriptions[classification] || 'Unknown classification';
   }

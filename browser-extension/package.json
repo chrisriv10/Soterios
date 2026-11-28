@@ -1,7 +1,7 @@
 {
   "name": "soterios-browser-extension",
   "version": "2.1.1",
-  "description": "Local-first credential and phishing protection for Chromium browsers",
+  "description": "Password checks, local threat-feed lookups, and optional ad and tracker blocking for Chromium",
   "private": true,
   "scripts": {
     "build": "node ../tools/build-extension.mjs",

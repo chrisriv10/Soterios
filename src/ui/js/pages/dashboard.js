@@ -759,13 +759,13 @@ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="r
             if (pct) item.reason = t('health.reason.cpuLoad', { pct: pct[1] });
           } else if (item.reason === 'Rebooted within the last day.') {
             item.reason = t('health.reason.uptimeToday');
-          } else if (item.reason.startsWith('Restarted ') && item.reason.includes(' day(s) ago — within normal range.')) {
+          } else if (item.reason.startsWith('Restarted ') && item.reason.includes(' day(s) ago, within normal range.')) {
             const days = item.reason.match(/Restarted (\d+) day\(s\) ago/);
             if (days) item.reason = t('health.reason.uptimeDays', { days: days[1] });
-          } else if (item.reason.startsWith('Running ') && item.reason.includes(' days without a restart — consider rebooting soon')) {
+          } else if (item.reason.startsWith('Running ') && item.reason.includes(' days without a restart. Consider rebooting soon')) {
             const days = item.reason.match(/Running (\d+) days without a restart/);
             if (days) item.reason = t('health.reason.uptimeWeeks', { days: days[1] });
-          } else if (item.reason.startsWith('Running ') && item.reason.includes(' days without a restart — a reboot is recommended')) {
+          } else if (item.reason.startsWith('Running ') && item.reason.includes(' days without a restart. A reboot is recommended')) {
             const days = item.reason.match(/Running (\d+) days without a restart/);
             if (days) item.reason = t('health.reason.uptimeLong', { days: days[1] });
           } else if (item.reason === 'Real-time protection is active.') {

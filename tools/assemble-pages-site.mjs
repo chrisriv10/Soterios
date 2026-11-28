@@ -61,6 +61,7 @@ export async function assemblePagesSite({ sourceDir, siteDir }) {
     await copyRootFile(rootAssets, outputAssets, filename);
   }
   await copyRegularTree(path.join(rootAssets, 'site'), path.join(outputAssets, 'site'));
+  await copyRegularTree(path.join(source, 'feedback'), path.join(site, 'feedback'));
 }
 
 function readArgument(name) {

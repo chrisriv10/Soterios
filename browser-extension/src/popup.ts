@@ -7,9 +7,9 @@ type PopupState = { settings: SettingsV2; display: { theme: any }; domain: strin
 function statusPresentation(verdict: ProtectionVerdict | null, confirmed: boolean) {
   if (!confirmed) return { label: 'Setup required', mark: '·', className: 'unknown' };
   if (!verdict || verdict.verdict === 'unknown') return { label: verdict?.reasons.includes('SITE_PAUSED') ? 'Paused' : 'Attention', mark: '?', className: 'warning' };
-  if (verdict.verdict === 'danger') return { label: 'Known risk found', mark: '!', className: 'danger' };
+  if (verdict.verdict === 'danger') return { label: 'Threat indicator found', mark: '!', className: 'danger' };
   if (verdict.verdict === 'warning') return { label: 'Review advised', mark: '!', className: 'warning' };
-  return { label: 'No known risks found', mark: '✓', className: 'clear' };
+  return { label: 'No known indicators found', mark: '✓', className: 'clear' };
 }
 function renderState(state: PopupState): void {
   applyTheme(state.display.theme); setText('current-domain', state.domain || 'This browser page');
@@ -45,7 +45,7 @@ function renderAdblock(state: AdblockState | null): void {
   trackersInput.disabled = view.controlsDisabled;
   const warning = document.getElementById('adblock-warning')!;
   warning.hidden = !view.showApplyWarning;
-  if (view.showApplyWarning) warning.textContent = 'Settings and active blocking disagree. Blocking may be partially off.';
+  if (view.showApplyWarning) warning.textContent = 'The settings could not be fully applied. Some ad or tracker requests may not be blocked.';
 }
 
 async function loadAdblock(): Promise<void> {
@@ -87,7 +87,7 @@ function renderAdblockSite(state: AdblockSiteState | null): void {
     toggle.disabled = true;
     host.textContent = '';
     note.hidden = false;
-    note.textContent = 'Site control needs an HTTP(S) page with ad protection on.';
+    note.textContent = 'Site controls require an HTTP or HTTPS page with ad and tracker blocking enabled.';
     adblockSiteHostname = null;
     return;
   }
@@ -110,7 +110,7 @@ function renderAdblockSite(state: AdblockSiteState | null): void {
   }
   if (state.applyWarning) {
     note.hidden = false;
-    note.textContent = 'Site state does not match yet. Try toggling again.';
+    note.textContent = 'The site setting could not be confirmed. Check its status and try again.';
   }
 }
 
@@ -145,7 +145,7 @@ async function loadActivity(): Promise<void> {
 document.querySelectorAll<HTMLButtonElement>('.tab').forEach((tab) => tab.addEventListener('click', () => { document.querySelectorAll<HTMLButtonElement>('.tab').forEach((candidate) => candidate.setAttribute('aria-selected', String(candidate === tab))); document.querySelectorAll<HTMLElement>('.view').forEach((view) => { view.hidden = view.id !== tab.dataset.view; }); if (tab.dataset.view === 'activity-view') void loadActivity(); }));
 const passwordInput = document.getElementById('password-input') as HTMLInputElement;
 passwordInput.addEventListener('input', async () => { const result = await send<{ score: number; label: string; suggestions: string[] }>('ANALYZE_PASSWORD', { password: passwordInput.value }); (document.getElementById('strength-meter') as HTMLElement).style.width = `${result.score * 25}%`; setText('strength-result', `${result.label}. ${result.suggestions.join(' ')}`); });
-document.getElementById('check-password')!.addEventListener('click', async () => { const output = document.getElementById('hibp-result')!; output.hidden = false; output.textContent = 'Checking one completed password…'; try { const result = await send<{ hibp: { found: boolean; count: number } | null; serviceState: string }>('CHECK_PASSWORD', { password: passwordInput.value }); output.className = `notice ${result.hibp?.found ? 'danger' : ''}`; output.textContent = result.hibp?.found ? `Seen ${result.hibp.count.toLocaleString()} times in the breach corpus. Change it anywhere you use it.` : result.hibp ? 'No match found in the breach corpus. This does not guarantee the password is safe.' : `HIBP is ${result.serviceState.replace('_', ' ')}.`; } catch (error) { output.className = 'notice warning'; output.textContent = error instanceof Error ? error.message : String(error); } });
+document.getElementById('check-password')!.addEventListener('click', async () => { const output = document.getElementById('hibp-result')!; output.hidden = false; output.textContent = 'Checking password…'; try { const result = await send<{ hibp: { found: boolean; count: number } | null; serviceState: string }>('CHECK_PASSWORD', { password: passwordInput.value }); output.className = `notice ${result.hibp?.found ? 'danger' : ''}`; output.textContent = result.hibp?.found ? `Seen ${result.hibp.count.toLocaleString()} times in the breach corpus. Change it anywhere you use it.` : result.hibp ? 'No match found in the breach corpus. A clean result does not prove that the password is safe.' : `HIBP is ${result.serviceState.replace('_', ' ')}.`; } catch (error) { output.className = 'notice warning'; output.textContent = error instanceof Error ? error.message : String(error); } });
 document.getElementById('generate')!.addEventListener('click', async () => { const mode = (document.getElementById('generator-mode') as HTMLSelectElement).value; const result = await send<{ value: string }>('GENERATE_PASSWORD', { mode, length: 20, words: 5 }); (document.getElementById('generated-value') as HTMLInputElement).value = result.value; });
 document.getElementById('copy-generated')!.addEventListener('click', async () => { const field = document.getElementById('generated-value') as HTMLInputElement; if (field.value) await navigator.clipboard.writeText(field.value); setText('copy-generated', field.value ? 'Copied' : 'Generate first'); });
 document.getElementById('on-demand')!.addEventListener('click', async () => { await send('RUN_ON_DEMAND'); window.close(); });

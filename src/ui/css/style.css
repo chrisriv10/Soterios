@@ -2164,7 +2164,7 @@ body {
 }
 .defender-history-resource {
   direction: ltr;
-  text-align: left;
+  text-align: start;
   unicode-bidi: plaintext;
   font-family: var(--font-mono, monospace);
   font-size: .78rem;
@@ -4566,3 +4566,37 @@ body.setup-mode .app-shell { display: block; }
 .browser-ext-copy { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 #srDescription { box-sizing: border-box; }
 .disk-health-warning { color: var(--warning-text); font-weight: 600; }
+
+.help-feedback-card { min-width: 0; }
+.help-feedback-card .panel-title { margin: 0; }
+.help-feedback-intro { margin: .35rem 0 1rem; }
+.help-feedback-actions { display: grid; }
+.help-feedback-action {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 8px;
+  border: 0;
+  border-top: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-main);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color .18s ease, color .18s ease;
+}
+.help-feedback-action:hover,
+.help-feedback-action:focus-visible { background: var(--bg-surface-hover); }
+.help-feedback-action:disabled { opacity: .62; cursor: progress; }
+.help-feedback-icon { width: 22px; height: 22px; color: var(--accent-primary); }
+.help-feedback-label { display: block; font-size: .9rem; font-weight: 650; }
+.help-feedback-desc { display: block; margin-top: 2px; color: var(--text-muted); font-size: .76rem; line-height: 1.4; }
+.help-feedback-external { color: var(--text-muted); font-size: .9rem; }
+.help-feedback-privacy { margin: 1rem 0 0; color: var(--text-muted); font-size: .76rem; line-height: 1.5; }
+.help-feedback-status { min-height: 1.2em; margin-top: .4rem; color: var(--accent-warning); font-size: .78rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .help-feedback-action { transition: none; }
+}

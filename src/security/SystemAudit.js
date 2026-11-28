@@ -38,7 +38,7 @@ class SystemAudit {
       return {
         ok: false,
         error: timedOut
-          ? `Query timed out after ${timeoutMs}ms (Windows Update search can be slow — try again or check manually in Settings).`
+          ? `Query timed out after ${timeoutMs}ms (Windows Update search can be slow; try again or check manually in Settings).`
           : errorDetails
       };
     }
@@ -53,9 +53,9 @@ class SystemAudit {
         if (s.AntivirusEnabled) {
           out.push({ name: 'Windows Defender Antivirus', section: 'antivirus', status: 'pass', message: 'Defender antivirus is enabled and running.', detail: `Engine: ${s.AMEngineVersion || 'N/A'} | Signatures: ${s.AntivirusSignatureVersion || 'N/A'} (${s.AntivirusSignatureAge || 0} days old)`, recommendation: '', actionUri: 'windowsdefender://threatsettings/' });
         } else {
-          out.push({ name: 'Windows Defender Antivirus', section: 'antivirus', status: 'fail', message: 'Defender antivirus is disabled!', detail: 'Antivirus protection is turned off.', recommendation: 'Open Windows Security > Virus & threat protection and turn on real-time protection.', actionUri: 'windowsdefender://threatsettings/' });
+          out.push({ name: 'Windows Defender Antivirus', section: 'antivirus', status: 'fail', message: 'Defender antivirus is disabled.', detail: 'Microsoft Defender Antivirus reports that its service is disabled. Windows may be using another antivirus provider.', recommendation: 'Open Windows Security and review which antivirus provider is active.', actionUri: 'windowsdefender://threatsettings/' });
         }
-        out.push({ name: 'Real-Time Protection', section: 'antivirus', status: s.RealTimeProtectionEnabled ? 'pass' : 'fail', message: s.RealTimeProtectionEnabled ? 'Real-time protection is active.' : 'Real-time protection is off!', detail: s.RealTimeProtectionEnabled ? 'Threats are blocked as they appear.' : 'Your system is vulnerable to active threats.', recommendation: s.RealTimeProtectionEnabled ? '' : 'Enable real-time protection in Windows Security settings.', actionUri: 'windowsdefender://threatsettings/' });
+        out.push({ name: 'Real-Time Protection', section: 'antivirus', status: s.RealTimeProtectionEnabled ? 'pass' : 'fail', message: s.RealTimeProtectionEnabled ? 'Real-time protection is active.' : 'Real-time protection is off.', detail: s.RealTimeProtectionEnabled ? 'Microsoft Defender checks files and activity in real time. It cannot detect or block every threat.' : 'Microsoft Defender is not checking files and activity in real time. Manual scans and other security controls may still be available.', recommendation: s.RealTimeProtectionEnabled ? '' : 'Enable real-time protection in Windows Security settings.', actionUri: 'windowsdefender://threatsettings/' });
       } catch (e) {
         out.push({ name: 'Windows Defender', section: 'antivirus', status: 'error', message: 'Could not parse Defender status.', detail: e.message, actionUri: 'ms-settings:windowsdefender' });
       }
@@ -71,14 +71,14 @@ class SystemAudit {
       const enabled = uac.stdout.trim() === '1';
       return [{
         name: 'User Account Control (UAC)', section: 'system', status: enabled ? 'pass' : 'fail',
-        message: enabled ? 'UAC is enabled.' : 'UAC is disabled! This is a severe security risk.',
-        detail: enabled ? 'UAC prompts before making system-level changes.' : 'All programs run with full administrator privileges.',
+        message: enabled ? 'UAC is enabled.' : 'UAC is disabled.',
+        detail: enabled ? 'UAC prompts for approval or credentials when an operation needs administrator permissions, depending on your settings.' : 'Programs running with an administrator account can make system changes without a UAC prompt.',
         recommendation: enabled ? '' : 'Enable UAC via Control Panel > User Accounts > Change User Account Control settings.',
         manageAction: 'open-windows-utility',
         manageContext: 'uac'
       }];
     }
-    return [{ name: 'User Account Control', section: 'system', status: 'error', message: 'Could not check UAC status.', manageAction: 'open-windows-utility', manageContext: 'uac' }];
+    return [{ name: 'User Account Control', section: 'system', status: 'error', message: 'Could not check UAC status.', detail: 'Could not read the UAC setting. Check it in Windows User Account Control settings.', manageAction: 'open-windows-utility', manageContext: 'uac' }];
   }
 
   async checkWindowsUpdate() {
@@ -89,9 +89,9 @@ class SystemAudit {
       const raw = up.stdout.trim();
       const count = /^[0-9]+$/.test(raw) ? Number(raw) : null;
       if (count === null) {
-        return [{ name: 'Windows Updates', section: 'updates', status: 'warn', message: 'Could not parse update status.', detail: raw || 'Unexpected response from Windows Update query.', recommendation: 'Check Windows Update in Settings manually.', actionUri: 'ms-settings:windowsupdate' }];
+        return [{ name: 'Windows Updates', section: 'updates', status: 'warn', message: 'Could not parse update status.', detail: 'The Windows Update query returned an unexpected response. Check Windows Update in Settings.', recommendation: 'Open Settings > Windows Update to check the status manually.', actionUri: 'ms-settings:windowsupdate' }];
       } else if (count === 0) {
-        return [{ name: 'Windows Updates', section: 'updates', status: 'pass', message: 'No pending updates.', detail: 'All mandatory updates are installed.', recommendation: '', actionUri: 'ms-settings:windowsupdate' }];
+        return [{ name: 'Windows Updates', section: 'updates', status: 'pass', message: 'No pending mandatory updates.', detail: 'The update query found no pending mandatory updates. Optional and driver updates may still be available.', recommendation: '', actionUri: 'ms-settings:windowsupdate' }];
       }
       return [{ name: 'Windows Updates', section: 'updates', status: 'warn', message: `${count} mandatory update(s) pending.`, detail: `${count} mandatory update(s) are waiting to be installed.`, recommendation: 'Open Settings > Windows Update and install pending updates.', actionUri: 'ms-settings:windowsupdate' }];
     }
@@ -104,7 +104,7 @@ class SystemAudit {
       } else {
         const count = /^[0-9]+$/.test(raw) ? Number(raw) : null;
         if (count !== null && count === 0) {
-          return [{ name: 'Windows Updates', section: 'updates', status: 'pass', message: 'No pending updates.', detail: 'All mandatory updates are installed.', recommendation: '', actionUri: 'ms-settings:windowsupdate' }];
+          return [{ name: 'Windows Updates', section: 'updates', status: 'pass', message: 'No pending mandatory updates.', detail: 'The update query found no pending mandatory updates. Optional and driver updates may still be available.', recommendation: '', actionUri: 'ms-settings:windowsupdate' }];
         } else if (count !== null && count > 0) {
           return [{ name: 'Windows Updates', section: 'updates', status: 'warn', message: `${count} mandatory update(s) pending.`, detail: `${count} mandatory update(s) are waiting to be installed.`, recommendation: 'Open Settings > Windows Update and install pending updates.', actionUri: 'ms-settings:windowsupdate' }];
         }
@@ -112,20 +112,11 @@ class SystemAudit {
     }
     // Sanitize error - don't expose raw PowerShell/COM errors to user
     const friendlyError = this.sanitizeWindowsUpdateError(up.error);
-    return [{ name: 'Windows Updates', section: 'updates', status: 'warn', message: 'Could not query update status.', detail: friendlyError, recommendation: 'Check Windows Update in Settings manually.', actionUri: 'ms-settings:windowsupdate' }];
+    return [{ name: 'Windows Updates', section: 'updates', status: 'warn', message: 'Could not query update status.', detail: friendlyError, recommendation: 'Open Settings > Windows Update to check the status manually.', actionUri: 'ms-settings:windowsupdate' }];
   }
 
   sanitizeWindowsUpdateError(rawError) {
-    if (!rawError) return 'Windows Update may be disabled or the COM query timed out.';
-    const err = String(rawError);
-    // PowerShell parser errors
-    if (err.includes('At line') && err.includes('char:')) return 'Windows Update query failed — the update service may be busy or temporarily unavailable.';
-    // COM errors
-    if (err.includes('0x8007') || err.includes('0x8024') || err.includes('HRESULT')) return 'Windows Update service returned an error. The service may be disabled or corrupted.';
-    if (err.includes('Microsoft.Update.Session') || err.includes('CreateUpdateSearcher')) return 'Could not connect to Windows Update service. It may be disabled or not running.';
-    if (err.includes('timeout') || err.includes('timed out')) return 'Windows Update query timed out. The service may be busy.';
-    // Generic fallback
-    return 'Unable to check Windows Update status. Please check manually in Settings > Windows Update.';
+    return 'Could not read Windows Update status. Try again later or check Settings > Windows Update.';
   }
 
   async checkBitLocker() {
@@ -138,17 +129,19 @@ class SystemAudit {
         if (statusValue === 1) {
           return [{
             name: 'BitLocker Drive Encryption', section: 'system', status: 'pass',
-            message: 'System drive is encrypted.',
-            detail: 'Your data is protected if the device is lost or stolen.',
+            message: 'BitLocker protection is on for the system drive.',
+            detail: 'This check reads BitLocker protection status, not encryption progress. Access still depends on Windows sign-in and recovery settings.',
             recommendation: '',
             actionUri: 'control /name Microsoft.BitLockerDriveEncryption'
           }];
         } else if (statusValue === 0 || statusValue === null) {
           return [{
             name: 'BitLocker Drive Encryption', section: 'system', status: 'warn',
-            message: statusValue === 0 ? 'System drive is NOT encrypted.' : 'BitLocker status unavailable.',
-            detail: statusValue === 0 ? 'Anyone with physical access can read your data.' : 'Could not determine BitLocker protection status.',
-            recommendation: 'Enable BitLocker via Control Panel > BitLocker Drive Encryption.',
+            message: statusValue === 0 ? 'BitLocker protection is off for the system drive.' : 'BitLocker status unavailable.',
+            detail: statusValue === 0 ? 'BitLocker protection is off for this drive. Windows sign-in may limit access while Windows is running, but it does not encrypt the drive.' : 'Could not determine BitLocker protection status.',
+            recommendation: statusValue === 0
+              ? 'Enable BitLocker via Control Panel > BitLocker Drive Encryption.'
+              : 'Check BitLocker status in Windows settings.',
             actionUri: 'control /name Microsoft.BitLockerDriveEncryption'
           }];
         }
@@ -160,10 +153,10 @@ class SystemAudit {
           actionUri: 'control /name Microsoft.BitLockerDriveEncryption'
         }];
       } catch (e) {
-        return [{ name: 'BitLocker', section: 'system', status: 'info', message: 'BitLocker status unavailable (may not be supported on this edition).', detail: 'BitLocker requires Windows Pro or Enterprise.', actionUri: 'control /name Microsoft.BitLockerDriveEncryption' }];
+          return [{ name: 'BitLocker', section: 'system', status: 'info', message: 'BitLocker status could not be read.', detail: 'The BitLocker response was not in the expected format. Open BitLocker settings to check status.', actionUri: 'control /name Microsoft.BitLockerDriveEncryption' }];
       }
     }
-    return [{ name: 'BitLocker', section: 'system', status: 'info', message: 'BitLocker is not available on this system.', detail: 'Requires Windows Pro/Enterprise and a TPM chip.', actionUri: 'ms-settings:deviceencryption' }];
+    return [{ name: 'BitLocker', section: 'system', status: 'info', message: 'Could not query BitLocker status.', detail: 'Check BitLocker in Windows Settings or Control Panel. Availability depends on your Windows edition and device configuration.', actionUri: 'ms-settings:deviceencryption' }];
   }
 
   async checkExecutionPolicy() {
@@ -175,7 +168,7 @@ class SystemAudit {
       return [{
         name: 'PowerShell Execution Policy', section: 'updates', status: pass ? 'pass' : 'warn',
         message: policy ? `Policy: ${policy}` : 'Policy could not be determined.',
-        detail: pass ? 'Only signed or locally authored scripts can run.' : 'Less restrictive execution policy may allow untrusted scripts.',
+        detail: pass ? 'Execution policy can restrict script execution, but it is not a security boundary.' : 'A less restrictive execution policy may allow scripts from untrusted sources. Execution policy is not a security boundary.',
         recommendation: pass ? '' : 'Consider setting to RemoteSigned: Set-ExecutionPolicy RemoteSigned -Scope LocalMachine',
         manageAction: 'open-powershell',
         manageContext: 'execution-policy'
@@ -190,8 +183,8 @@ class SystemAudit {
       const enabled = sb.stdout.trim() === 'True';
       return [{
         name: 'Secure Boot', section: 'system', status: enabled ? 'pass' : 'fail',
-        message: enabled ? 'Secure Boot is enabled.' : 'Secure Boot is disabled!',
-        detail: enabled ? 'Only trusted bootloaders can run during system startup.' : 'System is vulnerable to bootkit attacks.',
+        message: enabled ? 'Secure Boot is enabled.' : 'Secure Boot is disabled.',
+        detail: enabled ? 'UEFI verifies signatures on boot software before starting Windows.' : 'Secure Boot is off, so UEFI does not verify boot software signatures through this feature.',
         recommendation: enabled ? '' : 'Enable Secure Boot in your UEFI/BIOS firmware settings.',
         actionUri: 'ms-settings:recovery'
       }];
@@ -227,25 +220,25 @@ class SystemAudit {
     }
     const out = [];
     if (data.tamperProtected === true) {
-      out.push({ name: 'Tamper Protection', section: 'antivirus', status: 'pass', message: 'Tamper protection is enabled.', detail: 'Malware cannot disable Defender protections.', recommendation: '', actionUri: 'windowsdefender://threatsettings/' });
+      out.push({ name: 'Tamper Protection', section: 'antivirus', status: 'pass', message: 'Tamper protection is enabled.', detail: 'Tamper Protection helps prevent unauthorized changes to selected Microsoft Defender settings.', recommendation: '', actionUri: 'windowsdefender://threatsettings/' });
     } else if (data.tamperProtected === false) {
-      out.push({ name: 'Tamper Protection', section: 'antivirus', status: 'fail', message: 'Tamper protection is off!', detail: 'Malware can disable Defender protections without warning.', recommendation: 'Enable tamper protection in Windows Security > Virus & threat protection > Manage settings.', actionUri: 'windowsdefender://threatsettings/' });
+      out.push({ name: 'Tamper Protection', section: 'antivirus', status: 'fail', message: 'Tamper protection is off.', detail: 'Selected Defender settings are not protected by Tamper Protection. Other Windows protections may still apply.', recommendation: 'Enable tamper protection in Windows Security > Virus & threat protection > Manage settings.', actionUri: 'windowsdefender://threatsettings/' });
     } else {
       out.push({ name: 'Tamper Protection', section: 'antivirus', status: 'info', message: 'Tamper protection status could not be determined.', detail: 'This check may not be supported on this system.', actionUri: 'windowsdefender://threatsettings/' });
     }
     if (Number(data.cloudProtectionLevel) > 0) {
-      out.push({ name: 'Cloud-delivered Protection', section: 'antivirus', status: 'pass', message: 'Cloud-delivered protection is active.', detail: 'New threats are blocked using up-to-the-minute cloud intelligence.', recommendation: '', actionUri: 'windowsdefender://threatsettings/' });
+      out.push({ name: 'Cloud-delivered Protection', section: 'antivirus', status: 'pass', message: 'Cloud-delivered protection is active.', detail: "Defender can use Microsoft's cloud service to assess suspicious files and provide threat intelligence.", recommendation: '', actionUri: 'windowsdefender://threatsettings/' });
     } else if (data.cloudProtectionLevel === 0) {
-      out.push({ name: 'Cloud-delivered Protection', section: 'antivirus', status: 'fail', message: 'Cloud-delivered protection is off!', detail: 'Protection relies only on locally installed signatures.', recommendation: 'Turn on cloud-delivered protection in Windows Security > Virus & threat protection > Manage settings.', actionUri: 'windowsdefender://threatsettings/' });
+      out.push({ name: 'Cloud-delivered Protection', section: 'antivirus', status: 'fail', message: 'Cloud-delivered protection is off.', detail: 'Defender does not use cloud-delivered protection. Local signatures and other Windows security features may still be active.', recommendation: 'Turn on cloud-delivered protection in Windows Security > Virus & threat protection > Manage settings.', actionUri: 'windowsdefender://threatsettings/' });
     } else {
       out.push({ name: 'Cloud-delivered Protection', section: 'antivirus', status: 'info', message: 'Cloud-delivered protection status could not be determined.', detail: 'This setting may not be reported on this system.', actionUri: 'windowsdefender://threatsettings/' });
     }
     if (data.networkProtectionMode === 'block') {
-      out.push({ name: 'Network Protection', section: 'antivirus', status: 'pass', message: 'Network protection is on.', detail: 'Defender blocks malicious connections and phishing sites.', recommendation: '', manageAction: 'open-powershell', manageContext: 'network-protection' });
+      out.push({ name: 'Network Protection', section: 'antivirus', status: 'pass', message: 'Network protection is on.', detail: 'Defender Network Protection helps block connections to sites Microsoft identifies as malicious or suspicious.', recommendation: '', manageAction: 'open-powershell', manageContext: 'network-protection' });
     } else if (data.networkProtectionMode === 'audit') {
-      out.push({ name: 'Network Protection', section: 'antivirus', status: 'info', message: 'Network protection is in audit mode.', detail: 'Audit mode: logs malicious connections without blocking.', recommendation: 'Enable network protection block mode with PowerShell or Group Policy.', manageAction: 'open-powershell', manageContext: 'network-protection' });
+      out.push({ name: 'Network Protection', section: 'antivirus', status: 'info', message: 'Network protection is in audit mode.', detail: "Audit mode records connections that match Defender's criteria but does not block them.", recommendation: 'Enable network protection block mode with PowerShell or Group Policy.', manageAction: 'open-powershell', manageContext: 'network-protection' });
     } else if (data.networkProtectionMode === 'off') {
-      out.push({ name: 'Network Protection', section: 'antivirus', status: 'fail', message: 'Defender Network Protection is off.', detail: 'Network Protection is disabled. Defender will not block malicious connections.', recommendation: 'Enable network protection block mode with PowerShell or Group Policy.', manageAction: 'open-powershell', manageContext: 'network-protection' });
+      out.push({ name: 'Network Protection', section: 'antivirus', status: 'fail', message: 'Defender Network Protection is off.', detail: 'Defender Network Protection does not block sites while it is off. Other security controls may still apply.', recommendation: 'Enable network protection block mode with PowerShell or Group Policy.', manageAction: 'open-powershell', manageContext: 'network-protection' });
     } else {
       out.push({ name: 'Network Protection', section: 'antivirus', status: 'info', message: 'Network protection status could not be determined.', detail: 'Network Protection status could not be determined.', manageAction: 'open-powershell', manageContext: 'network-protection' });
     }
@@ -257,14 +250,14 @@ class SystemAudit {
     if (r.ok) {
       const v = r.stdout.trim();
       if (v === '0') {
-        return [{ name: 'SMBv1', section: 'system', status: 'pass', message: 'SMBv1 is disabled.', detail: 'The legacy SMBv1 protocol with known wormable vulnerabilities is off.', recommendation: '', manageAction: 'open-windows-utility', manageContext: 'windows-features' }];
+        return [{ name: 'SMBv1 server setting', section: 'system', status: 'pass', message: 'SMBv1 server setting is disabled.', detail: 'The SMB1 server setting in the registry is disabled. This check does not inspect every SMB1 client or feature setting.', recommendation: '', manageAction: 'open-windows-utility', manageContext: 'windows-features' }];
       }
       if (v === '1') {
-        return [{ name: 'SMBv1', section: 'system', status: 'fail', message: 'SMBv1 is enabled!', detail: 'SMBv1 has known wormable vulnerabilities (WannaCry, SMBGhost).', recommendation: 'Disable SMBv1: Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -NoRestart', manageAction: 'open-windows-utility', manageContext: 'windows-features' }];
+        return [{ name: 'SMBv1 server setting', section: 'system', status: 'fail', message: 'SMBv1 server setting is enabled.', detail: 'SMBv1 has known vulnerabilities. Disable it if no application or device requires it.', recommendation: 'Disable SMBv1: Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -NoRestart', manageAction: 'open-windows-utility', manageContext: 'windows-features' }];
       }
-      return [{ name: 'SMBv1', section: 'system', status: 'warn', message: 'SMBv1 may be enabled.', detail: 'Could not confirm SMBv1 is disabled — it may be enabled by default.', recommendation: 'Check SMBv1 status: Get-SmbServerConfiguration | Select SMB1Protocol', manageAction: 'open-windows-utility', manageContext: 'windows-features' }];
+        return [{ name: 'SMBv1 server setting', section: 'system', status: 'warn', message: 'SMBv1 server setting could not be confirmed.', detail: 'No SMB1 server registry value was found. Check the SMB server and client settings in Windows.', recommendation: 'Check SMBv1 status: Get-SmbServerConfiguration | Select SMB1Protocol', manageAction: 'open-windows-utility', manageContext: 'windows-features' }];
     }
-    return [{ name: 'SMBv1', section: 'system', status: 'warn', message: 'SMBv1 status could not be determined.', detail: r.error || 'Registry query failed.', recommendation: 'Check SMBv1 status: Get-SmbServerConfiguration | Select SMB1Protocol', manageAction: 'open-windows-utility', manageContext: 'windows-features' }];
+    return [{ name: 'SMBv1 server setting', section: 'system', status: 'warn', message: 'SMBv1 server setting could not be determined.', detail: 'The SMB1 server setting could not be read. Check SMB server and client settings in Windows.', recommendation: 'Check SMBv1 status: Get-SmbServerConfiguration | Select SMB1Protocol', manageAction: 'open-windows-utility', manageContext: 'windows-features' }];
   }
 
   async checkAutoLogon() {
@@ -275,7 +268,7 @@ class SystemAudit {
         const on = !!(d && d.autoAdminLogon === '1');
         const pw = !!(d && d.hasDefaultPassword);
         if (on && pw) {
-          return [{ name: 'Automatic Logon', section: 'accounts', status: 'fail', message: 'Automatic logon stores a plaintext password!', detail: 'Login credentials are stored in plaintext in the registry — anyone with access can read them.', recommendation: 'Disable automatic logon: Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon" -Name AutoAdminLogon -Value 0', actionUri: 'control userpasswords2' }];
+          return [{ name: 'Automatic Logon', section: 'accounts', status: 'fail', message: 'Automatic logon has a default password value in the registry.', detail: 'The Winlogon registry contains a default password value. Disable automatic logon and remove that value if it is no longer needed.', recommendation: 'Disable automatic logon: Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon" -Name AutoAdminLogon -Value 0', actionUri: 'control userpasswords2' }];
         }
         if (on) {
           return [{ name: 'Automatic Logon', section: 'accounts', status: 'warn', message: 'Automatic logon is enabled.', detail: 'Windows signs in automatically at startup without a prompt.', recommendation: 'Consider disabling automatic logon in User Accounts (netplwiz) settings.', actionUri: 'control userpasswords2' }];
@@ -292,13 +285,13 @@ class SystemAudit {
       try {
         const d = JSON.parse(r.stdout);
         if (d && d.rdpEnabled === false) {
-          return [{ name: 'Remote Desktop', section: 'system', status: 'pass', message: 'Remote Desktop is disabled.', detail: 'No remote desktop attack surface is exposed.', recommendation: '', actionUri: 'ms-settings:remotedesktop' }];
+          return [{ name: 'Remote Desktop', section: 'system', status: 'pass', message: 'Remote Desktop is disabled.', detail: 'This check found Windows Remote Desktop disabled. Other remote-access tools or services may still accept connections.', recommendation: '', actionUri: 'ms-settings:remotedesktop' }];
         }
         if (d && d.rdpEnabled === true) {
           if (d.nlaEnabled) {
-            return [{ name: 'Remote Desktop', section: 'system', status: 'warn', message: 'Remote Desktop is enabled (NLA on).', detail: 'Remote connections require network-level authentication.', recommendation: 'Turn off Remote Desktop when not needed: Settings > System > Remote Desktop.', actionUri: 'ms-settings:remotedesktop' }];
+            return [{ name: 'Remote Desktop', section: 'system', status: 'warn', message: 'Remote Desktop is enabled (NLA on).', detail: 'Network Level Authentication verifies users before Windows establishes a remote desktop session.', recommendation: 'Turn off Remote Desktop when not needed: Settings > System > Remote Desktop.', actionUri: 'ms-settings:remotedesktop' }];
           }
-          return [{ name: 'Remote Desktop', section: 'system', status: 'fail', message: 'Remote Desktop is enabled WITHOUT Network Level Authentication!', detail: 'Attackers can attempt password brute force over the network.', recommendation: 'Enable NLA: Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp" -Name UserAuthentication -Value 1', actionUri: 'ms-settings:remotedesktop' }];
+          return [{ name: 'Remote Desktop', section: 'system', status: 'fail', message: 'Remote Desktop is enabled without Network Level Authentication.', detail: 'Without NLA, Windows establishes the Remote Desktop connection before authenticating the user. Enable NLA when your clients support it.', recommendation: 'Enable NLA: Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp" -Name UserAuthentication -Value 1', actionUri: 'ms-settings:remotedesktop' }];
         }
       } catch (e) { /* fall through to error */ }
     }
@@ -310,10 +303,10 @@ class SystemAudit {
     if (r.ok) {
       const v = r.stdout.trim();
       if (v === '1' || v === '2') {
-        return [{ name: 'LSA Protection', section: 'system', status: 'pass', message: 'LSA protection is enabled.', detail: 'Credential-dumping tools cannot read Local Security Authority memory.', recommendation: '', manageAction: 'open-powershell', manageContext: 'lsa-protection' }];
+        return [{ name: 'LSA Protection', section: 'system', status: 'pass', message: 'LSA protection is configured on.', detail: 'When active, this setting restricts nonprotected processes from loading code into LSASS or reading its memory. It helps reduce credential-theft risk.', recommendation: '', manageAction: 'open-powershell', manageContext: 'lsa-protection' }];
       }
       if (v === '0') {
-        return [{ name: 'LSA Protection', section: 'system', status: 'fail', message: 'LSA protection is off!', detail: 'Credential-theft tools can read LSA memory and steal password hashes.', recommendation: 'Enable LSA protection: Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa" -Name RunAsPPL -Value 1', manageAction: 'open-powershell', manageContext: 'lsa-protection' }];
+        return [{ name: 'LSA Protection', section: 'system', status: 'fail', message: 'LSA protection is off.', detail: 'Windows is not configured to apply this additional restriction to LSASS. Other protections may still apply.', recommendation: 'Enable LSA protection: Set-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa" -Name RunAsPPL -Value 1', manageAction: 'open-powershell', manageContext: 'lsa-protection' }];
       }
     }
     return [{ name: 'LSA Protection', section: 'system', status: 'info', message: 'LSA protection status could not be determined.', detail: r.error || 'The RunAsPPL registry value is not set on this system.', manageAction: 'open-powershell', manageContext: 'lsa-protection' }];
@@ -344,9 +337,9 @@ class SystemAudit {
     const complexity = rawComplex === null || rawComplex === undefined ? null : Boolean(rawComplex);
 
     const guestRow = d.guestDisabled === true
-      ? { name: 'Guest Account', section: 'accounts', status: 'pass', message: 'Guest account is disabled.', detail: 'No anonymous local access to this PC.', recommendation: '', manageAction: 'open-powershell', manageContext: 'guest-account' }
+      ? { name: 'Guest Account', section: 'accounts', status: 'pass', message: 'Guest account is disabled.', detail: 'The built-in Guest account is disabled.', recommendation: '', manageAction: 'open-powershell', manageContext: 'guest-account' }
       : d.guestDisabled === false
-        ? { name: 'Guest Account', section: 'accounts', status: 'fail', message: 'Guest account is enabled!', detail: 'Anonymous users can log on locally.', recommendation: 'Disable the Guest account: net user Guest /active:no', manageAction: 'open-powershell', manageContext: 'guest-account' }
+        ? { name: 'Guest Account', section: 'accounts', status: 'fail', message: 'Guest account is enabled.', detail: 'The built-in Guest account can be used to sign in.', recommendation: 'Disable the Guest account: net user Guest /active:no', manageAction: 'open-powershell', manageContext: 'guest-account' }
         : { name: 'Guest Account', section: 'accounts', status: 'info', message: 'Guest account status could not be determined.', detail: 'Could not query the local Guest account.', manageAction: 'open-powershell', manageContext: 'guest-account' };
 
     if (minLength === null && lockout === null && complexity === null) {
@@ -407,7 +400,7 @@ class SystemAudit {
       { label: 'BitLocker', run: () => this.checkBitLocker() },
       { label: 'PowerShell execution policy', run: () => this.checkExecutionPolicy() },
       { label: 'Secure Boot', run: () => this.checkSecureBoot() },
-      { label: 'SMBv1', run: () => this.checkSmb1() },
+      { label: 'SMBv1 server setting', run: () => this.checkSmb1() },
       { label: 'Automatic Logon', run: () => this.checkAutoLogon() },
       { label: 'Remote Desktop', run: () => this.checkRemoteDesktop() },
       { label: 'LSA protection', run: () => this.checkLsaProtection() },

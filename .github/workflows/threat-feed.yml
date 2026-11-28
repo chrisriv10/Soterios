@@ -9,6 +9,7 @@ on:
       - 'index.html'
       - 'site.css'
       - 'site.js'
+      - 'feedback/**'
       - 'assets/brand-logo.png'
       - 'assets/soteriosTextLogo.png'
       - 'assets/site/**'

@@ -52,6 +52,15 @@ body:
       required: true
 
   - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Summarize the problem and when you first noticed it.
+      placeholder: Describe the issue in a few sentences.
+    validations:
+      required: true
+
+  - type: textarea
     id: reproduction
     attributes:
       label: Steps to reproduce

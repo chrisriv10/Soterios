@@ -21,6 +21,19 @@ const WINDOWS_UTILITIES = new Map([
   ['windows-features', { file: 'OptionalFeatures.exe', args: [] }]
 ]);
 
+const TRUSTED_GITHUB_DESTINATIONS = new Set([
+  'https://github.com/chrisriv10/Soterios',
+  'https://github.com/chrisriv10/Soterios/wiki',
+  'https://github.com/chrisriv10/Soterios/wiki/Troubleshooting',
+  'https://github.com/chrisriv10/Soterios/issues',
+  'https://github.com/chrisriv10/Soterios/issues/new?template=bug_report.yml',
+  'https://github.com/chrisriv10/Soterios/issues/new?template=feature_request.yml',
+  'https://github.com/chrisriv10/Soterios/discussions/categories/general',
+  'https://github.com/chrisriv10/Soterios/security/advisories/new',
+  'https://github.com/chrisriv10/Soterios/blob/main/SECURITY.md',
+  'https://github.com/chrisriv10/Soterios/releases/latest'
+]);
+
 function failure(error, fallback) {
   return { success: false, error: error?.message || fallback };
 }
@@ -53,12 +66,7 @@ function spawnDetached(spawnImpl, file, args) {
 }
 
 async function openExternal(shell, url) {
-  const allowed = typeof url === 'string' && (
-    /^https?:\/\//i.test(url)
-    || /^ms-settings:[A-Za-z0-9._/?=&%-]*$/i.test(url)
-    || /^windowsdefender:\/\/[A-Za-z0-9._/?=&%-]*$/i.test(url)
-  );
-  if (!allowed) return { success: false, error: 'Invalid URL.' };
+  if (!isTrustedExternalUrl(url)) return { success: false, error: 'Invalid URL.' };
 
   try {
     await shell.openExternal(url);
@@ -66,6 +74,55 @@ async function openExternal(shell, url) {
   } catch (err) {
     return failure(err, 'Unable to open the requested destination.');
   }
+}
+
+function isTrustedExternalUrl(value) {
+  if (typeof value !== 'string') return false;
+
+  const windowsSettings = new Set([
+    'ms-settings:appsfeatures',
+    'ms-settings:deviceencryption',
+    'ms-settings:network-vpn',
+    'ms-settings:recovery',
+    'ms-settings:remotedesktop',
+    'ms-settings:windowsdefender',
+    'ms-settings:windowsupdate'
+  ]);
+  if (windowsSettings.has(value.toLowerCase())) return true;
+  if (/^windowsdefender:\/\/(?:threat|threatsettings)\/$/i.test(value)) return true;
+
+  let destination;
+  try {
+    destination = new URL(value);
+  } catch (_) {
+    return false;
+  }
+  if (destination.protocol !== 'https:' || destination.username || destination.password || destination.port) {
+    return false;
+  }
+
+  if (destination.hostname === 'github.com') {
+    return !destination.hash
+      && TRUSTED_GITHUB_DESTINATIONS.has(`${destination.origin}${destination.pathname}${destination.search}`);
+  }
+
+  if (destination.hostname === 'ollama.com') {
+    return destination.pathname === '/download' && !destination.search && !destination.hash;
+  }
+
+  if (destination.hostname === 'chrisriv10.github.io' && destination.pathname === '/Soterios/feedback/') {
+    const queryEntries = [...destination.searchParams.entries()];
+    const version = destination.searchParams.get('appVersion');
+    const validVersion = version == null
+      || /^(?:v)?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version);
+    const validQuery = queryEntries.length === (version == null ? 0 : 1)
+      && queryEntries.every(([key]) => key === 'appVersion');
+    const validSection = !destination.hash
+      || /^#(?:bug-reports|feature-requests|general-feedback|security|documentation)$/.test(destination.hash);
+    return validVersion && validQuery && validSection;
+  }
+
+  return false;
 }
 
 function openPowerShell(spawnImpl, context) {

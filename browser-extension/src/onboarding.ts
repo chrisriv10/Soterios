@@ -18,9 +18,9 @@ async function load(): Promise<void> {
   const continuousIntro = continuousLabel?.closest('.step')?.querySelector('p.subtle');
   const continuousTitle = continuousLabel?.querySelector('.switch-title');
   const continuousNote = continuousLabel?.querySelector('.switch-note');
-  if (continuousIntro) continuousIntro.textContent = 'Soterios can access HTTP and HTTPS sites to identify password fields and show warnings automatically. Granting access once prevents you from having to click “Protect this page” on every website. You can leave this off to use on-demand protection instead.';
-  if (continuousTitle) continuousTitle.textContent = 'Protect sites automatically';
-  if (continuousNote) continuousNote.textContent = 'Recommended; your browser will ask for permission once.';
+  if (continuousIntro) continuousIntro.textContent = 'With site access, Soterios can detect password fields, show page warnings, and block ad and tracker requests on HTTP and HTTPS sites. Without that permission, select “Check this page” in the popup to run an on-demand check.';
+  if (continuousTitle) continuousTitle.textContent = 'Automatic page checks';
+  if (continuousNote) continuousNote.textContent = 'Optional. Your browser will ask for site access.';
   document.getElementById('upgrade-notice')!.hidden = !state.settings.onboarding.reuseResetNoticePending;
   if (state.settings.onboarding.confirmedAt) {
     setText('confirm-status', `Choices last confirmed ${new Date(state.settings.onboarding.confirmedAt).toLocaleString()}.`);
@@ -65,15 +65,15 @@ document.getElementById('confirm')!.addEventListener('click', () => {
         continuousAccess: continuousGranted
       });
       setText('confirm-status', continuousGranted
-        ? 'Choices confirmed. Protection now runs automatically on HTTP and HTTPS sites.'
-        : 'Choices confirmed. Use “Protect this page” when you want on-demand protection.');
+        ? 'Choices saved. Page checks run automatically on HTTP and HTTPS sites.'
+        : 'Choices saved. Select “Check this page” when you want to run a check on demand.');
       button.textContent = 'Choices confirmed';
     }).catch((error) => {
-      setText('confirm-status', error instanceof Error ? error.message : String(error));
+      setText('confirm-status', `Could not save choices. ${error instanceof Error ? error.message : String(error)}`);
       button.disabled = false;
     });
   } catch (error) {
-    setText('confirm-status', error instanceof Error ? error.message : String(error));
+    setText('confirm-status', `Could not save choices. ${error instanceof Error ? error.message : String(error)}`);
     button.disabled = false;
   }
 });

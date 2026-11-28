@@ -18,6 +18,10 @@ describe('aiGuidelines', () => {
     assert.match(AI_GUIDELINES, /snapshot may be incomplete or stale/i);
     assert.match(AI_GUIDELINES, /Never weaken security/i);
     assert.match(AI_GUIDELINES, /concise/i);
+    assert.match(AI_GUIDELINES, /local Ollama service/i);
+    assert.match(AI_GUIDELINES, /process scores are local risk indicators/i);
+    assert.match(AI_GUIDELINES, /not secure encryption/i);
+    assert.doesNotMatch(AI_GUIDELINES, /nothing leaves the user's machine/i);
   });
 
   it('documents the available actions and marker format', () => {

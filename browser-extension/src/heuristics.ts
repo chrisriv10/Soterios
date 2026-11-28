@@ -33,7 +33,7 @@ export function inspectUrl(urlValue: string): HeuristicFinding[] {
   for (const brand of BRANDS) {
     if (!hostname.includes(brand.name)) continue;
     if (!brand.domains.some((allowed) => domain === allowed || hostname.endsWith(`.${allowed}`))) {
-      findings.push({ code: 'BRAND_IMPERSONATION', message: `The domain contains “${brand.name}” but is not an official ${brand.name} domain.` });
+      findings.push({ code: 'BRAND_IMPERSONATION', message: `This URL contains “${brand.name}”, but its domain is not in the extension's list of official ${brand.name} domains.` });
       break;
     }
   }

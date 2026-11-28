@@ -28,6 +28,23 @@ body:
       required: true
 
   - type: textarea
+    id: use-cases
+    attributes:
+      label: Potential use cases
+      description: Who would benefit, and when would this improvement be useful?
+      placeholder: Describe one or more situations where this would help.
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add examples, references, or other context that may help.
+    validations:
+      required: false
+
+  - type: textarea
     id: windows-considerations
     attributes:
       label: Windows-specific considerations

@@ -308,11 +308,11 @@ describe('SystemAudit', () => {
     assert.ok(results[0].message.includes('Could not query'));
   });
 
-  it('checkBitLocker returns pass when drive is encrypted', async () => {
+  it('checkBitLocker reports protection on for the system drive', async () => {
     const audit = new SystemAudit();
     const results = await audit.checkBitLocker();
     assert.equal(results[0].status, 'pass');
-    assert.ok(results[0].message.includes('encrypted'));
+    assert.ok(results[0].message.includes('protection is on'));
   });
 
   it('checkBitLocker results carry BitLocker manage URI', async () => {
@@ -321,7 +321,7 @@ describe('SystemAudit', () => {
     assert.equal(results[0].actionUri, 'control /name Microsoft.BitLockerDriveEncryption');
   });
 
-  it('checkBitLocker returns warn when drive not encrypted', async () => {
+  it('checkBitLocker reports protection off for the system drive', async () => {
     currentExecHandler = async () => {
       return {
         stdout: JSON.stringify([{ ProtectionStatus: 0 }]),
@@ -332,7 +332,16 @@ describe('SystemAudit', () => {
     const audit = new SystemAudit();
     const results = await audit.checkBitLocker();
     assert.equal(results[0].status, 'warn');
-    assert.ok(results[0].message.includes('NOT encrypted'));
+    assert.ok(results[0].message.includes('protection is off'));
+  });
+
+  it('checkBitLocker recommends checking status when protection state is unavailable', async () => {
+    currentExecHandler = async () => ({ stdout: 'null', stderr: '' });
+
+    const audit = new SystemAudit();
+    const results = await audit.checkBitLocker();
+    assert.equal(results[0].message, 'BitLocker status unavailable.');
+    assert.equal(results[0].recommendation, 'Check BitLocker status in Windows settings.');
   });
 
   it('checkBitLocker handles unsupported systems', async () => {
@@ -343,7 +352,7 @@ describe('SystemAudit', () => {
     const audit = new SystemAudit();
     const results = await audit.checkBitLocker();
     assert.equal(results[0].status, 'info');
-    assert.ok(results[0].message.includes('not available'));
+    assert.ok(results[0].message.includes('Could not query'));
     assert.equal(results[0].actionUri, 'ms-settings:deviceencryption');
   });
 
@@ -539,7 +548,7 @@ describe('SystemAudit', () => {
     const audit = new SystemAudit();
     const results = await audit.checkSmb1();
     assert.equal(results[0].status, 'pass');
-    assert.equal(results[0].name, 'SMBv1');
+    assert.equal(results[0].name, 'SMBv1 server setting');
     assert.equal(results[0].section, 'system');
     assert.equal(results[0].manageAction, 'open-windows-utility');
     assert.equal(results[0].manageContext, 'windows-features');
@@ -585,7 +594,7 @@ describe('SystemAudit', () => {
     assert.equal(results[0].status, 'warn');
   });
 
-  it('checkAutoLogon fails when a plaintext password is stored', async () => {
+  it('checkAutoLogon flags a registry default password value', async () => {
     currentExecHandler = async () => {
       return {
         stdout: JSON.stringify({ autoAdminLogon: '1', hasDefaultPassword: true }),
@@ -595,7 +604,7 @@ describe('SystemAudit', () => {
     const audit = new SystemAudit();
     const results = await audit.checkAutoLogon();
     assert.equal(results[0].status, 'fail');
-    assert.ok(results[0].message.includes('plaintext'));
+    assert.ok(results[0].message.includes('default password value'));
   });
 
   it('checkRemoteDesktop returns pass when disabled', async () => {
@@ -629,7 +638,7 @@ describe('SystemAudit', () => {
     const audit = new SystemAudit();
     const results = await audit.checkRemoteDesktop();
     assert.equal(results[0].status, 'fail');
-    assert.ok(results[0].message.includes('WITHOUT Network Level Authentication'));
+    assert.ok(results[0].message.includes('enabled without Network Level Authentication'));
     assert.ok(results[0].recommendation.length > 0);
   });
 
@@ -760,7 +769,7 @@ describe('SystemAudit', () => {
     assert.ok(resultNames.includes('Tamper Protection'));
     assert.ok(resultNames.includes('Cloud-delivered Protection'));
     assert.ok(resultNames.includes('Network Protection'));
-    assert.ok(resultNames.includes('SMBv1'));
+    assert.ok(resultNames.includes('SMBv1 server setting'));
     assert.ok(resultNames.includes('Automatic Logon'));
     assert.ok(resultNames.includes('Remote Desktop'));
     assert.ok(resultNames.includes('LSA Protection'));

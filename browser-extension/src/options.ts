@@ -79,7 +79,7 @@ async function renderAdblockOptions(): Promise<void> {
   trackersInput.disabled = view.controlsDisabled;
   const warning = document.getElementById('adblock-options-warning')!;
   warning.hidden = !view.showApplyWarning;
-  if (view.showApplyWarning) warning.textContent = 'A change could not be applied. Blocking may be partially off.';
+  if (view.showApplyWarning) warning.textContent = 'The settings could not be fully applied. Some ad or tracker requests may not be blocked.';
 }
 
 async function updateAdblock(patch: { enabled?: boolean; blockAds?: boolean; blockTrackers?: boolean }): Promise<void> {

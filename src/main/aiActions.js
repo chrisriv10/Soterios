@@ -92,10 +92,10 @@ function summarizeScanResult(actionId, result) {
   const duration = durationMs > 0
     ? `${Math.round(durationMs / 1000)}s`
     : '';
-  const base = `${type} scan ${status}: ${files.toLocaleString()} files scanned, ${threats} threat${threats === 1 ? '' : 's'} found${duration ? ` in ${duration}` : ''}`;
+  const base = `${type} scan ${status}: ${files.toLocaleString()} files scanned, ${threats} detection${threats === 1 ? '' : 's'} reported${duration ? ` in ${duration}` : ''}`;
   if (threats > 0 && Array.isArray(result.threats) && result.threats.length > 0) {
     const names = result.threats.slice(0, 3).map((t) => t && t.name ? t.name : 'unknown').join(', ');
-    return `${base}. Threats: ${names}${result.threats.length > 3 ? ` +${result.threats.length - 3} more` : ''}. They were moved to quarantine.`;
+    return `${base}. Detection names: ${names}${result.threats.length > 3 ? ` +${result.threats.length - 3} more` : ''}. Review Quarantine to confirm which files were moved.`;
   }
   if (Array.isArray(result.errors) && result.errors.length > 0) {
     return `${base}. Errors: ${result.errors.slice(0, 2).join('; ')}`;

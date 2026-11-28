@@ -537,7 +537,7 @@ window.Pages['firewall'] = {
   },
 
   _riskLabel(risk) {
-    return risk === 'SAFE' ? window.I18n?.t('common.allowed') ?? 'Allowed' : risk === 'MALICIOUS' ? window.I18n?.t('common.blocked') ?? 'Blocked' : window.I18n?.t('common.unverified') ?? 'Unverified';
+    return risk === 'SAFE' ? window.I18n?.t('network.flagSafe') ?? 'Lower concern' : risk === 'MALICIOUS' ? window.I18n?.t('network.flagMalicious') ?? 'Blocklist match' : window.I18n?.t('common.unverified') ?? 'Unverified';
   },
 
   STATE_CODE_MAP: {
@@ -774,7 +774,7 @@ window.Pages['firewall'] = {
     }
 
     const socketsShown = allItems.reduce((sum, item) => sum + item.count, 0);
-    const blockedCount = allItems.filter((item) => item.blocked).length;
+    const blocklistMatchCount = allItems.filter((item) => item.risk === 'MALICIOUS').length;
     const hubCount = String(t('firewall.perimeterHubCount', { endpoints: allItems.length, sockets: socketsShown }));
     const hubLines = hubCount.split(/\s*[·•]\s*/);
     const endpointLine = hubLines[0] || `${allItems.length}`;
@@ -823,7 +823,7 @@ window.Pages['firewall'] = {
       <circle class="perim-boundary" cx="${cx}" cy="${cy}" r="${boundaryR}"/>
       <circle class="perim-risk-outline perim-risk-outline-safe" cx="${cx}" cy="${cy}" r="114"/>
       <circle class="perim-risk-outline perim-risk-outline-unknown" cx="${cx}" cy="${cy}" r="149"/>
-      <circle class="perim-risk-outline perim-risk-outline-malicious ${blockedCount ? 'has-blocked' : ''}" cx="${cx}" cy="${cy}" r="184"/>
+      <circle class="perim-risk-outline perim-risk-outline-malicious ${blocklistMatchCount ? 'has-blocked' : ''}" cx="${cx}" cy="${cy}" r="184"/>
       <g class="perim-ring-label perim-ring-label-safe" data-ring="safe" tabindex="0" aria-label="${escapeHtml(t('firewall.perimeterBandSafe'))}"><rect x="18" y="18" width="128" height="16" rx="8"/><text x="28" y="29" text-anchor="start">${escapeHtml(t('firewall.perimeterBandSafe'))}</text></g>
       <g class="perim-ring-label perim-ring-label-unknown" data-ring="unknown" tabindex="0" aria-label="${escapeHtml(t('firewall.perimeterBandUnknown'))}"><rect x="18" y="40" width="148" height="16" rx="8"/><text x="28" y="51" text-anchor="start">${escapeHtml(t('firewall.perimeterBandUnknown'))}</text></g>
       <g class="perim-ring-label perim-ring-label-malicious" data-ring="malicious" tabindex="0" aria-label="${escapeHtml(t('firewall.perimeterBandMalicious'))}"><rect x="18" y="62" width="148" height="16" rx="8"/><text x="28" y="73" text-anchor="start">${escapeHtml(t('firewall.perimeterBandMalicious'))}</text></g>`;
@@ -854,7 +854,7 @@ window.Pages['firewall'] = {
       if (hiddenCount > 0) {
         countText += t('firewall.perimeterSummaryHidden', { hidden: hiddenCount });
       }
-      summary.textContent = `${countText} · ${blockedCount} ${t('common.blocked')} · ${unknownCount} ${t('common.unverified')}`;
+      summary.textContent = `${countText} · ${blocklistMatchCount} ${t('firewall.perimeterBandMalicious')} · ${unknownCount} ${t('common.unverified')}`;
     }
   },
 

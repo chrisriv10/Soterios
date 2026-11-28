@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="dark light">
   <meta name="theme-color" content="#0b1116">
   <title>Soterios | Your security. Your control.</title>
-  <meta name="description" content="A free, open-source Windows security and system care workspace. Local-first by design, with clear controls for every online feature.">
+  <meta name="description" content="Free, open-source software for Windows file scanning, security checks, network monitoring, and system maintenance.">
   <link rel="canonical" href="https://chrisriv10.github.io/Soterios/">
   <link rel="icon" type="image/png" href="assets/brand-logo.png">
   <link rel="preload" as="image" href="assets/site/screenshots/maintenance.png" fetchpriority="high">
@@ -14,7 +14,7 @@
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Soterios">
   <meta property="og:title" content="Soterios | Your security. Your control.">
-  <meta property="og:description" content="A free, open-source Windows security and system care workspace. Local-first by design.">
+  <meta property="og:description" content="Scan files, review Windows security settings and network activity, and maintain your PC with free, open-source Soterios software.">
   <meta property="og:url" content="https://chrisriv10.github.io/Soterios/">
   <meta property="og:image" content="https://chrisriv10.github.io/Soterios/assets/site/screenshots/maintenance.png">
   <meta property="og:image:width" content="1899">
@@ -22,7 +22,7 @@
   <meta property="og:image:alt" content="The real Soterios Tools and Maintenance interface running on Windows">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Soterios | Your security. Your control.">
-  <meta name="twitter:description" content="A free, open-source Windows security and system care workspace. Local-first by design.">
+  <meta name="twitter:description" content="Scan files, review Windows security settings and network activity, and maintain your PC with free, open-source Soterios software.">
   <meta name="twitter:image" content="https://chrisriv10.github.io/Soterios/assets/site/screenshots/maintenance.png">
   <script>
     (() => {
@@ -43,7 +43,7 @@
       "name": "Soterios",
       "applicationCategory": "SecurityApplication",
       "operatingSystem": "Windows 10, Windows 11",
-      "description": "A free, open-source Windows security and system maintenance suite with a local-first design.",
+      "description": "Free, open-source Windows software for file scanning, security checks, network monitoring, and system maintenance.",
       "url": "https://chrisriv10.github.io/Soterios/",
       "downloadUrl": "https://github.com/chrisriv10/Soterios/releases/latest",
       "license": "https://github.com/chrisriv10/Soterios/blob/main/LICENSE",
@@ -72,9 +72,10 @@
         <a href="#privacy">Privacy</a>
         <a href="#open-source">Open Source</a>
         <a href="https://github.com/chrisriv10/Soterios/wiki">Documentation</a>
+        <a href="feedback/index.html">Feedback</a>
       </nav>
       <div class="nav-actions">
-        <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch to light appearance" aria-pressed="false" title="Switch appearance">
+        <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch to light mode" aria-pressed="false" title="Switch theme">
           <svg class="icon-sun" viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><circle cx="12" cy="12" r="3.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 2v2.2m0 15.6V22M4.93 4.93l1.55 1.55m11.04 11.04 1.55 1.55M2 12h2.2m15.6 0H22M4.93 19.07l1.55-1.55M17.52 6.48l1.55-1.55" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
           <svg class="icon-moon" viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path d="M20.2 15.4A8.8 8.8 0 0 1 8.6 3.8 8.9 8.9 0 1 0 20.2 15.4Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
         </button>
@@ -88,9 +89,8 @@
       <div class="hero-glow" aria-hidden="true"></div>
       <div class="wrap hero-layout">
         <div class="hero-copy">
-          <p class="eyebrow"><span class="eyebrow-mark" aria-hidden="true"></span> Windows security, privacy &amp; system care</p>
           <h1 id="hero-title">Your security.<br><span>Your control.</span></h1>
-          <p class="hero-lede">A considered workspace for understanding and looking after your Windows PC, built to keep your data on your machine by default.</p>
+          <p class="hero-lede">Free, open-source software for scanning files, reviewing Windows security settings, monitoring network activity, and maintaining your PC. Soterios sends no telemetry. Some features use external services, described below.</p>
           <div class="hero-actions">
             <a class="button button-primary" href="https://github.com/chrisriv10/Soterios/releases/latest">
               Download for Windows
@@ -117,40 +117,39 @@
       <div class="wrap">
         <div class="section-heading section-heading-split">
           <div>
-            <p class="eyebrow eyebrow-dark">One workspace, a wider view</p>
-            <h2 id="features-title">The whole PC,<br>in clearer focus.</h2>
+            <h2 id="features-title">Security and maintenance<br>for Windows.</h2>
           </div>
-          <p class="section-intro">Soterios brings security, privacy and system maintenance together. Each tool has a clear purpose, and the next step stays yours to choose.</p>
+          <p class="section-intro">Soterios combines file scanning, Windows security checks, network tools, and system maintenance in one application.</p>
         </div>
         <div class="capability-ledger">
           <article class="capability-row">
-            <p class="capability-label">Protection</p>
+            <p class="capability-label">Malware scanning</p>
             <div>
-              <h3>Scan, review, then decide.</h3>
-              <p>Run quick, full or custom ClamAV scans. Review detections in Quarantine, where you can restore a file, trust its hash, or remove it. Folder watching and removable-drive scan prompts are optional.</p>
-              <p class="capability-note">Soterios works alongside Microsoft Defender. It adds ClamAV scanning and selected Defender controls; it does not replace Windows Security.</p>
+              <h3>Scan files with ClamAV.</h3>
+              <p>Run quick, full, or custom scans. Review detections in Quarantine before restoring or deleting files. You can also trust a file hash so matching files are skipped in future scans. Folder monitoring and removable-drive scan prompts are optional.</p>
+              <p class="capability-note">ClamAV scans supplement Microsoft Defender. Soterios provides selected Defender controls and does not replace Windows Security.</p>
             </div>
           </article>
           <article class="capability-row">
-            <p class="capability-label">System visibility</p>
+            <p class="capability-label">System inspection</p>
             <div>
-              <h3>Understand what is running.</h3>
-              <p>Inspect processes and their relationships, review persistence changes, and run Windows security audits covering settings such as Defender, UAC, Windows Update, BitLocker and Secure Boot.</p>
+              <h3>Inspect processes and Windows settings.</h3>
+              <p>View running processes and their relationships, review persistence changes, and audit settings such as Defender, UAC, Windows Update, BitLocker, and Secure Boot.</p>
             </div>
           </article>
           <article class="capability-row">
             <p class="capability-label">Network security</p>
             <div>
-              <h3>See the connections and rules.</h3>
-              <p>Review active connections, firewall rules and interface activity. Manage Windows VPN profiles and use connection alerts, blocklists and optional geolocation tools when they fit your setup.</p>
-              <p class="capability-note">VPN controls work with Windows profiles and your provider; Soterios is not a VPN service.</p>
+              <h3>Review connections and firewall rules.</h3>
+              <p>Review active connections, interface activity, and Windows Firewall rules. Manage Windows VPN profiles and use connection alerts, IP blocklists, or optional geolocation.</p>
+              <p class="capability-note">VPN controls use profiles from your provider. Soterios does not provide a VPN service.</p>
             </div>
           </article>
           <article class="capability-row">
             <p class="capability-label">Maintenance</p>
             <div>
-              <h3>Make cleanup deliberate.</h3>
-              <p>Find large and duplicate files, review disk and browser reports, schedule selected tools, and stage file cleanup in the Safety Vault before deletion.</p>
+              <h3>Find files and review cleanup.</h3>
+              <p>Find large and duplicate files, review disk and browser reports, schedule maintenance tools, and stage files in Safety Vault before deleting them.</p>
             </div>
           </article>
         </div>
@@ -160,22 +159,21 @@
     <section class="section section-paper section-system" aria-labelledby="system-title">
       <div class="wrap">
         <div class="section-heading section-heading-narrow">
-          <p class="eyebrow eyebrow-dark">Know what is happening</p>
-          <h2 id="system-title">Visibility with context.</h2>
-          <p class="section-intro">Clear views for the parts of Windows that are easy to overlook, with system actions kept explicit.</p>
+          <h2 id="system-title">Monitor processes and network activity.</h2>
+          <p class="section-intro">Review running processes, active connections, and Windows Firewall rules with dedicated tools.</p>
         </div>
         <div class="editorial-pair">
           <article>
-            <p class="eyebrow eyebrow-dark">Processes &amp; system</p>
-            <h3>Investigate a process.<br>Keep the context.</h3>
-            <p>The Rust-backed Process Inspector gives you process details, relationships and risk signals, with familiar actions such as suspend, resume, adjust priority or inspect memory. Windows Audit groups key security settings with relevant management actions.</p>
-            <p class="fine-print">Optional VirusTotal reputation checks require explicit consent and your own API key. A lookup sends an executable SHA-256 hash; the file itself is not uploaded.</p>
+            <p class="eyebrow eyebrow-dark">Process Inspector</p>
+            <h3>Inspect running processes.</h3>
+            <p>View process details, parent and child relationships, signatures, hashes, and risk indicators. You can suspend or resume a process, change its priority, or inspect its memory. Windows Audit checks selected security settings and links to related controls.</p>
+            <p class="fine-print">VirusTotal checks are optional and require your API key and approval for each lookup. Soterios sends the executable's SHA-256 hash, not the file.</p>
           </article>
           <article>
-            <p class="eyebrow eyebrow-dark">Firewall &amp; connections</p>
-            <h3>See the paths<br>your PC is using.</h3>
-            <p>Inspect live connections and interface activity, review firewall rules, and use optional endpoint alerts and VPN controls. Geolocation can add approximate context to the map when enabled.</p>
-            <p class="fine-print">The network map uses ipwho.is for IP-location results. You can turn geolocation off in Settings or enable Privacy Mode.</p>
+            <p class="eyebrow eyebrow-dark">Network Monitor and Firewall</p>
+            <h3>Monitor network activity.</h3>
+            <p>Review active connections, interface activity, and Windows Firewall rules. Other tools provide endpoint alerts, VPN profile controls, and an optional connection map.</p>
+            <p class="fine-print">The map sends IP addresses to ipwho.is for approximate locations. Turn geolocation off in Settings or enable Privacy Mode to stop these requests.</p>
           </article>
         </div>
       </div>
@@ -185,56 +183,54 @@
       <div class="wrap">
         <div class="privacy-layout">
           <div class="privacy-copy">
-            <p class="eyebrow">Designed for local control</p>
-            <h2 id="privacy-title">Private by default.<br>Clear when it connects.</h2>
-            <p class="privacy-lede">Scanning, system audits, process monitoring, maintenance, password generation and strength analysis run on your PC. Soterios collects no analytics or telemetry and does not upload scan results.</p>
+            <h2 id="privacy-title">Data stays local unless a feature needs a service.</h2>
+            <p class="privacy-lede">File scans, audits, process monitoring, maintenance, password generation, and strength checks run on your PC. Soterios sends no analytics or product telemetry and does not upload scan results.</p>
             <div class="privacy-points">
               <div>
-                <h3>Local work stays local</h3>
-                <p>Reports, settings, history and quarantine records are stored on your machine.</p>
+                <h3>Stored on your PC</h3>
+                <p>Settings, reports, history, and quarantined files are stored on your computer.</p>
               </div>
               <div>
-                <h3>Privacy Mode is yours</h3>
-                <p>Privacy Mode disables the desktop app's breach, geolocation and reputation lookups, along with selected history and report features. ClamAV definitions, public IP lists and app updates remain separate.</p>
+                <h3>Privacy Mode</h3>
+                <p>Privacy Mode turns off breach, geolocation, and process-reputation lookups, along with AI context, traffic and scan history, and automatic reports. ClamAV definitions, public IP lists, extension feed updates, and app updates are separate.</p>
               </div>
             </div>
-            <a class="text-link text-link-light" href="https://github.com/chrisriv10/Soterios/blob/main/docs/wiki/Privacy-and-Security.md">Read the privacy model <span aria-hidden="true">↗</span></a>
+            <a class="text-link text-link-light" href="https://github.com/chrisriv10/Soterios/blob/main/docs/wiki/Privacy-and-Security.md">Read privacy and security details <span aria-hidden="true">↗</span></a>
           </div>
-          <div class="privacy-gallery" aria-label="Real Soterios privacy and credential safety screens">
+          <div class="privacy-gallery" aria-label="Soterios privacy settings and password tools">
             <figure class="screen-frame privacy-screen privacy-screen-primary" data-reveal>
-              <img src="assets/site/screenshots/privacy-settings.png" width="1899" height="1176" alt="Real Soterios Settings screen showing local feature toggles, external lookups, geolocation and the AI assistant setting." loading="lazy" decoding="async">
+              <img src="assets/site/screenshots/privacy-settings.png" width="1899" height="1176" alt="Soterios Settings screen with local feature toggles, external lookups, geolocation, and the AI assistant setting." loading="lazy" decoding="async">
             </figure>
             <figure class="screen-frame privacy-screen privacy-screen-secondary" data-reveal>
-              <img src="assets/site/screenshots/credential-safety.png" width="1899" height="1176" alt="Real Soterios Credential Safety Hub showing local password strength analysis and optional breach checks." loading="lazy" decoding="async">
+              <img src="assets/site/screenshots/credential-safety.png" width="1899" height="1176" alt="Soterios password tools with local strength analysis and optional breach checks." loading="lazy" decoding="async">
             </figure>
           </div>
         </div>
         <div class="network-disclosure">
-          <p class="eyebrow">Specific tools, specific data</p>
-          <h3>When Soterios uses the network</h3>
+          <h3>Online services and the data they receive</h3>
           <div class="network-ledger">
             <article>
-              <h4>Password &amp; email breach checks</h4>
+              <h4>Password and email breach checks</h4>
               <p>Have I Been Pwned receives only the first five hexadecimal characters of a locally calculated SHA-1 password hash. XposedOrNot receives the email address you submit when you run an email check.</p>
             </article>
             <article>
-              <h4>Connection geolocation</h4>
+              <h4>IP geolocation</h4>
               <p>When the map is used, IP addresses are sent to ipwho.is to resolve approximate locations. Turn the map off or use Privacy Mode to disable those lookups.</p>
             </article>
             <article>
-              <h4>Process reputation</h4>
+              <h4>VirusTotal reputation checks</h4>
               <p>VirusTotal is optional. After explicit consent and API-key setup, a lookup sends the executable SHA-256 hash, not the file.</p>
             </article>
             <article>
-              <h4>Browser extension services</h4>
-              <p>The signed threat feed refreshes periodically and does not send visited URLs. Google Safe Browsing is optional; when enabled, it receives the checked URL and your API key.</p>
+              <h4>Browser extension checks</h4>
+              <p>The extension downloads signed threat-feed updates without sending visited URLs. Google Safe Browsing is optional. If enabled, it receives the URL being checked and your API key.</p>
             </article>
             <article>
-              <h4>Public lists, definitions &amp; app updates</h4>
-              <p>At startup, Soterios downloads public Spamhaus IP lists for local connection matching. ClamAV obtains definitions from its upstream service; packaged builds check for and can download app updates. These paths are separate from Privacy Mode.</p>
+              <h4>Lists and updates</h4>
+              <p>Soterios downloads public Spamhaus IP lists at startup and matches connections locally. ClamAV definitions are downloaded when you request an update. The browser extension downloads signed feed updates on a schedule. Packaged builds check for and can download app updates. Privacy Mode does not disable these downloads.</p>
             </article>
           </div>
-          <p class="fine-print">The website itself uses no analytics, tracking scripts, third-party fonts or remote image services.</p>
+          <p class="fine-print">This website loads no analytics, tracking scripts, remote fonts, or third-party images.</p>
         </div>
       </div>
     </section>
@@ -243,24 +239,22 @@
       <div class="wrap">
         <div class="section-heading section-heading-split">
           <div>
-            <p class="eyebrow eyebrow-dark">A little further</p>
-            <h2 id="companions-title">Useful beyond<br>the desktop window.</h2>
+            <h2 id="companions-title">Browser extension and local assistant.</h2>
           </div>
-          <p class="section-intro">The companion tools follow the same rule: local first, with every network-dependent feature named and explained.</p>
+          <p class="section-intro">The browser extension checks pages and blocks selected content. The optional Ollama integration connects to a model running on your PC.</p>
         </div>
         <div class="companion-grid">
           <article class="companion">
             <p class="eyebrow eyebrow-dark">Browser extension</p>
-            <h3>Protection for the open tab.</h3>
-            <p>The Chromium extension checks password reuse locally, blocks ads and trackers with packaged rules, and uses a signed threat feed for phishing and malware indicators. Site-specific Google Safe Browsing checks can be enabled with your own key.</p>
+            <h3>Check links and reused passwords.</h3>
+            <p>The Chromium extension checks password reuse locally, blocks ads and trackers with packaged filters, and checks pages against Soterios's signed threat feed. Google Safe Browsing checks are optional and require your API key. Google receives the URL being checked.</p>
             <p class="fine-print">The extension has its own privacy setting and per-service controls.</p>
-            <a class="text-link text-link-dark" href="https://github.com/chrisriv10/Soterios/releases/latest">Find the extension package in Releases <span aria-hidden="true">↗</span></a>
+            <a class="text-link text-link-dark" href="https://github.com/chrisriv10/Soterios/releases/latest">Download the extension from Releases <span aria-hidden="true">↗</span></a>
           </article>
           <article class="companion">
-            <p class="eyebrow eyebrow-dark">Optional local assistant</p>
-            <h3>Ollama stays on localhost.</h3>
-            <p>Connect an Ollama model running on your own PC for system context and a limited set of on-request Soterios actions. Install and choose the model separately; the assistant is not a cloud service.</p>
-            <p class="fine-print">Soterios restricts this integration to a localhost Ollama endpoint.</p>
+            <p class="eyebrow eyebrow-dark">Optional Ollama integration</p>
+            <h3>Run a local model with Ollama.</h3>
+            <p>Connect to Ollama on your PC to ask questions about a local system snapshot and request a limited set of Soterios actions. Install Ollama and download a model separately. Soterios connects only to localhost.</p>
           </article>
         </div>
       </div>
@@ -269,26 +263,25 @@
     <section class="section section-open section-dark" id="open-source" aria-labelledby="open-title">
       <div class="wrap open-layout">
         <div>
-          <p class="eyebrow">Open source, in the open</p>
-          <h2 id="open-title">You can read<br>every line.</h2>
-          <p class="open-lede">Soterios is free and MIT licensed. The source, issue tracker and contribution guide are public, so the product can be examined and improved in the open.</p>
+          <h2 id="open-title">Source code and releases are public.</h2>
+          <p class="open-lede">Soterios is free, open-source software under the MIT license. Read the source, report issues, or contribute on GitHub.</p>
           <div class="open-actions">
-            <a class="button button-glass" href="https://github.com/chrisriv10/Soterios">Explore the source <span aria-hidden="true">↗</span></a>
-            <a class="text-link text-link-light" href="https://github.com/chrisriv10/Soterios/blob/main/CONTRIBUTING.md">How to contribute <span aria-hidden="true">↗</span></a>
+            <a class="button button-glass" href="https://github.com/chrisriv10/Soterios">View source code <span aria-hidden="true">↗</span></a>
+            <a class="text-link text-link-light" href="https://github.com/chrisriv10/Soterios/blob/main/CONTRIBUTING.md">Contribution guide <span aria-hidden="true">↗</span></a>
           </div>
         </div>
         <div class="integrity-list">
           <div>
             <span>License</span>
-            <p><a href="https://github.com/chrisriv10/Soterios/blob/main/LICENSE">MIT · free to use and inspect</a></p>
+            <p><a href="https://github.com/chrisriv10/Soterios/blob/main/LICENSE">Free to use under the MIT license</a></p>
           </div>
           <div>
             <span>Release verification</span>
-            <p>Published releases include SHA-256 sums and Node and Rust dependency metadata.</p>
+            <p>Releases include SHA-256 checksums, a Node.js SBOM, and Rust dependency metadata.</p>
           </div>
           <div>
             <span>Installer status</span>
-            <p>The current published Windows installer is not Authenticode-signed. Check each release for its current signing status.</p>
+            <p>The latest published Windows installer is not Authenticode-signed. Check the release page for its current status.</p>
           </div>
           <div>
             <span>Responsible reporting</span>
@@ -301,24 +294,23 @@
     <section class="section section-download section-paper" id="download" aria-labelledby="download-title">
       <div class="wrap download-layout">
         <div>
-          <p class="eyebrow eyebrow-dark">For Windows 10 &amp; 11</p>
-          <h2 id="download-title">Start with the<br>latest published release.</h2>
-          <p class="download-lede">A per-machine NSIS installer for 64-bit Windows. Administrator permission is required for installation and elevated system features; everyday views can run without elevation.</p>
+          <p class="eyebrow eyebrow-dark">Windows 10 and 11</p>
+          <h2 id="download-title">Download the latest release.</h2>
+          <p class="download-lede">The per-machine NSIS installer supports 64-bit Windows 10 and 11. Installation requires administrator privileges. Some system features also require elevation; other views work without it.</p>
           <div class="download-facts">
             <p><span>Platform</span>Windows 10/11 · x64</p>
             <p><span>Installer</span>NSIS · per-machine</p>
             <p><span>License</span>MIT · free</p>
           </div>
-          <p class="download-note">Network access is optional for most use. Public blocklists, definition updates, selected lookups, extension feed refreshes and packaged app updates use it.</p>
+          <p class="download-note">Local features work without a network connection. Internet access is needed for public blocklists, ClamAV definition updates, optional lookups, extension feed updates, and app updates.</p>
         </div>
         <div class="download-panel">
-          <p class="eyebrow eyebrow-dark">Latest release</p>
           <a class="button button-primary button-download" href="https://github.com/chrisriv10/Soterios/releases/latest">
             Download for Windows
             <svg viewBox="0 0 20 20" width="17" height="17" aria-hidden="true"><path d="M4 10h11m-4-4 4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </a>
-          <p>Open the release page to choose the current installer and extension package.</p>
-          <p><a href="https://github.com/chrisriv10/Soterios/releases/latest/download/SHA256SUMS.txt">Get SHA-256 checksums</a> from the latest release to verify the installer.</p>
+          <p>Download the installer or browser extension from GitHub Releases.</p>
+          <p><a href="https://github.com/chrisriv10/Soterios/releases/latest/download/SHA256SUMS.txt">Download SHA-256 checksums</a> and compare the installer's hash with SHA256SUMS.txt.</p>
           <a class="text-link text-link-dark" href="https://github.com/chrisriv10/Soterios/blob/main/docs/wiki/Installation.md">Installation guide <span aria-hidden="true">↗</span></a>
         </div>
       </div>
@@ -331,10 +323,11 @@
         <img class="brand-mark" src="assets/brand-logo.png" width="30" height="30" alt="">
         <img class="brand-wordmark" src="assets/soteriosTextLogo.png" width="102" height="28" alt="Soterios">
       </a>
-      <p>Security, privacy and system care that stay in your hands.</p>
+      <p>Security and maintenance tools for Windows.</p>
       <div class="footer-links">
         <a href="https://github.com/chrisriv10/Soterios">GitHub</a>
         <a href="https://github.com/chrisriv10/Soterios/wiki">Documentation</a>
+        <a href="feedback/index.html">Feedback</a>
         <a href="https://github.com/chrisriv10/Soterios/blob/main/SECURITY.md">Security policy</a>
         <a href="https://github.com/chrisriv10/Soterios/releases/latest">Releases</a>
       </div>

@@ -167,7 +167,7 @@ async function getUpdateStatus() {
     [PSCustomObject]@{
       pendingCount    = if ($rebootNeeded) { 1 } else { 0 }
       lastUpdateDate  = $lastDate
-      lastUpdateTitle = if ($rebootNeeded) { 'Updates installed — reboot pending' } else { $null }
+      lastUpdateTitle = if ($rebootNeeded) { 'Updates installed; reboot pending' } else { $null }
       source          = 'registry'
     }
   `, null, 10000);
@@ -215,10 +215,10 @@ function suspiciousPathSignals(filePath) {
     normalized.includes('\\recycle.bin\\') ||
     normalized.includes('\\recycler\\')
   ) {
-    signals.push({ points: 55, message: 'Runs from the Recycle Bin — highly unusual for legitimate software.' });
+    signals.push({ points: 55, message: 'Runs from the Recycle Bin, an uncommon location for installed software.' });
   }
   if (/\.(jpg|png|pdf|docx?|xlsx?)\.(exe|scr|js|vbs|bat|cmd|ps1)$/i.test(normalized)) {
-    signals.push({ points: 45, message: 'Uses a double extension commonly used to disguise malware.' });
+    signals.push({ points: 45, message: 'Uses a double extension that can disguise the file type.' });
   }
   return signals;
 }

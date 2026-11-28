@@ -97,25 +97,45 @@ describe('shell launchers', () => {
     assert.deepEqual(result, { success: false, error: 'launch denied' });
   });
 
-  it('awaits allowed external destinations and rejects unsafe schemes', async () => {
+  it('opens trusted external destinations and rejects untrusted URLs', async () => {
     const opened = [];
     const shell = {
       openExternal: async (url) => {
         opened.push(url);
-        if (url.includes('fail')) throw new Error('handler unavailable');
+        if (url === 'https://github.com/chrisriv10/Soterios') throw new Error('handler unavailable');
       }
     };
 
     assert.deepEqual(await openExternal(shell, 'ms-settings:remotedesktop'), { success: true });
     assert.deepEqual(await openExternal(shell, 'windowsdefender://threatsettings/'), { success: true });
+    assert.deepEqual(await openExternal(shell, 'https://github.com/chrisriv10/Soterios/wiki/Troubleshooting'), { success: true });
+    assert.deepEqual(await openExternal(shell, 'https://github.com/chrisriv10/Soterios/issues/new?template=bug_report.yml'), { success: true });
+    assert.deepEqual(await openExternal(shell, 'https://ollama.com/download'), { success: true });
+    assert.deepEqual(await openExternal(shell, 'https://chrisriv10.github.io/Soterios/feedback/?appVersion=1.4.2#bug-reports'), { success: true });
     assert.deepEqual(await openExternal(shell, 'file:///C:/Windows/System32'), {
       success: false,
       error: 'Invalid URL.'
     });
-    assert.deepEqual(await openExternal(shell, 'https://fail.example'), {
+    assert.deepEqual(await openExternal(shell, 'https://github.com.evil.example/chrisriv10/Soterios'), {
+      success: false,
+      error: 'Invalid URL.'
+    });
+    assert.deepEqual(await openExternal(shell, 'https://github.com/chrisriv10/Soterios/issues/new?title=private-data'), {
+      success: false,
+      error: 'Invalid URL.'
+    });
+    assert.deepEqual(await openExternal(shell, 'https://chrisriv10.github.io/Soterios/feedback/?appVersion=1.4.2&username=chris'), {
+      success: false,
+      error: 'Invalid URL.'
+    });
+    assert.deepEqual(await openExternal(shell, 'https://chrisriv10.github.io/Soterios/feedback/?appVersion=../../Users'), {
+      success: false,
+      error: 'Invalid URL.'
+    });
+    assert.deepEqual(await openExternal(shell, 'https://github.com/chrisriv10/Soterios'), {
       success: false,
       error: 'handler unavailable'
     });
-    assert.equal(opened.length, 3);
+    assert.equal(opened.length, 7);
   });
 });

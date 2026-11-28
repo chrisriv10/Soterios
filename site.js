@@ -4,13 +4,22 @@
   const navigation = document.getElementById('site-navigation');
   const themeToggle = document.getElementById('theme-toggle');
   const themeColor = document.querySelector('meta[name="theme-color"]');
+  const appVersionContext = document.getElementById('feedback-app-version-context');
+
+  if (appVersionContext) {
+    const appVersion = new URLSearchParams(window.location.search).get('appVersion');
+    if (appVersion && /^(?:v)?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(appVersion)) {
+      appVersionContext.textContent = 'Opened from Soterios version ' + appVersion + '. Only the version number is included in the URL. No diagnostics or device information is sent.';
+      appVersionContext.hidden = false;
+    }
+  }
 
   const applyTheme = (theme, save) => {
     const selected = theme === 'light' ? 'light' : 'dark';
     root.dataset.theme = selected;
     const isLight = selected === 'light';
     themeToggle?.setAttribute('aria-pressed', String(isLight));
-    themeToggle?.setAttribute('aria-label', 'Switch to ' + (isLight ? 'dark' : 'light') + ' appearance');
+    themeToggle?.setAttribute('aria-label', 'Switch to ' + (isLight ? 'dark' : 'light') + ' mode');
     if (themeColor) themeColor.content = isLight ? '#f5f6f4' : '#0b1116';
     if (save) {
       try { localStorage.setItem('soterios-appearance', selected); } catch (_) {}

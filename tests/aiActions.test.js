@@ -91,7 +91,7 @@ describe('aiActions - summarizeScanResult', () => {
     });
     assert.match(summary, /Quick scan completed/);
     assert.match(summary, /12,384 files scanned/);
-    assert.match(summary, /0 threats found/);
+    assert.match(summary, /0 detections reported/);
     assert.match(summary, /84s/);
   });
 
@@ -104,9 +104,9 @@ describe('aiActions - summarizeScanResult', () => {
       threats: [{ name: 'EICAR-Test' }, { name: 'Other' }],
       durationMs: 5000,
     });
-    assert.match(summary, /2 threats found/);
+    assert.match(summary, /2 detections reported/);
     assert.match(summary, /EICAR-Test/);
-    assert.match(summary, /quarantine/);
+    assert.match(summary, /Review Quarantine to confirm which files were moved/);
   });
 
   it('reports a failed scan', () => {

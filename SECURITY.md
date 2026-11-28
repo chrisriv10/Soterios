@@ -8,7 +8,7 @@ Security fixes are provided for the latest version on the `main` branch. Older v
 
 Please **do not** report security vulnerabilities through public GitHub issues.
 
-Instead, use **GitHub Private Vulnerability Reporting** (preferred).
+Instead, use [GitHub Private Vulnerability Reporting](https://github.com/chrisriv10/Soterios/security/advisories/new) (preferred).
 
 When reporting, include:
 - A description of the issue

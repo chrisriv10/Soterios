@@ -22,11 +22,13 @@ test('Pages assembly copies the landing page while preserving the signed feed', 
     const siteDir = path.join(sourceDir, 'public');
     const feedDir = path.join(siteDir, 'threat-feed');
     fs.mkdirSync(feedDir, { recursive: true });
+    fs.mkdirSync(path.join(sourceDir, 'feedback'), { recursive: true });
     fs.mkdirSync(path.join(sourceDir, 'assets', 'site'), { recursive: true });
     fs.writeFileSync(path.join(sourceDir, 'index.html'), '<h1>Landing page fixture</h1>');
     fs.writeFileSync(path.join(sourceDir, 'site.css'), 'body { color: #123; }');
     fs.writeFileSync(path.join(sourceDir, 'site.js'), 'window.fixture = true;');
     fs.writeFileSync(path.join(sourceDir, '.nojekyll'), '');
+    fs.writeFileSync(path.join(sourceDir, 'feedback', 'index.html'), '<h1>Feedback fixture</h1>');
     fs.writeFileSync(path.join(sourceDir, 'assets', 'brand-logo.png'), 'logo');
     fs.writeFileSync(path.join(sourceDir, 'assets', 'soteriosTextLogo.png'), 'wordmark');
     fs.writeFileSync(path.join(sourceDir, 'assets', 'site', 'hero.webp'), 'site image');
@@ -39,6 +41,7 @@ test('Pages assembly copies the landing page while preserving the signed feed', 
     assert.equal(fs.readFileSync(path.join(siteDir, 'site.css'), 'utf8'), 'body { color: #123; }');
     assert.equal(fs.readFileSync(path.join(siteDir, 'site.js'), 'utf8'), 'window.fixture = true;');
     assert.equal(fs.readFileSync(path.join(siteDir, '.nojekyll'), 'utf8'), '');
+    assert.equal(fs.readFileSync(path.join(siteDir, 'feedback', 'index.html'), 'utf8'), '<h1>Feedback fixture</h1>');
     assert.equal(fs.readFileSync(path.join(siteDir, 'assets', 'brand-logo.png'), 'utf8'), 'logo');
     assert.equal(fs.readFileSync(path.join(siteDir, 'assets', 'soteriosTextLogo.png'), 'utf8'), 'wordmark');
     assert.equal(fs.readFileSync(path.join(siteDir, 'assets', 'site', 'hero.webp'), 'utf8'), 'site image');
@@ -73,4 +76,5 @@ test('Pages publishing waits for an uploaded artifact in a separate deployment j
   assert.match(workflow, /tools\/assemble-pages-site\.mjs/);
   assert.match(workflow, /site\.css/);
   assert.match(workflow, /assets\/site\/\*\*/);
+  assert.match(workflow, /feedback\/\*\*/);
 });

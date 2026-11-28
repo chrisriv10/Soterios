@@ -34,7 +34,7 @@ const SYSTEM_DIR_MARKERS = ['\\windows\\system32\\', '\\windows\\syswow64\\'];
 function recommendationForReasons(reasons) {
   if (!reasons.length) return 'No action needed.';
   if (reasons.some((r) => /recycle bin/i.test(r))) {
-    return 'Review this process immediately — executables from the Recycle Bin are almost never legitimate.';
+    return 'An executable running from the Recycle Bin is unusual. Verify its source before allowing it to continue.';
   }
   if (reasons.some((r) => /unsigned|untrusted|encoded|appdata|temporary|unusual/i.test(r))) {
     return 'Verify the executable source and path before allowing it to keep running.';

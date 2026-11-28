@@ -291,6 +291,40 @@ window.Pages.settings = {
           </div>
         </div>
 
+        <section class="card help-feedback-card" aria-labelledby="helpFeedbackTitle">
+          <h2 class="panel-title" id="helpFeedbackTitle">${escapeHtml(t('settings.helpFeedback.title'))}</h2>
+          <p class="toggle-desc help-feedback-intro">${escapeHtml(t('settings.helpFeedback.description'))}</p>
+          <div class="help-feedback-actions">
+            <button class="help-feedback-action" type="button" data-feedback-category="bug">
+              <svg class="help-feedback-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8.5h8v7a4 4 0 0 1-8 0v-7Zm2-3a2 2 0 0 1 4 0v3h-4v-3ZM5 10l3 1m11-1-3 1M5 16h3m11 0h-3M7 5 9 7m8-2-2 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><span class="help-feedback-label">${escapeHtml(t('settings.helpFeedback.bug'))}</span><span class="help-feedback-desc">${escapeHtml(t('settings.helpFeedback.bugDesc'))}</span></span>
+              <span class="help-feedback-external" aria-hidden="true">↗</span>
+            </button>
+            <button class="help-feedback-action" type="button" data-feedback-category="feature">
+              <svg class="help-feedback-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4m0 10v4M3 12h4m10 0h4M5.6 5.6l2.8 2.8m7.2 7.2 2.8 2.8m0-12.8-2.8 2.8m-7.2 7.2-2.8 2.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+              <span><span class="help-feedback-label">${escapeHtml(t('settings.helpFeedback.feature'))}</span><span class="help-feedback-desc">${escapeHtml(t('settings.helpFeedback.featureDesc'))}</span></span>
+              <span class="help-feedback-external" aria-hidden="true">↗</span>
+            </button>
+            <button class="help-feedback-action" type="button" data-feedback-category="general">
+              <svg class="help-feedback-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v10H11l-4.5 3v-3H5v-10Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.5 9.5h7m-7 3h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              <span><span class="help-feedback-label">${escapeHtml(t('settings.helpFeedback.general'))}</span><span class="help-feedback-desc">${escapeHtml(t('settings.helpFeedback.generalDesc'))}</span></span>
+              <span class="help-feedback-external" aria-hidden="true">↗</span>
+            </button>
+            <button class="help-feedback-action" type="button" data-feedback-category="security">
+              <svg class="help-feedback-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 19 6v5.3c0 4.4-2.8 7.4-7 9.2-4.2-1.8-7-4.8-7-9.2V6l7-2.5Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M10 11V9.8a2 2 0 0 1 4 0V11m-5 0h6v4h-6v-4Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+              <span><span class="help-feedback-label">${escapeHtml(t('settings.helpFeedback.security'))}</span><span class="help-feedback-desc">${escapeHtml(t('settings.helpFeedback.securityDesc'))}</span></span>
+              <span class="help-feedback-external" aria-hidden="true">↗</span>
+            </button>
+            <button class="help-feedback-action" type="button" data-feedback-category="documentation">
+              <svg class="help-feedback-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.5h8l4 4v11H6v-15Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14 4.5v4h4m-9 4h6m-6 3h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><span class="help-feedback-label">${escapeHtml(t('settings.helpFeedback.docs'))}</span><span class="help-feedback-desc">${escapeHtml(t('settings.helpFeedback.docsDesc'))}</span></span>
+              <span class="help-feedback-external" aria-hidden="true">↗</span>
+            </button>
+          </div>
+          <p class="help-feedback-privacy">${escapeHtml(t('settings.helpFeedback.privacyNote'))}</p>
+          <div id="helpFeedbackStatus" class="help-feedback-status" role="status" aria-live="polite"></div>
+        </section>
+
         <div class="card">
           <div class="panel-title" style="margin-bottom:16px;">${escapeHtml(t('settings.about'))}</div>
           <div style="font-size:0.9rem; line-height:1.8;">
@@ -335,6 +369,25 @@ window.Pages.settings = {
         window.api.invoke('shell:openExternal', 'https://github.com/chrisriv10/Soterios');
       });
     }
+
+    container.querySelectorAll('[data-feedback-category]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const status = container.querySelector('#helpFeedbackStatus');
+        button.disabled = true;
+        status.textContent = '';
+        try {
+          const url = window.SoteriosHelpFeedback.buildUrl(button.dataset.feedbackCategory, appInfo.version);
+          const result = await window.api.invoke('shell:openExternal', url);
+          if (!result || result.success !== true) {
+            throw new Error(result?.error || t('settings.helpFeedback.openError'));
+          }
+        } catch (error) {
+          status.textContent = error.message || t('settings.helpFeedback.openError');
+        } finally {
+          button.disabled = false;
+        }
+      });
+    });
 
     container.querySelector('#themeSelect').addEventListener('change', (event) => {
       const theme = event.target.value;

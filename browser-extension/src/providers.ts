@@ -9,7 +9,7 @@ declare const SOTERIOS_EXTENSION_VERSION: string;
 
 export const PROVIDERS = {
   hibp: {
-    id: 'hibp', name: 'Have I Been Pwned — Pwned Passwords',
+    id: 'hibp', name: 'Have I Been Pwned: Pwned Passwords',
     origins: ['https://api.pwnedpasswords.com/*'],
     purpose: 'Checks whether a completed password appears in the Pwned Passwords corpus using k-anonymity.',
     dataSent: ['First 5 hexadecimal characters of a one-time SHA-1 password hash', 'No account name or visited site']

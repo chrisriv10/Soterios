@@ -85,7 +85,7 @@ function collectEvidence(proc, context = {}) {
       'document-script-chain',
       55,
       'Document application launched a script host',
-      `${context.parentName} launched ${proc.name}, a chain commonly used by malicious documents.`,
+      `${context.parentName} launched ${proc.name}. Malicious documents can use this pattern, but this launch alone does not confirm malicious activity.`,
       { category: 'lineage', confidence: 'high', suppressibleByTrust: false },
     ));
   }
@@ -95,8 +95,8 @@ function collectEvidence(proc, context = {}) {
     findings.push(evidence(
       'powershell-obfuscation',
       45,
-      'Encoded or download-capable PowerShell',
-      'The command line contains encoded or download-and-execute indicators.',
+      'PowerShell command includes encoded or download-related arguments',
+      'The command line contains encoded data or download-and-execute patterns.',
       { category: 'command', confidence: 'high', suppressibleByTrust: false },
     ));
   }
@@ -122,7 +122,7 @@ function collectEvidence(proc, context = {}) {
     findings.push(evidence(
       'invalid-signature',
       70,
-      'Executable signature is invalid',
+      'Executable signature check failed',
       `Windows reported signature status ${signature.status}.`,
       { category: 'signature', confidence: 'high', critical: true, suppressibleByTrust: false },
     ));
@@ -131,7 +131,7 @@ function collectEvidence(proc, context = {}) {
       'unsigned-windows-binary',
       45,
       'Unsigned executable in a Windows directory',
-      'A binary under the Windows directory does not have a valid signature.',
+      'The executable has no digital signature and is located under the Windows directory.',
       { category: 'signature', confidence: 'high', suppressibleByTrust: false },
     ));
   }
@@ -140,8 +140,8 @@ function collectEvidence(proc, context = {}) {
     findings.push(evidence(
       'known-malicious-hash',
       90,
-      'Hash has a malicious reputation',
-      `The executable hash is marked malicious by ${proc.reputation.source || 'the configured source'}.`,
+      'Hash flagged by a reputation source',
+      `The executable hash is reported as malicious by ${proc.reputation.source || 'the configured source'}. Review this result as a risk indicator.`,
       { category: 'reputation', confidence: 'high', critical: true, suppressibleByTrust: false },
     ));
   }

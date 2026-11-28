@@ -153,6 +153,23 @@
     const sparkMin = document.getElementById('sparkMin');
     const sparkMax = document.getElementById('sparkMax');
     const ctx = canvas.getContext('2d');
+    let catalog = {};
+    let latestSummary = null;
+
+    function translate(key, fallback) {
+      return catalog[key] || fallback;
+    }
+
+    async function loadCatalog() {
+      try {
+        let locale = await window.api.invoke('db:getSetting', 'ui.language');
+        if (!locale) locale = await window.api.invoke('i18n:getSystemLocale');
+        locale = await window.api.invoke('i18n:normalizeLocale', locale);
+        catalog = await window.api.invoke('i18n:getCatalog', locale) || {};
+        if (latestSummary) update(latestSummary);
+      } catch (_) {}
+    }
+
     const dpr = window.devicePixelRatio || 1;
     canvas.width = canvas.clientWidth * dpr;
     canvas.height = canvas.clientHeight * dpr;
@@ -207,6 +224,7 @@
 
     function update(summary) {
       if (!summary) return;
+      latestSummary = summary;
 
       // Health score
       scoreEl.textContent = summary.score != null ? String(summary.score) : 'N/A';
@@ -224,7 +242,9 @@
       if (summary.rtp) {
         const active = summary.rtp.enabled;
         rtpBadge.className = 'status-badge ' + (active ? 'active' : 'inactive');
-        rtpText.textContent = active ? 'RTP Active' : 'RTP Off';
+        rtpText.textContent = active
+          ? translate('tray.rtpActive', 'Defender setting on')
+          : translate('tray.rtpOff', 'Defender setting off');
       }
 
       // Network sparkline
@@ -259,6 +279,7 @@
     }
 
     window.api.on('tray:summary', (summary) => update(summary));
+    void loadCatalog();
     window.api.invoke('tray:getSummary').then(update).catch(() => {
       detailEl.textContent = 'Unable to load health summary.';
     });

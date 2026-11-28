@@ -50,12 +50,12 @@ async function send<T>(type: string, payload: unknown = {}): Promise<T> {
 
 function reasonText(code: string): string {
   const reasons: Record<string, string> = {
-    SIGNED_FEED_PHISHING: 'This address matches a signed, high-confidence phishing indicator.',
-    SIGNED_FEED_MALWARE: 'This address matches a signed, high-confidence malware indicator.',
+    SIGNED_FEED_PHISHING: 'This address matches a phishing indicator in the signed Soterios threat feed.',
+    SIGNED_FEED_MALWARE: 'This address matches a malware indicator in the signed Soterios threat feed.',
     IP_LITERAL_HOST: 'This address uses a numeric IP instead of a domain name.',
     DECEPTIVE_USERINFO: 'The address contains user information that can disguise its real destination.',
     PUNYCODE_HOST: 'This internationalized domain spelling may resemble another name.',
-    BRAND_IMPERSONATION: 'The domain appears to imitate a well-known brand.',
+    BRAND_IMPERSONATION: "The domain contains a name associated with a brand but is not in this extension's list of official domains.",
     INSECURE_CREDENTIAL_PATH: 'A sign-in-like page is being served without HTTPS.',
     CROSS_SITE_CREDENTIAL_FORM: 'This password form submits to a different registrable site.',
     INSECURE_FORM_DESTINATION: 'This password form sends data to an unencrypted destination.',
@@ -63,9 +63,9 @@ function reasonText(code: string): string {
     GOOGLE_MALWARE: 'Google Safe Browsing reported malware at this address.',
     GOOGLE_SOCIAL_ENGINEERING: 'Google Safe Browsing reported social engineering at this address.',
     GOOGLE_UNWANTED_SOFTWARE: 'Google Safe Browsing reported unwanted software at this address.',
-    FEED_STALE: 'The local threat feed is stale, so Soterios cannot provide a current clean verdict.',
-    FEED_UPDATE_FAILED: 'The latest threat-feed update failed, so Soterios cannot provide a current clean verdict.',
-    FEED_PERMISSION_REQUIRED: 'Threat-feed permission is missing, so Soterios cannot provide a current clean verdict.',
+    FEED_STALE: 'The local threat feed is out of date. Soterios cannot provide a current result.',
+    FEED_UPDATE_FAILED: 'The latest threat-feed update failed. Soterios cannot provide a current result.',
+    FEED_PERMISSION_REQUIRED: 'Threat-feed permission is missing. Soterios cannot provide a current result.',
     ONLINE_SETUP_REQUIRED: 'Online protection choices have not been confirmed.'
   };
   return reasons[code] || code.replaceAll('_', ' ').toLowerCase();
@@ -108,7 +108,7 @@ function showSiteNotice(urlValue: string, verdict: string, reasons: string[]): v
     'Soterios found something to review',
     reasons.map(reasonText).join(' '),
     verdict === 'danger' ? 'danger' : 'warning',
-    'Heuristic advisories never block the page.'
+    'This advisory does not block the page.'
   );
 }
 
@@ -117,8 +117,8 @@ function showInterstitial(reasons: string[]): void {
   const layer = document.createElement('section'); layer.className = 'interstitial'; layer.setAttribute('role', 'alertdialog'); layer.setAttribute('aria-modal', 'true'); layer.setAttribute('aria-labelledby', 'soterios-warning-title');
   const panel = document.createElement('div'); panel.className = 'panel';
   const mark = document.createElement('div'); mark.className = 'mark'; mark.textContent = '!'; mark.setAttribute('aria-hidden', 'true');
-  const heading = document.createElement('h1'); heading.id = 'soterios-warning-title'; heading.textContent = 'Soterios blocked interaction with this page';
-  const intro = document.createElement('p'); intro.textContent = 'This page matches the signed Soterios threat feed. Avoid entering credentials or continuing unless you understand the risk.';
+  const heading = document.createElement('h1'); heading.id = 'soterios-warning-title'; heading.textContent = 'Soterios paused this page';
+  const intro = document.createElement('p'); intro.textContent = 'This page matches an indicator in the signed Soterios threat feed. Avoid entering credentials unless you have verified the site.';
   const reason = document.createElement('div'); reason.className = 'reason'; reason.textContent = reasons.map(reasonText).join(' ');
   const actions = document.createElement('div'); actions.className = 'actions';
   const back = document.createElement('button'); back.className = 'action primary'; back.type = 'button'; back.textContent = 'Go back';
@@ -156,7 +156,7 @@ async function checkField(field: HTMLInputElement): Promise<void> {
   if (!enabled || !password || lastCheckedValue.get(field) === password) return;
   lastCheckedValue.set(field, password);
   const button = fieldButtons.get(field);
-  if (button) { button.dataset.state = 'checking'; setFieldGlyph(button, '…'); button.setAttribute('aria-label', 'Soterios is checking this completed password'); }
+  if (button) { button.dataset.state = 'checking'; setFieldGlyph(button, '…'); button.setAttribute('aria-label', 'Soterios is checking this password'); }
   try {
     const [check, reuse] = await Promise.all([
       send<{ strength: { label: string }; hibp: { found: boolean; count: number } | null; serviceState: string }>('CHECK_PASSWORD', { password }),
@@ -171,7 +171,7 @@ async function checkField(field: HTMLInputElement): Promise<void> {
     } else {
       if (button) { button.dataset.state = 'clear'; setFieldGlyph(button, '✓'); }
       const corpusText = check.hibp ? 'No match was found in the configured breach corpus.' : 'The online breach service is suspended.';
-      showNotice('Password check complete', `${corpusText} This is not a guarantee that the password is safe.`, 'info', `Offline strength: ${check.strength.label}`);
+      showNotice('Password check complete', `${corpusText} A clean result does not prove that the password is safe.`, 'info', `Offline strength: ${check.strength.label}`);
     }
   } catch (error) {
     if (button) { button.dataset.state = 'warning'; setFieldGlyph(button, '?'); }
@@ -183,7 +183,7 @@ function addField(field: HTMLInputElement): void {
   if (fieldButtons.has(field)) return;
   const button = document.createElement('button');
   button.className = 'field-button'; button.type = 'button'; setFieldGlyph(button, 'S');
-  button.setAttribute('aria-label', 'Check this completed password with Soterios');
+  button.setAttribute('aria-label', 'Check this password with Soterios');
   button.addEventListener('click', () => void checkField(field), { signal: controller.signal });
   field.addEventListener('blur', () => void checkField(field), { signal: controller.signal });
   fieldButtons.set(field, button); shadow.appendChild(button); buttonPosition(field, button);
@@ -244,7 +244,7 @@ async function checkCurrentSite(): Promise<void> {
     } else if (result.verdict.verdict === 'warning' || (result.verdict.verdict === 'danger' && result.verdict.source !== 'feed')) {
       showSiteNotice(location.href, result.verdict.verdict, result.verdict.reasons);
     } else if (result.verdict.verdict === 'unknown' && result.verdict.reasons.includes('FEED_STALE')) {
-      showNotice('Protection is degraded', reasonText('FEED_STALE'), 'warning');
+      showNotice('Threat-feed data is out of date', reasonText('FEED_STALE'), 'warning');
     }
   } catch (_) {}
 }
