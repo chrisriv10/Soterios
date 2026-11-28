@@ -2122,13 +2122,16 @@ body {
   font-size: .8rem;
 }
 .defender-history-item {
+  box-sizing: border-box;
+  width: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) max-content;
   align-items: start;
   gap: 10px 16px;
 }
 .defender-history-content {
   min-width: 0;
+  max-width: 100%;
   overflow-wrap: anywhere;
 }
 .defender-history-heading {
@@ -2150,9 +2153,12 @@ body {
 }
 .defender-history-detected,
 .defender-history-resource {
+  display: block;
   min-width: 0;
+  max-width: 100%;
   margin-top: 6px;
   line-height: 1.45;
+  white-space: normal;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -2162,11 +2168,13 @@ body {
   unicode-bidi: plaintext;
   font-family: var(--font-mono, monospace);
   font-size: .78rem;
+  word-break: break-all;
 }
 .defender-history-actions {
   display: flex;
   align-items: flex-start;
   justify-content: flex-end;
+  justify-self: end;
   flex-shrink: 0;
 }
 .defender-history-actions .btn { white-space: nowrap; }
@@ -2187,6 +2195,11 @@ body {
   .defender-history-controls { grid-template-columns: minmax(0, 1fr); }
   .defender-history-filter-buttons { grid-column: auto; }
   .defender-history-item { grid-template-columns: minmax(0, 1fr); }
+  .defender-history-actions { grid-column: 1; justify-self: end; }
+}
+
+@container reports-browser (max-width: 520px) {
+  .defender-history-item { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .defender-history-actions { grid-column: 1; justify-self: end; }
 }
 

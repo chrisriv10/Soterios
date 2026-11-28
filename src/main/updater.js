@@ -90,8 +90,11 @@ function initAutoUpdater({ onNotify } = {}) {
     if (onNotify) onNotify('Update ready', 'Restart Soterios to install the update.', 'success');
   });
   onStatus('error', (err) => {
-    logger.warn('Auto-updater error', { error: err.message || String(err) });
-    setState({ status: 'error', message: err.message || String(err), error: err.message || String(err) });
+    const message = err.message || String(err);
+    logger.warn('Auto-updater error', { error: message });
+    // Clear the previous translated status key; otherwise the settings page
+    // continues to render "Checking for updates..." after this failure.
+    setState({ status: 'error', message, messageKey: null, error: message, progress: null });
   });
 
   return state;
@@ -113,7 +116,7 @@ async function checkForUpdates() {
     } catch (err) {
       const message = err.message || String(err);
       logger.warn('Auto-updater check failed', { error: message });
-      setState({ status: 'error', message, error: message, progress: null });
+      setState({ status: 'error', message, messageKey: null, error: message, progress: null });
     }
     return { ...state };
   })();
