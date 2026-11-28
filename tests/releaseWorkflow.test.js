@@ -120,12 +120,23 @@ describe('release workflow updater invariants', () => {
     const uploadSection = text.slice(uploadIndex, uploadIndex + 1200);
     assert.ok(uploadSection.includes('dist/latest.yml'), 'artifact upload must include latest.yml');
     assert.ok(uploadSection.includes('dist/*.blockmap'), 'artifact upload must include blockmaps');
-    const releaseIndex = text.indexOf('gh release create');
-    assert.ok(releaseIndex >= 0, 'release creation must exist');
-    const releaseSection = text.slice(releaseIndex, releaseIndex + 1200);
+    const stepIndex = text.indexOf('Create GitHub Release');
+    assert.ok(stepIndex >= 0, 'release creation step must exist');
+    const releaseSection = text.slice(stepIndex, stepIndex + 2400);
+    assert.ok(releaseSection.includes('shell: pwsh'), 'release creation must explicitly use PowerShell');
+    assert.ok(releaseSection.includes('$installerName = "Soterios-Setup-$version.exe"'), 'the current-version installer must be selected explicitly');
+    assert.ok(releaseSection.includes('"dist/$installerName.blockmap"'), 'the matching current-version blockmap must be selected explicitly');
+    assert.ok(releaseSection.includes('$extensionName = "soterios-extension-$extensionVersion.zip"'), 'the current browser extension package must be selected explicitly');
     assert.ok(releaseSection.includes('dist/latest.yml'), 'GitHub Release must include latest.yml');
-    assert.ok(releaseSection.includes('dist/*.blockmap'), 'GitHub Release must include blockmaps');
+    assert.ok(releaseSection.includes('$blockmap.FullName'), 'GitHub Release must include blockmaps');
+    assert.ok(releaseSection.includes('$extensionPackage.FullName'), 'GitHub Release must include browser extension packages');
+    assert.ok(releaseSection.includes('$extensionChecksum.FullName'), 'GitHub Release must include extension checksums');
+    assert.ok(releaseSection.includes('dist/SHA256SUMS.txt'), 'GitHub Release must include installer checksums');
+    assert.ok(releaseSection.includes('dist/soterios-node.cdx.json'), 'GitHub Release must include Node dependency metadata');
+    assert.ok(releaseSection.includes('dist/soterios-rust-metadata.json'), 'GitHub Release must include Rust dependency metadata');
+    assert.ok(releaseSection.includes('& gh @arguments'), 'release assets and options must be passed as an argument array');
     assert.ok(releaseSection.includes('--verify-tag'), 'release creation must verify the tag');
+    assert.ok(!releaseSection.split(/\r?\n/).some((line) => line.trimEnd().endsWith('\\')), 'PowerShell release commands must not use Bash line continuations');
   });
 
   it('validates updater metadata after the build and before any upload', () => {

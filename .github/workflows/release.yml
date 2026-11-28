@@ -93,10 +93,37 @@ jobs:
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          gh release create "${{ github.ref_name }}" dist/*.exe dist/latest.yml dist/*.blockmap dist/SHA256SUMS.txt dist/soterios-node.cdx.json dist/soterios-rust-metadata.json dist/extension/*.zip dist/extension/*.sha256 \
-            --verify-tag \
-            --title "Soterios ${{ github.ref_name }}" \
-            --generate-notes
+        shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $version = (Get-Content -LiteralPath 'package.json' -Raw | ConvertFrom-Json).version
+          $extensionVersion = (Get-Content -LiteralPath 'browser-extension/package.json' -Raw | ConvertFrom-Json).version
+          $installerName = "Soterios-Setup-$version.exe"
+          $extensionName = "soterios-extension-$extensionVersion.zip"
+          $installer = Get-Item -LiteralPath "dist/$installerName" -ErrorAction Stop
+          $blockmap = Get-Item -LiteralPath "dist/$installerName.blockmap" -ErrorAction Stop
+          $extensionPackage = Get-Item -LiteralPath "dist/extension/$extensionName" -ErrorAction Stop
+          $extensionChecksum = Get-Item -LiteralPath "dist/extension/$extensionName.sha256" -ErrorAction Stop
+
+          $releaseAssets = @(
+            $installer.FullName,
+            $blockmap.FullName,
+            $extensionPackage.FullName,
+            $extensionChecksum.FullName,
+            'dist/latest.yml',
+            'dist/SHA256SUMS.txt',
+            'dist/soterios-node.cdx.json',
+            'dist/soterios-rust-metadata.json'
+          ) | ForEach-Object { (Resolve-Path -LiteralPath $_ -ErrorAction Stop).Path }
+
+          $arguments = @('release', 'create', $env:RELEASE_TAG) + $releaseAssets + @(
+            '--verify-tag',
+            '--title', "Soterios $env:RELEASE_TAG",
+            '--generate-notes'
+          )
+          & gh @arguments
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
