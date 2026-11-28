@@ -60,6 +60,10 @@
     window.api.on('navigate-to-tools', () => {
       navigate('tools');
     });
+    window.api.on('navigate-to-persistence', () => {
+      navigate('tools');
+      window.Pages.tools?.openPersistenceReview?.();
+    });
     window.api.on('navigate-to-removable-scan', () => {
       navigate('scanner');
       window.api.invoke('removableDrive:scanPending').then((result) => {

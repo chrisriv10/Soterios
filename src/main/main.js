@@ -219,7 +219,7 @@ function toastHtml(title, body, level, themeName, iconOverride = null, openText 
   const iconPaths = iconOverride || TOAST_ICONS[level] || TOAST_ICONS.info;
   const markDataUri = getToastMarkDataUri();
   const wordmarkDataUri = getToastWordmarkDataUri();
-  const hasAction = action === 'scanner' || action === 'tools' || action === 'removable-scan';
+  const hasAction = action === 'scanner' || action === 'tools' || action === 'persistence' || action === 'removable-scan';
   return `<!doctype html>
 <html><head><meta charset="utf-8"><style>
   html, body { margin:0; padding:0; background:transparent; overflow:hidden; user-select:none; }
@@ -370,6 +370,8 @@ function showNotification(title, body, level = 'info', iconOverride = null, acti
       const match = url.match(/^soterios:\/\/navigate-([a-z0-9-]+)$/i);
       if (match && mainWindow && !mainWindow.isDestroyed()) {
         event.preventDefault();
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        if (!mainWindow.isVisible()) mainWindow.show();
         mainWindow.focus();
         mainWindow.webContents.send(`navigate-to-${match[1].toLowerCase()}`);
       }
@@ -928,7 +930,7 @@ app.whenReady().then(async () => {
   const persistenceMonitor = new PersistenceMonitor({
     db: services.db,
     toolRegistry: services.toolRegistry,
-    notify: (title, body, level) => showNotification(title, body, level),
+    notify: (title, body, level) => showNotification(title, body, level, null, 'persistence'),
     log: (level, message, meta) => logLine(level, message, meta)
   });
   persistenceMonitor.start();

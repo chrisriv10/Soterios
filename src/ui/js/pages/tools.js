@@ -150,6 +150,23 @@
       this._renderView();
     },
 
+    async openPersistenceReview() {
+      const toolId = 'persistence-change-monitor';
+      this._selectedToolId = toolId;
+      this._notice = null;
+      // On a cold launch the registry is still loading. _initialize will load
+      // this selected tool's persisted review state after its registry fetch.
+      if (!this._registry.some((tool) => tool.id === toolId)) return false;
+      try {
+        await this._loadServiceState(toolId);
+      } catch (error) {
+        this._results[toolId] = { __error: error?.message || String(error) };
+      }
+      this._renderView();
+      this._workspace()?.focus?.();
+      return true;
+    },
+
     _ensureSubscriptions() {
       if (this._subscriptionsReady) return;
       this._subscriptionsReady = true;

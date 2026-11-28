@@ -49,6 +49,37 @@ it('removable-drive toast names the scan destination without relabeling other ac
   for (const action of ['scanner', 'dashboard', undefined]) assert.equal(label(action), 'toast.open');
 });
 
+it('persistence-change toast exposes Open and routes to the review view', () => {
+  const main = source('src/main/main.js');
+  const supportedActions = main.match(/const hasAction = ([^;]+);/);
+  assert.ok(supportedActions);
+  assert.equal(vm.runInNewContext(supportedActions[1], { action: 'persistence' }), true);
+  assert.match(main, /notify: \(title, body, level\) => showNotification\(title, body, level, null, 'persistence'\)/);
+  assert.match(main, /soterios:\/\/navigate-' \+ toastAction/);
+  assert.match(main, /mainWindow\.webContents\.send\(`navigate-to-\$\{match\[1\]\.toLowerCase\(\)\}`\)/);
+  const router = source('src/ui/js/router.js');
+  assert.match(router, /on\('navigate-to-persistence',[\s\S]*navigate\('tools'\)[\s\S]*openPersistenceReview/);
+});
+
+it('persistence review entry loads the saved status before rendering its detail view', async () => {
+  const sandbox = { window: { Pages: {} } };
+  vm.runInNewContext(source('src/ui/js/pages/tools.js'), sandbox);
+  const page = sandbox.window.Pages.tools;
+  const calls = [];
+  let rendered = 0;
+  let focused = 0;
+  page._registry = [{ id: 'persistence-change-monitor' }];
+  page._loadServiceState = async (toolId) => calls.push(toolId);
+  page._renderView = () => { rendered += 1; };
+  page._workspace = () => ({ focus: () => { focused += 1; } });
+
+  assert.equal(await page.openPersistenceReview(), true);
+  assert.equal(page._selectedToolId, 'persistence-change-monitor');
+  assert.deepEqual(calls, ['persistence-change-monitor']);
+  assert.equal(rendered, 1);
+  assert.equal(focused, 1);
+});
+
 it('report clear actions follow populated, empty and failed list refreshes', async () => {
   let populated = true;
   let fail = false;

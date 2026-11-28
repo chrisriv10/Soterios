@@ -181,7 +181,9 @@ describe('functional hardening: tray router', () => {
     const gate = new Promise(resolve => { release = resolve; });
     const h = harness(async () => ({ queued: true }));
     h.window.Api = { initializeTheme: () => gate, initializeLanguage: async () => {}, getSettings: async () => ({ features: {} }) };
-    for (const name of ['dashboard', 'network', 'scanner', 'tools']) h.window.Pages[name] = { render() {} };
+    let persistenceReviewOpens = 0;
+    for (const name of ['dashboard', 'network', 'scanner']) h.window.Pages[name] = { render() {} };
+    h.window.Pages.tools = { render() {}, openPersistenceReview() { persistenceReviewOpens += 1; } };
     const initialized = h.load('src/ui/js/router.js');
     assert.ok(h.events.has('navigate-to-network'));
     h.events.get('navigate-to-network')();
@@ -191,6 +193,10 @@ describe('functional hardening: tray router', () => {
     for (const [event, route] of [['navigate-to-scanner', 'scanner'], ['navigate-to-tools', 'tools'], ['navigate-to-network', 'network'], ['navigate-to-removable-scan', 'scanner']]) {
       h.events.get(event)(); assert.equal(h.window.AppRouter.current(), route);
     }
+    assert.ok(h.events.has('navigate-to-persistence'));
+    h.events.get('navigate-to-persistence')();
+    assert.equal(h.window.AppRouter.current(), 'tools');
+    assert.equal(persistenceReviewOpens, 1);
   });
 });
 
