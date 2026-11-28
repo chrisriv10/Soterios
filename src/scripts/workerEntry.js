@@ -43,7 +43,14 @@ function cleanupChildProcesses() {
       if (process.platform === 'win32' && child.pid) {
         pending.push(new Promise((resolve) => {
           let settled = false;
-          const complete = () => { if (settled) return; settled = true; resolve(); };
+          const complete = () => {
+            if (settled) return;
+            settled = true;
+            // taskkill handles the process tree; also terminate the tracked
+            // child directly if taskkill times out or reports an error.
+            try { child.kill(); } catch (_) {}
+            resolve();
+          };
           const killer = originalExecFile('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true }, complete);
           const timer = setTimeout(() => {
             try { killer.kill(); } catch (_) {}
