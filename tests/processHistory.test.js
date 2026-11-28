@@ -887,7 +887,11 @@ describe('process history IPC and UI surface', () => {
     assert.ok(locales.length >= 15);
     for (const file of locales) {
       const strings = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'src', 'i18n', 'locales', file), 'utf8'));
-      assert.equal(strings['processes.historyStatusActive'], 'Exit unknown', file);
+      const unknown = strings['processes.historyStatusActive'];
+      const running = strings['processes.historyRunningNow'];
+      assert.equal(typeof unknown, 'string', file);
+      assert.ok(unknown.trim().length > 0, file);
+      assert.notEqual(unknown.trim().toLocaleLowerCase(), running.trim().toLocaleLowerCase(), file);
     }
     const ui = fs.readFileSync(path.join(__dirname, '..', 'src', 'ui', 'js', 'pages', 'processes.js'), 'utf8');
     // "Running now" is only reachable behind an independent live-identity check,

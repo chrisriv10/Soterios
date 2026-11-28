@@ -1,25 +1,37 @@
-name: Build signed threat feed
+name: Build signed threat feed and Pages site
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/threat-feed.yml'
+      - '.nojekyll'
+      - 'index.html'
+      - 'site.css'
+      - 'site.js'
+      - 'assets/brand-logo.png'
+      - 'assets/soteriosTextLogo.png'
+      - 'assets/site/**'
+      - 'tools/assemble-pages-site.mjs'
+      - 'tools/build-threat-feed.mjs'
+      - 'browser-extension/src/feed-public-key.json'
   schedule:
     - cron: '17 */6 * * *'
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
+# This workflow is the single Pages publisher. It assembles the root landing
+# page and signed threat feed into one artifact so they cannot replace each
+# other in separate deployments.
 concurrency:
-  group: soterios-threat-feed
+  group: soterios-pages
   cancel-in-progress: false
 
 jobs:
-  build-and-publish:
+  build-pages:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: read
+      pages: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -38,10 +50,45 @@ jobs:
         run: node tools/build-threat-feed.mjs --certpl certpl-domains.txt --urlhaus urlhaus.json --output public/threat-feed
       - name: Verify signed threat feed
         run: npm run feed:verify -- public/threat-feed browser-extension/src/feed-public-key.json
+      - name: Assemble landing page and threat feed
+        run: node tools/assemble-pages-site.mjs --source . --site public
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: public
-      - name: Deploy signed feed to GitHub Pages
+          include-hidden-files: true
+
+  deploy-pages:
+    needs: build-pages
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # The artifact upload can finalize before the deployment metadata API
+      # lists it. Waiting here also crosses the build/deploy job boundary.
+      - name: Wait for Pages artifact registration
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        shell: bash
+        run: |
+          for attempt in $(seq 1 10); do
+            artifact_count="$(gh api "repos/${REPOSITORY}/actions/runs/${RUN_ID}/artifacts" --jq '[.artifacts[] | select(.name == "github-pages" and .expired == false)] | length')"
+            if [ "$artifact_count" -ge 1 ]; then
+              echo "Pages artifact is registered."
+              exit 0
+            fi
+            echo "Pages artifact is not visible yet (${attempt}/10)."
+            sleep 3
+          done
+          echo "The uploaded Pages artifact did not become visible to the deployment API." >&2
+          exit 1
+      - name: Deploy combined Pages site
         id: deployment
         uses: actions/deploy-pages@v4
